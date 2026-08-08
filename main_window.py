@@ -8,6 +8,7 @@ import logging
 import math
 import time
 import random
+import threading
 from typing import Any, Dict, List, Optional
 
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -385,6 +386,11 @@ class LineupBuildWorker(QtCore.QObject):
         self.build_style = build_style or "Strategic"
         self.mlb_stack_pref = mlb_stack_pref or "Strategic"
         self.salary_strategy = salary_strategy or "Near Cap"
+        self._cancel_event = threading.Event()
+
+    def request_cancel(self) -> None:
+        """Thread-safe cancellation request checked between lineup candidates."""
+        self._cancel_event.set()
 
     @QtCore.pyqtSlot()
     def run(self) -> None:
@@ -398,7 +404,11 @@ class LineupBuildWorker(QtCore.QObject):
                     own_weight=self.own_weight,
                     build_style=self.build_style,
                 )
-                lineups = opt.build_lineups(num_lineups=self.num_lineups)
+                lineups = opt.build_lineups(
+                    num_lineups=self.num_lineups,
+                    progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
+                    cancel_callback=self._cancel_event.is_set,
+                )
             else:
                 opt = MultiSportClassicOptimizer(
                     self.players,
@@ -416,6 +426,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "sport": self.sport,
                 "lineups": lineups,
                 "requested": self.num_lineups,
+                "cancelled": self._cancel_event.is_set(),
             })
         except Exception:
             self.error.emit(traceback.format_exc())
@@ -1288,6 +1299,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_eta = QtWidgets.QLabel("")
         self._build_eta.setVisible(False)
         self.status.addPermanentWidget(self._build_eta)
+
+        self._build_cancel = QtWidgets.QPushButton("Cancel")
+        self._build_cancel.setToolTip("Stop the active Showdown lineup build and keep completed lineups.")
+        self._build_cancel.setVisible(False)
+        self._build_cancel.clicked.connect(self._cancel_lineup_build)
+        self.status.addPermanentWidget(self._build_cancel)
 
         self._build_thread = None
         self._build_worker = None
@@ -2298,10 +2315,13 @@ class MainWindow(QtWidgets.QMainWindow):
         salary_strategy = salary_strategy_widget.currentText() if salary_strategy_widget is not None else "Near Cap"
 
         label_sport = sport if kind != "showdown" else "Showdown"
-        self._build_progress.setRange(0, 0)  # busy/indeterminate while solver runs
+        self._build_progress.setRange(0, num if kind == "showdown" else 0)
+        self._build_progress.setValue(0)
         self._build_progress.setVisible(True)
         self._build_eta.setText(f"Building {label_sport} lineups…")
         self._build_eta.setVisible(True)
+        self._build_cancel.setEnabled(True)
+        self._build_cancel.setVisible(kind == "showdown")
         self.status.showMessage(f"Building {label_sport} lineups ({num:,}) • {build_style} • {salary_strategy}…")
 
         self._build_thread = QtCore.QThread(self)
@@ -2348,9 +2368,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self._build_progress.setRange(0, 0)
             self._build_eta.setText(text or "Building…")
 
+    def _cancel_lineup_build(self) -> None:
+        worker = getattr(self, "_build_worker", None)
+        if worker is None:
+            return
+        worker.request_cancel()
+        self._build_cancel.setEnabled(False)
+        self._build_eta.setText("Cancelling after the current candidate…")
+        self.status.showMessage("Cancelling Showdown lineup build…")
+
     def _finish_lineup_build_ui(self) -> None:
         self._build_progress.setVisible(False)
         self._build_eta.setVisible(False)
+        self._build_cancel.setVisible(False)
 
     def _populate_showdown_lineups(self, lineups: List[Dict[str, Any]]) -> None:
         self.last_showdown = lineups or []
@@ -2489,15 +2519,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_lineup_build_finished(self, payload: Dict[str, Any]) -> None:
         try:
+            self._build_cancel.setVisible(False)
             kind = str(payload.get("kind", "classic"))
             sport = str(payload.get("sport", self._current_sport())).upper()
             requested = int(payload.get("requested", 0) or 0)
             lineups = payload.get("lineups", []) or []
+            cancelled = bool(payload.get("cancelled", False))
 
             if kind == "showdown":
                 self._populate_showdown_lineups(lineups)
                 built = len(self.last_showdown)
-                self.status.showMessage(f"Built {built} of {requested} showdown lineups. {self._lineup_quality_summary(self.last_showdown, sport, kind)}", 9000)
+                result = f"Cancelled after {built} of {requested}" if cancelled else f"Built {built} of {requested}"
+                self.status.showMessage(f"{result} showdown lineups. {self._lineup_quality_summary(self.last_showdown, sport, kind)}", 9000)
             else:
                 self._populate_classic_lineups(lineups, sport)
                 built = len(self.last_classic)

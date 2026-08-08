@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import random
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from collections import Counter
 
 logger = logging.getLogger("dfs.opt")
@@ -351,9 +351,17 @@ class ShowdownOptimizer:
         self.own_weight = float(own_weight or 0.0)
         self.build_style = build_style or "Strategic"
 
-    def build_lineups(self, num_lineups: int = 10) -> List[Dict[str, Any]]:
+    def build_lineups(
+        self,
+        num_lineups: int = 10,
+        *,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        cancel_callback: Optional[Callable[[], bool]] = None,
+    ) -> List[Dict[str, Any]]:
         if not self.players:
             return []
+
+        num_lineups = max(1, int(num_lineups or 1))
 
         locked = [p for p in self.players if p.get("LockCpt")]
         if len(locked) > 1:
@@ -363,12 +371,60 @@ class ShowdownOptimizer:
         if locked:
             logger.info("CPT LOCK ACTIVE: %s | key=%s", locked[0].get("Name", ""), _pkey(locked[0]))
 
-        if HAS_PULP:
-            return self._build_lineups_pulp(num_lineups=num_lineups)
-        logger.warning("PuLP not installed; using greedy fallback for showdown (tags honored).")
-        return self._build_lineups_greedy(num_lineups=num_lineups)
+        # Rebuilding a CBC model once per lineup becomes progressively slower as
+        # no-good constraints accumulate. Use a randomized candidate portfolio
+        # for larger requests; small requests retain the exact solver.
+        if num_lineups > 20:
+            logger.info("Using fast showdown portfolio builder for %d lineups.", num_lineups)
+            return self._build_lineups_fast(
+                num_lineups=num_lineups,
+                progress_callback=progress_callback,
+                cancel_callback=cancel_callback,
+            )
 
-    def _build_lineups_pulp(self, num_lineups: int) -> List[Dict[str, Any]]:
+        if HAS_PULP:
+            return self._build_lineups_pulp(
+                num_lineups=num_lineups,
+                progress_callback=progress_callback,
+                cancel_callback=cancel_callback,
+            )
+        logger.warning("PuLP not installed; using fast fallback for showdown (tags honored).")
+        return self._build_lineups_fast(
+            num_lineups=num_lineups,
+            progress_callback=progress_callback,
+            cancel_callback=cancel_callback,
+        )
+
+    @staticmethod
+    def _cancelled(cancel_callback: Optional[Callable[[], bool]]) -> bool:
+        if cancel_callback is None:
+            return False
+        try:
+            return bool(cancel_callback())
+        except Exception:
+            logger.debug("Showdown cancellation callback failed.", exc_info=True)
+            return False
+
+    @staticmethod
+    def _report_progress(
+        progress_callback: Optional[Callable[[int, int, str], None]],
+        done: int,
+        total: int,
+        text: str,
+    ) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback(done, total, text)
+        except Exception:
+            logger.debug("Showdown progress callback failed.", exc_info=True)
+
+    def _build_lineups_pulp(
+        self,
+        num_lineups: int,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        cancel_callback: Optional[Callable[[], bool]] = None,
+    ) -> List[Dict[str, Any]]:
         prev: List[Tuple[str, Tuple[str, ...]]] = []
         out: List[Dict[str, Any]] = []
 
@@ -385,7 +441,11 @@ class ShowdownOptimizer:
         w_cpt = self.own_weight * 1.35 * own_s
         w_flex = self.own_weight * 1.00 * own_s
 
+        self._report_progress(progress_callback, 0, num_lineups, "Optimizing showdown portfolio")
         for k in range(num_lineups):
+            if self._cancelled(cancel_callback):
+                logger.info("Showdown build cancelled at %d/%d.", len(out), num_lineups)
+                break
             prob = pulp.LpProblem(f"showdown_{k}", pulp.LpMaximize)
 
             cpt = pulp.LpVariable.dicts("cpt", keys, lowBound=0, upBound=1, cat="Binary")
@@ -505,7 +565,221 @@ class ShowdownOptimizer:
 
             prev.append((cpt_key, flex_keys))
             out.append({"Captain": key_to_player[cpt_key], "Flex": [key_to_player[pk] for pk in flex_keys]})
+            self._report_progress(progress_callback, len(out), num_lineups, "Optimizing showdown portfolio")
 
+        return out
+
+    def _build_lineups_fast(
+        self,
+        num_lineups: int,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        cancel_callback: Optional[Callable[[], bool]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Build a large unique showdown portfolio without one CBC solve per lineup.
+
+        Each portfolio slot samples a batch of salary-feasible candidates, scores
+        them with projection/ownership inputs plus a conservative team-split
+        preference, then accepts the best candidate that still fits all portfolio
+        exposure caps. Locks, fades, max percentages, and salary remain hard rules.
+        """
+        key_to_player: Dict[str, Dict[str, Any]] = {}
+        for player in self.players:
+            key = _pkey(player)
+            if key and key not in key_to_player:
+                key_to_player[key] = player
+        players = list(key_to_player.values())
+
+        cap_cpt, cap_flex = _build_showdown_cap_maps(players, num_lineups)
+        used_cpt: Dict[str, int] = {}
+        used_flex: Dict[str, int] = {}
+        used_signatures: set[Tuple[str, Tuple[str, ...]]] = set()
+        out: List[Dict[str, Any]] = []
+
+        own_s = _own_sign(self.own_mode)
+        w_cpt = self.own_weight * 1.35 * own_s
+        w_flex = self.own_weight * own_s
+        style = _style_level(self.build_style)
+
+        locked_cpt = next((p for p in players if p.get("LockCpt")), None)
+        conflicting_locks = [
+            p for p in players
+            if (p.get("LockFlex") and p.get("FadeFlex"))
+            or (p.get("LockCpt") and (p.get("FadeCpt") or p.get("LockFlex")))
+        ]
+        if conflicting_locks:
+            logger.info(
+                "Showdown fast build is infeasible because lock/fade tags conflict for: %s",
+                ", ".join(str(p.get("Name", "")) for p in conflicting_locks[:10]),
+            )
+            return []
+        locked_flex = [p for p in players if p.get("LockFlex")]
+        locked_flex_keys = {_pkey(p) for p in locked_flex}
+        if len(locked_flex_keys) > 5:
+            logger.info("Showdown fast build is infeasible: %d FLEX locks.", len(locked_flex_keys))
+            return []
+
+        def cpt_score(player: Dict[str, Any]) -> float:
+            return _cpt_proj(player) + w_cpt * _own(player)
+
+        def flex_score(player: Dict[str, Any]) -> float:
+            return _proj(player) + w_flex * _own(player)
+
+        def under_cap(cap_map: Dict[str, int], used: Dict[str, int], key: str) -> bool:
+            maximum = cap_map.get(key)
+            return maximum is None or used.get(key, 0) < maximum
+
+        def weighted_pick(pool: List[Dict[str, Any]], raw_scores: List[float]) -> Dict[str, Any]:
+            floor = min(raw_scores) if raw_scores else 0.0
+            weights = [max(0.05, score - floor + 0.75) ** 1.7 for score in raw_scores]
+            return self.rng.choices(pool, weights=weights, k=1)[0]
+
+        def lineup_score(captain: Dict[str, Any], flex: List[Dict[str, Any]]) -> float:
+            score = cpt_score(captain) + sum(flex_score(p) for p in flex)
+            if style <= 0:
+                return score + self.rng.uniform(-0.08, 0.08)
+
+            team_counts = sorted(
+                Counter(_team(p) for p in [captain] + flex if _team(p)).values(),
+                reverse=True,
+            )
+            split = tuple(team_counts)
+            split_bonus = {
+                (4, 2): 1.55,
+                (3, 3): 1.35,
+                (5, 1): 0.30,
+            }.get(split, -2.0 if split == (6,) else 0.0)
+            return score + style * split_bonus + self.rng.uniform(-0.08, 0.08)
+
+        def sample_candidate() -> Optional[Tuple[float, Dict[str, Any], List[Dict[str, Any]], Tuple[str, Tuple[str, ...]]]]:
+            cpt_pool = [
+                p for p in players
+                if not p.get("FadeCpt")
+                and not p.get("LockFlex")
+                and under_cap(cap_cpt, used_cpt, _pkey(p))
+            ]
+            if locked_cpt is not None:
+                cpt_pool = [locked_cpt] if locked_cpt in cpt_pool else []
+            if not cpt_pool:
+                return None
+
+            cpt_raw = [
+                cpt_score(p) + 0.10 * (cpt_score(p) / max(_cpt_salary(p), 1.0)) * 1000.0
+                for p in cpt_pool
+            ]
+            captain = weighted_pick(cpt_pool, cpt_raw)
+            captain_key = _pkey(captain)
+            cap_left = self.salary_cap - _cpt_salary(captain)
+            if cap_left < 0:
+                return None
+
+            flex: List[Dict[str, Any]] = []
+            for player in locked_flex:
+                key = _pkey(player)
+                if key == captain_key or not under_cap(cap_flex, used_flex, key):
+                    return None
+                flex.append(player)
+                cap_left -= _salary(player)
+            if cap_left < 0:
+                return None
+
+            available = [
+                p for p in players
+                if _pkey(p) != captain_key
+                and _pkey(p) not in locked_flex_keys
+                and not p.get("FadeFlex")
+                and under_cap(cap_flex, used_flex, _pkey(p))
+            ]
+
+            while len(flex) < 5:
+                slots_after_pick = 4 - len(flex)
+                feasible: List[Dict[str, Any]] = []
+                raw_scores: List[float] = []
+                cheapest_options = sorted((_salary(p), _pkey(p)) for p in available)
+                for player in available:
+                    salary = _salary(player)
+                    if salary > cap_left:
+                        continue
+                    player_key = _pkey(player)
+                    cheapest_others = [
+                        other_salary for other_salary, other_key in cheapest_options
+                        if other_key != player_key
+                    ][:slots_after_pick]
+                    if slots_after_pick and (
+                        len(cheapest_others) < slots_after_pick
+                        or sum(cheapest_others) > cap_left - salary
+                    ):
+                        continue
+                    same_team = sum(
+                        1 for chosen in [captain] + flex
+                        if _team(chosen) and _team(chosen) == _team(player)
+                    )
+                    raw = flex_score(player)
+                    raw += 0.10 * (flex_score(player) / max(salary, 1.0)) * 1000.0
+                    raw += style * 0.22 * same_team
+                    feasible.append(player)
+                    raw_scores.append(raw)
+                if not feasible:
+                    return None
+
+                chosen = weighted_pick(feasible, raw_scores)
+                flex.append(chosen)
+                cap_left -= _salary(chosen)
+                chosen_key = _pkey(chosen)
+                available = [p for p in available if _pkey(p) != chosen_key]
+
+            flex_keys = tuple(sorted(_pkey(p) for p in flex))
+            signature = (captain_key, flex_keys)
+            if signature in used_signatures:
+                return None
+            return lineup_score(captain, flex), captain, flex, signature
+
+        self._report_progress(progress_callback, 0, num_lineups, "Generating fast showdown portfolio")
+        # A few dozen alternatives per slot are enough to preserve quality while
+        # keeping 150-lineup builds comfortably interactive on ordinary laptops.
+        candidates_per_lineup = 28 if num_lineups >= 100 else 48
+        failures = 0
+        max_failures = 16
+
+        while len(out) < num_lineups and failures < max_failures:
+            if self._cancelled(cancel_callback):
+                logger.info("Showdown fast build cancelled at %d/%d.", len(out), num_lineups)
+                break
+
+            candidates = []
+            attempts = max(candidates_per_lineup * 3, 180)
+            for _ in range(attempts):
+                if self._cancelled(cancel_callback):
+                    break
+                candidate = sample_candidate()
+                if candidate is not None:
+                    candidates.append(candidate)
+                    if len(candidates) >= candidates_per_lineup:
+                        break
+
+            if self._cancelled(cancel_callback):
+                break
+            if not candidates:
+                failures += 1
+                continue
+
+            candidates.sort(key=lambda item: item[0], reverse=True)
+            _, captain, flex, signature = candidates[0]
+            used_signatures.add(signature)
+            captain_key = _pkey(captain)
+            used_cpt[captain_key] = used_cpt.get(captain_key, 0) + 1
+            for player in flex:
+                key = _pkey(player)
+                used_flex[key] = used_flex.get(key, 0) + 1
+            out.append({"Captain": captain, "Flex": flex})
+            failures = 0
+            self._report_progress(progress_callback, len(out), num_lineups, "Generating fast showdown portfolio")
+
+        if len(out) < num_lineups and not self._cancelled(cancel_callback):
+            logger.info(
+                "Showdown fast build stopped early at %d/%d after exhausting feasible candidates.",
+                len(out),
+                num_lineups,
+            )
         return out
 
     def _build_lineups_greedy(self, num_lineups: int) -> List[Dict[str, Any]]:
