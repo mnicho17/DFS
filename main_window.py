@@ -428,6 +428,7 @@ from widgets import CopyRowTableWidget
 from mlb_enrichment import apply_mlb_factors, clear_mlb_factors
 from mlb_batting_order import apply_batting_order, clear_batting_order, build_best_stacks
 from mlb_auto_data import apply_auto_mlb_context
+from nfl_auto_data import apply_auto_nfl_context
 
 logger = logging.getLogger("dfs.ui")
 
@@ -843,7 +844,7 @@ class StackExposureDialog(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DFS Optimizer - NFL Strategy Upgrade v1")
+        self.setWindowTitle("DFS Optimizer - NFL Context Upgrade v2")
         self.resize(1300, 820)
 
         self.players: List[Dict[str, Any]] = []
@@ -876,8 +877,8 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_load.clicked.connect(self.on_load_csv)
         row1.addWidget(btn_load)
 
-        btn_refresh_inj = QtWidgets.QPushButton("Refresh Injuries")
-        btn_refresh_inj.setToolTip("Re-call injury API and refresh InjuryStatus column.")
+        btn_refresh_inj = QtWidgets.QPushButton("Refresh Context")
+        btn_refresh_inj.setToolTip("Refresh injuries plus automatic NFL role, usage, matchup, and weather context.")
         btn_refresh_inj.clicked.connect(self.on_refresh_injuries)
         row1.addWidget(btn_refresh_inj)
 
@@ -1096,7 +1097,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Player table
         self.tbl_players = QtWidgets.QTableWidget(self)
         self.tbl_players.setColumnCount(21)
-        self.tbl_players.setHorizontalHeaderLabels(["Name", "Team", "Pos", "Injury", "Salary", "BaseProj", "AdjProj", "MLB±", "Form", "Matchup", "Park", "Wx", "Vegas", "TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "Max%", "Order", "Bats", "Conf"] )
+        self.tbl_players.setHorizontalHeaderLabels(["Name", "Team", "Pos", "Injury", "Salary", "BaseProj", "AdjProj", "NFL±", "Usage", "Matchup", "Role", "Wx", "Vegas", "TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "Max%", "Order", "Bats", "Conf"] )
         self.tbl_players.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tbl_players.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.tbl_players.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
@@ -1851,7 +1852,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 detected_sport = self._current_sport()
 
             self._load_step(progress, 40, f"Refreshing {detected_sport} injury/status data…")
-            if self._should_run_injury_enrichment(detected_sport):
+            if detected_sport == "NFL":
+                self._load_step(progress, 46, "Refreshing NFL role, usage, matchup, and weather context...")
+                try:
+                    ctx = apply_auto_nfl_context(self.players)
+                    logger.info("NFL auto context applied: %s", ctx)
+                except Exception:
+                    # Loading the CSV remains useful even if an unexpected
+                    # external payload bypasses the enrichment fallbacks.
+                    logger.exception("NFL auto context failed; using neutral context")
+            elif self._should_run_injury_enrichment(detected_sport):
                 enrich_players_with_injuries(self.players, sport=detected_sport)
             else:
                 self._clear_injury_fields()
@@ -1918,7 +1928,11 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         try:
-            enrich_players_with_injuries(self.players, sport=sport)
+            if sport == "NFL":
+                ctx = apply_auto_nfl_context(self.players)
+                logger.info("Manual NFL context refresh applied: %s", ctx)
+            else:
+                enrich_players_with_injuries(self.players, sport=sport)
             faded = self._auto_fade_out_players()
             self.recalc_ownership_quick()
 
@@ -1930,7 +1944,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 cap = 50000.0
             self._start_ownership_sim(num_sims=500, mode=mode, cap=cap)
 
-            msg = "Injuries refreshed." + (f" Auto-faded {faded} OUT." if faded else "")
+            msg = "NFL context refreshed." if sport == "NFL" else "Injuries refreshed."
+            msg += f" Auto-faded {faded} OUT." if faded else ""
             self.status.showMessage(msg, 4000)
         except Exception as e:
             logger.exception("Injury refresh failed")
@@ -2167,17 +2182,41 @@ class MainWindow(QtWidgets.QMainWindow):
             proj_item.setData(QtCore.Qt.UserRole, float(proj))
             self.tbl_players.setItem(r, 6, proj_item)
 
-            mlb_adj = float(p.get("MLBAdjScore", 0.0) or 0.0)
+            is_nfl = self._current_sport() == "NFL"
             is_mlb = self._current_sport() == "MLB"
-            adj_item = SortKeyItem(f"{mlb_adj:+.2f}" if (abs(mlb_adj) > 1e-9 or is_mlb) else "")
-            adj_item.setData(QtCore.Qt.UserRole, float(mlb_adj))
-            self.tbl_players.setItem(r, 7, adj_item)
+            if is_nfl:
+                nfl_adj = float(p.get("NFLAdjScore", 0.0) or 0.0)
+                adj_item = SortKeyItem(f"{nfl_adj:+.2f}")
+                adj_item.setData(QtCore.Qt.UserRole, nfl_adj)
+                self.tbl_players.setItem(r, 7, adj_item)
 
-            for col, key in [(8, "MLBRecentForm"), (9, "MLBMatchup"), (10, "MLBBallpark"), (11, "MLBWeather"), (12, "MLBVegas")]:
-                val = float(p.get(key, 0.0) or 0.0)
-                it = SortKeyItem(f"{val:+.1f}" if (abs(val) > 1e-9 or is_mlb) else "")
-                it.setData(QtCore.Qt.UserRole, val)
-                self.tbl_players.setItem(r, col, it)
+                for col, key in [(8, "NFLUsageScore"), (9, "NFLMatchupScore")]:
+                    val = float(p.get(key, 0.0) or 0.0)
+                    it = SortKeyItem(f"{val:+.1f}")
+                    it.setData(QtCore.Qt.UserRole, val)
+                    self.tbl_players.setItem(r, col, it)
+
+                role_item = SortKeyItem(str(p.get("NFLRole", "") or ""))
+                role_item.setData(QtCore.Qt.UserRole, float(p.get("NFLRoleScore", 0.0) or 0.0))
+                self.tbl_players.setItem(r, 10, role_item)
+                for col, key in [(11, "NFLWeatherScore"), (12, "NFLVegas")]:
+                    val = float(p.get(key, 0.0) or 0.0)
+                    it = SortKeyItem(f"{val:+.1f}")
+                    it.setData(QtCore.Qt.UserRole, val)
+                    self.tbl_players.setItem(r, col, it)
+            elif is_mlb:
+                mlb_adj = float(p.get("MLBAdjScore", 0.0) or 0.0)
+                adj_item = SortKeyItem(f"{mlb_adj:+.2f}")
+                adj_item.setData(QtCore.Qt.UserRole, float(mlb_adj))
+                self.tbl_players.setItem(r, 7, adj_item)
+                for col, key in [(8, "MLBRecentForm"), (9, "MLBMatchup"), (10, "MLBBallpark"), (11, "MLBWeather"), (12, "MLBVegas")]:
+                    val = float(p.get(key, 0.0) or 0.0)
+                    it = SortKeyItem(f"{val:+.1f}")
+                    it.setData(QtCore.Qt.UserRole, val)
+                    self.tbl_players.setItem(r, col, it)
+            else:
+                for col in range(7, 13):
+                    self.tbl_players.setItem(r, col, SortKeyItem(""))
 
             team_adj = float(p.get("TeamAdjPct", 0.0) or 0.0)
             team_adj_item = SortKeyItem(f"{team_adj:+.0f}%" if abs(team_adj) > 1e-9 else "")
@@ -2641,6 +2680,12 @@ class MainWindow(QtWidgets.QMainWindow):
         slots = get_roster_slots_for_sport(sport_u)
         headers = ["Save"] + slots + ["TotalSal", "Grade"]
         try:
+            context_headers = {
+                "NFL": ["NFL±", "Usage", "Matchup", "Role", "Wx", "Vegas"],
+                "MLB": ["MLB±", "Form", "Matchup", "Park", "Wx", "Vegas"],
+            }.get(sport_u, ["Adj±", "Context", "Matchup", "Role", "Wx", "Vegas"])
+            player_headers = ["Name", "Team", "Pos", "Injury", "Salary", "BaseProj", "AdjProj"] + context_headers + ["TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "Max%", "Order", "Bats", "Conf"]
+            self.tbl_players.setHorizontalHeaderLabels(player_headers)
             self.tbl_cl.setColumnCount(len(headers))
             self.tbl_cl.setHorizontalHeaderLabels(headers)
             self.tbl_saved_cl.setColumnCount(len(slots))
@@ -2649,6 +2694,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.last_classic.clear()
             self.tbl_cl.setRowCount(0)
             self._refresh_saved_tables()
+            if self.players:
+                self._refresh_players_table()
             self.status.showMessage(f"Sport set to {sport_u}. Classic tab now uses: {', '.join(slots)}", 5000)
         except Exception:
             pass
