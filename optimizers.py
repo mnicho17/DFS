@@ -1,0 +1,1761 @@
+# optimizers.py
+from __future__ import annotations
+
+import logging
+import random
+import math
+from typing import Any, Dict, List, Optional, Tuple
+from collections import Counter
+
+logger = logging.getLogger("dfs.opt")
+
+try:
+    import pulp  # type: ignore
+
+    HAS_PULP = True
+except Exception:
+    HAS_PULP = False
+
+
+# ---------------- Shared helpers ----------------
+
+def _pkey(p: Dict[str, Any]) -> str:
+    return (
+        str(p.get("FlexNamePlusID") or "").strip()
+        or str(p.get("FlexID") or "").strip()
+        or str(p.get("Name") or "").strip()
+    )
+
+
+def _max_count_from_pct(pct: Optional[float], total_lineups: int) -> Optional[int]:
+    """Convert a percent cap into a max appearance count for a multi-lineup build.
+
+    Important: a positive cap should allow at least one lineup. The previous
+    floor-only behavior turned low simulated ownership values, like 0.4%, into
+    a hard zero-appearance cap when copied into Max%. That could make MLB pools
+    artificially infeasible or leave assignment/display holes after tight caps.
+    Use explicit 0 only when the user truly wants to block a player.
+    """
+    if pct is None:
+        return None
+    try:
+        f = float(pct)
+    except Exception:
+        return None
+    f = max(0.0, min(100.0, f))
+    if f <= 0.0:
+        return 0
+    raw_count = int(math.floor((f / 100.0) * float(max(1, total_lineups))))
+    return max(1, raw_count)
+
+
+def _build_showdown_cap_maps(players: List[Dict[str, Any]], total_lineups: int) -> Tuple[Dict[str, int], Dict[str, int]]:
+    """Return (captain_cap_map, flex_cap_map) keyed by _pkey."""
+    cap_cpt: Dict[str, int] = {}
+    cap_flex: Dict[str, int] = {}
+    for p in players:
+        pk = _pkey(p)
+        mc = _max_count_from_pct(p.get("MaxCptPct", None), total_lineups)
+        # Showdown FLEX cap uses unified MaxPct (legacy MaxFlexPct supported)
+        legacy_flex = p.get("MaxFlexPct", None)
+        mf = _max_count_from_pct(
+            legacy_flex if legacy_flex not in (None, "") else p.get("MaxPct", None),
+            total_lineups,
+        )
+        if mc is not None:
+            cap_cpt[pk] = mc
+        if mf is not None:
+            cap_flex[pk] = mf
+    return cap_cpt, cap_flex
+
+
+def _salary(p: Dict[str, Any]) -> float:
+    return float(p.get("FlexSalary", 0.0) or 0.0)
+
+
+def _team_adj_multiplier(p: Dict[str, Any]) -> float:
+    try:
+        pct = float(p.get("TeamAdjPct", 0.0) or 0.0)
+    except Exception:
+        pct = 0.0
+    return max(0.05, 1.0 + pct / 100.0)
+
+
+def _proj(p: Dict[str, Any]) -> float:
+    return float(p.get("FlexProjection", 0.0) or 0.0) * _team_adj_multiplier(p)
+
+
+def _cpt_salary(p: Dict[str, Any]) -> float:
+    return float(p.get("CptSalary", 1.5 * _salary(p)) or 0.0)
+
+
+def _cpt_proj(p: Dict[str, Any]) -> float:
+    raw = float(p.get("CptProjection", 1.5 * float(p.get("FlexProjection", 0.0) or 0.0)) or 0.0)
+    return raw * _team_adj_multiplier(p)
+
+
+def _own(p: Dict[str, Any]) -> float:
+    """Simulated ownership percent (0..100)."""
+    try:
+        return float(p.get("ProjOwnPct", 0.0) or 0.0)
+    except Exception:
+        return 0.0
+
+
+def _own_sign(mode: str) -> float:
+    """Return sign for ownership term: + for chalk, - for leverage."""
+    m = (mode or "").strip().lower()
+    if m in ("chalk", "high", "field", "popular"):
+        return +1.0
+    if m in ("leverage", "contrarian", "low"):
+        return -1.0
+    # "balanced" defaults to a mild leverage tilt
+    return -0.5
+
+
+def _style_level(build_style: str) -> float:
+    """Strategic-template strength.
+
+    0.0 = mostly projection/randomized optimizer
+    1.0 = standard strategic
+    >1.0 = stronger template bias
+    """
+    s = (build_style or "Strategic").strip().lower()
+    if s in ("randomized", "random", "semi-random", "semi random", "projection"):
+        return 0.0
+    if s in ("balanced", "standard"):
+        return 0.65
+    if s in ("contrarian", "leverage"):
+        return 0.85
+    if s in ("chalk", "optimal"):
+        return 0.75
+    return 1.0
+
+
+def _team(p: Dict[str, Any]) -> str:
+    return str(p.get("Team", "") or "").strip().upper()
+
+
+def _game_key(p: Dict[str, Any]) -> str:
+    return str(p.get("GameKey") or p.get("GameInfo", "") or "").strip().upper()
+
+
+def _nfl_opponent(p: Dict[str, Any]) -> str:
+    """Return opponent from parsed DK context, with a GameKey fallback."""
+    opp = str(p.get("Opponent") or "").strip().upper()
+    if opp:
+        return opp
+    team = _team(p)
+    game = _game_key(p)
+    if "@" in game:
+        away, home = [x.strip().upper() for x in game.split("@", 1)]
+        # GameInfo fallback may contain date/time after the home team.
+        home = home.split()[0] if home else home
+        if team == away:
+            return home
+        if team == home:
+            return away
+    return ""
+
+
+def _nfl_style_profile(build_style: str) -> Dict[str, Any]:
+    """Internal NFL construction defaults mapped onto the existing Build Style UI."""
+    s = (build_style or "Strategic").strip().lower()
+    if s in ("randomized", "random", "semi-random", "semi random", "projection"):
+        return {"required_qb_stack": 0, "max_team": 5, "max_game": 6, "min_unique": 2}
+    if s in ("chalk", "optimal"):
+        return {"required_qb_stack": 1, "max_team": 5, "max_game": 6, "min_unique": 1}
+    if s in ("contrarian", "leverage"):
+        return {"required_qb_stack": 1, "max_team": 4, "max_game": 5, "min_unique": 3}
+    if s in ("balanced", "standard"):
+        return {"required_qb_stack": 1, "max_team": 4, "max_game": 5, "min_unique": 2}
+    return {"required_qb_stack": 1, "max_team": 4, "max_game": 5, "min_unique": 2}
+
+
+def _nfl_lineup_features(lineup: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Summarize the NFL correlations that matter for Classic tournament builds."""
+    players = list(lineup or [])
+    qbs = [p for p in players if "QB" in _position_tokens(p)]
+    dsts = [p for p in players if "DST" in _position_tokens(p)]
+    qb = qbs[0] if qbs else None
+
+    team_counts = Counter(_team(p) for p in players if _team(p))
+    game_counts = Counter(_game_key(p) for p in players if _game_key(p))
+    max_team = max(team_counts.values()) if team_counts else 0
+    max_game = max(game_counts.values()) if game_counts else 0
+
+    stack_count = 0
+    bringback_count = 0
+    qb_vs_opp_dst = False
+    qb_game_count = 0
+    qb_team = ""
+    qb_opp = ""
+    qb_game = ""
+    if qb is not None:
+        qb_team = _team(qb)
+        qb_opp = _nfl_opponent(qb)
+        qb_game = _game_key(qb)
+        stack_count = sum(
+            1 for p in players
+            if p is not qb
+            and _team(p) == qb_team
+            and bool(_position_tokens(p) & {"WR", "TE"})
+        )
+        bringback_count = sum(
+            1 for p in players
+            if qb_opp
+            and _team(p) == qb_opp
+            and bool(_position_tokens(p) & {"RB", "WR", "TE"})
+        )
+        qb_vs_opp_dst = any(qb_opp and _team(d) == qb_opp for d in dsts)
+        qb_game_count = sum(1 for p in players if qb_game and _game_key(p) == qb_game)
+
+    rb_dst_pairs = 0
+    for d in dsts:
+        dt = _team(d)
+        rb_dst_pairs += sum(1 for p in players if _team(p) == dt and "RB" in _position_tokens(p))
+
+    same_team_rb_pairs = 0
+    for t in set(_team(p) for p in players if _team(p)):
+        rbs = sum(1 for p in players if _team(p) == t and "RB" in _position_tokens(p))
+        if rbs >= 2:
+            same_team_rb_pairs += (rbs * (rbs - 1)) // 2
+
+    stack_score = 30.0
+    if stack_count >= 1:
+        stack_score += 24.0
+    if stack_count >= 2:
+        stack_score += 12.0
+    if bringback_count >= 1:
+        stack_score += 18.0
+    if stack_count >= 2 and bringback_count >= 1:
+        stack_score += 8.0
+    if rb_dst_pairs:
+        stack_score += min(10.0, 7.0 * rb_dst_pairs)
+    if 4 <= qb_game_count <= 5:
+        stack_score += 5.0
+    elif qb_game_count >= 6:
+        stack_score -= 7.0
+    if same_team_rb_pairs:
+        stack_score -= 8.0 * same_team_rb_pairs
+    if qb_vs_opp_dst:
+        stack_score -= 45.0
+    if max_team >= 5:
+        stack_score -= 10.0 * (max_team - 4)
+    stack_score = max(0.0, min(100.0, stack_score))
+
+    return {
+        "qb_team": qb_team,
+        "qb_opponent": qb_opp,
+        "qb_game": qb_game,
+        "qb_stack": stack_count,
+        "bringback": bringback_count,
+        "qb_vs_opp_dst": qb_vs_opp_dst,
+        "rb_dst_pairs": rb_dst_pairs,
+        "same_team_rb_pairs": same_team_rb_pairs,
+        "qb_game_count": qb_game_count,
+        "max_team": max_team,
+        "max_game": max_game,
+        "stack_score": stack_score,
+        "stack_shape": f"QB+{stack_count} / BB{bringback_count}" if qb is not None else "no QB",
+    }
+
+
+def _nfl_lineup_is_acceptable(lineup: List[Dict[str, Any]], build_style: str) -> bool:
+    """Hard safety rails; strategic preferences beyond these remain soft scores."""
+    f = _nfl_lineup_features(lineup)
+    profile = _nfl_style_profile(build_style)
+    if f.get("qb_team", "") == "":
+        return False
+    # QB against the opposing DST is sufficiently anti-correlated to reject in all presets.
+    if bool(f.get("qb_vs_opp_dst")):
+        return False
+    if int(f.get("qb_stack", 0) or 0) < int(profile.get("required_qb_stack", 0) or 0):
+        return False
+    if int(f.get("max_team", 0) or 0) > int(profile.get("max_team", 99) or 99):
+        return False
+    if int(f.get("max_game", 0) or 0) > int(profile.get("max_game", 99) or 99):
+        return False
+    return True
+
+
+def _is_mlb_pitcher(p: Dict[str, Any]) -> bool:
+    return bool(_position_tokens(p) & {"P", "SP", "RP"})
+
+
+def _is_mlb_hitter(p: Dict[str, Any]) -> bool:
+    return not _is_mlb_pitcher(p)
+
+
+def _batting_order_bonus(p: Dict[str, Any]) -> float:
+    """Small DFS strategy boost/penalty for MLB confirmed batting order.
+
+    This is intentionally modest: it helps 1-5 hitters and confirmed starters
+    rise in otherwise-close decisions without turning lineup order into a hard rule.
+    """
+    try:
+        order = int(p.get("BattingOrder", 0) or 0)
+    except Exception:
+        order = 0
+    bonus = 0.0
+    if order in (1, 2, 3):
+        bonus += 1.15
+    elif order in (4, 5):
+        bonus += 0.75
+    elif order == 6:
+        bonus += 0.15
+    elif order in (7, 8, 9):
+        bonus -= 0.45
+    if p.get("ConfirmedLineup"):
+        bonus += 0.25
+    return bonus
+
+
+def _is_nba_ball_handler_or_wing(p: Dict[str, Any]) -> bool:
+    return bool(_position_tokens(p) & {"PG", "SG", "SF", "PF", "C", "G", "F"})
+
+
+# ---------------- Showdown ----------------
+
+
+class ShowdownOptimizer:
+    """DK Showdown
+
+    - 1 CPT + 5 FLEX
+    - salary cap
+    - maximize (projection + optional ownership term)
+
+    Tags:
+      - LockFlex/FadeFlex apply to FLEX slot eligibility
+      - LockCpt/FadeCpt apply to CPT slot eligibility
+
+    Ownership controls:
+      - own_mode: 'Balanced' | 'Leverage' | 'Chalk'
+      - own_weight: strength of ownership term in the objective
+    """
+
+    def __init__(
+        self,
+        players: List[Dict[str, Any]],
+        salary_cap: float = 50000.0,
+        seed: int = 1337,
+        *,
+        own_mode: str = "Balanced",
+        own_weight: float = 0.0,
+        build_style: str = "Strategic",
+    ):
+        self.players = [p for p in players if _salary(p) > 0 or _cpt_salary(p) > 0]
+        self.salary_cap = float(salary_cap)
+        self.rng = random.Random(seed)
+        self.own_mode = own_mode
+        self.own_weight = float(own_weight or 0.0)
+        self.build_style = build_style or "Strategic"
+
+    def build_lineups(self, num_lineups: int = 10) -> List[Dict[str, Any]]:
+        if not self.players:
+            return []
+
+        locked = [p for p in self.players if p.get("LockCpt")]
+        if len(locked) > 1:
+            names = ", ".join(str(p.get("Name")) for p in locked[:10])
+            raise ValueError(f"Multiple CPT locks set (only 1 CPT allowed). Locked: {names}")
+
+        if locked:
+            logger.info("CPT LOCK ACTIVE: %s | key=%s", locked[0].get("Name", ""), _pkey(locked[0]))
+
+        if HAS_PULP:
+            return self._build_lineups_pulp(num_lineups=num_lineups)
+        logger.warning("PuLP not installed; using greedy fallback for showdown (tags honored).")
+        return self._build_lineups_greedy(num_lineups=num_lineups)
+
+    def _build_lineups_pulp(self, num_lineups: int) -> List[Dict[str, Any]]:
+        prev: List[Tuple[str, Tuple[str, ...]]] = []
+        out: List[Dict[str, Any]] = []
+
+        keys = [_pkey(p) for p in self.players]
+        key_to_player = {_pkey(p): p for p in self.players}
+
+        cap_cpt, cap_flex = _build_showdown_cap_maps(self.players, num_lineups)
+        used_cpt: Dict[str, int] = {}
+        used_flex: Dict[str, int] = {}
+
+        # Ownership settings
+        own_s = _own_sign(self.own_mode)
+        # Slightly stronger ownership shaping at CPT than FLEX (industry-ish)
+        w_cpt = self.own_weight * 1.35 * own_s
+        w_flex = self.own_weight * 1.00 * own_s
+
+        for k in range(num_lineups):
+            prob = pulp.LpProblem(f"showdown_{k}", pulp.LpMaximize)
+
+            cpt = pulp.LpVariable.dicts("cpt", keys, lowBound=0, upBound=1, cat="Binary")
+            flx = pulp.LpVariable.dicts("flx", keys, lowBound=0, upBound=1, cat="Binary")
+
+            # Base objective
+            obj = pulp.lpSum(
+                [
+                    cpt[pk] * _cpt_proj(key_to_player[pk])
+                    + flx[pk] * _proj(key_to_player[pk])
+                    for pk in keys
+                ]
+            )
+
+            # Ownership term (soft)
+            if self.own_weight and abs(self.own_weight) > 1e-9:
+                obj += pulp.lpSum(
+                    [
+                        cpt[pk] * (w_cpt * _own(key_to_player[pk]))
+                        + flx[pk] * (w_flex * _own(key_to_player[pk]))
+                        for pk in keys
+                    ]
+                )
+
+            # Strategic Showdown bias: prefer correlated 4-2 / 3-3 style builds
+            # by rewarding same-team pairs, but only as a soft nudge. This still
+            # allows semi-random/projection-driven builds when Build Style is set
+            # to Randomized.
+            style = _style_level(self.build_style)
+            if style > 0:
+                same_team_pairs = []
+                for a_i, a in enumerate(keys):
+                    ta = _team(key_to_player[a])
+                    if not ta:
+                        continue
+                    for b in keys[a_i + 1:]:
+                        if ta and ta == _team(key_to_player[b]):
+                            same_team_pairs.append((a, b))
+                if same_team_pairs:
+                    ypair = pulp.LpVariable.dicts(f"sd_pair_{k}", list(range(len(same_team_pairs))), 0, 1, cat="Binary")
+                    for idx, (a, b) in enumerate(same_team_pairs):
+                        a_used = cpt[a] + flx[a]
+                        b_used = cpt[b] + flx[b]
+                        prob += ypair[idx] <= a_used
+                        prob += ypair[idx] <= b_used
+                        prob += ypair[idx] >= a_used + b_used - 1
+                    obj += pulp.lpSum([ypair[i] * (0.18 * style) for i in range(len(same_team_pairs))])
+
+                # Tiny jitter so repeated lineups are not just strictly deterministic after no-good cuts.
+                obj += pulp.lpSum([
+                    (cpt[pk] + flx[pk]) * self.rng.uniform(-0.015, 0.015)
+                    for pk in keys
+                ])
+
+            prob += obj
+
+            prob += pulp.lpSum([cpt[pk] for pk in keys]) == 1
+            prob += pulp.lpSum([flx[pk] for pk in keys]) == 5
+
+            for pk in keys:
+                prob += cpt[pk] + flx[pk] <= 1
+
+            prob += (
+                pulp.lpSum(
+                    [
+                        cpt[pk] * _cpt_salary(key_to_player[pk])
+                        + flx[pk] * _salary(key_to_player[pk])
+                        for pk in keys
+                    ]
+                )
+                <= self.salary_cap
+            )
+
+            # Tags
+            for pk in keys:
+                p = key_to_player[pk]
+                if p.get("FadeFlex"):
+                    prob += flx[pk] == 0
+                if p.get("FadeCpt"):
+                    prob += cpt[pk] == 0
+                if p.get("LockFlex"):
+                    prob += flx[pk] == 1
+                if p.get("LockCpt"):
+                    prob += cpt[pk] == 1
+                    prob += flx[pk] == 0
+
+            # Ownership caps (Showdown only)
+            for pk in keys:
+                mx_cpt = cap_cpt.get(pk, None)
+                if mx_cpt is not None and used_cpt.get(pk, 0) >= mx_cpt:
+                    prob += cpt[pk] == 0
+
+                mx_flex = cap_flex.get(pk, None)
+                if mx_flex is not None and used_flex.get(pk, 0) >= mx_flex:
+                    prob += flx[pk] == 0
+
+            # Uniqueness (avoid exact same 6-man set)
+            for prev_cpt, prev_flex in prev:
+                prob += (cpt[prev_cpt] + pulp.lpSum([flx[pk] for pk in prev_flex])) <= 5
+
+            status = prob.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=4))
+            if pulp.LpStatus[status] != "Optimal":
+                logger.info(
+                    "Showdown stopped early at %d/%d (status=%s)",
+                    k,
+                    num_lineups,
+                    pulp.LpStatus[status],
+                )
+                break
+
+            cpt_key = next(pk for pk in keys if pulp.value(cpt[pk]) > 0.5)
+            flex_keys = tuple(sorted([pk for pk in keys if pulp.value(flx[pk]) > 0.5]))
+
+            used_cpt[cpt_key] = used_cpt.get(cpt_key, 0) + 1
+            for pk in flex_keys:
+                used_flex[pk] = used_flex.get(pk, 0) + 1
+
+            prev.append((cpt_key, flex_keys))
+            out.append({"Captain": key_to_player[cpt_key], "Flex": [key_to_player[pk] for pk in flex_keys]})
+
+        return out
+
+    def _build_lineups_greedy(self, num_lineups: int) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        used_sets: set[Tuple[str, Tuple[str, ...]]] = set()
+
+        cap_cpt, cap_flex = _build_showdown_cap_maps(self.players, num_lineups)
+        used_cpt: Dict[str, int] = {}
+        used_flex: Dict[str, int] = {}
+
+        own_s = _own_sign(self.own_mode)
+        w_cpt = self.own_weight * 1.35 * own_s
+        w_flex = self.own_weight * 1.00 * own_s
+
+        def score_cpt(p: Dict[str, Any]) -> float:
+            return _cpt_proj(p) + w_cpt * _own(p)
+
+        def score_flex(p: Dict[str, Any]) -> float:
+            return _proj(p) + w_flex * _own(p)
+
+        locked_cpt = next((p for p in self.players if p.get("LockCpt")), None)
+
+        # CPT pool
+        if locked_cpt:
+            cpt_choices = [locked_cpt]
+        else:
+            cpt_pool = [p for p in self.players if not p.get("FadeCpt")]
+            cpt_pool = sorted(cpt_pool, key=lambda p: (score_cpt(p) / max(_cpt_salary(p), 1.0)), reverse=True)
+            cpt_choices = cpt_pool[: max(10, len(cpt_pool) // 10)]
+
+        # FLEX pool
+        base_flex_pool = [p for p in self.players if not p.get("FadeFlex")]
+        base_flex_pool = sorted(base_flex_pool, key=lambda p: (score_flex(p) / max(_salary(p), 1.0)), reverse=True)
+
+        for _ in range(num_lineups * 50):
+            cpt = self.rng.choice(cpt_choices)
+            cpt_key = _pkey(cpt)
+            mx_cpt = cap_cpt.get(cpt_key, None)
+            if mx_cpt is not None and used_cpt.get(cpt_key, 0) >= mx_cpt:
+                continue
+
+            cap_left = self.salary_cap - _cpt_salary(cpt)
+            if cap_left < 0:
+                continue
+
+            flex: List[Dict[str, Any]] = []
+
+            # forced flex locks first
+            locked_flex = [p for p in self.players if p.get("LockFlex") and not p.get("FadeFlex")]
+            locked_flex = [p for p in locked_flex if _pkey(p) != _pkey(cpt)]
+
+            ok = True
+            for p in locked_flex:
+                if _salary(p) > cap_left:
+                    ok = False
+                    break
+                pk = _pkey(p)
+                mx_f = cap_flex.get(pk, None)
+                if mx_f is not None and used_flex.get(pk, 0) >= mx_f:
+                    ok = False
+                    break
+                flex.append(p)
+                cap_left -= _salary(p)
+            if not ok or len(flex) > 5:
+                continue
+
+            for p in base_flex_pool:
+                if _pkey(p) == _pkey(cpt):
+                    continue
+                if any(_pkey(p) == _pkey(x) for x in flex):
+                    continue
+                if _salary(p) <= cap_left:
+                    pk = _pkey(p)
+                    mx_f = cap_flex.get(pk, None)
+                    if mx_f is not None and used_flex.get(pk, 0) >= mx_f:
+                        continue
+                    flex.append(p)
+                    cap_left -= _salary(p)
+                if len(flex) == 5:
+                    break
+
+            if len(flex) < 5:
+                continue
+
+            sig = (_pkey(cpt), tuple(sorted(_pkey(p) for p in flex)))
+            if sig in used_sets:
+                continue
+
+            used_sets.add(sig)
+            out.append({"Captain": cpt, "Flex": flex})
+
+            used_cpt[_pkey(cpt)] = used_cpt.get(_pkey(cpt), 0) + 1
+            for pp in flex:
+                pk = _pkey(pp)
+                used_flex[pk] = used_flex.get(pk, 0) + 1
+
+            if len(out) >= num_lineups:
+                break
+
+        return out
+
+
+# ---------------- Classic ----------------
+
+
+class ClassicOptimizer:
+    """DK Classic
+
+    QB, RB, RB, WR, WR, WR, TE, FLEX(RB/WR/TE), DST
+
+    Tags:
+      - LockFlex = must include player
+      - FadeFlex = exclude player
+      - CPT tags ignored
+
+    Builder biases (soft): stacking + bringbacks + correlation.
+
+    Ownership controls:
+      - own_mode: 'Balanced' | 'Leverage' | 'Chalk'
+      - own_weight: strength of ownership term in the objective
+    """
+
+    def __init__(
+        self,
+        players: List[Dict[str, Any]],
+        salary_cap: float = 50000.0,
+        seed: int = 1337,
+        *,
+        own_mode: str = "Balanced",
+        own_weight: float = 0.0,
+    ):
+        self.players = [p for p in players if _salary(p) > 0 and str(p.get("Position", "")).strip()]
+        self.salary_cap = float(salary_cap)
+        self.rng = random.Random(seed)
+        self.own_mode = own_mode
+        self.own_weight = float(own_weight or 0.0)
+
+    def build_lineups(self, num_lineups: int = 10) -> List[List[Dict[str, Any]]]:
+        if not self.players:
+            return []
+
+        if HAS_PULP:
+            return self._build_lineups_pulp(num_lineups=num_lineups)
+        logger.warning("PuLP not installed; using greedy fallback for classic (tags honored).")
+        return self._build_lineups_greedy(num_lineups=num_lineups)
+
+    def _mlb_stack_weights(self) -> Tuple[float, float, float]:
+        pref = (getattr(self, "mlb_stack_pref", "Strategic") or "Strategic").strip().lower()
+        if "no" in pref or "off" in pref:
+            return (0.0, 0.0, 0.0)
+        if "5-3" in pref:
+            return (0.25, 0.90, 3.00)
+        if "5-2-1" in pref:
+            return (0.15, 0.60, 2.70)
+        if "4-4" in pref:
+            return (0.25, 2.40, 1.20)
+        if "4-3-1" in pref:
+            return (0.90, 2.00, 0.75)
+        # Any Strategic: prefer useful stacks without forcing a specific construction.
+        return (0.70, 1.25, 2.10)
+
+    def _build_lineups_pulp(self, num_lineups: int) -> List[List[Dict[str, Any]]]:
+        prev_sets: List[Tuple[str, ...]] = []
+        out: List[List[Dict[str, Any]]] = []
+
+        keys = [_pkey(p) for p in self.players]
+        key_to_player = {_pkey(p): p for p in self.players}
+
+        def pos(pk: str) -> str:
+            return str(key_to_player[pk].get("Position", "")).strip().upper()
+
+        def team(pk: str) -> str:
+            return str(key_to_player[pk].get("Team", "")).strip().upper()
+
+        def opp(pk: str) -> str:
+            return str(key_to_player[pk].get("Opponent", "")).strip().upper()
+
+        # Exposure caps (Classic): MaxPct (fallback to legacy MaxFlexPct)
+        cap_total: Dict[str, int] = {}
+        used_total: Dict[str, int] = {}
+        for p in self.players:
+            pk = _pkey(p)
+            pct_val = p.get("MaxPct", None)
+            if pct_val in (None, ""):
+                pct_val = p.get("MaxFlexPct", None)
+            mc = _max_count_from_pct(pct_val, num_lineups)
+            if mc is not None:
+                cap_total[pk] = mc
+                used_total[pk] = 0
+
+        # ---- Classic builder biases (soft) ----
+        DEFAULT_BIAS = {
+            "stack_pair": 2.0,  # QB with each same-team WR/TE
+            "bringback_pair": 0.8,  # QB with each opposing RB/WR/TE
+            "qb_vs_dst": -2.5,  # QB against opposing DST
+            "rb_dst": 0.6,  # RB + same-team DST
+            "rb_rb_same": -1.0,  # 2 RB same team
+        }
+        bias_weights = [1.0, 0.6, 0.3, 0.0]  # progressive relaxation
+
+        # Ownership term
+        own_s = _own_sign(self.own_mode)
+        w_own = self.own_weight * own_s
+
+        # Precompute pair terms once: (a_key, b_key, coef)
+        def build_pair_terms() -> List[Tuple[str, str, float]]:
+            pair_terms: List[Tuple[str, str, float]] = []
+            by_team_pos: Dict[Tuple[str, str], List[str]] = {}
+            for pk in keys:
+                by_team_pos.setdefault((team(pk), pos(pk)), []).append(pk)
+
+            # QB stacking with WR/TE
+            for qbpk in [pk for pk in keys if pos(pk) == "QB"]:
+                t = team(qbpk)
+                if not t:
+                    continue
+                passcatch = (by_team_pos.get((t, "WR"), []) or []) + (by_team_pos.get((t, "TE"), []) or [])
+                for ppk in passcatch:
+                    pair_terms.append((qbpk, ppk, DEFAULT_BIAS["stack_pair"]))
+
+            # Bring-backs: QB with opposing RB/WR/TE
+            for qbpk in [pk for pk in keys if pos(pk) == "QB"]:
+                o = opp(qbpk)
+                if not o:
+                    continue
+                opp_skills = (
+                    (by_team_pos.get((o, "RB"), []) or [])
+                    + (by_team_pos.get((o, "WR"), []) or [])
+                    + (by_team_pos.get((o, "TE"), []) or [])
+                )
+                for sk in opp_skills:
+                    pair_terms.append((qbpk, sk, DEFAULT_BIAS["bringback_pair"]))
+
+            # QB vs opposing DST penalty
+            for qbpk in [pk for pk in keys if pos(pk) == "QB"]:
+                o = opp(qbpk)
+                if not o:
+                    continue
+                for dstpk in (by_team_pos.get((o, "DST"), []) or []):
+                    pair_terms.append((qbpk, dstpk, DEFAULT_BIAS["qb_vs_dst"]))
+
+            # RB + DST same team bonus
+            for t in {team(pk) for pk in keys}:
+                if not t:
+                    continue
+                rbs = by_team_pos.get((t, "RB"), []) or []
+                dsts = by_team_pos.get((t, "DST"), []) or []
+                for rbpk in rbs:
+                    for dstpk in dsts:
+                        pair_terms.append((rbpk, dstpk, DEFAULT_BIAS["rb_dst"]))
+
+            # RB + RB same team penalty
+            for t in {team(pk) for pk in keys}:
+                if not t:
+                    continue
+                rbs = sorted(by_team_pos.get((t, "RB"), []) or [])
+                for i in range(len(rbs)):
+                    for j in range(i + 1, len(rbs)):
+                        pair_terms.append((rbs[i], rbs[j], DEFAULT_BIAS["rb_rb_same"]))
+
+            return pair_terms
+
+        pair_terms = build_pair_terms()
+
+        for k in range(num_lineups):
+            solved = False
+            last_status = "Unknown"
+
+            for bw in bias_weights:
+                prob = pulp.LpProblem(f"classic_{k}", pulp.LpMaximize)
+                x = pulp.LpVariable.dicts("pick", keys, lowBound=0, upBound=1, cat="Binary")
+
+                # Base objective
+                obj = pulp.lpSum([x[pk] * _proj(key_to_player[pk]) for pk in keys])
+
+                # Ownership term (soft)
+                if self.own_weight and abs(self.own_weight) > 1e-9:
+                    obj += pulp.lpSum([x[pk] * (w_own * _own(key_to_player[pk])) for pk in keys])
+
+                # Pair bias terms (soft) with relaxation
+                if pair_terms and bw > 0:
+                    y = pulp.LpVariable.dicts(
+                        f"pair_{k}", list(range(len(pair_terms))), lowBound=0, upBound=1, cat="Binary"
+                    )
+                    for idx, (a, b, coef) in enumerate(pair_terms):
+                        prob += y[idx] <= x[a]
+                        prob += y[idx] <= x[b]
+                        prob += y[idx] >= x[a] + x[b] - 1
+                        obj += y[idx] * (bw * coef)
+
+                prob += obj
+
+                # Roster constraints
+                prob += pulp.lpSum([x[pk] for pk in keys]) == 9
+                prob += pulp.lpSum([x[pk] * _salary(key_to_player[pk]) for pk in keys]) <= self.salary_cap
+
+                prob += pulp.lpSum([x[pk] for pk in keys if pos(pk) == "QB"]) == 1
+                prob += pulp.lpSum([x[pk] for pk in keys if pos(pk) == "DST"]) == 1
+                prob += pulp.lpSum([x[pk] for pk in keys if pos(pk) == "RB"]) >= 2
+                prob += pulp.lpSum([x[pk] for pk in keys if pos(pk) == "WR"]) >= 3
+                prob += pulp.lpSum([x[pk] for pk in keys if pos(pk) == "TE"]) >= 1
+                prob += pulp.lpSum([x[pk] for pk in keys if pos(pk) in ("RB", "WR", "TE")]) == 7
+
+                # Tags
+                for pk in keys:
+                    p = key_to_player[pk]
+                    if p.get("FadeFlex"):
+                        prob += x[pk] == 0
+                    if p.get("LockFlex"):
+                        prob += x[pk] == 1
+
+                # Exposure caps
+                for pk, cap in cap_total.items():
+                    used = used_total.get(pk, 0)
+                    if used >= cap:
+                        prob += x[pk] == 0
+                    else:
+                        prob += x[pk] <= (cap - used)
+
+                # Uniqueness (avoid exact same 9-man set)
+                for prev in prev_sets:
+                    prob += pulp.lpSum([x[pk] for pk in prev]) <= 8
+
+                status = prob.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=4))
+                last_status = pulp.LpStatus.get(status, str(status))
+                if pulp.LpStatus[status] != "Optimal":
+                    continue
+
+                picked = tuple(sorted([pk for pk in keys if pulp.value(x[pk]) > 0.5]))
+                if len(picked) != 9:
+                    continue
+
+                for pk in picked:
+                    if pk in used_total:
+                        used_total[pk] = used_total.get(pk, 0) + 1
+
+                prev_sets.append(picked)
+                out.append([key_to_player[pk] for pk in picked])
+                solved = True
+                break
+
+            if not solved:
+                logger.info("Classic stopped early at %d/%d (status=%s)", k, num_lineups, last_status)
+                break
+
+        return out
+
+    def _build_lineups_greedy(self, num_lineups: int) -> List[List[Dict[str, Any]]]:
+        out: List[List[Dict[str, Any]]] = []
+        used: set[Tuple[str, ...]] = set()
+
+        own_s = _own_sign(self.own_mode)
+        w_own = self.own_weight * own_s
+
+        def score(p: Dict[str, Any]) -> float:
+            return _proj(p) + w_own * _own(p)
+
+        pool = [p for p in self.players if not p.get("FadeFlex")]
+        pool = sorted(pool, key=lambda p: (score(p) / max(_salary(p), 1.0)), reverse=True)
+
+        locked = [p for p in self.players if p.get("LockFlex") and not p.get("FadeFlex")]
+        locked_keys = {_pkey(p) for p in locked}
+
+        # Exposure caps
+        cap_total: Dict[str, int] = {}
+        used_total: Dict[str, int] = {}
+        for p in self.players:
+            pk = _pkey(p)
+            pct_val = p.get("MaxPct", None)
+            if pct_val in (None, ""):
+                pct_val = p.get("MaxFlexPct", None)
+            mc = _max_count_from_pct(pct_val, num_lineups)
+            if mc is not None:
+                cap_total[pk] = mc
+                used_total[pk] = 0
+
+        def pick_best(pos_name: str, exclude: set[str], cap_left: float) -> Optional[Dict[str, Any]]:
+            for p in pool:
+                pk = _pkey(p)
+                if pk in exclude:
+                    continue
+                if pk in cap_total and pk not in locked_keys and used_total.get(pk, 0) >= cap_total[pk]:
+                    continue
+                if str(p.get("Position", "")).strip().upper() != pos_name:
+                    continue
+                if _salary(p) <= cap_left:
+                    return p
+            return None
+
+        for _ in range(num_lineups * 60):
+            cap_left = self.salary_cap
+            chosen: List[Dict[str, Any]] = []
+            excl: set[str] = set()
+
+            ok = True
+            for p in locked:
+                if _salary(p) > cap_left:
+                    ok = False
+                    break
+                chosen.append(p)
+                excl.add(_pkey(p))
+                cap_left -= _salary(p)
+            if not ok or len(chosen) > 9:
+                continue
+
+            def count(posn: str) -> int:
+                return sum(1 for p in chosen if str(p.get("Position", "")).upper() == posn)
+
+            if count("QB") == 0:
+                qb = pick_best("QB", excl, cap_left)
+                if not qb:
+                    continue
+                chosen.append(qb)
+                excl.add(_pkey(qb))
+                cap_left -= _salary(qb)
+
+            if count("DST") == 0:
+                dst = pick_best("DST", excl, cap_left)
+                if not dst:
+                    continue
+                chosen.append(dst)
+                excl.add(_pkey(dst))
+                cap_left -= _salary(dst)
+
+            while count("RB") < 2:
+                p = pick_best("RB", excl, cap_left)
+                if not p:
+                    ok = False
+                    break
+                chosen.append(p)
+                excl.add(_pkey(p))
+                cap_left -= _salary(p)
+            if not ok:
+                continue
+
+            while count("WR") < 3:
+                p = pick_best("WR", excl, cap_left)
+                if not p:
+                    ok = False
+                    break
+                chosen.append(p)
+                excl.add(_pkey(p))
+                cap_left -= _salary(p)
+            if not ok:
+                continue
+
+            while count("TE") < 1:
+                p = pick_best("TE", excl, cap_left)
+                if not p:
+                    ok = False
+                    break
+                chosen.append(p)
+                excl.add(_pkey(p))
+                cap_left -= _salary(p)
+            if not ok:
+                continue
+
+            while len(chosen) < 9:
+                flex = None
+                for p in pool:
+                    if _pkey(p) in excl:
+                        continue
+                    if str(p.get("Position", "")).upper() not in ("RB", "WR", "TE"):
+                        continue
+                    if _salary(p) <= cap_left:
+                        flex = p
+                        break
+                if not flex:
+                    ok = False
+                    break
+                chosen.append(flex)
+                excl.add(_pkey(flex))
+                cap_left -= _salary(flex)
+
+            if not ok:
+                continue
+
+            if not locked_keys.issubset({_pkey(p) for p in chosen}):
+                continue
+
+            sig = tuple(sorted(_pkey(p) for p in chosen))
+            if sig in used:
+                continue
+            used.add(sig)
+
+            # Update exposure usage counts
+            for p in chosen:
+                pk = _pkey(p)
+                if pk in used_total and pk not in locked_keys:
+                    used_total[pk] = used_total.get(pk, 0) + 1
+
+            out.append(chosen)
+            if len(out) >= num_lineups:
+                break
+
+        return out
+
+
+# ---------------- Multi-sport Classic (MLB / NBA / WNBA) ----------------
+
+SPORT_ROSTER_SLOTS = {
+    "NFL": ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "DST"],
+    "MLB": ["P", "P", "C", "1B", "2B", "3B", "SS", "OF", "OF", "OF"],
+    "NBA": ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
+    "WNBA": ["PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"],
+}
+
+
+def get_roster_slots_for_sport(sport: str) -> List[str]:
+    s = (sport or "NFL").strip().upper()
+    return list(SPORT_ROSTER_SLOTS.get(s, SPORT_ROSTER_SLOTS["NFL"]))
+
+
+def _position_tokens(p: Dict[str, Any]) -> set[str]:
+    raw = str(p.get("Position", "") or "").upper().replace("/", ",").replace(";", ",")
+    parts = [x.strip() for x in raw.split(",") if x.strip()]
+    if not parts and raw.strip():
+        parts = [raw.strip()]
+    return set(parts)
+
+
+def _eligible_for_slot(p: Dict[str, Any], slot: str, sport: str) -> bool:
+    slot = (slot or "").upper()
+    sport = (sport or "NFL").upper()
+    pos = _position_tokens(p)
+
+    # Direct match first. Handles normal cases like QB, 1B, SS, PG, etc.
+    if slot in pos:
+        return True
+
+    # MLB DraftKings files often label pitchers as SP/RP instead of generic P,
+    # and outfielders may occasionally appear as LF/CF/RF rather than OF.
+    if sport == "MLB":
+        if slot == "P":
+            return bool(pos & {"P", "SP", "RP"})
+        if slot == "OF":
+            return bool(pos & {"OF", "LF", "CF", "RF"})
+
+    # NBA/WNBA utility slots.
+    if slot == "UTIL":
+        return bool(pos & {"PG", "SG", "SF", "PF", "C", "G", "F"})
+    if slot == "G":
+        return bool(pos & {"PG", "SG", "G"})
+    if slot == "F":
+        return bool(pos & {"SF", "PF", "F"})
+
+    # NFL flex.
+    if slot == "FLEX":
+        return bool(pos & {"RB", "WR", "TE"})
+
+    return False
+
+
+
+def _lineup_salary(lineup: List[Dict[str, Any]]) -> float:
+    return sum(_salary(p) for p in (lineup or []))
+
+
+def _salary_floor_for_strategy(salary_cap: float, strategy: str, sport: str) -> float:
+    """Preferred minimum salary. This is enforced progressively, not blindly forever."""
+    strategy_l = (strategy or "Near Cap").strip().lower()
+    cap = float(salary_cap or 50000.0)
+    if "leverage" in strategy_l or "loose" in strategy_l:
+        return max(0.0, cap - 4500.0)   # e.g. 45.5k on 50k cap
+    if "balanced" in strategy_l:
+        return max(0.0, cap - 3000.0)   # e.g. 47k
+    if "max" in strategy_l or "cash" in strategy_l:
+        return max(0.0, cap - 1000.0)   # e.g. 49k
+    # Recommended tournament default: use almost all salary without requiring perfect 50k.
+    return max(0.0, cap - 1500.0)       # e.g. 48.5k
+
+
+def _salary_bonus(lineup: List[Dict[str, Any]], salary_cap: float, strategy: str = "Near Cap") -> float:
+    used = _lineup_salary(lineup)
+    cap = float(salary_cap or 50000.0)
+    if cap <= 0:
+        return 0.0
+    # Smoothly rewards spending from ~94% of cap upward. Caps the effect so bad
+    # high-salary players do not overwhelm projections and stack logic.
+    pct = max(0.0, min(1.0, used / cap))
+    if "leverage" in (strategy or "").strip().lower():
+        # Salary leverage still dislikes extreme punts, but doesn't force near-cap.
+        return max(0.0, min(3.0, (pct - 0.88) * 25.0))
+    return max(0.0, min(8.0, (pct - 0.94) * 100.0))
+
+
+def lineup_grade_for_sport(lineup: List[Dict[str, Any]], sport: str, salary_cap: float = 50000.0) -> Dict[str, Any]:
+    """UI-only lineup grade. Do not export this to DK upload files."""
+    sport_u = (sport or "NFL").upper()
+    used = _lineup_salary(lineup)
+    cap = float(salary_cap or 50000.0)
+    sal_pct = (used / cap) if cap > 0 else 0.0
+    salary_score = max(0.0, min(100.0, (sal_pct - 0.88) / 0.12 * 100.0))
+
+    proj = sum(_proj(p) for p in (lineup or []))
+    # Sport-specific loose normalization. NFL previously used proj*2, which made
+    # virtually every normal Classic lineup hit a meaningless 100 projection score.
+    if sport_u == "NFL":
+        proj_score = max(0.0, min(100.0, ((proj - 90.0) / 80.0) * 100.0))
+    elif sport_u == "MLB":
+        proj_score = max(0.0, min(100.0, proj * 7.5))
+    else:
+        proj_score = max(0.0, min(100.0, proj * 2.0))
+
+    stack_score = 50.0
+    stack_shape = "n/a"
+    warnings: List[str] = []
+    if sport_u == "NFL":
+        nf = _nfl_lineup_features(lineup)
+        stack_score = float(nf.get("stack_score", 50.0) or 50.0)
+        stack_shape = str(nf.get("stack_shape", "n/a") or "n/a")
+        if int(nf.get("qb_stack", 0) or 0) == 0:
+            warnings.append("QB unstacked")
+        if int(nf.get("bringback", 0) or 0) == 0:
+            warnings.append("no bring-back")
+        if bool(nf.get("qb_vs_opp_dst")):
+            warnings.append("QB vs opposing DST")
+        if int(nf.get("max_team", 0) or 0) >= 5:
+            warnings.append("heavy team concentration")
+        if used < cap - 3000:
+            warnings.append("low salary")
+    elif sport_u == "MLB":
+        hitters = [p for p in lineup if _is_mlb_hitter(p)]
+        counts = sorted([c for _, c in Counter(_team(p) for p in hitters if _team(p)).items()], reverse=True)
+        stack_shape = "-".join(map(str, counts[:3])) if counts else "none"
+        if counts[:2] in ([5,3], [4,4]):
+            stack_score = 100.0
+        elif counts and counts[0] == 5:
+            stack_score = 88.0
+        elif counts and counts[0] == 4:
+            stack_score = 78.0
+        elif counts and counts[0] == 3:
+            stack_score = 62.0
+        else:
+            stack_score = 35.0
+        top_order = sum(1 for p in hitters if 1 <= int(p.get("BattingOrder", 0) or 0) <= 5)
+        confirmed = sum(1 for p in hitters if p.get("ConfirmedLineup"))
+        order_score = min(100.0, 35.0 + top_order * 8.0 + confirmed * 2.0)
+        stack_score = min(100.0, 0.82 * stack_score + 0.18 * order_score)
+        if used < cap - 3000:
+            warnings.append("low salary")
+    elif sport_u in ("NBA", "WNBA"):
+        teams = Counter(_team(p) for p in lineup if _team(p))
+        max_team = max(teams.values()) if teams else 0
+        stack_shape = f"max team {max_team}"
+        stack_score = min(100.0, 45.0 + max_team * 12.0)
+
+    overall = 0.42 * proj_score + 0.35 * salary_score + 0.23 * stack_score
+    if used < cap - 5000:
+        overall -= 18.0
+    elif used < cap - 3000:
+        overall -= 8.0
+    overall = max(0.0, min(100.0, overall))
+    letter = "A" if overall >= 85 else "B" if overall >= 72 else "C" if overall >= 58 else "D"
+    return {
+        "grade": letter,
+        "score": overall,
+        "salary_used": used,
+        "salary_left": max(0.0, cap - used),
+        "stack_shape": stack_shape,
+        "warnings": ", ".join(warnings),
+    }
+
+
+class MultiSportClassicOptimizer:
+    """Generic DK-style classic optimizer for NFL / MLB / NBA / WNBA.
+
+    Uses sport-specific slot templates and supports LockFlex/FadeFlex, salary cap,
+    max exposure via MaxPct, and ownership objective shaping.
+    """
+
+    def __init__(
+        self,
+        players: List[Dict[str, Any]],
+        *,
+        sport: str = "NFL",
+        salary_cap: float = 50000.0,
+        seed: int = 1337,
+        own_mode: str = "Balanced",
+        own_weight: float = 0.0,
+        build_style: str = "Strategic",
+        mlb_stack_pref: str = "Strategic",
+        salary_strategy: str = "Near Cap",
+    ):
+        self.sport = (sport or "NFL").strip().upper()
+        self.slots = get_roster_slots_for_sport(self.sport)
+        self.players = [p for p in players if _salary(p) > 0 and str(p.get("Position", "")).strip()]
+        self.salary_cap = float(salary_cap)
+        self.rng = random.Random(seed)
+        self.own_mode = own_mode
+        self.own_weight = float(own_weight or 0.0)
+        self.build_style = build_style or "Strategic"
+        self.mlb_stack_pref = mlb_stack_pref or "Strategic"
+        self.salary_strategy = salary_strategy or "Near Cap"
+
+    def build_lineups(self, num_lineups: int = 10) -> List[List[Dict[str, Any]]]:
+        # Use the same strategy-aware builder for every Classic sport. NFL used to
+        # delegate to the legacy ClassicOptimizer here, silently dropping the UI's
+        # Build Style and Salary Strategy settings. Keeping NFL in this path makes
+        # those controls real and lets the portfolio scorer enforce NFL-specific
+        # correlation/uniqueness rules.
+
+        # IMPORTANT: MLB/NBA/WNBA slates can contain hundreds of players.
+        # The exact PuLP slot-assignment model becomes very large because it
+        # creates player-by-slot variables and, for MLB, additional stack and
+        # pitcher-vs-hitter pair variables. On large DK MLB files this can make
+        # the UI appear stuck at "Optimizing...".
+        #
+        # Use the fast strategic greedy builder first for non-NFL classic slates.
+        # It still respects sport roster slots, salary cap, fades, locks, max%,
+        # ownership influence, and complete-slot validation. If it ever returns
+        # no lineups on a smaller slate, then try PuLP as a backup.
+        lineups = self._build_lineups_greedy(num_lineups=num_lineups)
+        if lineups:
+            logger.info("%s fast strategic build returned %d/%d lineups.", self.sport, len(lineups), num_lineups)
+            return lineups
+
+        if HAS_PULP and len(self.players) <= 120 and num_lineups <= 20:
+            logger.info("%s fast build returned no lineups; trying small-slate PuLP fallback.", self.sport)
+            return self._build_lineups_pulp(num_lineups=num_lineups)
+
+        logger.info("%s fast build returned no lineups; PuLP skipped for large slate safety.", self.sport)
+        return []
+
+    def _score(self, p: Dict[str, Any]) -> float:
+        score = _proj(p) + self.own_weight * _own_sign(self.own_mode) * _own(p)
+        if self.sport == "MLB" and _is_mlb_hitter(p):
+            score += _batting_order_bonus(p)
+        return score
+
+    def _caps(self, total_lineups: int) -> Tuple[Dict[str, int], Dict[str, int]]:
+        cap: Dict[str, int] = {}
+        used: Dict[str, int] = {}
+        for p in self.players:
+            pk = _pkey(p)
+            pct_val = p.get("MaxPct", None)
+            if pct_val in (None, ""):
+                pct_val = p.get("MaxFlexPct", None)
+            mc = _max_count_from_pct(pct_val, total_lineups)
+            if mc is not None:
+                cap[pk] = mc
+                used[pk] = 0
+        return cap, used
+
+    def _mlb_stack_weights(self) -> Tuple[float, float, float]:
+        pref = (getattr(self, "mlb_stack_pref", "Strategic") or "Strategic").strip().lower()
+        if "no" in pref or "off" in pref:
+            return (0.0, 0.0, 0.0)
+        if "5-3" in pref:
+            return (0.25, 0.90, 3.00)
+        if "5-2-1" in pref:
+            return (0.15, 0.60, 2.70)
+        if "4-4" in pref:
+            return (0.25, 2.40, 1.20)
+        if "4-3-1" in pref:
+            return (0.90, 2.00, 0.75)
+        # Any Strategic: prefer useful stacks without forcing a specific construction.
+        return (0.70, 1.25, 2.10)
+
+    def _build_lineups_pulp(self, num_lineups: int) -> List[List[Dict[str, Any]]]:
+        prev_sets: List[Tuple[str, ...]] = []
+        out: List[List[Dict[str, Any]]] = []
+        keys = [_pkey(p) for p in self.players]
+        key_to_player = {_pkey(p): p for p in self.players}
+        cap_total, used_total = self._caps(num_lineups)
+        locked_keys = {_pkey(p) for p in self.players if p.get("LockFlex") and not p.get("FadeFlex")}
+
+        # Helpful feasibility logging: if a slot has zero candidates, the solver
+        # would be infeasible before lineup 1.
+        try:
+            slot_counts = {slot: sum(1 for pk in keys if _eligible_for_slot(key_to_player[pk], slot, self.sport) and not key_to_player[pk].get("FadeFlex")) for slot in sorted(set(self.slots))}
+            logger.info("%s candidate counts by slot: %s", self.sport, slot_counts)
+        except Exception:
+            pass
+
+        for k in range(num_lineups):
+            prob = pulp.LpProblem(f"{self.sport.lower()}_{k}", pulp.LpMaximize)
+            x = pulp.LpVariable.dicts("pick", keys, lowBound=0, upBound=1, cat="Binary")
+            y = pulp.LpVariable.dicts("slot", [(i, pk) for i in range(len(self.slots)) for pk in keys], lowBound=0, upBound=1, cat="Binary")
+
+            obj = pulp.lpSum([x[pk] * self._score(key_to_player[pk]) for pk in keys])
+
+            # Strategic template bias. These are soft nudges layered on top of
+            # projections and MLB factor-adjusted projections. If Build Style is
+            # Randomized, this block is disabled and the optimizer falls back to
+            # projection/value plus the tiny diversity jitter.
+            style = _style_level(self.build_style)
+            if style > 0:
+                teams = sorted({_team(key_to_player[pk]) for pk in keys if _team(key_to_player[pk])})
+
+                if self.sport == "NFL":
+                    profile = _nfl_style_profile(self.build_style)
+                    # Baseline roster concentration rails. These are intentionally
+                    # generous enough to allow shootout stacks while preventing
+                    # accidental five/six-man team over-concentration.
+                    for t in teams:
+                        tkeys = [pk for pk in keys if _team(key_to_player[pk]) == t]
+                        if tkeys:
+                            prob += pulp.lpSum([x[pk] for pk in tkeys]) <= int(profile.get("max_team", 5))
+
+                    games = sorted({_game_key(key_to_player[pk]) for pk in keys if _game_key(key_to_player[pk])})
+                    for g in games:
+                        gkeys = [pk for pk in keys if _game_key(key_to_player[pk]) == g]
+                        if gkeys:
+                            prob += pulp.lpSum([x[pk] for pk in gkeys]) <= int(profile.get("max_game", 6))
+
+                    # Every selected QB in strategic modes carries at least one of
+                    # his WR/TE pass catchers. Opposing DST is a hard anti-correlation.
+                    required_stack = int(profile.get("required_qb_stack", 0) or 0)
+                    for qbpk in [pk for pk in keys if "QB" in _position_tokens(key_to_player[pk])]:
+                        qt = _team(key_to_player[qbpk])
+                        qo = _nfl_opponent(key_to_player[qbpk])
+                        passcatch = [
+                            pk for pk in keys
+                            if _team(key_to_player[pk]) == qt
+                            and bool(_position_tokens(key_to_player[pk]) & {"WR", "TE"})
+                        ]
+                        if required_stack > 0:
+                            if passcatch:
+                                prob += pulp.lpSum([x[pk] for pk in passcatch]) >= required_stack * x[qbpk]
+                            else:
+                                prob += x[qbpk] == 0
+                        for dstpk in [pk for pk in keys if "DST" in _position_tokens(key_to_player[pk]) and qo and _team(key_to_player[pk]) == qo]:
+                            prob += x[qbpk] + x[dstpk] <= 1
+
+                    # Soft NFL pair scoring: QB-pass catcher, bring-back and RB-DST
+                    # bonuses; same-team RB and DST-vs-opponent offense penalties.
+                    nfl_pairs: List[Tuple[str, str, float]] = []
+                    for qbpk in [pk for pk in keys if "QB" in _position_tokens(key_to_player[pk])]:
+                        qt = _team(key_to_player[qbpk])
+                        qo = _nfl_opponent(key_to_player[qbpk])
+                        for pk in keys:
+                            if pk == qbpk:
+                                continue
+                            pp = key_to_player[pk]
+                            toks = _position_tokens(pp)
+                            if _team(pp) == qt and bool(toks & {"WR", "TE"}):
+                                nfl_pairs.append((qbpk, pk, 1.8))
+                            elif qo and _team(pp) == qo and bool(toks & {"RB", "WR", "TE"}):
+                                nfl_pairs.append((qbpk, pk, 0.75))
+                    for t in teams:
+                        rbs = [pk for pk in keys if _team(key_to_player[pk]) == t and "RB" in _position_tokens(key_to_player[pk])]
+                        dsts = [pk for pk in keys if _team(key_to_player[pk]) == t and "DST" in _position_tokens(key_to_player[pk])]
+                        for rbpk in rbs:
+                            for dstpk in dsts:
+                                nfl_pairs.append((rbpk, dstpk, 0.55))
+                        for i in range(len(rbs)):
+                            for j in range(i + 1, len(rbs)):
+                                nfl_pairs.append((rbs[i], rbs[j], -0.85))
+                    if nfl_pairs:
+                        ynfl = pulp.LpVariable.dicts(f"nfl_pair_{k}", list(range(len(nfl_pairs))), 0, 1, cat="Binary")
+                        for idx, (a, b, coef) in enumerate(nfl_pairs):
+                            prob += ynfl[idx] <= x[a]
+                            prob += ynfl[idx] <= x[b]
+                            prob += ynfl[idx] >= x[a] + x[b] - 1
+                            obj += ynfl[idx] * (style * coef)
+
+                elif self.sport == "MLB":
+                    # DK MLB usually wants stacks. Encourage 3/4/5 hitter stacks
+                    # and cap hitters at 5 from one team. Pitchers do not count
+                    # toward hitter stacks.
+                    for t in teams:
+                        hitter_keys = [pk for pk in keys if _team(key_to_player[pk]) == t and _is_mlb_hitter(key_to_player[pk])]
+                        if not hitter_keys:
+                            continue
+                        team_count = pulp.lpSum([x[pk] for pk in hitter_keys])
+                        prob += team_count <= 5
+                        z3 = pulp.LpVariable(f"mlb_{k}_{t}_stack3", 0, 1, cat="Binary")
+                        z4 = pulp.LpVariable(f"mlb_{k}_{t}_stack4", 0, 1, cat="Binary")
+                        z5 = pulp.LpVariable(f"mlb_{k}_{t}_stack5", 0, 1, cat="Binary")
+                        # Indicator constraints for stack sizes.
+                        # z3/z4/z5 should turn ON when team_count reaches 3/4/5.
+                        # Important: these must not make low team_count values infeasible.
+                        # Prior version used team_count - 2 >= z3, which is impossible
+                        # when team_count is 0/1 and caused MLB builds to return Infeasible.
+                        m = max(5, len(hitter_keys))
+                        prob += team_count >= 3 * z3
+                        prob += team_count <= 2 + m * z3
+                        prob += team_count >= 4 * z4
+                        prob += team_count <= 3 + m * z4
+                        prob += team_count >= 5 * z5
+                        prob += team_count <= 4 + m * z5
+                        w3, w4, w5 = self._mlb_stack_weights()
+                        obj += style * (w3 * z3 + w4 * z4 + w5 * z5)
+
+                    # Avoid pitcher vs opposing hitters in the same GameInfo.
+                    # This is a penalty rather than a hard ban so users can still
+                    # force unusual builds with locks if desired.
+                    opp_pairs = []
+                    for ppk in keys:
+                        pp = key_to_player[ppk]
+                        if not _is_mlb_pitcher(pp):
+                            continue
+                        for hpk in keys:
+                            hp = key_to_player[hpk]
+                            if hpk == ppk or not _is_mlb_hitter(hp):
+                                continue
+                            if _game_key(pp) and _game_key(pp) == _game_key(hp) and _team(pp) != _team(hp):
+                                opp_pairs.append((ppk, hpk))
+                    if opp_pairs:
+                        ybad = pulp.LpVariable.dicts(f"mlb_bad_{k}", list(range(len(opp_pairs))), 0, 1, cat="Binary")
+                        for idx, (a, b) in enumerate(opp_pairs):
+                            prob += ybad[idx] <= x[a]
+                            prob += ybad[idx] <= x[b]
+                            prob += ybad[idx] >= x[a] + x[b] - 1
+                        obj -= pulp.lpSum([ybad[i] * (1.25 * style) for i in range(len(opp_pairs))])
+
+                elif self.sport in ("NBA", "WNBA"):
+                    # Gentle same-game/team correlation. Useful for overtime/close-game
+                    # environments without forcing rigid stacks.
+                    game_pairs = []
+                    for a_i, a in enumerate(keys):
+                        ga = _game_key(key_to_player[a])
+                        if not ga:
+                            continue
+                        for b in keys[a_i + 1:]:
+                            if ga == _game_key(key_to_player[b]):
+                                game_pairs.append((a, b))
+                    if game_pairs:
+                        ygame = pulp.LpVariable.dicts(f"nba_game_{k}", list(range(len(game_pairs))), 0, 1, cat="Binary")
+                        for idx, (a, b) in enumerate(game_pairs):
+                            prob += ygame[idx] <= x[a]
+                            prob += ygame[idx] <= x[b]
+                            prob += ygame[idx] >= x[a] + x[b] - 1
+                        obj += pulp.lpSum([ygame[i] * (0.08 * style) for i in range(len(game_pairs))])
+
+            # Small jitter creates semi-strategic randomness behind the template bias.
+            obj += pulp.lpSum([x[pk] * self.rng.uniform(-0.02, 0.02) for pk in keys])
+            prob += obj
+
+            prob += pulp.lpSum([x[pk] for pk in keys]) == len(self.slots)
+            prob += pulp.lpSum([x[pk] * _salary(key_to_player[pk]) for pk in keys]) <= self.salary_cap
+
+            for i, slot in enumerate(self.slots):
+                elig = [pk for pk in keys if _eligible_for_slot(key_to_player[pk], slot, self.sport)]
+                prob += pulp.lpSum([y[(i, pk)] for pk in elig]) == 1
+                for pk in keys:
+                    if pk not in elig:
+                        prob += y[(i, pk)] == 0
+                    else:
+                        prob += y[(i, pk)] <= x[pk]
+
+            for pk in keys:
+                prob += pulp.lpSum([y[(i, pk)] for i in range(len(self.slots))]) == x[pk]
+
+            for pk in keys:
+                p = key_to_player[pk]
+                if p.get("FadeFlex"):
+                    prob += x[pk] == 0
+                if p.get("LockFlex"):
+                    prob += x[pk] == 1
+
+            for pk, cap in cap_total.items():
+                if pk not in locked_keys and used_total.get(pk, 0) >= cap:
+                    prob += x[pk] == 0
+
+            min_unique = int(_nfl_style_profile(self.build_style).get("min_unique", 1) or 1) if self.sport == "NFL" else 1
+            for prev in prev_sets:
+                prob += pulp.lpSum([x[pk] for pk in prev]) <= len(self.slots) - min_unique
+
+            status = prob.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=4))
+            if pulp.LpStatus[status] != "Optimal":
+                logger.info("%s stopped early at %d/%d (status=%s)", self.sport, k, num_lineups, pulp.LpStatus[status])
+                break
+            picked = tuple(sorted([pk for pk in keys if pulp.value(x[pk]) > 0.5]))
+            if len(picked) != len(self.slots):
+                break
+            lineup = [key_to_player[pk] for pk in picked]
+            if not lineup_is_complete_for_sport(lineup, self.sport):
+                logger.warning("%s solver produced an incomplete slot assignment; skipping lineup %d", self.sport, k + 1)
+                prev_sets.append(picked)
+                continue
+            if self.sport == "NFL" and not _nfl_lineup_is_acceptable(lineup, self.build_style):
+                logger.warning("NFL solver produced a lineup outside correlation safety rails; skipping lineup %d", k + 1)
+                prev_sets.append(picked)
+                continue
+            prev_sets.append(picked)
+            for pk in picked:
+                if pk in used_total and pk not in locked_keys:
+                    used_total[pk] = used_total.get(pk, 0) + 1
+            out.append(lineup)
+        return out
+
+    def _lineup_strategy_score(self, lineup: List[Dict[str, Any]]) -> float:
+        """Score a complete lineup for tournament usefulness."""
+        base = sum(self._score(p) for p in lineup)
+        sal_bonus = _salary_bonus(lineup, self.salary_cap, self.salary_strategy)
+        stack_bonus = 0.0
+        style = _style_level(self.build_style)
+        if self.sport == "NFL":
+            nf = _nfl_lineup_features(lineup)
+            # Keep the baseline safety rails meaningful even in Randomized mode,
+            # then scale the tournament-construction preference by Build Style.
+            stack_bonus += (float(nf.get("stack_score", 50.0) or 50.0) - 50.0) * 0.16 * max(0.35, style)
+            # Double stacks with a bring-back get a small extra ceiling nudge.
+            if int(nf.get("qb_stack", 0) or 0) >= 2 and int(nf.get("bringback", 0) or 0) >= 1:
+                stack_bonus += 2.5 * max(0.35, style)
+            elif int(nf.get("qb_stack", 0) or 0) >= 1 and int(nf.get("bringback", 0) or 0) >= 1:
+                stack_bonus += 1.2 * max(0.35, style)
+        elif self.sport == "MLB" and style > 0:
+            hitters = [p for p in lineup if _is_mlb_hitter(p)]
+            counts = sorted([c for _, c in Counter(_team(p) for p in hitters if _team(p)).items()], reverse=True)
+            top_order = sum(1 for p in hitters if 1 <= int(p.get("BattingOrder", 0) or 0) <= 5)
+            confirmed = sum(1 for p in hitters if p.get("ConfirmedLineup"))
+            stack_bonus += min(3.0, 0.45 * top_order + 0.12 * confirmed) * style
+            if counts[:2] == [5, 3]:
+                stack_bonus += 8.0 * style
+            elif counts[:3] == [5, 2, 1]:
+                stack_bonus += 7.0 * style
+            elif counts[:2] == [4, 4]:
+                stack_bonus += 7.5 * style
+            elif counts[:3] == [4, 3, 1]:
+                stack_bonus += 6.5 * style
+            elif counts and counts[0] >= 4:
+                stack_bonus += 4.0 * style
+            # Soft pitcher-vs-opposing-hitters penalty.
+            pitchers = [p for p in lineup if _is_mlb_pitcher(p)]
+            bad = 0
+            for pp in pitchers:
+                for hp in hitters:
+                    if _game_key(pp) and _game_key(pp) == _game_key(hp) and _team(pp) != _team(hp):
+                        bad += 1
+            stack_bonus -= bad * 1.2 * style
+        return base + sal_bonus + stack_bonus + self.rng.uniform(-0.05, 0.05)
+
+    def _build_lineups_greedy(self, num_lineups: int) -> List[List[Dict[str, Any]]]:
+        """Fast strategic builder with salary-floor priority.
+
+        It first tries to return near-cap tournament-style lineups, then relaxes
+        salary only if roster rules, locks/fades, or max exposure caps make that
+        impossible. This avoids the previous behavior where valid but very cheap
+        $30k MLB lineups could be accepted too early.
+        """
+        accepted: List[List[Dict[str, Any]]] = []
+        used_sigs: set[Tuple[str, ...]] = set()
+        pool = [p for p in self.players if not p.get("FadeFlex")]
+        pool = sorted(pool, key=lambda p: (self._score(p) + 0.20 * (_salary(p) / 1000.0)) / max(_salary(p), 1.0), reverse=True)
+        locked = [p for p in pool if p.get("LockFlex")]
+        locked_keys = {_pkey(p) for p in locked}
+        cap_total, used_total = self._caps(num_lineups)
+        nfl_profile = _nfl_style_profile(self.build_style) if self.sport == "NFL" else {}
+        preferred_min_unique = int(nfl_profile.get("min_unique", 1) or 1) if self.sport == "NFL" else 1
+
+        preferred_floor = _salary_floor_for_strategy(self.salary_cap, self.salary_strategy, self.sport)
+        floor_stages = [
+            preferred_floor,
+            max(0.0, preferred_floor - 1500.0),
+            max(0.0, preferred_floor - 3000.0),
+            0.0,
+        ]
+
+        def can_use(p: Dict[str, Any]) -> bool:
+            pk = _pkey(p)
+            return pk not in cap_total or pk in locked_keys or used_total.get(pk, 0) < cap_total[pk]
+
+        def lineup_respects_caps_now(lineup: List[Dict[str, Any]]) -> bool:
+            # Candidate lineups are accumulated in a pool before acceptance. A cap
+            # can become exhausted after another candidate is accepted, so recheck
+            # against the live usage counts immediately before committing a lineup.
+            for p in lineup:
+                pk = _pkey(p)
+                if pk in locked_keys or pk not in cap_total:
+                    continue
+                if used_total.get(pk, 0) >= cap_total[pk]:
+                    return False
+            return True
+
+        def candidate_rank(p: Dict[str, Any], cap_left: float, slots_left: int, floor: float, salary_used_so_far: float) -> float:
+            # Prefer good players, but when we are behind salary pace, give salary
+            # real weight so the builder does not keep settling for cheap value.
+            base = self._score(p)
+            sal = _salary(p)
+            target_remaining = max(0.0, floor - salary_used_so_far)
+            avg_needed = target_remaining / max(1, slots_left)
+            salary_pressure = 0.0
+            if floor > 0 and salary_used_so_far < floor:
+                salary_pressure = min(4.0, max(0.0, (sal - avg_needed) / 1000.0) * 0.75)
+            return base + salary_pressure + 0.12 * (sal / 1000.0) + self.rng.uniform(-0.20, 0.20)
+
+        def try_build_one(floor: float) -> Optional[List[Dict[str, Any]]]:
+            chosen = list(locked)
+            chosen_keys = {_pkey(p) for p in chosen}
+            cap_left = self.salary_cap - sum(_salary(p) for p in chosen)
+            if cap_left < 0 or len(chosen) > len(self.slots):
+                return None
+
+            assigned_locked: set[str] = set()
+            slots_to_fill: List[str] = []
+            for slot in self.slots:
+                found = None
+                for p in chosen:
+                    pk = _pkey(p)
+                    if pk not in assigned_locked and _eligible_for_slot(p, slot, self.sport):
+                        found = pk
+                        break
+                if found:
+                    assigned_locked.add(found)
+                else:
+                    slots_to_fill.append(slot)
+
+            for idx, slot in enumerate(slots_to_fill):
+                slots_left = len(slots_to_fill) - idx
+                salary_used_so_far = self.salary_cap - cap_left
+                candidates = [
+                    p for p in pool
+                    if _pkey(p) not in chosen_keys
+                    and can_use(p)
+                    and _eligible_for_slot(p, slot, self.sport)
+                    and _salary(p) <= cap_left
+                ]
+                if not candidates:
+                    return None
+
+                # Choose from a strong but not deterministic top slice.
+                ranked = sorted(
+                    candidates,
+                    key=lambda p: candidate_rank(p, cap_left, slots_left, floor, salary_used_so_far),
+                    reverse=True,
+                )
+                top_n = min(len(ranked), max(10, len(ranked) // 4))
+                p = self.rng.choice(ranked[:top_n])
+                chosen.append(p)
+                chosen_keys.add(_pkey(p))
+                cap_left -= _salary(p)
+
+            if len(chosen) != len(self.slots):
+                return None
+            if _lineup_salary(chosen) < floor:
+                return None
+            if not lineup_is_complete_for_sport(chosen, self.sport):
+                return None
+            if self.sport == "NFL" and not _nfl_lineup_is_acceptable(chosen, self.build_style):
+                return None
+            return chosen
+
+        def too_similar(sig: Tuple[str, ...], min_unique: int) -> bool:
+            if min_unique <= 1:
+                return sig in used_sigs
+            sset = set(sig)
+            max_overlap = max(0, len(self.slots) - int(min_unique))
+            return any(len(sset.intersection(prev)) > max_overlap for prev in used_sigs)
+
+        # Build progressively: near-cap first, then relax only if needed.
+        attempts_per_stage = max(250, num_lineups * 120)
+        candidates_by_sig: Dict[Tuple[str, ...], List[Dict[str, Any]]] = {}
+
+        for stage_idx, floor in enumerate(floor_stages):
+            # Preserve portfolio diversity early; only relax if constraints prevent
+            # filling the requested lineup count. Strategic/Balanced start at two
+            # uniques, Contrarian at three, Chalk at one.
+            stage_min_unique = max(1, preferred_min_unique - max(0, stage_idx - 1))
+            for _ in range(attempts_per_stage):
+                lu = try_build_one(floor)
+                if not lu:
+                    continue
+                sig = tuple(sorted(_pkey(p) for p in lu))
+                if sig in candidates_by_sig or too_similar(sig, stage_min_unique):
+                    continue
+                candidates_by_sig[sig] = lu
+
+                # Periodically accept the best available so exposure caps advance.
+                if len(candidates_by_sig) >= max(20, num_lineups // 2):
+                    ranked_pool = sorted(candidates_by_sig.items(), key=lambda kv: self._lineup_strategy_score(kv[1]), reverse=True)
+                    for sig2, lu2 in ranked_pool:
+                        if too_similar(sig2, stage_min_unique) or not lineup_respects_caps_now(lu2):
+                            candidates_by_sig.pop(sig2, None)
+                            continue
+                        used_sigs.add(sig2)
+                        for p in lu2:
+                            pk = _pkey(p)
+                            if pk in used_total and pk not in locked_keys:
+                                used_total[pk] = used_total.get(pk, 0) + 1
+                        accepted.append(lu2)
+                        candidates_by_sig.pop(sig2, None)
+                        break
+                if len(accepted) >= num_lineups:
+                    return accepted[:num_lineups]
+
+            # After each floor stage, accept the best remaining candidates at that floor.
+            while candidates_by_sig and len(accepted) < num_lineups:
+                sig_best, lu_best = max(candidates_by_sig.items(), key=lambda kv: self._lineup_strategy_score(kv[1]))
+                candidates_by_sig.pop(sig_best, None)
+                if too_similar(sig_best, stage_min_unique) or not lineup_respects_caps_now(lu_best):
+                    continue
+                used_sigs.add(sig_best)
+                for p in lu_best:
+                    pk = _pkey(p)
+                    if pk in used_total and pk not in locked_keys:
+                        used_total[pk] = used_total.get(pk, 0) + 1
+                accepted.append(lu_best)
+            if len(accepted) >= num_lineups:
+                break
+
+        return accepted[:num_lineups]
+
+
+def lineup_slots_for_sport(lineup: List[Dict[str, Any]], sport: str) -> List[Tuple[str, Optional[Dict[str, Any]]]]:
+    """Assign lineup players to display/export slots for the selected sport.
+
+    This uses a small bipartite matching/backtracking step instead of a greedy
+    first-fit assignment. Greedy assignment can put a multi-position MLB player
+    into an early slot and then strand a later slot, causing blank cells even
+    when the optimizer actually selected a valid 10-man lineup.
+    """
+    sport = (sport or "NFL").upper()
+    slots = get_roster_slots_for_sport(sport)
+    players = list(lineup or [])
+
+    if len(players) < len(slots):
+        return [(slot, players[i] if i < len(players) and _eligible_for_slot(players[i], slot, sport) else None) for i, slot in enumerate(slots)]
+
+    slot_candidates: List[List[int]] = []
+    for slot in slots:
+        cand = [idx for idx, player in enumerate(players) if _eligible_for_slot(player, slot, sport)]
+        slot_candidates.append(cand)
+
+    # If any slot has no eligible player, there is no complete assignment.
+    if any(len(c) == 0 for c in slot_candidates):
+        return [(slot, None) for slot in slots]
+
+    # Fill most-constrained slots first, but return in original roster order.
+    order = sorted(range(len(slots)), key=lambda i: len(slot_candidates[i]))
+    assigned_idx: Dict[int, int] = {}
+    used_players: set[int] = set()
+
+    def backtrack(pos: int) -> bool:
+        if pos >= len(order):
+            return True
+        slot_i = order[pos]
+        candidates = sorted(
+            slot_candidates[slot_i],
+            key=lambda idx: (len([j for j in range(len(slots)) if idx in slot_candidates[j]]), -_proj(players[idx]), _salary(players[idx]))
+        )
+        for player_i in candidates:
+            if player_i in used_players:
+                continue
+            used_players.add(player_i)
+            assigned_idx[slot_i] = player_i
+            if backtrack(pos + 1):
+                return True
+            assigned_idx.pop(slot_i, None)
+            used_players.remove(player_i)
+        return False
+
+    if not backtrack(0):
+        return [(slot, None) for slot in slots]
+
+    return [(slot, players[assigned_idx[i]]) for i, slot in enumerate(slots)]
+
+
+def lineup_is_complete_for_sport(lineup: List[Dict[str, Any]], sport: str) -> bool:
+    assigned = lineup_slots_for_sport(lineup, sport)
+    return bool(assigned) and all(player is not None for _, player in assigned)

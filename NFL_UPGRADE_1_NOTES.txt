@@ -1,0 +1,52 @@
+DFS App - NFL Upgrade #1: Correctness + Optimizer Strategy
+Date: 2026-08-08
+
+What changed
+------------
+1. DraftKings Game Info parsing
+   - Parses AwayTeam / HomeTeam from Game Info.
+   - Adds Opponent, HomeAway, and normalized GameKey to every loaded player.
+   - This restores opponent-aware NFL correlation logic.
+
+2. NFL Classic now honors existing strategy controls
+   - NFL no longer drops Build Style and Salary Strategy by delegating to the legacy builder.
+   - Uses the strategy-aware MultiSportClassicOptimizer path.
+
+3. NFL construction safety + scoring
+   - Strategic/Balanced/Contrarian/Chalk require a QB + WR/TE stack.
+   - Rejects QB + opposing DST combinations.
+   - Adds soft bring-back, double-stack, and RB+DST correlation scoring.
+   - Penalizes same-team RB duplication and excessive team/game concentration.
+   - Build Style controls preferred portfolio uniqueness:
+       Strategic: 2 uniques
+       Balanced: 2 uniques
+       Contrarian: 3 uniques
+       Chalk: 1 unique
+       Randomized: 2 uniques
+     These relax only if necessary to fill the requested portfolio.
+
+4. NFL salary behavior
+   - NFL Classic now uses the existing Salary Strategy setting and near-cap staged builder.
+
+5. NFL lineup grades
+   - NFL grades now include correlation quality and report stack shape such as QB+2 / BB1.
+   - Projection grading was rescaled so normal NFL lineups do not all automatically max the projection component.
+
+6. Exposure correctness
+   - MaxPct=0 now means an actual hard block rather than being treated as unset.
+   - Exposure caps are rechecked immediately before a candidate lineup is committed, preventing pooled candidates from exceeding portfolio caps.
+
+7. Diagnostics/tests
+   - CSV load logs parsed opponent/game coverage.
+   - Added test_nfl_logic.py covering opponent parsing, NFL correlation, salary quality, uniqueness, MaxPct=0, portfolio caps, and NFL grading.
+   - Updated test_smoke.py to exercise the strategy-aware NFL Classic optimizer.
+
+Validation performed
+--------------------
+- All Python files compile successfully.
+- test_nfl_logic.py: 5/5 tests passed.
+- Synthetic 20-lineup NFL Strategic portfolio produced valid rosters, near-cap salary usage, QB stacks, no QB/opposing-DST conflicts, and multi-player lineup diversity.
+
+Next planned item
+-----------------
+#2 - nfl_auto_data.py: automatic NFL role/usage/depth-chart/game-environment context.

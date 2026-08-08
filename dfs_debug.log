@@ -1,0 +1,14 @@
+2026-08-08 08:39:26 | INFO    | dfs.ui | Loading CSV: C:/Users/miste/Downloads/DKSalaries (20).csv
+2026-08-08 08:39:26 | ERROR   | dfs.ui | Failed to load CSV
+Traceback (most recent call last):
+  File "C:\Users\miste\OneDrive\Desktop\DFS_NFL_Upgrade_1_Full\DFS_NFL_Upgrade_1\main_window.py", line 1821, in on_load_csv
+    self.players = read_players_csv(path)
+                   ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\miste\OneDrive\Desktop\DFS_NFL_Upgrade_1_Full\DFS_NFL_Upgrade_1\data_io.py", line 187, in read_players_csv
+    raise ValueError("No players found. Ensure the CSV includes FLEX rows (and CPT rows for proper CPT pricing).")
+ValueError: No players found. Ensure the CSV includes FLEX rows (and CPT rows for proper CPT pricing).
+2026-08-08 08:40:38 | INFO    | dfs.ui | Loading CSV: C:/Users/miste/Downloads/DKSalaries (4).csv
+2026-08-08 08:40:38 | INFO    | dfs.ui | Parsed DK game context: opponents=207/207 | games=4
+2026-08-08 08:40:39 | INFO    | dfs.injury | Injury enrichment complete: 199/207 matched by name
+2026-08-08 08:40:44 | INFO    | dfs.ui | Building showdown lineups (n=5 cap=50000)
+2026-08-08 08:40:44 | INFO    | dfs.ui | Building showdown lineups (n=5 cap=50000)
