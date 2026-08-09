@@ -3,7 +3,14 @@ from __future__ import annotations
 import time
 import unittest
 
-from optimizers import ShowdownOptimizer, _pkey
+from optimizers import (
+    ShowdownOptimizer,
+    _pkey,
+    _showdown_lineup_script_bonus,
+    _showdown_pair_script_bonus,
+    _showdown_player_script_bonus,
+    _showdown_split_bonus_for_count,
+)
 
 
 def _showdown_players():
@@ -29,7 +36,72 @@ def _showdown_players():
     return players
 
 
+def _script_player(name, team, position, spread, total):
+    return {
+        "Name": name,
+        "Team": team,
+        "Position": position,
+        "NFLVegasSpread": float(spread),
+        "NFLVegasGameTotal": float(total),
+    }
+
+
 class ShowdownPerformanceTests(unittest.TestCase):
+    def test_showdown_script_prefers_favorite_heavy_splits(self):
+        favorite = [
+            _script_player("Fav QB", "BUF", "QB", -8, 42),
+            _script_player("Fav RB", "BUF", "RB", -8, 42),
+            _script_player("Fav K", "BUF", "K", -8, 42),
+            _script_player("Fav DST", "BUF", "DST", -8, 42),
+        ]
+        underdog = [
+            _script_player("Dog QB", "MIA", "QB", 8, 42),
+            _script_player("Dog WR", "MIA", "WR", 8, 42),
+            _script_player("Dog WR2", "MIA", "WR", 8, 42),
+            _script_player("Dog TE", "MIA", "TE", 8, 42),
+        ]
+
+        favorite_four_two = _showdown_lineup_script_bonus(favorite[0], favorite[1:] + underdog[:2])
+        underdog_four_two = _showdown_lineup_script_bonus(underdog[0], underdog[1:] + favorite[:2])
+        self.assertGreater(favorite_four_two, underdog_four_two)
+
+    def test_showdown_script_uses_total_for_correlated_roles(self):
+        high_qb = _script_player("Dog QB", "MIA", "QB", 6, 52)
+        high_wr = _script_player("Dog WR", "MIA", "WR", 6, 52)
+        high_rb = _script_player("Fav RB", "BUF", "RB", -6, 52)
+        low_rb = _script_player("Fav RB", "BUF", "RB", -6, 40)
+        low_dst = _script_player("Fav DST", "BUF", "DST", -6, 40)
+
+        self.assertGreater(
+            _showdown_pair_script_bonus(high_qb, high_wr),
+            _showdown_pair_script_bonus(high_qb, high_rb),
+        )
+        self.assertGreater(
+            _showdown_pair_script_bonus(low_rb, low_dst),
+            _showdown_pair_script_bonus(high_rb, low_dst),
+        )
+        self.assertGreater(
+            _showdown_player_script_bonus(high_wr),
+            _showdown_player_script_bonus(high_rb),
+        )
+        self.assertGreater(
+            _showdown_player_script_bonus(low_rb),
+            _showdown_player_script_bonus(high_rb),
+        )
+
+    def test_total_without_spread_does_not_invent_a_favorite(self):
+        players = [
+            _script_player(f"BUF {index}", "BUF", "WR", 0, 50)
+            for index in range(4)
+        ] + [
+            _script_player(f"MIA {index}", "MIA", "WR", 0, 50)
+            for index in range(4)
+        ]
+        self.assertEqual(
+            _showdown_split_bonus_for_count(4, "BUF", players),
+            _showdown_split_bonus_for_count(2, "BUF", players),
+        )
+
     def test_high_volume_build_is_fast_complete_unique_and_reports_progress(self):
         events = []
         started = time.perf_counter()

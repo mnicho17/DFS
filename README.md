@@ -65,6 +65,19 @@ NFL Classic builds can use the **NFL SIM Edge** option. The app first removes in
 
 The Classic results table shows a slate-relative SIM Edge grade. Its tooltip includes top-one-percent rate, representative win rate, cash rate, simulated ceiling, and duplication risk. These metrics are decision aids based on the loaded projections and assumptions, not guarantees of contest results.
 
+## NFL Game-Day Check and Vegas lines
+
+NFL salary files automatically receive current player availability, injury status, practice participation, roster status, news notes, and depth-chart roles from Sleeper. The status strip reports how many salary-file players matched, when the check ran, and whether anything changed. **Game-Day Check** refreshes the data on demand, and a stale check is refreshed before lineup generation.
+
+- Confirmed out, inactive, injured-reserve, suspended, and practice-squad players are automatically removed unless the user locked them.
+- A locked unavailable player is never silently removed; lineup generation stops and names the conflict.
+- Questionable and doubtful players remain available, with their uncertainty reflected in the NFL role adjustment.
+- The Status and Role columns expose starter/backup depth, practice participation, the source, and freshness details.
+
+The **Vegas ITT** column displays each team's implied point total rather than an opaque score. Open **Live Data Settings** to save a personal [The Odds API](https://the-odds-api.com/) key. The app requests consensus US spreads and totals, matches them to the DraftKings games, and uses a small capped projection adjustment. The key stays in the current Windows user's local settings and is not placed in exports, logs, or the repository. If no key is configured—or no NFL lines have been posted—the status strip explains that instead of displaying a misleading zero.
+
+NFL Showdown generation uses those same live inputs without applying the Classic low-depth pool filter. Strategic Showdown builds softly favor favorite-heavy 4-2 and plausible 5-1 constructions, passing correlations in higher-total or trailing-team scripts, and RB/K/DST combinations in lower-total favorite scripts. When a confirmed starter is unavailable, the next active depth-chart player receives a small, reversible opportunity adjustment; manual locks and exposure limits remain hard rules.
+
 ## Create a release
 
 The `Windows Release` GitHub Actions workflow supports two modes:

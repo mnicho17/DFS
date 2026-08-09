@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtWidgets
 
-from main_window import LineupBuildWorker, MainWindow, ResultsLearningDialog
+from main_window import LineupBuildWorker, LiveDataSettingsDialog, MainWindow, ResultsLearningDialog
 from learning_db import generate_learning_report
 from test_learning_results import _showdown_lineup
 from test_nfl_logic import _fixture_players
@@ -49,6 +49,39 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIsNotNone(sim_toggle)
         self.assertTrue(sim_toggle.isChecked())
         self.assertIsNotNone(window.findChild(QtWidgets.QSpinBox, "nflSimScenarios"))
+        self.assertEqual(window.findChild(QtWidgets.QPushButton, "gameDayCheckButton").text(), "Game-Day Check")
+        self.assertIsNotNone(window.findChild(QtWidgets.QPushButton, "liveDataSettingsButton"))
+        self.assertIn("Live data", window.findChild(QtWidgets.QLabel, "liveDataStatusLabel").text())
+        window.close()
+
+    def test_live_data_settings_masks_the_odds_api_key(self):
+        dialog = LiveDataSettingsDialog("secret-test-key")
+        field = dialog.findChild(QtWidgets.QLineEdit, "oddsApiKeyEdit")
+        self.assertIsNotNone(field)
+        self.assertEqual(field.text(), "secret-test-key")
+        self.assertEqual(field.echoMode(), QtWidgets.QLineEdit.Password)
+        dialog.close()
+
+    def test_player_table_shows_live_availability_and_implied_team_total(self):
+        window = MainWindow()
+        window.players = [{
+            "Name": "Example QB", "Team": "BUF", "Position": "QB",
+            "FlexSalary": 7000, "BaseProjection": 20, "FlexProjection": 20.5,
+            "NFLAvailability": "STARTER", "NFLDepthPosition": "QB", "NFLDepthOrder": 1,
+            "NFLRole": "QB2 NEXT UP", "NFLRoleScore": 0.55,
+            "NFLReplacementFor": "Starting QB", "NFLReplacementBoost": 0.30,
+            "NFLRosterStatus": "Active", "NFLPractice": "Full Participation",
+            "InjurySource": "Sleeper", "LiveStatusUpdatedAt": "2026-09-13T15:00:00Z",
+            "NFLVegas": 0.5, "NFLVegasTeamTotal": 27.0, "NFLVegasGameTotal": 50.0,
+            "NFLVegasSpread": -4.0, "NFLVegasBookmakers": 5,
+            "NFLVegasUpdatedAt": "2026-09-13T14:55:00Z", "NFLVegasState": "matched",
+        }]
+        window._refresh_players_table()
+        self.assertEqual(window.tbl_players.item(0, 3).text(), "Starter")
+        self.assertIn("Depth: QB1", window.tbl_players.item(0, 3).toolTip())
+        self.assertEqual(window.tbl_players.item(0, 12).text(), "27.0")
+        self.assertIn("Game total: 50.0", window.tbl_players.item(0, 12).toolTip())
+        self.assertIn("Starting QB", window.tbl_players.item(0, 10).toolTip())
         window.close()
 
     def test_classic_worker_reports_high_volume_progress_without_surplus_candidates(self):

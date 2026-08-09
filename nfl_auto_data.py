@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-"""Automatic, keyless NFL context enrichment.
+"""Automatic NFL context enrichment.
 
 Sleeper supplies role/depth/practice context, nflverse supplies recent usage and
-opponent production allowed, and Open-Meteo supplies game-time outdoor weather.
-Every source is optional: unavailable or malformed data leaves its component at
-neutral, and the combined projection change is capped at +/- 3.5 DK points.
+opponent production allowed, Open-Meteo supplies game-time outdoor weather, and
+an optional user-supplied The Odds API key supplies consensus spreads/totals.
+Every source is optional: unavailable data is clearly reported and the combined
+projection change is capped at +/- 3.5 DK points.
 """
 
 import csv
@@ -14,8 +15,10 @@ import gzip
 import io
 import logging
 import math
+import os
 import re
 from collections import defaultdict
+from statistics import median
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 try:
@@ -32,6 +35,7 @@ NFLVERSE_PLAYER_STATS_URL = (
     "player_stats/player_stats_{season}.csv.gz"
 )
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+THE_ODDS_API_URL = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/"
 
 MAX_NFL_ADJUSTMENT = 3.5
 RECENT_WEEKS = 4
@@ -58,6 +62,22 @@ _TEAM_ALIASES = {
     "TEN": "TEN", "OTI": "TEN",
     "WAS": "WAS", "WSH": "WAS", "WSN": "WAS",
 }
+
+_NFL_TEAM_NAMES = {
+    "arizona cardinals": "ARI", "atlanta falcons": "ATL", "baltimore ravens": "BAL",
+    "buffalo bills": "BUF", "carolina panthers": "CAR", "chicago bears": "CHI",
+    "cincinnati bengals": "CIN", "cleveland browns": "CLE", "dallas cowboys": "DAL",
+    "denver broncos": "DEN", "detroit lions": "DET", "green bay packers": "GB",
+    "houston texans": "HOU", "indianapolis colts": "IND", "jacksonville jaguars": "JAX",
+    "kansas city chiefs": "KC", "las vegas raiders": "LV", "los angeles chargers": "LAC",
+    "los angeles rams": "LAR", "miami dolphins": "MIA", "minnesota vikings": "MIN",
+    "new england patriots": "NE", "new orleans saints": "NO", "new york giants": "NYG",
+    "new york jets": "NYJ", "philadelphia eagles": "PHI", "pittsburgh steelers": "PIT",
+    "san francisco 49ers": "SF", "seattle seahawks": "SEA", "tampa bay buccaneers": "TB",
+    "tennessee titans": "TEN", "washington commanders": "WAS",
+}
+
+_OUT_STATUSES = {"OUT", "IR", "PUP", "NFI", "SUSP", "SUSPENDED", "INACTIVE", "PRACTICE SQUAD"}
 
 # Approximate stadium coordinates and roof classification. Covered/retractable
 # venues remain weather-neutral because a reliable roof-open feed is not used.
@@ -151,6 +171,150 @@ def _fetch_json(url: str, *, params: Optional[Dict[str, Any]] = None, timeout_se
 def fetch_sleeper_players(timeout_sec: int = 10) -> Optional[Dict[str, Any]]:
     data = _fetch_json(SLEEPER_PLAYERS_URL, timeout_sec=timeout_sec)
     return data if isinstance(data, dict) else None
+
+
+def configured_odds_api_key(explicit_key: Optional[str] = None) -> str:
+    """Return an explicitly supplied key or a supported environment key."""
+    return str(
+        explicit_key
+        or os.environ.get("THE_ODDS_API_KEY")
+        or os.environ.get("ODDS_API_KEY")
+        or ""
+    ).strip()
+
+
+def normalize_odds_team(team: Any) -> str:
+    text = re.sub(r"\s+", " ", str(team or "").strip().lower())
+    return _NFL_TEAM_NAMES.get(text, normalize_nfl_team(team))
+
+
+def _utc_now_iso() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _epoch_to_iso(value: Any) -> str:
+    raw = _to_float(value, 0.0)
+    if raw <= 0:
+        return ""
+    try:
+        # Sleeper news_updated is normally milliseconds; tolerate seconds too.
+        if raw > 10_000_000_000:
+            raw /= 1000.0
+        return dt.datetime.fromtimestamp(raw, tz=dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    except Exception:
+        return ""
+
+
+def parse_nfl_odds(events: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Build consensus totals/spreads keyed by the app's ``AWAY@HOME`` game key."""
+    result: Dict[str, Dict[str, Any]] = {}
+    for event in events or []:
+        home_name = str(event.get("home_team") or "").strip()
+        away_name = str(event.get("away_team") or "").strip()
+        home = normalize_odds_team(home_name)
+        away = normalize_odds_team(away_name)
+        if not home or not away:
+            continue
+
+        totals: List[float] = []
+        home_spreads: List[float] = []
+        latest = ""
+        books_with_lines = 0
+        for book in event.get("bookmakers", []) or []:
+            book_has_line = False
+            latest = max(latest, str(book.get("last_update") or ""))
+            for market in book.get("markets", []) or []:
+                market_key = str(market.get("key") or "").strip().lower()
+                outcomes = market.get("outcomes", []) or []
+                if market_key == "totals":
+                    points = [
+                        _to_float(row.get("point"), 0.0)
+                        for row in outcomes
+                        if _to_float(row.get("point"), 0.0) > 0
+                    ]
+                    if points:
+                        totals.append(points[0])
+                        book_has_line = True
+                elif market_key == "spreads":
+                    for row in outcomes:
+                        if normalize_odds_team(row.get("name")) == home and row.get("point") not in (None, ""):
+                            home_spreads.append(_to_float(row.get("point"), 0.0))
+                            book_has_line = True
+                            break
+            if book_has_line:
+                books_with_lines += 1
+
+        game_total = float(median(totals)) if totals else 0.0
+        home_spread = float(median(home_spreads)) if home_spreads else 0.0
+        if not game_total and not home_spreads:
+            continue
+        home_implied = (game_total / 2.0 - home_spread / 2.0) if game_total else 0.0
+        away_implied = (game_total / 2.0 + home_spread / 2.0) if game_total else 0.0
+        result[f"{away}@{home}"] = {
+            "event_id": str(event.get("id") or ""),
+            "commence_time": str(event.get("commence_time") or ""),
+            "away_team": away,
+            "home_team": home,
+            "game_total": game_total,
+            "home_spread": home_spread,
+            "away_spread": -home_spread,
+            "home_implied": home_implied,
+            "away_implied": away_implied,
+            "bookmakers": books_with_lines,
+            "last_update": latest,
+        }
+    return result
+
+
+def fetch_nfl_odds(api_key: Optional[str] = None, timeout_sec: int = 10) -> Dict[str, Any]:
+    """Fetch current NFL spread/total consensus from The Odds API.
+
+    The key is never logged or included in the returned diagnostics.
+    """
+    checked_at = _utc_now_iso()
+    key = configured_odds_api_key(api_key)
+    if not key:
+        return {"state": "not_configured", "games": {}, "checked_at": checked_at, "remaining": None, "message": "Odds API key needed"}
+    if not HAS_REQUESTS:
+        return {"state": "unavailable", "games": {}, "checked_at": checked_at, "remaining": None, "message": "Network support unavailable"}
+    try:
+        response = requests.get(
+            THE_ODDS_API_URL,
+            params={
+                "apiKey": key,
+                "regions": "us",
+                "markets": "spreads,totals",
+                "oddsFormat": "american",
+                "dateFormat": "iso",
+            },
+            timeout=timeout_sec,
+        )
+        remaining_raw = response.headers.get("x-requests-remaining")
+        remaining = int(remaining_raw) if str(remaining_raw or "").isdigit() else None
+        if response.status_code >= 400:
+            message = "Odds service rejected the request"
+            try:
+                payload = response.json()
+                message = str(payload.get("message") or payload.get("error") or message)
+            except Exception:
+                pass
+            state = "invalid_key" if response.status_code in (401, 403) else "error"
+            logger.info("NFL odds request returned HTTP %s", response.status_code)
+            return {"state": state, "games": {}, "checked_at": checked_at, "remaining": remaining, "message": message}
+        payload = response.json()
+        if not isinstance(payload, list):
+            return {"state": "error", "games": {}, "checked_at": checked_at, "remaining": remaining, "message": "Unexpected odds response"}
+        games = parse_nfl_odds(payload)
+        return {
+            "state": "ok" if games else "no_games",
+            "games": games,
+            "checked_at": checked_at,
+            "remaining": remaining,
+            "message": "" if games else "No upcoming NFL lines were returned",
+        }
+    except Exception as exc:
+        logger.info("NFL odds request failed (%s)", type(exc).__name__)
+        return {"state": "unavailable", "games": {}, "checked_at": checked_at, "remaining": None, "message": "Odds service unavailable"}
 
 
 def _fetch_nflverse_season_rows(season: int, timeout_sec: int = 15) -> List[Dict[str, Any]]:
@@ -304,13 +468,162 @@ def _sleeper_index(data: Mapping[str, Any]) -> Dict[Tuple[str, str], Dict[str, A
     return grouped
 
 
+def _status_snapshot(player: Mapping[str, Any]) -> Tuple[Any, ...]:
+    return (
+        str(player.get("InjuryStatus") or ""),
+        str(player.get("NFLRosterStatus") or ""),
+        int(_to_float(player.get("NFLDepthOrder"), 0)),
+        str(player.get("NFLPractice") or ""),
+        str(player.get("NFLNewsNote") or ""),
+    )
+
+
+def _canonical_injury_status(value: Any) -> str:
+    raw = str(value or "").strip().upper().replace("_", " ")
+    return {
+        "O": "OUT",
+        "Q": "QUESTIONABLE",
+        "D": "DOUBTFUL",
+        "P": "PROBABLE",
+        "SUSP": "SUSPENDED",
+    }.get(raw, raw)
+
+
+def _apply_dk_status_fallback(player: Dict[str, Any]) -> None:
+    status = _canonical_injury_status(player.get("InjuryStatus") or player.get("Status"))
+    if not status:
+        return
+    player["InjuryStatus"] = status
+    player.setdefault("InjurySource", "DraftKings file")
+    if _is_out_status(status):
+        player["NFLAvailability"] = "OUT"
+    elif status in {"QUESTIONABLE", "DOUBTFUL", "PROBABLE"}:
+        player["NFLAvailability"] = status
+
+
+def _is_out_status(injury: Any, roster: Any = "", active: Any = True) -> bool:
+    injury_u = _canonical_injury_status(injury)
+    roster_u = str(roster or "").strip().upper().replace("_", " ")
+    if injury_u in _OUT_STATUSES:
+        return True
+    if any(token in roster_u for token in ("INACTIVE", "INJURED RESERVE", "PRACTICE SQUAD", "SUSPENDED", "PUP", "NFI")):
+        return True
+    return active is False and roster_u not in {"", "ACTIVE"}
+
+
+def _apply_sleeper_player(player: Dict[str, Any], sleeper: Mapping[str, Any], checked_at: str) -> bool:
+    """Apply one Sleeper record while preserving explicit user locks."""
+    before = _status_snapshot(player)
+    depth = int(_to_float(sleeper.get("depth_chart_order"), 0))
+    sleeper_injury = _canonical_injury_status(sleeper.get("injury_status"))
+    dk_injury = _canonical_injury_status(player.get("Status"))
+    prior_injury = _canonical_injury_status(player.get("InjuryStatus"))
+    prior_source = str(player.get("InjurySource") or "")
+    if sleeper_injury:
+        injury = sleeper_injury
+    elif dk_injury:
+        injury = dk_injury
+    elif prior_source == "Sleeper":
+        # Sleeper previously supplied the injury and now reports it cleared.
+        injury = ""
+    else:
+        injury = prior_injury
+    roster = str(sleeper.get("status") or "").strip()
+    active = sleeper.get("active")
+    practice = str(sleeper.get("practice_participation") or sleeper.get("practice_description") or "").strip()
+
+    player["NFLDepthPosition"] = str(sleeper.get("depth_chart_position") or sleeper.get("position") or "")
+    player["NFLDepthOrder"] = depth
+    player["NFLPractice"] = practice
+    player["NFLRosterStatus"] = roster
+    player["NFLActive"] = bool(active) if active is not None else True
+    player["InjuryStatus"] = injury
+    player["InjuryBodyPart"] = str(sleeper.get("injury_body_part") or "")
+    player["InjuryStartDate"] = str(sleeper.get("injury_start_date") or "")
+    player["InjurySource"] = "Sleeper" if sleeper_injury else ("DraftKings file + Sleeper role" if injury else "Sleeper")
+    player["NFLNewsNote"] = str(sleeper.get("injury_notes") or "").strip()
+    player["NFLNewsUpdatedAt"] = _epoch_to_iso(sleeper.get("news_updated"))
+    player["LiveStatusUpdatedAt"] = checked_at
+
+    out = _is_out_status(injury, roster, active)
+    injury_u = injury.upper()
+    if out:
+        availability = "OUT"
+    elif injury_u in {"DOUBTFUL", "QUESTIONABLE", "PROBABLE"}:
+        availability = injury_u
+    elif depth == 1:
+        availability = "STARTER"
+    elif depth > 1:
+        availability = f"BACKUP {depth}"
+    else:
+        availability = "ACTIVE" if active is not False else (roster.upper() or "INACTIVE")
+    player["NFLAvailability"] = availability
+
+    locked = bool(player.get("LockFlex")) or bool(player.get("LockCpt"))
+    player["LiveStatusConflict"] = bool(out and locked)
+    if out and not locked:
+        player["FadeFlex"] = True
+        player["FadeCpt"] = True
+        player["AutoFadeInjury"] = True
+    elif not out and player.get("AutoFadeInjury") is True:
+        player["FadeFlex"] = False
+        player["FadeCpt"] = False
+        player["AutoFadeInjury"] = False
+
+    changed = before != _status_snapshot(player)
+    player["LiveStatusChanged"] = changed
+    return changed
+
+
+def score_vegas(*, team_implied: float, opponent_implied: float, team_spread: float, position: Any) -> float:
+    """Convert consensus game lines into a modest projection adjustment."""
+    position_u = _position_group(position)
+    if not team_implied:
+        return 0.0
+    if position_u == "DST":
+        raw = (22.5 - float(opponent_implied or 22.5)) / 8.0 - float(team_spread or 0.0) / 12.0
+    else:
+        raw = (float(team_implied) - 22.5) / 8.0
+        if position_u in {"WR", "TE"}:
+            raw *= 0.85
+        elif position_u == "RB":
+            raw *= 0.90
+    return _clamp(raw, -0.8, 0.8)
+
+
+def _apply_odds_player(player: Dict[str, Any], odds: Mapping[str, Any], checked_at: str) -> float:
+    team = normalize_nfl_team(player.get("Team"))
+    home = normalize_nfl_team(odds.get("home_team"))
+    is_home = team == home
+    team_implied = _to_float(odds.get("home_implied" if is_home else "away_implied"), 0.0)
+    opponent_implied = _to_float(odds.get("away_implied" if is_home else "home_implied"), 0.0)
+    team_spread = _to_float(odds.get("home_spread" if is_home else "away_spread"), 0.0)
+    score = score_vegas(
+        team_implied=team_implied,
+        opponent_implied=opponent_implied,
+        team_spread=team_spread,
+        position=player.get("Position"),
+    )
+    player["NFLVegas"] = score
+    player["NFLVegasGameTotal"] = _to_float(odds.get("game_total"), 0.0)
+    player["NFLVegasTeamTotal"] = team_implied
+    player["NFLVegasOpponentTotal"] = opponent_implied
+    player["NFLVegasSpread"] = team_spread
+    player["NFLVegasBookmakers"] = int(_to_float(odds.get("bookmakers"), 0))
+    player["NFLVegasUpdatedAt"] = str(odds.get("last_update") or checked_at)
+    player["NFLVegasState"] = "matched"
+    return score
+
+
 def _role_context(player: Mapping[str, Any], sleeper: Optional[Mapping[str, Any]]) -> Tuple[str, float]:
     if not sleeper:
         return "", 0.0
     position = _position_group(sleeper.get("depth_chart_position") or sleeper.get("position") or player.get("Position"))
     depth = int(_to_float(sleeper.get("depth_chart_order"), 0))
     practice = str(sleeper.get("practice_participation") or sleeper.get("practice_description") or "").strip()
-    injury = str(sleeper.get("injury_status") or "").strip()
+    injury = _canonical_injury_status(
+        sleeper.get("injury_status") or player.get("InjuryStatus") or player.get("Status")
+    )
 
     score = 0.0
     if depth == 1:
@@ -346,6 +659,91 @@ def _role_context(player: Mapping[str, Any], sleeper: Optional[Mapping[str, Any]
     if practice_short:
         label = f"{label} {practice_short}".strip()
     return label, _clamp(score, -0.9, 0.9)
+
+
+def _apply_replacement_roles(players: List[Dict[str, Any]]) -> int:
+    """Promote the next active depth-chart player when a starter is out.
+
+    The adjustment is deliberately modest. It recognizes a likely opportunity
+    increase without pretending that a backup inherits the starter's complete
+    workload or projection. The base role score is kept separately so repeated
+    game-day refreshes never stack the promotion.
+    """
+    groups: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    for player in players or []:
+        base_role = str(player.get("NFLRoleBase") or player.get("NFLRole") or "").replace(" NEXT UP", "").strip()
+        base_score = _to_float(
+            player.get("NFLRoleBaseScore"),
+            _to_float(player.get("NFLRoleScore"), 0.0) - _to_float(player.get("NFLReplacementBoost"), 0.0),
+        )
+        player["NFLRoleBase"] = base_role
+        player["NFLRoleBaseScore"] = base_score
+        player["NFLRole"] = base_role
+        player["NFLRoleScore"] = base_score
+        player["NFLReplacementBoost"] = 0.0
+        player["NFLReplacementFor"] = ""
+
+        team = normalize_nfl_team(player.get("Team"))
+        position = _position_group(player.get("NFLDepthPosition") or player.get("Position"))
+        depth = int(_to_float(player.get("NFLDepthOrder"), 0))
+        if team and position in {"QB", "RB", "WR", "TE"} and depth > 0:
+            groups.setdefault((team, position), []).append(player)
+
+    promoted = 0
+    boost_by_position = {"QB": 0.30, "RB": 0.50, "WR": 0.40, "TE": 0.40}
+    for (_, position), group in groups.items():
+        unavailable_starters = [
+            player for player in group
+            if int(_to_float(player.get("NFLDepthOrder"), 0)) == 1
+            and _is_out_status(
+                player.get("InjuryStatus"),
+                player.get("NFLRosterStatus"),
+                player.get("NFLActive"),
+            )
+        ]
+        if not unavailable_starters:
+            continue
+
+        eligible = [
+            player for player in group
+            if int(_to_float(player.get("NFLDepthOrder"), 0)) > 1
+            and not _is_out_status(
+                player.get("InjuryStatus"),
+                player.get("NFLRosterStatus"),
+                player.get("NFLActive"),
+            )
+        ]
+        if not eligible:
+            continue
+        next_depth = min(int(_to_float(player.get("NFLDepthOrder"), 0)) for player in eligible)
+        next_players = [
+            player for player in eligible
+            if int(_to_float(player.get("NFLDepthOrder"), 0)) == next_depth
+        ]
+        unavailable_names = ", ".join(str(player.get("Name") or "") for player in unavailable_starters if player.get("Name"))
+        for player in next_players:
+            boost = boost_by_position.get(position, 0.35)
+            base_score = _to_float(player.get("NFLRoleBaseScore"), 0.0)
+            player["NFLReplacementBoost"] = boost
+            player["NFLReplacementFor"] = unavailable_names
+            player["NFLRoleScore"] = _clamp(base_score + boost, -0.9, 0.9)
+            base_label = str(player.get("NFLRoleBase") or position).strip()
+            player["NFLRole"] = f"{base_label} NEXT UP".strip()
+            promoted += 1
+    return promoted
+
+
+def _reapply_context_adjustments(players: List[Dict[str, Any]]) -> None:
+    """Recalculate projections after cross-player replacement roles are known."""
+    for player in players or []:
+        apply_context_adjustment(
+            player,
+            usage=_to_float(player.get("NFLUsageScore"), 0.0),
+            matchup=_to_float(player.get("NFLMatchupScore"), 0.0),
+            role=_to_float(player.get("NFLRoleScore"), 0.0),
+            weather=_to_float(player.get("NFLWeatherScore"), 0.0),
+            vegas=_to_float(player.get("NFLVegas"), 0.0),
+        )
 
 
 def _slate_season(players: Iterable[Mapping[str, Any]]) -> int:
@@ -542,6 +940,8 @@ def apply_auto_nfl_context(
     usage_rows: Optional[Sequence[Mapping[str, Any]]] = None,
     usage_season: Optional[int] = None,
     weather_by_game: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    odds_by_game: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    odds_api_key: Optional[str] = None,
     fetch_external: bool = True,
     season: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -560,15 +960,33 @@ def apply_auto_nfl_context(
         usage_rows, usage_season = fetch_recent_usage_with_fallback(target_season)
     if fetch_external and weather_by_game is None:
         weather_by_game = _fetch_weather_for_games(players)
+    if odds_by_game is None:
+        odds_result = fetch_nfl_odds(odds_api_key) if fetch_external else {
+            "state": "not_requested", "games": {}, "checked_at": _utc_now_iso(), "remaining": None, "message": ""
+        }
+        odds_by_game = odds_result.get("games") or {}
+    else:
+        odds_result = {
+            "state": "ok" if odds_by_game else "no_games",
+            "games": dict(odds_by_game),
+            "checked_at": _utc_now_iso(),
+            "remaining": None,
+            "message": "",
+        }
 
     sleeper_index = _sleeper_index(sleeper_data or {})
     usage_index = _build_usage_index(usage_rows or [])
     matchup_index = _build_matchup_index(usage_rows or [])
     weather_index = {str(key).strip().upper(): dict(value) for key, value in (weather_by_game or {}).items()}
+    odds_index = {str(key).strip().upper(): dict(value) for key, value in (odds_by_game or {}).items()}
+    checked_at = _utc_now_iso()
 
     sleeper_matches = 0
     usage_matches = 0
+    status_changes = 0
+    odds_matches: set[str] = set()
     for player in players:
+        _apply_dk_status_fallback(player)
         name = normalize_nfl_name(player.get("Name"))
         team = normalize_nfl_team(player.get("Team"))
         opponent = normalize_nfl_team(player.get("Opponent"))
@@ -578,29 +996,12 @@ def apply_auto_nfl_context(
         sleeper = sleeper_index.get((name, team)) or sleeper_index.get((name, ""))
         if sleeper:
             sleeper_matches += 1
-            player["NFLDepthPosition"] = str(sleeper.get("depth_chart_position") or sleeper.get("position") or "")
-            player["NFLDepthOrder"] = int(_to_float(sleeper.get("depth_chart_order"), 0))
-            player["NFLPractice"] = str(sleeper.get("practice_participation") or sleeper.get("practice_description") or "")
-            player["InjuryStatus"] = str(sleeper.get("injury_status") or "")
-            player["InjuryBodyPart"] = str(sleeper.get("injury_body_part") or "")
-            player["InjuryStartDate"] = str(sleeper.get("injury_start_date") or "")
-            player["InjurySource"] = "Sleeper"
-            status = str(player["InjuryStatus"]).strip().upper()
-            is_out = status in {"OUT", "IR", "PUP", "NFI", "SUSP", "SUSPENDED", "INACTIVE"}
-            if is_out:
-                player["LockFlex"] = False
-                player["LockCpt"] = False
-                player["FadeFlex"] = True
-                player["FadeCpt"] = True
-                player["AutoFadeInjury"] = True
-            elif player.get("AutoFadeInjury") is True:
-                player["FadeFlex"] = False
-                player["FadeCpt"] = False
-                player["AutoFadeInjury"] = False
-        else:
+            status_changes += int(_apply_sleeper_player(player, sleeper, checked_at))
+        elif sleeper_data is not None:
             player["NFLDepthPosition"] = ""
             player["NFLDepthOrder"] = 0
             player["NFLPractice"] = ""
+            player["LiveStatusConflict"] = False
 
         role_label, role_score = _role_context(player, sleeper)
         usage = usage_index.get((name, team)) or usage_index.get((name, "")) or {}
@@ -620,8 +1021,14 @@ def apply_auto_nfl_context(
             indoor=indoor,
         ) if condition else 0.0
 
-        # Vegas intentionally stays neutral until a reliable keyless source exists.
-        vegas_score = 0.0
+        game_odds = odds_index.get(game_key)
+        if game_odds:
+            vegas_score = _apply_odds_player(player, game_odds, str(odds_result.get("checked_at") or checked_at))
+            odds_matches.add(game_key)
+        else:
+            vegas_score = 0.0
+            player["NFLVegas"] = 0.0
+            player["NFLVegasState"] = "unmatched" if odds_result.get("state") == "ok" else str(odds_result.get("state") or "unavailable")
         player["NFLUsage"] = _usage_display(usage)
         player["NFLUsageGames"] = int(_to_float(usage.get("games"), 0))
         player["NFLUsageSeason"] = usage_season
@@ -629,6 +1036,8 @@ def apply_auto_nfl_context(
         player["NFLMatchupScore"] = matchup_score
         player["NFLRole"] = role_label
         player["NFLRoleScore"] = role_score
+        player["NFLRoleBase"] = role_label
+        player["NFLRoleBaseScore"] = role_score
         player["NFLWeatherScore"] = weather_score
         player["NFLWeatherIndoor"] = indoor
         player["NFLWeatherTempF"] = _to_float(condition.get("temperature_f"), 0.0) if condition else 0.0
@@ -644,15 +1053,140 @@ def apply_auto_nfl_context(
             vegas=vegas_score,
         )
 
+    replacement_promotions = _apply_replacement_roles(players)
+    _reapply_context_adjustments(players)
     summary = {
         "total": len(players),
         "sleeper": sleeper_matches,
+        "sleeper_state": "ok" if sleeper_data is not None else "unavailable",
+        "status_changes": status_changes,
+        "status_flags": sum(1 for player in players if _is_out_status(player.get("InjuryStatus"), player.get("NFLRosterStatus"), player.get("NFLActive"))),
+        "locked_conflicts": sum(1 for player in players if player.get("LiveStatusConflict")),
+        "replacement_promotions": replacement_promotions,
         "usage": usage_matches,
         "weather_games": len(weather_index),
         "usage_season": usage_season,
+        "odds_state": odds_result.get("state"),
+        "odds_games": len(odds_index),
+        "odds_matched_games": len(odds_matches),
+        "odds_remaining": odds_result.get("remaining"),
+        "odds_message": odds_result.get("message") or "",
+        "checked_at": checked_at,
         "max_adjustment": MAX_NFL_ADJUSTMENT,
     }
     logger.info("NFL auto context applied: %s", summary)
+    return summary
+
+
+def refresh_live_nfl_data(
+    players: List[Dict[str, Any]],
+    *,
+    odds_api_key: Optional[str] = None,
+    sleeper_data: Optional[Mapping[str, Any]] = None,
+    odds_result: Optional[Mapping[str, Any]] = None,
+    fetch_external: bool = True,
+) -> Dict[str, Any]:
+    """Refresh only time-sensitive NFL availability and game lines.
+
+    This is intentionally smaller than :func:`apply_auto_nfl_context` so it can
+    run immediately before generation without re-downloading usage history or
+    weather. Existing usage/matchup/weather scores remain intact.
+    """
+    if not players:
+        return {"total": 0, "sleeper": 0, "sleeper_state": "unavailable", "odds_state": "not_configured", "checked_at": _utc_now_iso()}
+
+    if fetch_external and sleeper_data is None:
+        sleeper_data = fetch_sleeper_players()
+    if odds_result is None:
+        odds_result = fetch_nfl_odds(odds_api_key) if fetch_external else {
+            "state": "not_requested", "games": {}, "checked_at": _utc_now_iso(), "remaining": None, "message": ""
+        }
+
+    checked_at = _utc_now_iso()
+    sleeper_index = _sleeper_index(sleeper_data or {})
+    odds_state = str(odds_result.get("state") or "unavailable")
+    odds_index = {
+        str(key).strip().upper(): dict(value)
+        for key, value in (odds_result.get("games") or {}).items()
+    }
+    sleeper_matches = 0
+    changes: List[Dict[str, Any]] = []
+    matched_games: set[str] = set()
+
+    for player in players:
+        _apply_dk_status_fallback(player)
+        name = normalize_nfl_name(player.get("Name"))
+        team = normalize_nfl_team(player.get("Team"))
+        game_key = str(player.get("GameKey") or "").strip().upper()
+        before = _status_snapshot(player)
+        sleeper = sleeper_index.get((name, team)) or sleeper_index.get((name, ""))
+        if sleeper:
+            sleeper_matches += 1
+            _apply_sleeper_player(player, sleeper, checked_at)
+            after = _status_snapshot(player)
+            if before != after:
+                changes.append({
+                    "name": str(player.get("Name") or ""),
+                    "before": before,
+                    "after": after,
+                    "availability": str(player.get("NFLAvailability") or ""),
+                })
+
+        game_odds = odds_index.get(game_key)
+        if game_odds:
+            vegas_score = _apply_odds_player(player, game_odds, str(odds_result.get("checked_at") or checked_at))
+            matched_games.add(game_key)
+        else:
+            vegas_score = _to_float(player.get("NFLVegas"), 0.0)
+            if odds_state in {"ok", "no_games"}:
+                vegas_score = 0.0
+                player["NFLVegas"] = 0.0
+                player["NFLVegasState"] = "unmatched" if odds_state == "ok" else "no_games"
+            elif odds_state == "not_configured" and not player.get("NFLVegasState"):
+                player["NFLVegasState"] = "not_configured"
+            elif odds_state in {"not_configured", "unavailable", "error", "invalid_key"} and _to_float(player.get("NFLVegasTeamTotal"), 0.0) > 0:
+                player["NFLVegasState"] = "cached"
+
+        if sleeper:
+            role_label, role_base_score = _role_context(player, sleeper)
+        else:
+            role_label = str(player.get("NFLRoleBase") or player.get("NFLRole") or "").replace(" NEXT UP", "").strip()
+            role_base_score = _to_float(
+                player.get("NFLRoleBaseScore"),
+                _to_float(player.get("NFLRoleScore"), 0.0) - _to_float(player.get("NFLReplacementBoost"), 0.0),
+            )
+        player["NFLRoleBase"] = role_label
+        player["NFLRoleBaseScore"] = role_base_score
+        player["NFLRole"] = role_label
+        player["NFLRoleScore"] = role_base_score
+
+        apply_context_adjustment(
+            player,
+            usage=_to_float(player.get("NFLUsageScore"), 0.0),
+            matchup=_to_float(player.get("NFLMatchupScore"), 0.0),
+            role=role_base_score,
+            weather=_to_float(player.get("NFLWeatherScore"), 0.0),
+            vegas=vegas_score,
+        )
+    replacement_promotions = _apply_replacement_roles(players)
+    _reapply_context_adjustments(players)
+    summary = {
+        "total": len(players),
+        "sleeper": sleeper_matches,
+        "sleeper_state": "ok" if sleeper_data is not None else "unavailable",
+        "status_changes": len(changes),
+        "changes": changes,
+        "status_flags": sum(1 for player in players if _is_out_status(player.get("InjuryStatus"), player.get("NFLRosterStatus"), player.get("NFLActive"))),
+        "locked_conflicts": sum(1 for player in players if player.get("LiveStatusConflict")),
+        "replacement_promotions": replacement_promotions,
+        "odds_state": odds_state,
+        "odds_games": len(odds_index),
+        "odds_matched_games": len(matched_games),
+        "odds_remaining": odds_result.get("remaining"),
+        "odds_message": odds_result.get("message") or "",
+        "checked_at": checked_at,
+    }
+    logger.info("NFL live data refreshed: %s", {key: value for key, value in summary.items() if key != "changes"})
     return summary
 
 
@@ -664,8 +1198,13 @@ def clear_nfl_context(players: List[Dict[str, Any]]) -> None:
         for key in (
             "NFLAdjRaw", "NFLAdjScore", "NFLUsage", "NFLUsageGames", "NFLUsageSeason",
             "NFLUsageScore", "NFLMatchupScore", "NFLRole", "NFLRoleScore",
+            "NFLRoleBase", "NFLRoleBaseScore", "NFLReplacementBoost", "NFLReplacementFor",
             "NFLDepthPosition", "NFLDepthOrder", "NFLPractice", "NFLWeatherScore",
             "NFLWeatherIndoor", "NFLWeatherTempF", "NFLWeatherWindMph",
-            "NFLWeatherPrecipPct", "NFLVegas",
+            "NFLWeatherPrecipPct", "NFLVegas", "NFLVegasGameTotal", "NFLVegasTeamTotal",
+            "NFLVegasOpponentTotal", "NFLVegasSpread", "NFLVegasBookmakers",
+            "NFLVegasUpdatedAt", "NFLVegasState", "NFLRosterStatus", "NFLActive",
+            "NFLAvailability", "NFLNewsNote", "NFLNewsUpdatedAt", "LiveStatusUpdatedAt",
+            "LiveStatusChanged", "LiveStatusConflict",
         ):
             player.pop(key, None)

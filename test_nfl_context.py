@@ -3,13 +3,18 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
+import nfl_auto_data
 from nfl_auto_data import (
     MAX_NFL_ADJUSTMENT,
     apply_auto_nfl_context,
     apply_context_adjustment,
+    fetch_nfl_odds,
     fetch_recent_usage_with_fallback,
     normalize_nfl_team,
+    parse_nfl_odds,
+    refresh_live_nfl_data,
     score_matchup,
+    score_vegas,
     score_weather,
 )
 
@@ -199,6 +204,187 @@ class NFLContextTests(unittest.TestCase):
         self.assertEqual(minus, -3.5)
         self.assertEqual(positive["FlexProjection"], 18.5)
         self.assertEqual(negative["FlexProjection"], 11.5)
+
+    def test_odds_parser_builds_consensus_implied_team_totals(self):
+        events = [{
+            "id": "game-1",
+            "home_team": "Buffalo Bills",
+            "away_team": "Jacksonville Jaguars",
+            "commence_time": "2026-09-13T17:00:00Z",
+            "bookmakers": [
+                {
+                    "last_update": "2026-09-12T20:00:00Z",
+                    "markets": [
+                        {"key": "totals", "outcomes": [{"name": "Over", "point": 47.5}, {"name": "Under", "point": 47.5}]},
+                        {"key": "spreads", "outcomes": [{"name": "Buffalo Bills", "point": -3.5}, {"name": "Jacksonville Jaguars", "point": 3.5}]},
+                    ],
+                },
+                {
+                    "last_update": "2026-09-12T20:05:00Z",
+                    "markets": [
+                        {"key": "totals", "outcomes": [{"name": "Over", "point": 48.5}, {"name": "Under", "point": 48.5}]},
+                        {"key": "spreads", "outcomes": [{"name": "Buffalo Bills", "point": -2.5}, {"name": "Jacksonville Jaguars", "point": 2.5}]},
+                    ],
+                },
+            ],
+        }]
+        parsed = parse_nfl_odds(events)
+        game = parsed["JAX@BUF"]
+        self.assertEqual(game["game_total"], 48.0)
+        self.assertEqual(game["home_spread"], -3.0)
+        self.assertEqual(game["home_implied"], 25.5)
+        self.assertEqual(game["away_implied"], 22.5)
+        self.assertEqual(game["bookmakers"], 2)
+
+    def test_context_applies_vegas_team_total_and_adjustment(self):
+        player = _player(Team="BUF", Opponent="JAX", GameKey="JAX@BUF", HomeTeam="BUF", Position="QB")
+        summary = apply_auto_nfl_context(
+            [player],
+            sleeper_data={},
+            usage_rows=[],
+            weather_by_game={},
+            odds_by_game={
+                "JAX@BUF": {
+                    "home_team": "BUF", "away_team": "JAX", "game_total": 50,
+                    "home_spread": -4, "away_spread": 4, "home_implied": 27,
+                    "away_implied": 23, "bookmakers": 5, "last_update": "2026-09-12T20:00:00Z",
+                }
+            },
+            fetch_external=False,
+            season=2026,
+        )
+        self.assertEqual(summary["odds_state"], "ok")
+        self.assertEqual(summary["odds_matched_games"], 1)
+        self.assertEqual(player["NFLVegasTeamTotal"], 27.0)
+        self.assertEqual(player["NFLVegasGameTotal"], 50.0)
+        self.assertGreater(player["NFLVegas"], 0.0)
+        self.assertGreater(player["FlexProjection"], 15.0)
+
+    def test_live_refresh_preserves_locked_out_player_and_reports_conflict(self):
+        player = _player(LockFlex=True, FadeFlex=False, FadeCpt=False)
+        sleeper = {
+            "1": {
+                "full_name": "Example Runner", "team": "JAC", "position": "RB",
+                "depth_chart_position": "RB", "depth_chart_order": 1,
+                "status": "Active", "active": True, "injury_status": "Out",
+                "practice_participation": "Did Not Participate",
+            }
+        }
+        summary = refresh_live_nfl_data(
+            [player],
+            sleeper_data=sleeper,
+            odds_result={"state": "not_configured", "games": {}, "remaining": None, "message": ""},
+            fetch_external=False,
+        )
+        self.assertTrue(player["LockFlex"])
+        self.assertFalse(bool(player.get("FadeFlex")))
+        self.assertEqual(player["NFLAvailability"], "OUT")
+        self.assertTrue(player["LiveStatusConflict"])
+        self.assertEqual(summary["locked_conflicts"], 1)
+
+    def test_out_starter_promotes_next_active_player_and_refresh_can_reverse_it(self):
+        starter = _player(Name="Starting Runner")
+        backup = _player(Name="Backup Runner", FlexProjection=10.0, CptProjection=15.0, BaseProjection=10.0)
+        out_sleeper = {
+            "1": {
+                "full_name": "Starting Runner", "team": "JAC", "position": "RB",
+                "depth_chart_position": "RB", "depth_chart_order": 1,
+                "status": "Active", "active": True, "injury_status": "Out",
+            },
+            "2": {
+                "full_name": "Backup Runner", "team": "JAC", "position": "RB",
+                "depth_chart_position": "RB", "depth_chart_order": 2,
+                "status": "Active", "active": True, "injury_status": None,
+            },
+        }
+        summary = apply_auto_nfl_context(
+            [starter, backup],
+            sleeper_data=out_sleeper,
+            usage_rows=[],
+            weather_by_game={},
+            odds_by_game={},
+            fetch_external=False,
+            season=2026,
+        )
+
+        self.assertEqual(summary["replacement_promotions"], 1)
+        self.assertEqual(backup["NFLReplacementBoost"], 0.5)
+        self.assertEqual(backup["NFLReplacementFor"], "Starting Runner")
+        self.assertIn("NEXT UP", backup["NFLRole"])
+        self.assertAlmostEqual(backup["FlexProjection"], 10.55)
+
+        active_sleeper = {
+            **out_sleeper,
+            "1": {**out_sleeper["1"], "injury_status": None},
+        }
+        refreshed = refresh_live_nfl_data(
+            [starter, backup],
+            sleeper_data=active_sleeper,
+            odds_result={"state": "not_configured", "games": {}, "remaining": None, "message": ""},
+            fetch_external=False,
+        )
+        self.assertEqual(refreshed["replacement_promotions"], 0)
+        self.assertEqual(backup["NFLReplacementBoost"], 0.0)
+        self.assertNotIn("NEXT UP", backup["NFLRole"])
+        self.assertAlmostEqual(backup["FlexProjection"], 10.05)
+        self.assertFalse(bool(starter.get("FadeFlex")))
+
+    def test_draftkings_questionable_status_survives_blank_sleeper_injury(self):
+        player = _player(Status="Q")
+        sleeper = {
+            "1": {
+                "full_name": "Example Runner", "team": "JAC", "position": "RB",
+                "depth_chart_position": "RB", "depth_chart_order": 1,
+                "status": "Active", "active": True, "injury_status": None,
+            }
+        }
+        refresh_live_nfl_data(
+            [player],
+            sleeper_data=sleeper,
+            odds_result={"state": "not_configured", "games": {}, "remaining": None, "message": ""},
+            fetch_external=False,
+        )
+        self.assertEqual(player["InjuryStatus"], "QUESTIONABLE")
+        self.assertEqual(player["NFLAvailability"], "QUESTIONABLE")
+        self.assertFalse(bool(player.get("FadeFlex")))
+
+    def test_vegas_scoring_rewards_high_totals_and_favored_defenses(self):
+        self.assertGreater(score_vegas(team_implied=28, opponent_implied=20, team_spread=-6, position="QB"), 0)
+        self.assertLess(score_vegas(team_implied=17, opponent_implied=28, team_spread=8, position="WR"), 0)
+        self.assertGreater(score_vegas(team_implied=24, opponent_implied=17, team_spread=-7, position="DST"), 0)
+
+    def test_missing_odds_key_returns_clear_diagnostic_without_request(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            result = fetch_nfl_odds("")
+        self.assertEqual(result["state"], "not_configured")
+        self.assertIn("key", result["message"].lower())
+
+    def test_odds_fetch_uses_current_endpoint_and_never_returns_the_key(self):
+        response = mock.Mock()
+        response.status_code = 200
+        response.headers = {"x-requests-remaining": "497"}
+        response.json.return_value = [{
+            "id": "game-1", "home_team": "Buffalo Bills", "away_team": "Jacksonville Jaguars",
+            "bookmakers": [{
+                "last_update": "2026-09-12T20:00:00Z",
+                "markets": [
+                    {"key": "totals", "outcomes": [{"name": "Over", "point": 48.5}]},
+                    {"key": "spreads", "outcomes": [{"name": "Buffalo Bills", "point": -3.5}]},
+                ],
+            }],
+        }]
+        request_client = mock.Mock()
+        request_client.get.return_value = response
+        with mock.patch.object(nfl_auto_data, "HAS_REQUESTS", True), mock.patch.object(
+            nfl_auto_data, "requests", request_client, create=True
+        ):
+            result = fetch_nfl_odds("secret-key")
+        self.assertEqual(result["state"], "ok")
+        self.assertEqual(result["remaining"], 497)
+        self.assertIn("JAX@BUF", result["games"])
+        self.assertNotIn("secret-key", str(result))
+        params = request_client.get.call_args.kwargs["params"]
+        self.assertEqual(params["markets"], "spreads,totals")
 
 
 if __name__ == "__main__":
