@@ -54,6 +54,17 @@ The optimizer can shape the complete set of generated lineups, not just each lin
 
 The app generates a larger candidate pool and selects a compliant portfolio from it. If aggressive settings cannot all be satisfied, it returns the feasible lineups it found and clearly reports any relaxed uniqueness or minimum-exposure shortfall.
 
+## NFL SIM Edge
+
+NFL Classic builds can use the **NFL SIM Edge** option. The app first removes inactive and low-depth players from the automatic field pool while preserving manual locks. It then:
+
+- creates only complete, near-cap field lineups with realistic QB-stack, bring-back, and FLEX construction;
+- simulates correlated game, team, passing, rushing, and player outcomes;
+- ranks every candidate against the same representative field in each scenario; and
+- selects a 150-lineup portfolio that covers different top-one-percent outcomes while respecting exposure rules.
+
+The Classic results table shows a slate-relative SIM Edge grade. Its tooltip includes top-one-percent rate, representative win rate, cash rate, simulated ceiling, and duplication risk. These metrics are decision aids based on the loaded projections and assumptions, not guarantees of contest results.
+
 ## Create a release
 
 The `Windows Release` GitHub Actions workflow supports two modes:

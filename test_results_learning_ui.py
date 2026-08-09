@@ -45,6 +45,10 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(button.text(), "Results & Learning")
         self.assertIsNotNone(window.findChild(QtWidgets.QSpinBox, "portfolioMinUnique"))
         self.assertIsNotNone(window.findChild(QtWidgets.QPushButton, "portfolioSummaryButton"))
+        sim_toggle = window.findChild(QtWidgets.QCheckBox, "nflSimEdgeCheck")
+        self.assertIsNotNone(sim_toggle)
+        self.assertTrue(sim_toggle.isChecked())
+        self.assertIsNotNone(window.findChild(QtWidgets.QSpinBox, "nflSimScenarios"))
         window.close()
 
     def test_classic_worker_reports_high_volume_progress_without_surplus_candidates(self):

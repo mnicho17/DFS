@@ -129,6 +129,11 @@ def _ownership(lineup: Any, kind: str) -> float:
     return sum(values) / len(values)
 
 
+def _sim_metrics(lineup: Any) -> Dict[str, Any]:
+    value = getattr(lineup, "sim_metrics", None)
+    return value if isinstance(value, dict) else {}
+
+
 def _candidate_signature(lineup: Any, kind: str) -> Tuple[str, ...]:
     keys = sorted(player_key(player) for player in lineup_players(lineup, kind) if player_key(player))
     captain = lineup_captain(lineup, kind)
@@ -246,6 +251,7 @@ def select_portfolio(
     game_counts: Counter[str] = Counter()
     warnings: List[str] = []
     current_min_unique = normalized["min_unique"]
+    covered_sim_hits: set[int] = set()
 
     def admissible(lineup: Any, min_unique: int) -> bool:
         keys, teams, games = _lineup_sets(lineup, kind)
@@ -282,8 +288,21 @@ def select_portfolio(
         game_penalty = sum(game_counts[game] for game in games) * 0.03
         ownership_penalty = _ownership(lineup, kind) * 0.018 if normalized["balance_ownership"] else 0.0
         overlap_penalty = max((len(keys.intersection(previous)) for previous in selected_key_sets), default=0) * 0.10
+        sim = _sim_metrics(lineup)
+        sim_edge = _pct(sim.get("sim_edge"), None)
+        if sim_edge is None:
+            quality_score = _projection(lineup, kind)
+            scenario_bonus = 0.0
+        else:
+            # SIM Edge is slate-relative and should lead candidate quality while
+            # retaining a smaller projection term as a stability guardrail.
+            quality_score = 0.35 * _projection(lineup, kind) + 0.95 * sim_edge
+            hits = set(getattr(lineup, "sim_top_hits", set()) or set())
+            marginal = len(hits - covered_sim_hits)
+            scenario_bonus = 35.0 * (marginal / max(1, len(hits))) if hits else 0.0
         return (
-            _projection(lineup, kind)
+            quality_score
+            + scenario_bonus
             + deficit_bonus
             - concentration_penalty
             - team_penalty
@@ -312,6 +331,7 @@ def select_portfolio(
         captain = lineup_captain(chosen, kind)
         if captain:
             cpt_counts[player_key(captain)] += 1
+        covered_sim_hits.update(set(getattr(chosen, "sim_top_hits", set()) or set()))
 
     if len(selected) < requested:
         warnings.append(

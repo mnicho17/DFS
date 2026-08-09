@@ -67,20 +67,20 @@ class NFLLogicTests(unittest.TestCase):
             with open(path, "w", newline="", encoding="utf-8") as f:
                 w = csv.DictWriter(f, fieldnames=[
                     "Position", "Name + ID", "Name", "ID", "Roster Position",
-                    "Salary", "Game Info", "TeamAbbrev", "AvgPointsPerGame",
+                    "Salary", "Game Info", "TeamAbbrev", "AvgPointsPerGame", "Status",
                 ])
                 w.writeheader()
                 w.writerow({
                     "Position": "QB", "Name + ID": "Josh Example (1)",
                     "Name": "Josh Example", "ID": "1", "Roster Position": "QB",
                     "Salary": "6500", "Game Info": "BUF@MIA 09/13/2026 01:00PM ET",
-                    "TeamAbbrev": "BUF", "AvgPointsPerGame": "22.5",
+                    "TeamAbbrev": "BUF", "AvgPointsPerGame": "22.5", "Status": "Q",
                 })
                 w.writerow({
                     "Position": "WR", "Name + ID": "Miami Example (2)",
                     "Name": "Miami Example", "ID": "2", "Roster Position": "WR",
                     "Salary": "5900", "Game Info": "BUF@MIA 09/13/2026 01:00PM ET",
-                    "TeamAbbrev": "MIA", "AvgPointsPerGame": "15.0",
+                    "TeamAbbrev": "MIA", "AvgPointsPerGame": "15.0", "Status": "",
                 })
             players = read_players_csv(path)
             by_team = {p["Team"]: p for p in players}
@@ -89,6 +89,7 @@ class NFLLogicTests(unittest.TestCase):
             self.assertEqual(by_team["MIA"]["Opponent"], "BUF")
             self.assertEqual(by_team["MIA"]["HomeAway"], "H")
             self.assertEqual(by_team["BUF"]["GameKey"], "BUF@MIA")
+            self.assertEqual(by_team["BUF"]["Status"], "Q")
 
     def test_strategic_nfl_build_has_correlation_and_salary_quality(self):
         players = _fixture_players()

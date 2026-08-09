@@ -137,6 +137,15 @@ class OwnershipSimWorker(QtCore.QObject):
         if not eligible:
             return {}
 
+        if self.mode != "showdown" and self.sport == "NFL":
+            return simulate_nfl_field_ownership(
+                eligible,
+                self.num_sims,
+                salary_cap=self.salary_cap,
+                progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
+                cancel_callback=lambda: self._cancel,
+            )
+
         if self.mode != "showdown" and self.sport in ("MLB", "NBA", "WNBA"):
             return self._simulate_multisport_classic(eligible)
 
@@ -376,6 +385,8 @@ class LineupBuildWorker(QtCore.QObject):
         mlb_stack_pref: str = "Strategic",
         salary_strategy: str = "Near Cap",
         portfolio_rules: Optional[Dict[str, Any]] = None,
+        sim_enabled: bool = False,
+        sim_scenarios: int = 750,
     ):
         super().__init__()
         self.players = players
@@ -389,6 +400,8 @@ class LineupBuildWorker(QtCore.QObject):
         self.mlb_stack_pref = mlb_stack_pref or "Strategic"
         self.salary_strategy = salary_strategy or "Near Cap"
         self.portfolio_rules = dict(portfolio_rules or {})
+        self.sim_enabled = bool(sim_enabled)
+        self.sim_scenarios = max(100, int(sim_scenarios or 750))
         self._cancel_event = threading.Event()
 
     def request_cancel(self) -> None:
@@ -430,9 +443,10 @@ class LineupBuildWorker(QtCore.QObject):
                 or number(self.portfolio_rules.get("max_game_pct"), 100.0) < 100.0
                 or int(self.portfolio_rules.get("min_unique", 1) or 1) > built_in_unique
             )
+            use_nfl_sim = self.kind != "showdown" and self.sport == "NFL" and self.sim_enabled
             candidate_target = (
                 expanded_target
-                if self.kind == "showdown" or hard_portfolio_rules
+                if self.kind == "showdown" or hard_portfolio_rules or use_nfl_sim
                 else self.num_lineups
             )
             build_players = [dict(player) for player in self.players]
@@ -449,6 +463,8 @@ class LineupBuildWorker(QtCore.QObject):
                 min_cpt = float(configured.get("MinCptPct", player.get("MinCptPct", 0.0)) or 0.0)
                 player["_PortfolioCandidateBoost"] = min(12.0, min_total * 0.10) + (5.0 if key in required_group_keys else 0.0)
                 player["_PortfolioCptCandidateBoost"] = min(14.0, min_cpt * 0.12) + (3.0 if key in required_group_keys else 0.0)
+            if use_nfl_sim:
+                build_players = build_nfl_role_pool(build_players, preserve_locks=True)
             if self.kind == "showdown":
                 opt = ShowdownOptimizer(
                     build_players,
@@ -486,6 +502,49 @@ class LineupBuildWorker(QtCore.QObject):
                     ),
                     cancel_callback=self._cancel_event.is_set,
                 )
+            sim_report: Dict[str, Any] = {}
+            if use_nfl_sim and lineups and not self._cancel_event.is_set():
+                strategy_l = self.salary_strategy.strip().lower()
+                has_locks = any(bool(player.get("LockFlex")) for player in build_players)
+                if not hard_portfolio_rules and not has_locks:
+                    extra_count = min(90, max(30, self.num_lineups // 2))
+                    extras, _ = generate_nfl_field_lineups(
+                        build_players,
+                        extra_count,
+                        salary_cap=self.salary_cap,
+                        min_salary=max(0.0, self.salary_cap - 1000.0),
+                        seed=20260913,
+                        cancel_callback=self._cancel_event.is_set,
+                        candidate_mode=True,
+                        unique=True,
+                    )
+                    unique_lineups: Dict[tuple[str, ...], List[Dict[str, Any]]] = {}
+                    for lineup in list(lineups) + list(extras):
+                        signature = tuple(sorted(player_key(player) for player in lineup))
+                        unique_lineups.setdefault(signature, lineup)
+                    lineups = list(unique_lineups.values())
+                if "leverage" not in strategy_l and "balanced" not in strategy_l:
+                    hard_floor = self.salary_cap - (500.0 if "max" in strategy_l else 1000.0)
+                    near_cap = [
+                        lineup for lineup in lineups
+                        if sum(float(player.get("FlexSalary", 0.0) or 0.0) for player in lineup) >= hard_floor
+                    ]
+                    if len(near_cap) >= self.num_lineups:
+                        lineups = near_cap
+                field_count = max(600, min(2400, self.num_lineups * 8))
+                self.progress.emit(0, self.sim_scenarios, "Preparing NFL contest simulation")
+                sim_result = simulate_nfl_contest(
+                    lineups,
+                    build_players,
+                    scenarios=self.sim_scenarios,
+                    field_lineup_count=field_count,
+                    salary_cap=self.salary_cap,
+                    progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
+                    cancel_callback=self._cancel_event.is_set,
+                )
+                lineups = sim_result.get("lineups") or lineups
+                sim_report = dict(sim_result.get("report") or {})
+
             self.progress.emit(
                 min(self.num_lineups, len(lineups)),
                 self.num_lineups,
@@ -506,6 +565,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "cancelled": self._cancel_event.is_set(),
                 "portfolio_report": selected["report"],
                 "candidate_count": selected["candidate_count"],
+                "sim_report": sim_report,
             })
         except Exception:
             self.error.emit(traceback.format_exc())
@@ -527,6 +587,7 @@ from learning_db import (
     record_export,
 )
 from portfolio_rules import player_key, portfolio_report, select_portfolio
+from nfl_simulation import build_nfl_role_pool, generate_nfl_field_lineups, simulate_nfl_contest, simulate_nfl_field_ownership
 
 logger = logging.getLogger("dfs.ui")
 
@@ -1174,12 +1235,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.combo_salary_strategy.addItems(["Near Cap", "Maximize Salary", "Balanced Spend", "Salary Leverage"])
         self.combo_salary_strategy.setCurrentText("Near Cap")
         self.combo_salary_strategy.setToolTip(
-            "Near Cap: prefer $48.5k+ on a $50k cap.\n"
-            "Maximize Salary: stricter, usually $49k+.\n"
+            "Near Cap: NFL prefers $49k+ on a $50k cap.\n"
+            "Maximize Salary: NFL usually uses $49.5k+.\n"
             "Balanced Spend: allows around $47k+.\n"
             "Salary Leverage: allows more unused salary for contrarian builds."
         )
         row2.addWidget(self.combo_salary_strategy)
+
+        row2.addSpacing(18)
+        self.chk_nfl_contest_sim = QtWidgets.QCheckBox("NFL SIM Edge")
+        self.chk_nfl_contest_sim.setObjectName("nflSimEdgeCheck")
+        self.chk_nfl_contest_sim.setChecked(True)
+        self.chk_nfl_contest_sim.setToolTip(
+            "NFL Classic only: rank candidate lineups against correlated outcome scenarios\n"
+            "and a representative field, then select a diversified SIM Edge portfolio."
+        )
+        row2.addWidget(self.chk_nfl_contest_sim)
+
+        row2.addWidget(QtWidgets.QLabel("Scenarios:"))
+        self.spin_nfl_sim_scenarios = QtWidgets.QSpinBox()
+        self.spin_nfl_sim_scenarios.setObjectName("nflSimScenarios")
+        self.spin_nfl_sim_scenarios.setRange(250, 5000)
+        self.spin_nfl_sim_scenarios.setSingleStep(250)
+        self.spin_nfl_sim_scenarios.setValue(750)
+        self.spin_nfl_sim_scenarios.setToolTip(
+            "More scenarios stabilize SIM Edge estimates but take longer. 750 is the desktop default."
+        )
+        row2.addWidget(self.spin_nfl_sim_scenarios)
 
         row2.addStretch(1)
         top_box.addLayout(row2)
@@ -2504,15 +2586,26 @@ class MainWindow(QtWidgets.QMainWindow):
         tot = (own_map or {}).get("total", {})
         cpt = (own_map or {}).get("cpt", {})
         flx = (own_map or {}).get("flex", {})
+        meta = (own_map or {}).get("meta", {}) or {}
+        eligible_keys = set(meta.get("eligible_keys") or [])
         for p in self.players:
             k = _pkey(p)
             p["ProjOwnPct"] = float(tot.get(k, 0.0) or 0.0)
             p["ProjCptOwnPct"] = float(cpt.get(k, 0.0) or 0.0)
             p["ProjFlexOwnPct"] = float(flx.get(k, 0.0) or 0.0)
+            if eligible_keys:
+                p["NFLFieldEligible"] = k in eligible_keys
         self._own_progress.setVisible(False)
         self._own_eta.setVisible(False)
         self._refresh_players_table()
-        self.status.showMessage("Ownership simulation complete.", 4000)
+        if meta:
+            self.status.showMessage(
+                f"Ownership simulation complete: {int(meta.get('valid_lineups', 0) or 0):,} valid field lineups "
+                f"from a {int(meta.get('role_pool_size', 0) or 0)}-player role pool.",
+                6000,
+            )
+        else:
+            self.status.showMessage("Ownership simulation complete.", 4000)
 
     def _on_own_sim_error(self, msg: str) -> None:
         self._own_progress.setVisible(False)
@@ -2686,6 +2779,10 @@ class MainWindow(QtWidgets.QMainWindow):
         build_style = build_style_widget.currentText() if build_style_widget is not None else "Strategic"
         mlb_stack_pref = mlb_stack_widget.currentText() if mlb_stack_widget is not None else "Any Strategic"
         salary_strategy = salary_strategy_widget.currentText() if salary_strategy_widget is not None else "Near Cap"
+        sim_checkbox = getattr(self, "chk_nfl_contest_sim", None)
+        sim_spin = getattr(self, "spin_nfl_sim_scenarios", None)
+        sim_enabled = bool(sim_checkbox.isChecked()) if sim_checkbox is not None else True
+        sim_scenarios = int(sim_spin.value()) if sim_spin is not None else 750
 
         label_sport = sport if kind != "showdown" else "Showdown"
         self._build_progress.setRange(0, num)
@@ -2710,6 +2807,8 @@ class MainWindow(QtWidgets.QMainWindow):
             mlb_stack_pref=mlb_stack_pref,
             salary_strategy=salary_strategy,
             portfolio_rules=self._portfolio_rules(),
+            sim_enabled=sim_enabled,
+            sim_scenarios=sim_scenarios,
         )
         self._build_worker.moveToThread(self._build_thread)
 
@@ -2813,7 +2912,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.last_classic = valid_lineups
         slots = get_roster_slots_for_sport(sport)
-        headers = ["Save"] + slots + ["TotalSal", "Grade"]
+        has_sim_edge = any(bool(getattr(lineup, "sim_metrics", None)) for lineup in self.last_classic)
+        headers = ["Save"] + slots + ["TotalSal", "SIM Edge" if has_sim_edge else "Grade"]
         self.tbl_cl.setColumnCount(len(headers))
         self.tbl_cl.setHorizontalHeaderLabels(headers)
         self.tbl_cl.setRowCount(0)
@@ -2845,8 +2945,19 @@ class MainWindow(QtWidgets.QMainWindow):
                     f"Salary Left: ${float(grade_info.get('salary_left', 0.0)):,.0f}\n"
                     f"Stack/Shape: {grade_info.get('stack_shape', '')}\n"
                     f"Warnings: {grade_info.get('warnings', '') or 'None'}\n"
-                    "UI-only grade; not included in DK export/saved ID table."
                 )
+                if grade_info.get("sim_scenarios"):
+                    detail += (
+                        f"Top 1% Rate: {float(grade_info.get('sim_top_one_pct', 0.0)):.2f}%\n"
+                        f"Representative Win Rate: {float(grade_info.get('sim_win_rate', 0.0)):.2f}%\n"
+                        f"Cash Rate: {float(grade_info.get('sim_cash_rate', 0.0)):.1f}%\n"
+                        f"Average Field Percentile: {float(grade_info.get('sim_average_percentile', 0.0)):.1f}\n"
+                        f"90th-Percentile Score: {float(grade_info.get('sim_ceiling', 0.0)):.1f}\n"
+                        f"Duplication Risk: {float(grade_info.get('duplicate_risk', 0.0)):.0f}/100\n"
+                        f"Simulation: {int(grade_info.get('sim_scenarios', 0)):,} scenarios vs "
+                        f"{int(grade_info.get('sim_field_lineups', 0)):,} field lineups\n"
+                    )
+                detail += "UI-only grade; not included in DK export/saved ID table."
                 grade_item.setToolTip(detail)
                 self.tbl_cl.setItem(i, len(headers)-1, grade_item)
             except Exception:
@@ -2887,6 +2998,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 return f"Quality: MLB stacks {common}; avg salary left ${avg_left:,.0f}; grades {grade_txt or 'n/a'}."
             salaries = [sum(float(p.get("FlexSalary", 0) or 0) for p in lu) for lu in lineups if isinstance(lu, list)]
             avg_left = 50000 - (sum(salaries)/len(salaries)) if salaries else 0
+            if sport_u == "NFL":
+                sim_rows = [getattr(lineup, "sim_metrics", None) for lineup in lineups]
+                sim_rows = [row for row in sim_rows if isinstance(row, dict) and row]
+                if sim_rows:
+                    avg_edge = sum(float(row.get("sim_edge", 0.0) or 0.0) for row in sim_rows) / len(sim_rows)
+                    avg_top = sum(float(row.get("sim_top_one_pct", 0.0) or 0.0) for row in sim_rows) / len(sim_rows)
+                    return (
+                        f"Quality: {len(lineups)} NFL lineups | avg salary left ${avg_left:,.0f} | "
+                        f"avg SIM Edge {avg_edge:.0f} | avg top-1% rate {avg_top:.2f}%."
+                    )
             return f"Quality: {len(lineups)} {sport_u} lineups | avg salary left ${avg_left:,.0f}."
         except Exception as e:
             return f"Quality summary unavailable: {e}"
@@ -2900,6 +3021,7 @@ class MainWindow(QtWidgets.QMainWindow):
             lineups = payload.get("lineups", []) or []
             cancelled = bool(payload.get("cancelled", False))
             self.last_portfolio_report = dict(payload.get("portfolio_report") or {})
+            self.last_sim_report = dict(payload.get("sim_report") or {})
             warning_count = len(self.last_portfolio_report.get("warnings") or [])
             portfolio_note = f" Portfolio warnings: {warning_count}." if warning_count else " Portfolio rules satisfied."
 

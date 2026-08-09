@@ -30,6 +30,8 @@ def _canon_field(name: str) -> str:
         return "Salary"
     if base in ("projection", "proj", "avgpointspergame", "fppg", "fantasy points", "fpts"):
         return "Projection"
+    if base in ("status", "injury", "injury status", "player status"):
+        return "Status"
     return s.strip()
 
 
@@ -132,6 +134,7 @@ def read_players_csv(path: str) -> List[Dict[str, Any]]:
             salary = _to_float(row.get("Salary"), 0.0)
             projection = _to_float(row.get("Projection"), 0.0)
             game_info = (row.get("Game Info") or "").strip()
+            status = (row.get("Status") or "").strip()
             pid = (row.get("ID") or "").strip()
             name_plus_id = (row.get("Name + ID") or "").strip()
 
@@ -141,6 +144,7 @@ def read_players_csv(path: str) -> List[Dict[str, Any]]:
                 "Team": team,
                 "Position": position,
                 "GameInfo": game_info,
+                "Status": status,
                 **game_ctx,
                 "Salary": salary,
                 "Projection": projection,
@@ -168,6 +172,7 @@ def read_players_csv(path: str) -> List[Dict[str, Any]]:
             "Team": flex.get("Team", ""),
             "Position": flex.get("Position", ""),
             "GameInfo": flex.get("GameInfo", ""),
+            "Status": flex.get("Status", ""),
             "AwayTeam": flex.get("AwayTeam", ""),
             "HomeTeam": flex.get("HomeTeam", ""),
             "Opponent": flex.get("Opponent", ""),
