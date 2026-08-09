@@ -1342,15 +1342,16 @@ def _lineup_salary(lineup: List[Dict[str, Any]]) -> float:
 def _salary_floor_for_strategy(salary_cap: float, strategy: str, sport: str) -> float:
     """Preferred minimum salary. This is enforced progressively, not blindly forever."""
     strategy_l = (strategy or "Near Cap").strip().lower()
+    sport_u = (sport or "").strip().upper()
     cap = float(salary_cap or 50000.0)
     if "leverage" in strategy_l or "loose" in strategy_l:
         return max(0.0, cap - 4500.0)   # e.g. 45.5k on 50k cap
     if "balanced" in strategy_l:
         return max(0.0, cap - 3000.0)   # e.g. 47k
     if "max" in strategy_l or "cash" in strategy_l:
-        return max(0.0, cap - 1000.0)   # e.g. 49k
+        return max(0.0, cap - (500.0 if sport_u == "NFL" else 1000.0))
     # Recommended tournament default: use almost all salary without requiring perfect 50k.
-    return max(0.0, cap - 1500.0)       # e.g. 48.5k
+    return max(0.0, cap - (1000.0 if sport_u == "NFL" else 1500.0))
 
 
 def _salary_bonus(lineup: List[Dict[str, Any]], salary_cap: float, strategy: str = "Near Cap") -> float:
@@ -1427,6 +1428,32 @@ def lineup_grade_for_sport(lineup: List[Dict[str, Any]], sport: str, salary_cap:
         max_team = max(teams.values()) if teams else 0
         stack_shape = f"max team {max_team}"
         stack_score = min(100.0, 45.0 + max_team * 12.0)
+
+    sim_metrics = getattr(lineup, "sim_metrics", None)
+    if sport_u == "NFL" and isinstance(sim_metrics, dict) and sim_metrics:
+        sim_edge = max(0.0, min(100.0, float(sim_metrics.get("sim_edge", 0.0) or 0.0)))
+        duplicate_risk = max(0.0, min(100.0, float(sim_metrics.get("duplicate_risk", 0.0) or 0.0)))
+        if duplicate_risk >= 80.0:
+            warnings.append("high duplication risk")
+        letter = "A" if sim_edge >= 80 else "B" if sim_edge >= 60 else "C" if sim_edge >= 40 else "D"
+        return {
+            "grade": letter,
+            "score": sim_edge,
+            "salary_used": used,
+            "salary_left": max(0.0, cap - used),
+            "stack_shape": stack_shape,
+            "warnings": ", ".join(warnings),
+            "sim_edge": sim_edge,
+            "sim_top_one_pct": float(sim_metrics.get("sim_top_one_pct", 0.0) or 0.0),
+            "sim_win_rate": float(sim_metrics.get("sim_win_rate", 0.0) or 0.0),
+            "sim_cash_rate": float(sim_metrics.get("sim_cash_rate", 0.0) or 0.0),
+            "sim_average_percentile": float(sim_metrics.get("sim_average_percentile", 0.0) or 0.0),
+            "sim_ceiling": float(sim_metrics.get("sim_ceiling", 0.0) or 0.0),
+            "duplicate_risk": duplicate_risk,
+            "field_duplicate_estimate": float(sim_metrics.get("field_duplicate_estimate", 0.0) or 0.0),
+            "sim_scenarios": int(sim_metrics.get("sim_scenarios", 0) or 0),
+            "sim_field_lineups": int(sim_metrics.get("sim_field_lineups", 0) or 0),
+        }
 
     overall = 0.42 * proj_score + 0.35 * salary_score + 0.23 * stack_score
     if used < cap - 5000:
