@@ -204,6 +204,40 @@ def select_portfolio(
     max_team = _max_count(normalized["max_team_pct"], requested)
     max_game = _max_count(normalized["max_game_pct"], requested)
 
+    # If generation returned no surplus candidates and there are no hard
+    # portfolio rules, every candidate must be selected. Avoid repeatedly
+    # rescoring the same shrinking pool (and all prior overlaps) 150 times.
+    # The pairwise check keeps the configured uniqueness contract intact.
+    unrestricted_full_pool = (
+        len(pool) <= requested
+        and not normalized["groups"]
+        and not any(value > 0 for value in min_total.values())
+        and not any(value is not None for value in max_total.values())
+        and not any(value > 0 for value in min_cpt.values())
+        and not any(value is not None for value in max_cpt.values())
+        and (max_team is None or max_team >= requested)
+        and (max_game is None or max_game >= requested)
+    )
+    if unrestricted_full_pool:
+        key_sets = [_lineup_sets(lineup, kind)[0] for lineup in pool]
+        min_unique = normalized["min_unique"]
+        pairwise_unique = all(
+            len(key_sets[i] - key_sets[j]) >= min_unique
+            for i in range(len(key_sets))
+            for j in range(i)
+        )
+        if pairwise_unique:
+            report = portfolio_report(pool, normalized, kind=kind, requested=requested)
+            if len(pool) < requested:
+                warning = (
+                    f"Built {len(pool)} of {requested} requested lineups; "
+                    "the generator exhausted its unique candidate pool."
+                )
+                if warning not in report["warnings"]:
+                    report["warnings"].append(warning)
+                report["text"] = _report_text(report)
+            return {"lineups": pool, "report": report, "candidate_count": len(pool)}
+
     selected: List[Any] = []
     selected_key_sets: List[set[str]] = []
     total_counts: Counter[str] = Counter()

@@ -1476,7 +1476,12 @@ class MultiSportClassicOptimizer:
         self.mlb_stack_pref = mlb_stack_pref or "Strategic"
         self.salary_strategy = salary_strategy or "Near Cap"
 
-    def build_lineups(self, num_lineups: int = 10) -> List[List[Dict[str, Any]]]:
+    def build_lineups(
+        self,
+        num_lineups: int = 10,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        cancel_callback: Optional[Callable[[], bool]] = None,
+    ) -> List[List[Dict[str, Any]]]:
         # Use the same strategy-aware builder for every Classic sport. NFL used to
         # delegate to the legacy ClassicOptimizer here, silently dropping the UI's
         # Build Style and Salary Strategy settings. Keeping NFL in this path makes
@@ -1493,7 +1498,11 @@ class MultiSportClassicOptimizer:
         # It still respects sport roster slots, salary cap, fades, locks, max%,
         # ownership influence, and complete-slot validation. If it ever returns
         # no lineups on a smaller slate, then try PuLP as a backup.
-        lineups = self._build_lineups_greedy(num_lineups=num_lineups)
+        lineups = self._build_lineups_greedy(
+            num_lineups=num_lineups,
+            progress_callback=progress_callback,
+            cancel_callback=cancel_callback,
+        )
         if lineups:
             logger.info("%s fast strategic build returned %d/%d lineups.", self.sport, len(lineups), num_lineups)
             return lineups
@@ -1504,6 +1513,20 @@ class MultiSportClassicOptimizer:
 
         logger.info("%s fast build returned no lineups; PuLP skipped for large slate safety.", self.sport)
         return []
+
+    @staticmethod
+    def _report_progress(
+        progress_callback: Optional[Callable[[int, int, str], None]],
+        done: int,
+        total: int,
+        text: str,
+    ) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback(done, total, text)
+        except Exception:
+            logger.debug("Classic progress callback failed.", exc_info=True)
 
     def _score(self, p: Dict[str, Any]) -> float:
         score = _proj(p) + self.own_weight * _own_sign(self.own_mode) * _own(p)
@@ -1806,7 +1829,12 @@ class MultiSportClassicOptimizer:
             stack_bonus -= bad * 1.2 * style
         return base + sal_bonus + stack_bonus + self.rng.uniform(-0.05, 0.05)
 
-    def _build_lineups_greedy(self, num_lineups: int) -> List[List[Dict[str, Any]]]:
+    def _build_lineups_greedy(
+        self,
+        num_lineups: int,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+        cancel_callback: Optional[Callable[[], bool]] = None,
+    ) -> List[List[Dict[str, Any]]]:
         """Fast strategic builder with salary-floor priority.
 
         It first tries to return near-cap tournament-style lineups, then relaxes
@@ -1816,10 +1844,27 @@ class MultiSportClassicOptimizer:
         """
         accepted: List[List[Dict[str, Any]]] = []
         used_sigs: set[Tuple[str, ...]] = set()
-        pool = [p for p in self.players if not p.get("FadeFlex")]
-        pool = sorted(pool, key=lambda p: (self._score(p) + 0.20 * (_salary(p) / 1000.0)) / max(_salary(p), 1.0), reverse=True)
+        base_pool = [p for p in self.players if not p.get("FadeFlex")]
+        key_by_id = {id(p): _pkey(p) for p in base_pool}
+        salary_by_id = {id(p): _salary(p) for p in base_pool}
+        score_by_id = {id(p): self._score(p) for p in base_pool}
+        pool = sorted(
+            base_pool,
+            key=lambda p: (
+                score_by_id[id(p)] + 0.20 * (salary_by_id[id(p)] / 1000.0)
+            ) / max(salary_by_id[id(p)], 1.0),
+            reverse=True,
+        )
+        eligible_by_slot = {
+            slot: [p for p in pool if _eligible_for_slot(p, slot, self.sport)]
+            for slot in set(self.slots)
+        }
+        eligible_ids_by_slot = {
+            slot: {id(p) for p in players}
+            for slot, players in eligible_by_slot.items()
+        }
         locked = [p for p in pool if p.get("LockFlex")]
-        locked_keys = {_pkey(p) for p in locked}
+        locked_keys = {key_by_id[id(p)] for p in locked}
         cap_total, used_total = self._caps(num_lineups)
         nfl_profile = _nfl_style_profile(self.build_style) if self.sport == "NFL" else {}
         preferred_min_unique = int(nfl_profile.get("min_unique", 1) or 1) if self.sport == "NFL" else 1
@@ -1833,7 +1878,7 @@ class MultiSportClassicOptimizer:
         ]
 
         def can_use(p: Dict[str, Any]) -> bool:
-            pk = _pkey(p)
+            pk = key_by_id[id(p)]
             return pk not in cap_total or pk in locked_keys or used_total.get(pk, 0) < cap_total[pk]
 
         def lineup_respects_caps_now(lineup: List[Dict[str, Any]]) -> bool:
@@ -1841,7 +1886,7 @@ class MultiSportClassicOptimizer:
             # can become exhausted after another candidate is accepted, so recheck
             # against the live usage counts immediately before committing a lineup.
             for p in lineup:
-                pk = _pkey(p)
+                pk = key_by_id[id(p)]
                 if pk in locked_keys or pk not in cap_total:
                     continue
                 if used_total.get(pk, 0) >= cap_total[pk]:
@@ -1851,8 +1896,8 @@ class MultiSportClassicOptimizer:
         def candidate_rank(p: Dict[str, Any], cap_left: float, slots_left: int, floor: float, salary_used_so_far: float) -> float:
             # Prefer good players, but when we are behind salary pace, give salary
             # real weight so the builder does not keep settling for cheap value.
-            base = self._score(p)
-            sal = _salary(p)
+            base = score_by_id[id(p)]
+            sal = salary_by_id[id(p)]
             target_remaining = max(0.0, floor - salary_used_so_far)
             avg_needed = target_remaining / max(1, slots_left)
             salary_pressure = 0.0
@@ -1862,8 +1907,8 @@ class MultiSportClassicOptimizer:
 
         def try_build_one(floor: float) -> Optional[List[Dict[str, Any]]]:
             chosen = list(locked)
-            chosen_keys = {_pkey(p) for p in chosen}
-            cap_left = self.salary_cap - sum(_salary(p) for p in chosen)
+            chosen_keys = {key_by_id[id(p)] for p in chosen}
+            cap_left = self.salary_cap - sum(salary_by_id[id(p)] for p in chosen)
             if cap_left < 0 or len(chosen) > len(self.slots):
                 return None
 
@@ -1872,8 +1917,8 @@ class MultiSportClassicOptimizer:
             for slot in self.slots:
                 found = None
                 for p in chosen:
-                    pk = _pkey(p)
-                    if pk not in assigned_locked and _eligible_for_slot(p, slot, self.sport):
+                    pk = key_by_id[id(p)]
+                    if pk not in assigned_locked and id(p) in eligible_ids_by_slot[slot]:
                         found = pk
                         break
                 if found:
@@ -1885,11 +1930,10 @@ class MultiSportClassicOptimizer:
                 slots_left = len(slots_to_fill) - idx
                 salary_used_so_far = self.salary_cap - cap_left
                 candidates = [
-                    p for p in pool
-                    if _pkey(p) not in chosen_keys
+                    p for p in eligible_by_slot[slot]
+                    if key_by_id[id(p)] not in chosen_keys
                     and can_use(p)
-                    and _eligible_for_slot(p, slot, self.sport)
-                    and _salary(p) <= cap_left
+                    and salary_by_id[id(p)] <= cap_left
                 ]
                 if not candidates:
                     return None
@@ -1903,12 +1947,12 @@ class MultiSportClassicOptimizer:
                 top_n = min(len(ranked), max(10, len(ranked) // 4))
                 p = self.rng.choice(ranked[:top_n])
                 chosen.append(p)
-                chosen_keys.add(_pkey(p))
-                cap_left -= _salary(p)
+                chosen_keys.add(key_by_id[id(p)])
+                cap_left -= salary_by_id[id(p)]
 
             if len(chosen) != len(self.slots):
                 return None
-            if _lineup_salary(chosen) < floor:
+            if sum(salary_by_id[id(p)] for p in chosen) < floor:
                 return None
             if not lineup_is_complete_for_sport(chosen, self.sport):
                 return None
@@ -1923,8 +1967,48 @@ class MultiSportClassicOptimizer:
             max_overlap = max(0, len(self.slots) - int(min_unique))
             return any(len(sset.intersection(prev)) > max_overlap for prev in used_sigs)
 
+        self._report_progress(progress_callback, 0, num_lineups, f"Generating {self.sport} Classic candidates")
+
+        def accept_candidate_pool(min_unique: int) -> None:
+            """Commit every currently viable candidate in score order.
+
+            The previous high-volume path accepted only one lineup whenever its
+            candidate buffer filled. A 225-candidate build therefore required
+            roughly 25,000 otherwise-useful attempts. Draining the viable batch
+            preserves the same score, uniqueness, and live exposure checks while
+            making work scale with requested lineups instead of requested squared.
+            """
+            if not candidates_by_sig:
+                return
+            ranked_pool = sorted(
+                candidates_by_sig.items(),
+                key=lambda item: self._lineup_strategy_score(item[1]),
+                reverse=True,
+            )
+            candidates_by_sig.clear()
+            for sig, lineup in ranked_pool:
+                if len(accepted) >= num_lineups:
+                    break
+                if cancel_callback and cancel_callback():
+                    break
+                if too_similar(sig, min_unique) or not lineup_respects_caps_now(lineup):
+                    continue
+                used_sigs.add(sig)
+                for player in lineup:
+                    pk = key_by_id[id(player)]
+                    if pk in used_total and pk not in locked_keys:
+                        used_total[pk] = used_total.get(pk, 0) + 1
+                accepted.append(lineup)
+            self._report_progress(
+                progress_callback,
+                len(accepted),
+                num_lineups,
+                f"Generating {self.sport} Classic candidates",
+            )
+
         # Build progressively: near-cap first, then relax only if needed.
-        attempts_per_stage = max(250, num_lineups * 120)
+        attempts_per_stage = max(500, num_lineups * 20)
+        candidate_batch_size = min(60, max(20, num_lineups // 4))
         candidates_by_sig: Dict[Tuple[str, ...], List[Dict[str, Any]]] = {}
 
         for stage_idx, floor in enumerate(floor_stages):
@@ -1932,48 +2016,44 @@ class MultiSportClassicOptimizer:
             # filling the requested lineup count. Strategic/Balanced start at two
             # uniques, Contrarian at three, Chalk at one.
             stage_min_unique = max(1, preferred_min_unique - max(0, stage_idx - 1))
-            for _ in range(attempts_per_stage):
+            for attempt in range(attempts_per_stage):
+                if cancel_callback and cancel_callback():
+                    accept_candidate_pool(stage_min_unique)
+                    return accepted[:num_lineups]
                 lu = try_build_one(floor)
                 if not lu:
                     continue
-                sig = tuple(sorted(_pkey(p) for p in lu))
+                sig = tuple(sorted(key_by_id[id(p)] for p in lu))
                 if sig in candidates_by_sig or too_similar(sig, stage_min_unique):
                     continue
                 candidates_by_sig[sig] = lu
 
-                # Periodically accept the best available so exposure caps advance.
-                if len(candidates_by_sig) >= max(20, num_lineups // 2):
-                    ranked_pool = sorted(candidates_by_sig.items(), key=lambda kv: self._lineup_strategy_score(kv[1]), reverse=True)
-                    for sig2, lu2 in ranked_pool:
-                        if too_similar(sig2, stage_min_unique) or not lineup_respects_caps_now(lu2):
-                            candidates_by_sig.pop(sig2, None)
-                            continue
-                        used_sigs.add(sig2)
-                        for p in lu2:
-                            pk = _pkey(p)
-                            if pk in used_total and pk not in locked_keys:
-                                used_total[pk] = used_total.get(pk, 0) + 1
-                        accepted.append(lu2)
-                        candidates_by_sig.pop(sig2, None)
-                        break
+                # Periodically accept the best viable batch so exposure caps
+                # advance without forcing another full buffer per lineup.
+                if len(candidates_by_sig) >= candidate_batch_size:
+                    accept_candidate_pool(stage_min_unique)
                 if len(accepted) >= num_lineups:
                     return accepted[:num_lineups]
 
+                if attempt and attempt % 100 == 0:
+                    self._report_progress(
+                        progress_callback,
+                        len(accepted),
+                        num_lineups,
+                        f"Evaluating {self.sport} Classic candidates",
+                    )
+
             # After each floor stage, accept the best remaining candidates at that floor.
-            while candidates_by_sig and len(accepted) < num_lineups:
-                sig_best, lu_best = max(candidates_by_sig.items(), key=lambda kv: self._lineup_strategy_score(kv[1]))
-                candidates_by_sig.pop(sig_best, None)
-                if too_similar(sig_best, stage_min_unique) or not lineup_respects_caps_now(lu_best):
-                    continue
-                used_sigs.add(sig_best)
-                for p in lu_best:
-                    pk = _pkey(p)
-                    if pk in used_total and pk not in locked_keys:
-                        used_total[pk] = used_total.get(pk, 0) + 1
-                accepted.append(lu_best)
+            accept_candidate_pool(stage_min_unique)
             if len(accepted) >= num_lineups:
                 break
 
+        self._report_progress(
+            progress_callback,
+            len(accepted),
+            num_lineups,
+            f"Generated {len(accepted)} {self.sport} Classic candidates",
+        )
         return accepted[:num_lineups]
 
 

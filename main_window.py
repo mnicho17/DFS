@@ -398,10 +398,44 @@ class LineupBuildWorker(QtCore.QObject):
     @QtCore.pyqtSlot()
     def run(self) -> None:
         try:
-            self.progress.emit(0, 0, "Optimizing…")
-            candidate_target = min(450, max(self.num_lineups + 30, int(math.ceil(self.num_lineups * 1.5))))
-            build_players = [dict(player) for player in self.players]
+            self.progress.emit(0, self.num_lineups, "Starting lineup build")
+            expanded_target = min(450, max(self.num_lineups + 30, int(math.ceil(self.num_lineups * 1.5))))
             constraints = self.portfolio_rules.get("player_constraints") or {}
+
+            def number(value: Any, default: float = 0.0) -> float:
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    return default
+
+            hard_player_rules = any(
+                number(item.get("MinPct"), 0.0) > 0.0
+                or (
+                    item.get("MaxPct") not in (None, "")
+                    and number(item.get("MaxPct"), 100.0) < 100.0
+                )
+                for item in constraints.values()
+            )
+            style = self.build_style.strip().lower()
+            if self.sport == "NFL" and style in ("contrarian", "leverage"):
+                built_in_unique = 3
+            elif self.sport == "NFL" and style not in ("chalk", "optimal"):
+                built_in_unique = 2
+            else:
+                built_in_unique = 1
+            hard_portfolio_rules = (
+                hard_player_rules
+                or bool(self.portfolio_rules.get("groups"))
+                or number(self.portfolio_rules.get("max_team_pct"), 100.0) < 100.0
+                or number(self.portfolio_rules.get("max_game_pct"), 100.0) < 100.0
+                or int(self.portfolio_rules.get("min_unique", 1) or 1) > built_in_unique
+            )
+            candidate_target = (
+                expanded_target
+                if self.kind == "showdown" or hard_portfolio_rules
+                else self.num_lineups
+            )
+            build_players = [dict(player) for player in self.players]
             required_group_keys = {
                 str(key)
                 for group in self.portfolio_rules.get("groups") or []
@@ -443,7 +477,20 @@ class LineupBuildWorker(QtCore.QObject):
                     mlb_stack_pref=self.mlb_stack_pref,
                     salary_strategy=self.salary_strategy,
                 )
-                lineups = opt.build_lineups(num_lineups=candidate_target)
+                lineups = opt.build_lineups(
+                    num_lineups=candidate_target,
+                    progress_callback=lambda done, total, text: self.progress.emit(
+                        min(self.num_lineups, int(done * self.num_lineups / max(1, total))),
+                        self.num_lineups,
+                        text,
+                    ),
+                    cancel_callback=self._cancel_event.is_set,
+                )
+            self.progress.emit(
+                min(self.num_lineups, len(lineups)),
+                self.num_lineups,
+                "Selecting portfolio",
+            )
             selected = select_portfolio(
                 lineups,
                 self.num_lineups,
@@ -2641,13 +2688,13 @@ class MainWindow(QtWidgets.QMainWindow):
         salary_strategy = salary_strategy_widget.currentText() if salary_strategy_widget is not None else "Near Cap"
 
         label_sport = sport if kind != "showdown" else "Showdown"
-        self._build_progress.setRange(0, num if kind == "showdown" else 0)
+        self._build_progress.setRange(0, num)
         self._build_progress.setValue(0)
         self._build_progress.setVisible(True)
         self._build_eta.setText(f"Building {label_sport} lineups…")
         self._build_eta.setVisible(True)
         self._build_cancel.setEnabled(True)
-        self._build_cancel.setVisible(kind == "showdown")
+        self._build_cancel.setVisible(True)
         self.status.showMessage(f"Building {label_sport} lineups ({num:,}) • {build_style} • {salary_strategy}…")
 
         self._build_thread = QtCore.QThread(self)
@@ -2702,7 +2749,7 @@ class MainWindow(QtWidgets.QMainWindow):
         worker.request_cancel()
         self._build_cancel.setEnabled(False)
         self._build_eta.setText("Cancelling after the current candidate…")
-        self.status.showMessage("Cancelling Showdown lineup build…")
+        self.status.showMessage("Cancelling lineup build…")
 
     def _finish_lineup_build_ui(self) -> None:
         self._build_progress.setVisible(False)

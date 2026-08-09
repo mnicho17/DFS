@@ -9,9 +9,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtWidgets
 
-from main_window import MainWindow, ResultsLearningDialog
+from main_window import LineupBuildWorker, MainWindow, ResultsLearningDialog
 from learning_db import generate_learning_report
 from test_learning_results import _showdown_lineup
+from test_nfl_logic import _fixture_players
 
 
 class ResultsLearningUITests(unittest.TestCase):
@@ -45,6 +46,38 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIsNotNone(window.findChild(QtWidgets.QSpinBox, "portfolioMinUnique"))
         self.assertIsNotNone(window.findChild(QtWidgets.QPushButton, "portfolioSummaryButton"))
         window.close()
+
+    def test_classic_worker_reports_high_volume_progress_without_surplus_candidates(self):
+        progress = []
+        finished = []
+        worker = LineupBuildWorker(
+            _fixture_players(),
+            kind="classic",
+            sport="NFL",
+            num_lineups=150,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules={
+                "min_unique": 2,
+                "max_team_pct": 100.0,
+                "max_game_pct": 100.0,
+                "balance_ownership": True,
+                "groups": [],
+                "player_constraints": {},
+            },
+        )
+        worker.progress.connect(lambda done, total, text: progress.append((done, total, text)))
+        worker.finished.connect(finished.append)
+
+        worker.run()
+
+        self.assertTrue(finished)
+        self.assertEqual(len(finished[0]["lineups"]), 150)
+        self.assertEqual(finished[0]["candidate_count"], 150)
+        self.assertEqual(progress[0][:2], (0, 150))
+        self.assertEqual(progress[-1][:2], (150, 150))
+        self.assertEqual([event[0] for event in progress], sorted(event[0] for event in progress))
 
     def test_saved_export_writes_csv_and_learning_record(self):
         window = MainWindow()
