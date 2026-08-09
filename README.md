@@ -31,6 +31,16 @@ python app.py
 
 On Windows, `Launch_DFS.bat` also starts the app after its dependencies have been installed.
 
+## Results & Learning
+
+1. Save the lineups you plan to enter, then choose **Export Saved CSV** on the Showdown or Classic tab.
+2. After the contest, download the DraftKings contest standings or contest-history CSV.
+3. Open **Results & Learning** and choose **Import DraftKings Results**.
+
+The app matches result rosters to exact lineups it previously exported. The report includes net return, ROI, cash rate, finish percentile, projection error, and guarded breakdowns by salary use, ownership, construction, and context adjustment. Small samples are clearly labeled and are not used to automatically change optimizer strategy.
+
+Export history and imported results stay on the computer. They are stored in the app's local `history` folder and are not uploaded to this repository.
+
 ## Create a release
 
 The `Windows Release` GitHub Actions workflow supports two modes:
