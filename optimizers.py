@@ -319,6 +319,168 @@ def _is_nba_ball_handler_or_wing(p: Dict[str, Any]) -> bool:
 # ---------------- Showdown ----------------
 
 
+def _showdown_number(player: Dict[str, Any], key: str) -> float:
+    try:
+        return float(player.get(key, 0.0) or 0.0)
+    except Exception:
+        return 0.0
+
+
+def _showdown_player_script_bonus(player: Dict[str, Any], *, captain: bool = False) -> float:
+    """Small Vegas-aware role preference for a single-game lineup slot."""
+    total = _showdown_number(player, "NFLVegasGameTotal")
+    spread = _showdown_number(player, "NFLVegasSpread")
+    position = _position_tokens(player)
+    bonus = 0.0
+
+    if total >= 48.0:
+        scale = min(1.0, (total - 46.0) / 8.0)
+        if "QB" in position:
+            bonus += 0.18 * scale
+        elif position & {"WR", "TE"}:
+            bonus += 0.24 * scale
+        elif position & {"K", "DST"}:
+            bonus -= 0.12 * scale
+    elif 0.0 < total <= 43.0:
+        scale = min(1.0, (45.0 - total) / 8.0)
+        if "RB" in position:
+            bonus += 0.22 * scale
+        elif "K" in position:
+            bonus += 0.20 * scale
+        elif "DST" in position:
+            bonus += 0.24 * scale
+        elif position & {"QB", "WR", "TE"}:
+            bonus -= 0.08 * scale
+
+    if spread <= -3.0:
+        scale = min(1.0, (abs(spread) - 2.0) / 8.0)
+        if "RB" in position:
+            bonus += 0.20 * scale
+        elif position & {"K", "DST"}:
+            bonus += 0.16 * scale
+    elif spread >= 3.0:
+        scale = min(1.0, (spread - 2.0) / 8.0)
+        if position & {"QB", "WR", "TE"}:
+            bonus += 0.20 * scale
+        elif "RB" in position:
+            bonus -= 0.08 * scale
+        elif "DST" in position:
+            bonus -= 0.18 * scale
+
+    return bonus * (1.20 if captain else 1.0)
+
+
+def _showdown_pair_script_bonus(a: Dict[str, Any], b: Dict[str, Any]) -> float:
+    """Reward pairs that tell the same likely game story."""
+    pa = _position_tokens(a)
+    pb = _position_tokens(b)
+    ta, tb = _team(a), _team(b)
+    if not ta or not tb:
+        return 0.0
+    total_values = [
+        value for value in (
+            _showdown_number(a, "NFLVegasGameTotal"),
+            _showdown_number(b, "NFLVegasGameTotal"),
+        ) if value > 0
+    ]
+    total = sum(total_values) / len(total_values) if total_values else 0.0
+    bonus = 0.0
+
+    a_qb, b_qb = "QB" in pa, "QB" in pb
+    a_receiver, b_receiver = bool(pa & {"WR", "TE"}), bool(pb & {"WR", "TE"})
+    if total >= 47.0:
+        scale = min(1.0, (total - 45.0) / 9.0)
+        if ta == tb and ((a_qb and b_receiver) or (b_qb and a_receiver)):
+            bonus += 0.34 * scale
+        elif ta != tb and ((a_qb and b_receiver) or (b_qb and a_receiver)):
+            bonus += 0.12 * scale
+
+    if 0.0 < total <= 44.0 and ta == tb:
+        scale = min(1.0, (46.0 - total) / 9.0)
+        if ("RB" in pa and bool(pb & {"K", "DST"})) or ("RB" in pb and bool(pa & {"K", "DST"})):
+            bonus += 0.30 * scale
+        elif ("K" in pa and "DST" in pb) or ("K" in pb and "DST" in pa):
+            bonus += 0.12 * scale
+
+    return bonus
+
+
+def _showdown_split_bonus_for_count(
+    focus_team_count: int,
+    focus_team: str,
+    reference_players: List[Dict[str, Any]],
+) -> float:
+    """Score a two-team Showdown split, leaning toward the Vegas favorite."""
+    count = max(0, min(6, int(focus_team_count)))
+    split = tuple(sorted((count, 6 - count), reverse=True))
+    bonus = {
+        (4, 2): 1.55,
+        (3, 3): 1.35,
+        (5, 1): 0.30,
+        (6, 0): -2.0,
+    }.get(split, 0.0)
+
+    team_spreads: Dict[str, List[float]] = {}
+    totals: List[float] = []
+    for player in reference_players or []:
+        team = _team(player)
+        spread = _showdown_number(player, "NFLVegasSpread")
+        total = _showdown_number(player, "NFLVegasGameTotal")
+        if team and spread != 0.0:
+            team_spreads.setdefault(team, []).append(spread)
+        if total > 0.0:
+            totals.append(total)
+
+    favorite_count: Optional[int] = None
+    margin_scale = 0.0
+    if team_spreads:
+        average_spread = {team: sum(values) / len(values) for team, values in team_spreads.items()}
+        favorite = min(average_spread, key=average_spread.get)
+        favorite_spread = average_spread[favorite]
+        margin_scale = min(1.0, max(0.0, (abs(favorite_spread) - 2.0) / 8.0))
+        favorite_count = count if focus_team == favorite else 6 - count
+        if favorite_count == 4:
+            bonus += 0.35 + 0.35 * margin_scale
+        elif favorite_count == 5:
+            bonus += -0.05 + 0.65 * margin_scale
+        elif favorite_count <= 2:
+            bonus -= 0.45 * margin_scale
+
+    game_total = sum(totals) / len(totals) if totals else 0.0
+    if game_total >= 49.0 and split == (3, 3):
+        bonus += 0.20
+    elif game_total >= 49.0 and split == (4, 2):
+        bonus += 0.10
+    elif 0.0 < game_total <= 42.0 and favorite_count == 5:
+        bonus += 0.20 * margin_scale
+    return bonus
+
+
+def _showdown_lineup_script_bonus(captain: Dict[str, Any], flex: List[Dict[str, Any]]) -> float:
+    players = [captain] + list(flex or [])
+    teams = sorted({_team(player) for player in players if _team(player)})
+    if len(teams) == 2:
+        focus = teams[0]
+        split_bonus = _showdown_split_bonus_for_count(
+            sum(1 for player in players if _team(player) == focus),
+            focus,
+            players,
+        )
+    else:
+        counts = sorted(Counter(_team(player) for player in players if _team(player)).values(), reverse=True)
+        split_bonus = {
+            (4, 2): 1.55,
+            (3, 3): 1.35,
+            (5, 1): 0.30,
+        }.get(tuple(counts), -2.0 if tuple(counts) == (6,) else 0.0)
+
+    pair_bonus = 0.0
+    for index, player in enumerate(players):
+        for other in players[index + 1:]:
+            pair_bonus += _showdown_pair_script_bonus(player, other)
+    return split_bonus + pair_bonus
+
+
 class ShowdownOptimizer:
     """DK Showdown
 
@@ -441,6 +603,7 @@ class ShowdownOptimizer:
         # Slightly stronger ownership shaping at CPT than FLEX (industry-ish)
         w_cpt = self.own_weight * 1.35 * own_s
         w_flex = self.own_weight * 1.00 * own_s
+        style = _style_level(self.build_style)
 
         self._report_progress(progress_callback, 0, num_lineups, "Optimizing showdown portfolio")
         for k in range(num_lineups):
@@ -455,8 +618,14 @@ class ShowdownOptimizer:
             # Base objective
             obj = pulp.lpSum(
                 [
-                    cpt[pk] * _cpt_proj(key_to_player[pk])
-                    + flx[pk] * _proj(key_to_player[pk])
+                    cpt[pk] * (
+                        _cpt_proj(key_to_player[pk])
+                        + style * _showdown_player_script_bonus(key_to_player[pk], captain=True)
+                    )
+                    + flx[pk] * (
+                        _proj(key_to_player[pk])
+                        + style * _showdown_player_script_bonus(key_to_player[pk])
+                    )
                     for pk in keys
                 ]
             )
@@ -471,29 +640,44 @@ class ShowdownOptimizer:
                     ]
                 )
 
-            # Strategic Showdown bias: prefer correlated 4-2 / 3-3 style builds
-            # by rewarding same-team pairs, but only as a soft nudge. This still
-            # allows semi-random/projection-driven builds when Build Style is set
-            # to Randomized.
-            style = _style_level(self.build_style)
+            # Strategic Showdown bias uses the actual spread/total when present.
+            # It remains soft so projections, locks, fades, and salary still lead.
             if style > 0:
-                same_team_pairs = []
+                teams = sorted({_team(player) for player in self.players if _team(player)})
+                if len(teams) == 2:
+                    focus_team = teams[0]
+                    team_count = pulp.lpSum([
+                        cpt[pk] + flx[pk]
+                        for pk in keys if _team(key_to_player[pk]) == focus_team
+                    ])
+                    split_choice = pulp.LpVariable.dicts(f"sd_split_{k}", list(range(7)), 0, 1, cat="Binary")
+                    prob += pulp.lpSum([split_choice[count] for count in range(7)]) == 1
+                    prob += team_count == pulp.lpSum([count * split_choice[count] for count in range(7)])
+                    obj += pulp.lpSum([
+                        split_choice[count]
+                        * style
+                        * _showdown_split_bonus_for_count(count, focus_team, self.players)
+                        for count in range(7)
+                    ])
+
+                scripted_pairs = []
                 for a_i, a in enumerate(keys):
-                    ta = _team(key_to_player[a])
-                    if not ta:
-                        continue
                     for b in keys[a_i + 1:]:
-                        if ta and ta == _team(key_to_player[b]):
-                            same_team_pairs.append((a, b))
-                if same_team_pairs:
-                    ypair = pulp.LpVariable.dicts(f"sd_pair_{k}", list(range(len(same_team_pairs))), 0, 1, cat="Binary")
-                    for idx, (a, b) in enumerate(same_team_pairs):
+                        pair_bonus = _showdown_pair_script_bonus(key_to_player[a], key_to_player[b])
+                        if abs(pair_bonus) > 1e-9:
+                            scripted_pairs.append((a, b, pair_bonus))
+                if scripted_pairs:
+                    ypair = pulp.LpVariable.dicts(f"sd_pair_{k}", list(range(len(scripted_pairs))), 0, 1, cat="Binary")
+                    for idx, (a, b, _) in enumerate(scripted_pairs):
                         a_used = cpt[a] + flx[a]
                         b_used = cpt[b] + flx[b]
                         prob += ypair[idx] <= a_used
                         prob += ypair[idx] <= b_used
                         prob += ypair[idx] >= a_used + b_used - 1
-                    obj += pulp.lpSum([ypair[i] * (0.18 * style) for i in range(len(same_team_pairs))])
+                    obj += pulp.lpSum([
+                        ypair[index] * (pair_bonus * style)
+                        for index, (_, _, pair_bonus) in enumerate(scripted_pairs)
+                    ])
 
                 # Tiny jitter so repeated lineups are not just strictly deterministic after no-good cuts.
                 obj += pulp.lpSum([
@@ -620,10 +804,14 @@ class ShowdownOptimizer:
             return []
 
         def cpt_score(player: Dict[str, Any]) -> float:
-            return _cpt_proj(player) + w_cpt * _own(player)
+            return (
+                _cpt_proj(player)
+                + w_cpt * _own(player)
+                + style * _showdown_player_script_bonus(player, captain=True)
+            )
 
         def flex_score(player: Dict[str, Any]) -> float:
-            return _proj(player) + w_flex * _own(player)
+            return _proj(player) + w_flex * _own(player) + style * _showdown_player_script_bonus(player)
 
         def under_cap(cap_map: Dict[str, int], used: Dict[str, int], key: str) -> bool:
             maximum = cap_map.get(key)
@@ -639,17 +827,7 @@ class ShowdownOptimizer:
             if style <= 0:
                 return score + self.rng.uniform(-0.08, 0.08)
 
-            team_counts = sorted(
-                Counter(_team(p) for p in [captain] + flex if _team(p)).values(),
-                reverse=True,
-            )
-            split = tuple(team_counts)
-            split_bonus = {
-                (4, 2): 1.55,
-                (3, 3): 1.35,
-                (5, 1): 0.30,
-            }.get(split, -2.0 if split == (6,) else 0.0)
-            return score + style * split_bonus + self.rng.uniform(-0.08, 0.08)
+            return score + style * _showdown_lineup_script_bonus(captain, flex) + self.rng.uniform(-0.08, 0.08)
 
         def sample_candidate() -> Optional[Tuple[float, Dict[str, Any], List[Dict[str, Any]], Tuple[str, Tuple[str, ...]]]]:
             cpt_pool = [
@@ -710,13 +888,12 @@ class ShowdownOptimizer:
                         or sum(cheapest_others) > cap_left - salary
                     ):
                         continue
-                    same_team = sum(
-                        1 for chosen in [captain] + flex
-                        if _team(chosen) and _team(chosen) == _team(player)
-                    )
                     raw = flex_score(player)
                     raw += 0.10 * (flex_score(player) / max(salary, 1.0)) * 1000.0
-                    raw += style * 0.22 * same_team
+                    raw += style * sum(
+                        _showdown_pair_script_bonus(player, chosen)
+                        for chosen in [captain] + flex
+                    )
                     feasible.append(player)
                     raw_scores.append(raw)
                 if not feasible:
