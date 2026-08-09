@@ -41,6 +41,19 @@ The app matches result rosters to exact lineups it previously exported. The repo
 
 Export history and imported results stay on the computer. They are stored in the app's local `history` folder and are not uploaded to this repository.
 
+## Portfolio & Exposure
+
+The optimizer can shape the complete set of generated lineups, not just each lineup in isolation:
+
+- set minimum and maximum player exposure, including separate Showdown Captain limits;
+- require a minimum number of unique players between lineups;
+- cap the percentage of lineups containing a team or game;
+- create selected-player groups that require at least one player or prevent players from appearing together;
+- balance ownership concentration and duplication risk across the portfolio; and
+- review a portfolio compliance summary before exporting to DraftKings.
+
+The app generates a larger candidate pool and selects a compliant portfolio from it. If aggressive settings cannot all be satisfied, it returns the feasible lineups it found and clearly reports any relaxed uniqueness or minimum-exposure shortfall.
+
 ## Create a release
 
 The `Windows Release` GitHub Actions workflow supports two modes:
