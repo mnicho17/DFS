@@ -42,6 +42,8 @@ class ResultsLearningUITests(unittest.TestCase):
         button = window.findChild(QtWidgets.QPushButton, "resultsLearningButton")
         self.assertIsNotNone(button)
         self.assertEqual(button.text(), "Results & Learning")
+        self.assertIsNotNone(window.findChild(QtWidgets.QSpinBox, "portfolioMinUnique"))
+        self.assertIsNotNone(window.findChild(QtWidgets.QPushButton, "portfolioSummaryButton"))
         window.close()
 
     def test_saved_export_writes_csv_and_learning_record(self):
@@ -50,6 +52,8 @@ class ResultsLearningUITests(unittest.TestCase):
         export_path = os.path.join(self.temp.name, "saved.csv")
         with mock.patch.object(
             QtWidgets.QFileDialog, "getSaveFileName", return_value=(export_path, "CSV Files (*.csv)")
+        ), mock.patch.object(
+            QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes
         ), mock.patch.object(QtWidgets.QMessageBox, "information"):
             window.on_export_saved("showdown")
         self.assertTrue(os.path.isfile(export_path))

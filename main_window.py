@@ -375,6 +375,7 @@ class LineupBuildWorker(QtCore.QObject):
         build_style: str = "Strategic",
         mlb_stack_pref: str = "Strategic",
         salary_strategy: str = "Near Cap",
+        portfolio_rules: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
         self.players = players
@@ -387,6 +388,7 @@ class LineupBuildWorker(QtCore.QObject):
         self.build_style = build_style or "Strategic"
         self.mlb_stack_pref = mlb_stack_pref or "Strategic"
         self.salary_strategy = salary_strategy or "Near Cap"
+        self.portfolio_rules = dict(portfolio_rules or {})
         self._cancel_event = threading.Event()
 
     def request_cancel(self) -> None:
@@ -397,22 +399,42 @@ class LineupBuildWorker(QtCore.QObject):
     def run(self) -> None:
         try:
             self.progress.emit(0, 0, "Optimizing…")
+            candidate_target = min(450, max(self.num_lineups + 30, int(math.ceil(self.num_lineups * 1.5))))
+            build_players = [dict(player) for player in self.players]
+            constraints = self.portfolio_rules.get("player_constraints") or {}
+            required_group_keys = {
+                str(key)
+                for group in self.portfolio_rules.get("groups") or []
+                if str(group.get("type") or "") == "at_least_one"
+                for key in group.get("player_keys") or []
+            }
+            for player in build_players:
+                key = player_key(player)
+                configured = constraints.get(key) or {}
+                min_total = float(configured.get("MinPct", player.get("MinPct", 0.0)) or 0.0)
+                min_cpt = float(configured.get("MinCptPct", player.get("MinCptPct", 0.0)) or 0.0)
+                player["_PortfolioCandidateBoost"] = min(12.0, min_total * 0.10) + (5.0 if key in required_group_keys else 0.0)
+                player["_PortfolioCptCandidateBoost"] = min(14.0, min_cpt * 0.12) + (3.0 if key in required_group_keys else 0.0)
             if self.kind == "showdown":
                 opt = ShowdownOptimizer(
-                    self.players,
+                    build_players,
                     salary_cap=self.salary_cap,
                     own_mode=self.own_mode,
                     own_weight=self.own_weight,
                     build_style=self.build_style,
                 )
                 lineups = opt.build_lineups(
-                    num_lineups=self.num_lineups,
-                    progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
+                    num_lineups=candidate_target,
+                    progress_callback=lambda done, total, text: self.progress.emit(
+                        min(self.num_lineups, int(done * self.num_lineups / max(1, total))),
+                        self.num_lineups,
+                        "Generating portfolio candidates",
+                    ),
                     cancel_callback=self._cancel_event.is_set,
                 )
             else:
                 opt = MultiSportClassicOptimizer(
-                    self.players,
+                    build_players,
                     sport=self.sport,
                     salary_cap=self.salary_cap,
                     own_mode=self.own_mode,
@@ -421,13 +443,22 @@ class LineupBuildWorker(QtCore.QObject):
                     mlb_stack_pref=self.mlb_stack_pref,
                     salary_strategy=self.salary_strategy,
                 )
-                lineups = opt.build_lineups(num_lineups=self.num_lineups)
+                lineups = opt.build_lineups(num_lineups=candidate_target)
+            selected = select_portfolio(
+                lineups,
+                self.num_lineups,
+                rules=self.portfolio_rules,
+                kind=self.kind,
+            )
+            lineups = selected["lineups"]
             self.finished.emit({
                 "kind": self.kind,
                 "sport": self.sport,
                 "lineups": lineups,
                 "requested": self.num_lineups,
                 "cancelled": self._cancel_event.is_set(),
+                "portfolio_report": selected["report"],
+                "candidate_count": selected["candidate_count"],
             })
         except Exception:
             self.error.emit(traceback.format_exc())
@@ -448,6 +479,7 @@ from learning_db import (
     import_historical_result_csvs,
     record_export,
 )
+from portfolio_rules import player_key, portfolio_report, select_portfolio
 
 logger = logging.getLogger("dfs.ui")
 
@@ -958,7 +990,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DFS Optimizer - Results & Learning Upgrade v3")
+        self.setWindowTitle("DFS Optimizer - Portfolio & Exposure Upgrade v4")
         self.resize(1300, 820)
 
         self.players: List[Dict[str, Any]] = []
@@ -967,6 +999,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.saved_showdown: List[Dict[str, Any]] = []
         self.saved_classic: List[List[Dict[str, Any]]] = []
+        self.portfolio_groups: List[Dict[str, Any]] = []
+        self.last_portfolio_report: Dict[str, Any] = {}
 
         self._build_ui()
 
@@ -1113,7 +1147,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row3.addWidget(btn_max_cpt)
 
         btn_max_exposure = QtWidgets.QPushButton("Max Exposure%")
-        btn_max_exposure.setToolTip("Set a maximum exposure % for selected players. In Classic this caps total appearances; in Showdown this caps FLEX appearances.")
+        btn_max_exposure.setToolTip("Set a maximum total portfolio exposure % for selected players.")
         btn_max_exposure.clicked.connect(lambda: self.set_max_pct(kind="exposure"))
         row3.addWidget(btn_max_exposure)
 
@@ -1211,13 +1245,83 @@ class MainWindow(QtWidgets.QMainWindow):
         row3.addStretch(1)
         top_box.addLayout(row3)
 
+        # --- Row 4: portfolio-wide exposure and diversity rules ---
+        row4 = QtWidgets.QHBoxLayout()
+        row4.addWidget(QtWidgets.QLabel("Portfolio:"))
+
+        btn_min_cpt = QtWidgets.QPushButton("Min CPT%")
+        btn_min_cpt.setToolTip("Set a minimum Captain exposure for selected players in Showdown portfolios.")
+        btn_min_cpt.clicked.connect(lambda: self.set_min_pct(kind="cpt"))
+        row4.addWidget(btn_min_cpt)
+
+        btn_min_exposure = QtWidgets.QPushButton("Min Exposure%")
+        btn_min_exposure.setToolTip("Set a minimum total portfolio exposure for selected players.")
+        btn_min_exposure.clicked.connect(lambda: self.set_min_pct(kind="exposure"))
+        row4.addWidget(btn_min_exposure)
+
+        btn_clear_min = QtWidgets.QPushButton("Clear Min%")
+        btn_clear_min.clicked.connect(self.clear_min_pct)
+        row4.addWidget(btn_clear_min)
+
+        row4.addSpacing(8)
+        row4.addWidget(QtWidgets.QLabel("Min unique:"))
+        self.spin_portfolio_unique = QtWidgets.QSpinBox()
+        self.spin_portfolio_unique.setObjectName("portfolioMinUnique")
+        self.spin_portfolio_unique.setRange(1, 5)
+        self.spin_portfolio_unique.setValue(2)
+        self.spin_portfolio_unique.setToolTip("Minimum different players between lineups; relaxes safely only if necessary.")
+        row4.addWidget(self.spin_portfolio_unique)
+
+        row4.addWidget(QtWidgets.QLabel("Team max:"))
+        self.spin_team_exposure = QtWidgets.QDoubleSpinBox()
+        self.spin_team_exposure.setObjectName("portfolioTeamMax")
+        self.spin_team_exposure.setRange(1.0, 100.0)
+        self.spin_team_exposure.setDecimals(0)
+        self.spin_team_exposure.setSuffix("%")
+        self.spin_team_exposure.setValue(100.0)
+        row4.addWidget(self.spin_team_exposure)
+
+        row4.addWidget(QtWidgets.QLabel("Game max:"))
+        self.spin_game_exposure = QtWidgets.QDoubleSpinBox()
+        self.spin_game_exposure.setObjectName("portfolioGameMax")
+        self.spin_game_exposure.setRange(1.0, 100.0)
+        self.spin_game_exposure.setDecimals(0)
+        self.spin_game_exposure.setSuffix("%")
+        self.spin_game_exposure.setValue(100.0)
+        row4.addWidget(self.spin_game_exposure)
+
+        self.chk_portfolio_balance = QtWidgets.QCheckBox("Balance ownership/dup risk")
+        self.chk_portfolio_balance.setObjectName("portfolioBalance")
+        self.chk_portfolio_balance.setChecked(True)
+        row4.addWidget(self.chk_portfolio_balance)
+
+        btn_group_one = QtWidgets.QPushButton("Group: At Least 1")
+        btn_group_one.setToolTip("Require at least one of the selected players in every lineup.")
+        btn_group_one.clicked.connect(lambda: self.add_portfolio_group("at_least_one"))
+        row4.addWidget(btn_group_one)
+
+        btn_group_never = QtWidgets.QPushButton("Group: Never Together")
+        btn_group_never.setToolTip("Allow at most one of the selected players in any lineup.")
+        btn_group_never.clicked.connect(lambda: self.add_portfolio_group("never_together"))
+        row4.addWidget(btn_group_never)
+
+        btn_groups_clear = QtWidgets.QPushButton("Clear Groups")
+        btn_groups_clear.clicked.connect(self.clear_portfolio_groups)
+        row4.addWidget(btn_groups_clear)
+
+        self.lbl_portfolio_groups = QtWidgets.QLabel("Groups: 0")
+        self.lbl_portfolio_groups.setObjectName("portfolioGroupCount")
+        row4.addWidget(self.lbl_portfolio_groups)
+        row4.addStretch(1)
+        top_box.addLayout(row4)
+
         left_layout.addLayout(top_box)
 
 
         # Player table
         self.tbl_players = QtWidgets.QTableWidget(self)
-        self.tbl_players.setColumnCount(21)
-        self.tbl_players.setHorizontalHeaderLabels(["Name", "Team", "Pos", "Injury", "Salary", "BaseProj", "AdjProj", "NFL±", "Usage", "Matchup", "Role", "Wx", "Vegas", "TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "Max%", "Order", "Bats", "Conf"] )
+        self.tbl_players.setColumnCount(23)
+        self.tbl_players.setHorizontalHeaderLabels(["Name", "Team", "Pos", "Injury", "Salary", "BaseProj", "AdjProj", "NFL±", "Usage", "Matchup", "Role", "Wx", "Vegas", "TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "MinCPT%", "Max%", "Min%", "Order", "Bats", "Conf"] )
         self.tbl_players.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tbl_players.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.tbl_players.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
@@ -1363,6 +1467,12 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_view_exposure.setToolTip("Show player exposure based on the lineups currently saved on the right.")
         btn_view_exposure.clicked.connect(self.on_view_exposure)
         right_layout.addWidget(btn_view_exposure)
+
+        btn_portfolio_summary = QtWidgets.QPushButton("Portfolio Summary")
+        btn_portfolio_summary.setObjectName("portfolioSummaryButton")
+        btn_portfolio_summary.setToolTip("Review player, Captain, team, game, group, and uniqueness compliance before export.")
+        btn_portfolio_summary.clicked.connect(self.on_portfolio_summary)
+        right_layout.addWidget(btn_portfolio_summary)
 
         btn_view_stack_exp = QtWidgets.QPushButton("Stack Exposure Dashboard")
         btn_view_stack_exp.setToolTip("Show saved-lineup team, stack-shape, salary-band, and pitcher exposure.")
@@ -1591,13 +1701,98 @@ class MainWindow(QtWidgets.QMainWindow):
     
     # ---------------- Max Ownership / Exposure Caps ----------------
 
+    def _portfolio_rules(self) -> Dict[str, Any]:
+        constraints = {}
+        for player in self.players:
+            if not any(player.get(field) not in (None, "") for field in ("MinPct", "MaxPct", "MinCptPct", "MaxCptPct")):
+                continue
+            key = player_key(player)
+            if not key:
+                continue
+            constraints[key] = {
+                "Name": str(player.get("Name") or key),
+                "MinPct": player.get("MinPct"),
+                "MaxPct": player.get("MaxPct"),
+                "MinCptPct": player.get("MinCptPct"),
+                "MaxCptPct": player.get("MaxCptPct"),
+            }
+        return {
+            "min_unique": int(self.spin_portfolio_unique.value()),
+            "max_team_pct": float(self.spin_team_exposure.value()),
+            "max_game_pct": float(self.spin_game_exposure.value()),
+            "balance_ownership": bool(self.chk_portfolio_balance.isChecked()),
+            "groups": list(self.portfolio_groups),
+            "player_constraints": constraints,
+        }
+
+    def set_min_pct(self, *, kind: str) -> None:
+        rows = self._get_selected_player_rows()
+        if not rows:
+            self.status.showMessage("Select one or more players first.", 3000)
+            return
+        kind_u = str(kind or "exposure").strip().lower()
+        key = "MinCptPct" if kind_u == "cpt" else "MinPct"
+        label = "Min CPT%" if kind_u == "cpt" else "Min Exposure%"
+        current = [self.players[row].get(key) for row in rows]
+        values = [float(value) for value in current if value not in (None, "")]
+        default = values[0] if values and all(abs(value - values[0]) < 1e-9 for value in values) else 10.0
+        value, ok = QtWidgets.QInputDialog.getDouble(
+            self,
+            f"Set {label}",
+            f"{label} (0-100). Minimums are prioritized across the complete portfolio and reported if infeasible.",
+            default,
+            0.0,
+            100.0,
+            1,
+        )
+        if not ok:
+            return
+        for row in rows:
+            self.players[row][key] = float(value)
+        self._refresh_players_table()
+        self.status.showMessage(f"Set {label} = {value:.1f}% for {len(rows)} players.", 5000)
+
+    def clear_min_pct(self) -> None:
+        rows = self._get_selected_player_rows()
+        if not rows:
+            self.status.showMessage("Select one or more players first.", 3000)
+            return
+        for row in rows:
+            self.players[row]["MinCptPct"] = None
+            self.players[row]["MinPct"] = None
+        self._refresh_players_table()
+        self.status.showMessage(f"Cleared minimum exposure for {len(rows)} players.", 4000)
+
+    def add_portfolio_group(self, group_type: str) -> None:
+        rows = self._get_selected_player_rows()
+        minimum = 1 if group_type == "at_least_one" else 2
+        if len(rows) < minimum:
+            self.status.showMessage(f"Select at least {minimum} player(s) for this group.", 4000)
+            return
+        selected = [self.players[row] for row in rows]
+        keys = sorted({player_key(player) for player in selected if player_key(player)})
+        names = [str(player.get("Name") or player_key(player)) for player in selected]
+        if len(keys) < minimum:
+            return
+        label = ("At least one: " if group_type == "at_least_one" else "Never together: ") + ", ".join(names)
+        group = {"type": group_type, "player_keys": keys, "label": label}
+        if group not in self.portfolio_groups:
+            self.portfolio_groups.append(group)
+        self.lbl_portfolio_groups.setText(f"Groups: {len(self.portfolio_groups)}")
+        self.lbl_portfolio_groups.setToolTip("\n".join(item.get("label", "") for item in self.portfolio_groups))
+        self.status.showMessage(label, 5000)
+
+    def clear_portfolio_groups(self) -> None:
+        self.portfolio_groups.clear()
+        self.lbl_portfolio_groups.setText("Groups: 0")
+        self.lbl_portfolio_groups.setToolTip("")
+        self.status.showMessage("Cleared portfolio player groups.", 3000)
+
     def set_max_pct(self, *, kind: str) -> None:
         """Set max ownership/exposure percent for selected players.
 
         - kind="cpt": sets MaxCptPct (Captain slot cap) — used in Showdown only.
-        - kind="exposure": sets MaxPct (unified cap)
-            * Classic: caps TOTAL appearances across generated Classic lineups
-            * Showdown: caps FLEX appearances across generated Showdown lineups
+        - kind="exposure": sets MaxPct, the total portfolio appearance cap.
 
         Notes:
         - Classic lineup generation ignores MaxCptPct entirely.
@@ -1620,7 +1815,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             label = "Max Exposure%"
             key = "MaxPct"
-            help_text = "Classic: total exposure cap. Showdown: FLEX exposure cap."
+            help_text = "Caps total appearances across the selected portfolio."
 
         # If all selected share the same value, use it as default; else 25.
         current_vals: List[float] = []
@@ -1972,6 +2167,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 p.setdefault("MaxCptPct", None)
                 p.setdefault("MaxPct", None)
                 p.setdefault("MaxFlexPct", None)
+                p.setdefault("MinCptPct", None)
+                p.setdefault("MinPct", None)
                 p.setdefault("BaseProjection", float(p.get("FlexProjection", 0.0) or 0.0))
                 p.setdefault("BattingOrder", 0)
                 p.setdefault("Bats", "")
@@ -2368,28 +2565,38 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # Ownership / exposure caps (display only)
             max_cpt = p.get("MaxCptPct", None)
+            min_cpt = p.get("MinCptPct", None)
             max_pct = p.get("MaxPct", None)
+            min_pct = p.get("MinPct", None)
 
             mc_item = SortKeyItem("" if max_cpt in (None, "", 0) else f"{float(max_cpt):.0f}%")
             mc_item.setData(QtCore.Qt.UserRole, float(max_cpt) if max_cpt not in (None, "", 0) else -1.0)
             self.tbl_players.setItem(r, 16, mc_item)
 
+            min_cpt_item = SortKeyItem("" if min_cpt in (None, "", 0) else f"{float(min_cpt):.0f}%")
+            min_cpt_item.setData(QtCore.Qt.UserRole, float(min_cpt) if min_cpt not in (None, "", 0) else -1.0)
+            self.tbl_players.setItem(r, 17, min_cpt_item)
+
             mp_item = SortKeyItem("" if max_pct in (None, "", 0) else f"{float(max_pct):.0f}%")
             mp_item.setData(QtCore.Qt.UserRole, float(max_pct) if max_pct not in (None, "", 0) else -1.0)
-            self.tbl_players.setItem(r, 17, mp_item)
+            self.tbl_players.setItem(r, 18, mp_item)
+
+            min_pct_item = SortKeyItem("" if min_pct in (None, "", 0) else f"{float(min_pct):.0f}%")
+            min_pct_item.setData(QtCore.Qt.UserRole, float(min_pct) if min_pct not in (None, "", 0) else -1.0)
+            self.tbl_players.setItem(r, 19, min_pct_item)
 
             order_val = int(p.get("BattingOrder", 0) or 0)
             is_pitcher = bool(set(str(p.get("Position", "") or "").upper().replace("/", ",").split(",")) & {"P", "SP", "RP"})
             order_text = "P" if (is_mlb and is_pitcher and order_val <= 0) else ("" if order_val <= 0 else str(order_val))
             order_item = SortKeyItem(order_text)
             order_item.setData(QtCore.Qt.UserRole, float(order_val if order_val > 0 else 99))
-            self.tbl_players.setItem(r, 18, order_item)
+            self.tbl_players.setItem(r, 20, order_item)
 
-            self.tbl_players.setItem(r, 19, QtWidgets.QTableWidgetItem(str(p.get("Bats", "") or "")))
+            self.tbl_players.setItem(r, 21, QtWidgets.QTableWidgetItem(str(p.get("Bats", "") or "")))
             status = str(p.get("LineupStatus", "") or "").strip().lower()
             conf_text = "Y" if bool(p.get("ConfirmedLineup")) else ("Proj" if status == "projected" else "")
             conf_item = QtWidgets.QTableWidgetItem(conf_text)
-            self.tbl_players.setItem(r, 20, conf_item)
+            self.tbl_players.setItem(r, 22, conf_item)
 
             # Visual-only highlighting
             self._set_player_row_style(r, p)
@@ -2455,6 +2662,7 @@ class MainWindow(QtWidgets.QMainWindow):
             build_style=build_style,
             mlb_stack_pref=mlb_stack_pref,
             salary_strategy=salary_strategy,
+            portfolio_rules=self._portfolio_rules(),
         )
         self._build_worker.moveToThread(self._build_thread)
 
@@ -2644,16 +2852,19 @@ class MainWindow(QtWidgets.QMainWindow):
             requested = int(payload.get("requested", 0) or 0)
             lineups = payload.get("lineups", []) or []
             cancelled = bool(payload.get("cancelled", False))
+            self.last_portfolio_report = dict(payload.get("portfolio_report") or {})
+            warning_count = len(self.last_portfolio_report.get("warnings") or [])
+            portfolio_note = f" Portfolio warnings: {warning_count}." if warning_count else " Portfolio rules satisfied."
 
             if kind == "showdown":
                 self._populate_showdown_lineups(lineups)
                 built = len(self.last_showdown)
                 result = f"Cancelled after {built} of {requested}" if cancelled else f"Built {built} of {requested}"
-                self.status.showMessage(f"{result} showdown lineups. {self._lineup_quality_summary(self.last_showdown, sport, kind)}", 9000)
+                self.status.showMessage(f"{result} showdown lineups. {self._lineup_quality_summary(self.last_showdown, sport, kind)}{portfolio_note}", 9000)
             else:
                 self._populate_classic_lineups(lineups, sport)
                 built = len(self.last_classic)
-                self.status.showMessage(f"Built {built} of {requested} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}", 9000)
+                self.status.showMessage(f"Built {built} of {requested} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}", 9000)
         finally:
             self._finish_lineup_build_ui()
 
@@ -2836,7 +3047,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "NFL": ["NFL±", "Usage", "Matchup", "Role", "Wx", "Vegas"],
                 "MLB": ["MLB±", "Form", "Matchup", "Park", "Wx", "Vegas"],
             }.get(sport_u, ["Adj±", "Context", "Matchup", "Role", "Wx", "Vegas"])
-            player_headers = ["Name", "Team", "Pos", "Injury", "Salary", "BaseProj", "AdjProj"] + context_headers + ["TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "Max%", "Order", "Bats", "Conf"]
+            player_headers = ["Name", "Team", "Pos", "Injury", "Salary", "BaseProj", "AdjProj"] + context_headers + ["TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "MinCPT%", "Max%", "Min%", "Order", "Bats", "Conf"]
             self.tbl_players.setHorizontalHeaderLabels(player_headers)
             self.tbl_cl.setColumnCount(len(headers))
             self.tbl_cl.setHorizontalHeaderLabels(headers)
@@ -2911,6 +3122,9 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return
 
+        if not self._confirm_portfolio_export(kind_l, lineups):
+            return
+
         suggested = f"DK_{sport}_{kind_l}_lineups.csv"
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self,
@@ -2941,6 +3155,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "own_weight": self.spin_build_own_weight.value(),
                 "mlb_stack_pref": self.combo_mlb_stack_pref.currentText(),
                 "salary_strategy": self.combo_salary_strategy.currentText(),
+                "portfolio_rules": self._portfolio_rules(),
             }
             validation = {
                 "valid": True,
@@ -3123,6 +3338,38 @@ class MainWindow(QtWidgets.QMainWindow):
             classic_rows=self._exposure_classic_rows(),
         )
         dlg.show()
+
+    def _saved_portfolio_report(self, kind: str, lineups: Optional[List[Any]] = None) -> Dict[str, Any]:
+        kind_l = str(kind or "classic").lower()
+        selected = list(lineups if lineups is not None else (
+            self.saved_showdown if kind_l == "showdown" else self.saved_classic
+        ))
+        return portfolio_report(selected, self._portfolio_rules(), kind=kind_l, requested=len(selected))
+
+    def on_portfolio_summary(self) -> None:
+        kind = "showdown" if self.tabs_lineups.currentIndex() == 0 else "classic"
+        lineups = self.saved_showdown if kind == "showdown" else self.saved_classic
+        if not lineups:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Portfolio Summary",
+                "Save lineups first, then review the portfolio before export.",
+            )
+            return
+        report = self._saved_portfolio_report(kind, list(lineups))
+        QtWidgets.QMessageBox.information(self, "Portfolio Summary", str(report.get("text") or ""))
+
+    def _confirm_portfolio_export(self, kind: str, lineups: List[Any]) -> bool:
+        report = self._saved_portfolio_report(kind, lineups)
+        text = str(report.get("text") or "") + "\n\nContinue with DraftKings export?"
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Review Portfolio Before Export",
+            text,
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Yes,
+        )
+        return answer == QtWidgets.QMessageBox.Yes
 
     # ---------------- Stack / Team / Salary Exposure Dashboard ----------------
 

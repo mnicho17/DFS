@@ -82,7 +82,8 @@ def _team_adj_multiplier(p: Dict[str, Any]) -> float:
 
 
 def _proj(p: Dict[str, Any]) -> float:
-    return float(p.get("FlexProjection", 0.0) or 0.0) * _team_adj_multiplier(p)
+    base = float(p.get("FlexProjection", 0.0) or 0.0) * _team_adj_multiplier(p)
+    return base + float(p.get("_PortfolioCandidateBoost", 0.0) or 0.0)
 
 
 def _cpt_salary(p: Dict[str, Any]) -> float:
@@ -91,7 +92,7 @@ def _cpt_salary(p: Dict[str, Any]) -> float:
 
 def _cpt_proj(p: Dict[str, Any]) -> float:
     raw = float(p.get("CptProjection", 1.5 * float(p.get("FlexProjection", 0.0) or 0.0)) or 0.0)
-    return raw * _team_adj_multiplier(p)
+    return raw * _team_adj_multiplier(p) + float(p.get("_PortfolioCptCandidateBoost", 0.0) or 0.0)
 
 
 def _own(p: Dict[str, Any]) -> float:
