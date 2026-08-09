@@ -9,10 +9,16 @@ attach actual fantasy points/ROI to these same records.
 
 import datetime as _dt
 import csv
+import hashlib
 import json
+import math
 import os
+import re
 import sqlite3
+import statistics
+import sys
 import uuid
+from collections import Counter
 from typing import Any, Dict, List, Optional
 
 
@@ -47,6 +53,15 @@ def _pkey(p: Dict[str, Any]) -> str:
 
 
 def _base_dir() -> str:
+    override = str(os.environ.get("DFS_OPTIMIZER_DATA_DIR") or "").strip()
+    if override:
+        os.makedirs(override, exist_ok=True)
+        return override
+    if getattr(sys, "frozen", False):
+        local = str(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")).strip()
+        path = os.path.join(local, "DFS Optimizer")
+        os.makedirs(path, exist_ok=True)
+        return path
     return os.path.dirname(os.path.abspath(__file__))
 
 
@@ -61,6 +76,12 @@ def _connect(db_path: Optional[str] = None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def init_db(conn: sqlite3.Connection) -> None:
@@ -91,6 +112,8 @@ def init_db(conn: sqlite3.Connection) -> None:
             roster_ids_json TEXT,
             salary REAL,
             projection REAL,
+            base_projection REAL,
+            context_adjustment REAL,
             grade TEXT,
             grade_score REAL,
             dup_risk REAL,
@@ -124,6 +147,9 @@ def init_db(conn: sqlite3.Connection) -> None:
             position TEXT,
             salary REAL,
             projection REAL,
+            base_projection REAL,
+            context_adjustment REAL,
+            context_json TEXT,
             ownership REAL,
             batting_order INTEGER,
             confirmed_lineup INTEGER,
@@ -138,6 +164,11 @@ def init_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_lineup_players_player_id ON lineup_players(player_id);
         """
     )
+    _ensure_column(conn, "lineups", "base_projection", "REAL")
+    _ensure_column(conn, "lineups", "context_adjustment", "REAL")
+    _ensure_column(conn, "lineup_players", "base_projection", "REAL")
+    _ensure_column(conn, "lineup_players", "context_adjustment", "REAL")
+    _ensure_column(conn, "lineup_players", "context_json", "TEXT")
     conn.commit()
 
 
@@ -177,6 +208,27 @@ def _team_counts(players: List[Dict[str, Any]], sport: str) -> Dict[str, int]:
     return counts
 
 
+def _player_projection_context(p: Dict[str, Any], slot: str) -> tuple[float, float, float, Dict[str, Any]]:
+    is_cpt = str(slot or "").upper() == "CPT"
+    adjusted = _safe_float(p.get("CptProjection") if is_cpt else p.get("FlexProjection"))
+    raw_base = p.get("BaseProjection")
+    if raw_base in (None, ""):
+        base = adjusted
+    else:
+        base = _safe_float(raw_base) * (1.5 if is_cpt else 1.0)
+    context = {
+        key: p.get(key)
+        for key in (
+            "NFLAdjScore", "NFLUsageScore", "NFLMatchupScore", "NFLRoleScore",
+            "NFLWeatherScore", "NFLVegas", "NFLNotes", "MLBAdjScore", "MLBRecentForm",
+            "MLBMatchup", "MLBBallpark", "MLBWeather", "MLBVegas", "MLBNotes",
+            "TeamAdjPct",
+        )
+        if p.get(key) not in (None, "")
+    }
+    return adjusted, base, adjusted - base, context
+
+
 def _lineup_feature_fallback(kind: str, sport: str, lineup: Any, salary_cap: float) -> Dict[str, Any]:
     pairs = _lineup_players(kind, lineup, sport)
     players = [p for _, p in pairs]
@@ -188,6 +240,7 @@ def _lineup_feature_fallback(kind: str, sport: str, lineup: Any, salary_cap: flo
     else:
         salary = sum(_safe_float(p.get("FlexSalary")) for p in players)
         projection = sum(_safe_float(p.get("FlexProjection")) for p in players)
+    base_projection = sum(_player_projection_context(p, slot)[1] for slot, p in pairs)
 
     owns = [_safe_float(p.get("ProjOwnPct")) for p in players]
     avg_own = sum(owns) / max(1, len(owns))
@@ -217,6 +270,8 @@ def _lineup_feature_fallback(kind: str, sport: str, lineup: Any, salary_cap: flo
     return {
         "salary": salary,
         "projection": projection,
+        "base_projection": base_projection,
+        "context_adjustment": projection - base_projection,
         "grade": "",
         "score": 0.0,
         "dup_risk": dup_risk,
@@ -302,10 +357,11 @@ def record_export(
                     """
                     INSERT INTO lineups (
                         lineup_id, export_id, lineup_index, roster_ids_json, salary, projection,
+                        base_projection, context_adjustment,
                         grade, grade_score, dup_risk, dup_risk_label, uniqueness, stack_shape,
                         primary_team, secondary_team, top_order_hitters, confirmed_hitters,
                         avg_ownership, max_ownership, warnings, explanation
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         lineup_id,
@@ -314,6 +370,8 @@ def record_export(
                         json.dumps(roster_ids),
                         _safe_float(feature.get("salary", fallback.get("salary"))),
                         _safe_float(feature.get("projection", fallback.get("projection"))),
+                        _safe_float(feature.get("base_projection", fallback.get("base_projection"))),
+                        _safe_float(feature.get("context_adjustment", fallback.get("context_adjustment"))),
                         str(feature.get("grade", "") or ""),
                         _safe_float(feature.get("score", feature.get("grade_score", 0.0))),
                         _safe_float(feature.get("dup_risk", fallback.get("dup_risk"))),
@@ -332,13 +390,15 @@ def record_export(
                 )
                 for slot, p in _lineup_players(kind, lineup, sport):
                     player_id = str(p.get("CptID") if slot == "CPT" else p.get("FlexID") or "").strip()
+                    adjusted_projection, base_projection, context_adjustment, context = _player_projection_context(p, slot)
                     conn.execute(
                         """
                         INSERT INTO lineup_players (
                             lineup_player_id, lineup_id, slot, player_key, player_id, name,
-                            team, opponent, position, salary, projection, ownership,
+                            team, opponent, position, salary, projection, base_projection,
+                            context_adjustment, context_json, ownership,
                             batting_order, confirmed_lineup, injury_status
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             str(uuid.uuid4()),
@@ -351,14 +411,243 @@ def record_export(
                             str(p.get("Opponent", "") or ""),
                             str(p.get("Position", "") or ""),
                             _safe_float(p.get("CptSalary") if slot == "CPT" else p.get("FlexSalary")),
-                            _safe_float(p.get("CptProjection") if slot == "CPT" else p.get("FlexProjection")),
+                            adjusted_projection,
+                            base_projection,
+                            context_adjustment,
+                            json.dumps(context, default=str),
                             _safe_float(p.get("ProjCptOwnPct") if slot == "CPT" else p.get("ProjOwnPct")),
                             _safe_int(p.get("BattingOrder"), 0),
                             1 if bool(p.get("ConfirmedLineup")) else 0,
                             str(p.get("InjuryStatus", "") or ""),
                         ),
                     )
-        return {"export_id": export_id, "db_path": history_db_path(), "lineups_recorded": len(lineups or [])}
+        matching = match_historical_results(conn)
+        return {
+            "export_id": export_id,
+            "db_path": db_path or history_db_path(),
+            "lineups_recorded": len(lineups or []),
+            "results_matched": matching.get("matched", 0),
+        }
+    finally:
+        conn.close()
+
+
+def _bucket_ownership(value: float) -> str:
+    if value < 8:
+        return "Under 8% avg own"
+    if value < 12:
+        return "8-12% avg own"
+    if value < 16:
+        return "12-16% avg own"
+    if value < 20:
+        return "16-20% avg own"
+    return "20%+ avg own"
+
+
+def _context_bucket(value: float) -> str:
+    if value > 0.25:
+        return "Positive context"
+    if value < -0.25:
+        return "Negative context"
+    return "Neutral context"
+
+
+def _correlation(xs: List[float], ys: List[float]) -> Optional[float]:
+    if len(xs) < 2 or len(xs) != len(ys):
+        return None
+    x_mean = statistics.mean(xs)
+    y_mean = statistics.mean(ys)
+    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(xs, ys))
+    denominator = math.sqrt(
+        sum((x - x_mean) ** 2 for x in xs) * sum((y - y_mean) ** 2 for y in ys)
+    )
+    return numerator / denominator if denominator > 0 else None
+
+
+def _render_breakdown(
+    title: str, groups: Dict[str, List[Dict[str, Any]]], *, minimum: int = 5
+) -> List[str]:
+    lines = [title]
+    eligible = []
+    for label, rows in groups.items():
+        if len(rows) < minimum:
+            continue
+        roi_values = [float(row["roi"]) for row in rows if row.get("roi") is not None]
+        scores = [float(row["actual_points"]) for row in rows if row.get("actual_points") is not None]
+        eligible.append((label, rows, roi_values, scores))
+    if not eligible:
+        lines.append(f"- Hidden until a bucket has at least {minimum} matched entries.")
+        return lines
+    for label, rows, roi_values, scores in sorted(
+        eligible, key=lambda item: len(item[1]), reverse=True
+    )[:8]:
+        details = [f"{len(rows)} entries"]
+        if roi_values:
+            details.append(f"avg net {_fmt_money(statistics.mean(roi_values))}")
+        if scores:
+            details.append(f"avg score {statistics.mean(scores):.2f}")
+        lines.append(f"- {label or 'Unknown'}: " + " | ".join(details))
+    return lines
+
+
+def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Build conservative, local-only outcome and projection calibration reporting."""
+    path = db_path or history_db_path()
+    conn = _connect(path)
+    try:
+        init_historical_import_tables(conn)
+        match_historical_results(conn)
+        cur = conn.cursor()
+        export_count = int(cur.execute("SELECT COUNT(*) FROM exports").fetchone()[0] or 0)
+        exported_lineups = int(cur.execute("SELECT COUNT(*) FROM lineups").fetchone()[0] or 0)
+        imported_files = int(cur.execute("SELECT COUNT(*) FROM historical_imports WHERE notes='ok'").fetchone()[0] or 0)
+        imported_rows = int(cur.execute("SELECT COUNT(*) FROM historical_results").fetchone()[0] or 0)
+        matched_rows = int(cur.execute("SELECT COUNT(*) FROM historical_results WHERE matched_lineup_id IS NOT NULL").fetchone()[0] or 0)
+        matched_lineups = int(cur.execute("SELECT COUNT(DISTINCT matched_lineup_id) FROM historical_results WHERE matched_lineup_id IS NOT NULL").fetchone()[0] or 0)
+
+        outcome_rows = []
+        raw_outcomes = cur.execute(
+            """
+            SELECT hr.roi, hr.entry_fee, hr.winnings, hr.percentile, hr.cashed,
+                   hr.top_one_pct, hr.actual_points, l.salary, l.avg_ownership,
+                   l.stack_shape, l.context_adjustment, e.salary_cap, e.sport
+            FROM historical_results hr
+            JOIN lineups l ON l.lineup_id=hr.matched_lineup_id
+            JOIN exports e ON e.export_id=l.export_id
+            """
+        ).fetchall()
+        for row in raw_outcomes:
+            outcome_rows.append({
+                "roi": row[0], "entry_fee": row[1], "winnings": row[2],
+                "percentile": row[3], "cashed": row[4], "top_one_pct": row[5],
+                "actual_points": row[6], "salary": row[7], "avg_ownership": row[8],
+                "stack_shape": row[9], "context_adjustment": row[10],
+                "salary_cap": row[11], "sport": row[12],
+            })
+
+        calibration_rows = cur.execute(
+            """
+            SELECT projection, base_projection, actual_points
+            FROM lineups
+            WHERE actual_points IS NOT NULL AND projection IS NOT NULL AND projection > 0
+            """
+        ).fetchall()
+        adjusted = [float(row[0]) for row in calibration_rows]
+        actual = [float(row[2]) for row in calibration_rows]
+        adjusted_mae = statistics.mean(abs(a - p) for p, a in zip(adjusted, actual)) if actual else None
+        bias = statistics.mean(a - p for p, a in zip(adjusted, actual)) if actual else None
+        corr = _correlation(adjusted, actual)
+        base_pairs = [
+            (float(row[1]), float(row[2]))
+            for row in calibration_rows
+            if row[1] is not None and float(row[1]) > 0
+        ]
+        base_mae = statistics.mean(abs(a - p) for p, a in base_pairs) if base_pairs else None
+        context_edge = (
+            base_mae - adjusted_mae
+            if base_mae is not None and adjusted_mae is not None
+            else None
+        )
+
+        roi_values = [float(row["roi"]) for row in outcome_rows if row.get("roi") is not None]
+        stake = sum(float(row.get("entry_fee") or 0.0) for row in outcome_rows if row.get("roi") is not None)
+        winnings = sum(float(row.get("winnings") or 0.0) for row in outcome_rows if row.get("roi") is not None)
+        net = sum(roi_values)
+        roi_pct = (net / stake * 100.0) if stake > 0 else None
+        cash_values = [int(row["cashed"]) for row in outcome_rows if row.get("cashed") is not None]
+        percentile_values = [float(row["percentile"]) for row in outcome_rows if row.get("percentile") is not None]
+        top_values = [int(row["top_one_pct"]) for row in outcome_rows if row.get("top_one_pct") is not None]
+
+        salary_groups: Dict[str, List[Dict[str, Any]]] = {}
+        ownership_groups: Dict[str, List[Dict[str, Any]]] = {}
+        stack_groups: Dict[str, List[Dict[str, Any]]] = {}
+        context_groups: Dict[str, List[Dict[str, Any]]] = {}
+        sport_groups: Dict[str, List[Dict[str, Any]]] = {}
+        for row in outcome_rows:
+            salary_groups.setdefault(
+                _bucket_salary_unused(_safe_float(row["salary"]), _safe_float(row["salary_cap"], 50000.0)), []
+            ).append(row)
+            ownership_groups.setdefault(_bucket_ownership(_safe_float(row["avg_ownership"])), []).append(row)
+            stack_groups.setdefault(str(row.get("stack_shape") or "Unknown"), []).append(row)
+            context_groups.setdefault(_context_bucket(_safe_float(row["context_adjustment"])), []).append(row)
+            sport_groups.setdefault(str(row.get("sport") or "Unknown"), []).append(row)
+
+        match_rate = (matched_rows / imported_rows * 100.0) if imported_rows else 0.0
+        confidence = _confidence_label(exported_lineups + imported_rows)
+        outcome_confidence = _confidence_label(matched_rows)
+        lines = [
+            "DFS Results & Learning", "", "Local data status",
+            f"- Exports recorded: {export_count}",
+            f"- Exported lineups: {exported_lineups}",
+            f"- Result files imported: {imported_files}",
+            f"- Result entries imported: {imported_rows}",
+            f"- Exact lineup matches: {matched_rows} entries / {matched_lineups} unique lineups ({match_rate:.1f}%)",
+            f"- Outcome confidence: {outcome_confidence}",
+            "- All history stays on this computer.", "", "Contest performance",
+        ]
+        if outcome_rows:
+            if roi_values:
+                lines.append(f"- Entry fees: {_fmt_money(stake)} | winnings: {_fmt_money(winnings)} | net: {_fmt_money(net)}")
+                if roi_pct is not None:
+                    lines.append(f"- ROI: {roi_pct:+.1f}% across {len(roi_values)} matched entries")
+            else:
+                lines.append("- Monetary ROI is unavailable in the imported file.")
+            lines.append(
+                f"- Cash rate: {statistics.mean(cash_values) * 100.0:.1f}% ({len(cash_values)} entries)"
+                if cash_values else "- Cash rate is unavailable in the imported file."
+            )
+            lines.append(
+                f"- Average finish percentile: {statistics.mean(percentile_values):.1f}% ({len(percentile_values)} entries)"
+                if percentile_values else "- Percentile needs contest field size or complete standings."
+            )
+            lines.append(
+                f"- Top 1% rate: {statistics.mean(top_values) * 100.0:.1f}% ({len(top_values)} entries)"
+                if top_values else "- Top 1% rate needs contest field size or complete standings."
+            )
+        else:
+            lines.append("- No imported result has matched an exported lineup yet.")
+
+        lines.extend(["", "Projection calibration"])
+        if actual:
+            lines.append(f"- Matched lineups with actual scores: {len(actual)}")
+            lines.append(f"- Adjusted projection MAE: {adjusted_mae:.2f} DK points")
+            lines.append(f"- Mean actual minus projection: {bias:+.2f} DK points")
+            lines.append(f"- Projection/actual correlation: {corr:.3f}" if corr is not None else "- Correlation needs score variation.")
+            if base_mae is not None:
+                lines.append(f"- Base projection MAE: {base_mae:.2f} DK points")
+                if len(base_pairs) >= 25:
+                    verdict = "helped" if context_edge and context_edge > 0 else "hurt" if context_edge and context_edge < 0 else "was neutral"
+                    lines.append(f"- Context adjustment {verdict} MAE by {abs(context_edge or 0.0):.2f} points ({len(base_pairs)} lineups).")
+                else:
+                    lines.append(f"- Base vs context comparison is directional only until 25 matched lineups ({len(base_pairs)}/25).")
+        else:
+            lines.append("- Export lineups, then import DraftKings results to measure projection accuracy.")
+
+        lines.extend([""] + _render_breakdown("Performance by sport", sport_groups))
+        lines.extend([""] + _render_breakdown("Performance by salary used", salary_groups))
+        lines.extend([""] + _render_breakdown("Performance by ownership", ownership_groups))
+        lines.extend([""] + _render_breakdown("Performance by stack / construction", stack_groups))
+        lines.extend([""] + _render_breakdown("Performance by context adjustment", context_groups))
+        lines.extend(["", "Guardrails"])
+        if matched_rows < 25:
+            lines.append(f"- No strategy tuning is recommended yet; collect at least 25 matched entries ({matched_rows}/25).")
+        elif matched_rows < 100:
+            lines.append("- Treat these as early signals. Avoid changing strategy from a single bucket or tournament.")
+        else:
+            lines.append("- Samples are useful for auditing, but contest selection and slate strength still affect ROI.")
+        if imported_rows and matched_rows < imported_rows:
+            lines.append("- Unmatched rows usually mean the final submitted lineup differed from the app export or the file lacks a parseable lineup.")
+
+        return {
+            "text": "\n".join(lines), "db_path": path, "export_count": export_count,
+            "exported_lineups": exported_lineups, "historical_rows": imported_rows,
+            "matched_rows": matched_rows, "matched_lineups": matched_lineups,
+            "match_rate": match_rate, "net": net, "roi_pct": roi_pct,
+            "cash_rate": statistics.mean(cash_values) if cash_values else None,
+            "avg_percentile": statistics.mean(percentile_values) if percentile_values else None,
+            "adjusted_mae": adjusted_mae, "base_mae": base_mae,
+            "confidence": confidence, "outcome_confidence": outcome_confidence,
+        }
     finally:
         conn.close()
 
@@ -515,6 +804,7 @@ def create_slate_snapshot(
         "ProjOwnPct", "ProjCptOwnPct", "ProjFlexOwnPct", "MaxPct", "MaxCptPct",
         "LockFlex", "FadeFlex", "LockCpt", "FadeCpt", "InjuryStatus", "InjurySource",
         "BattingOrder", "Bats", "ConfirmedLineup", "LineupStatus",
+        "NFLUsageScore", "NFLMatchupScore", "NFLRoleScore", "NFLWeatherScore", "NFLVegas", "NFLAdjScore", "NFLNotes",
         "MLBRecentForm", "MLBMatchup", "MLBBallpark", "MLBWeather", "MLBVegas", "MLBStack", "MLBHR", "MLBAdjScore", "MLBNotes", "TeamAdjPct",
     ]
     with open(os.path.join(snap_dir, "slate_players.csv"), "w", newline="", encoding="utf-8") as f:
@@ -559,14 +849,17 @@ def _canon_result_col(name: Any) -> str:
     while "  " in s:
         s = s.replace("  ", " ")
     aliases = {
-        "contest": "contest_name", "contest name": "contest_name", "name": "contest_name",
-        "entry": "entry_name", "entry name": "entry_name", "lineup name": "entry_name",
-        "entry fee": "entry_fee", "fee": "entry_fee", "buy in": "entry_fee",
+        "contest": "contest_name", "contest name": "contest_name", "contestname": "contest_name", "name": "contest_name",
+        "entry": "entry_name", "entry name": "entry_name", "entryname": "entry_name", "lineup name": "entry_name",
+        "entryid": "entry_id", "entry id": "entry_id",
+        "entry fee": "entry_fee", "entryfee": "entry_fee", "fee": "entry_fee", "buy in": "entry_fee",
         "winnings": "winnings", "winning": "winnings", "prize": "winnings", "prizes": "winnings", "payout": "winnings",
-        "fpts": "actual_points", "fantasy points": "actual_points", "points": "actual_points", "score": "actual_points",
+        "fpts": "actual_points", "fantasy points": "actual_points", "fantasypoints": "actual_points", "points": "actual_points", "score": "actual_points",
         "rank": "rank", "place": "rank", "finish": "rank", "position": "rank",
-        "lineup": "lineup", "roster": "lineup", "players": "lineup", "draft group": "draft_group",
-        "sport": "sport", "date": "slate_date", "contest date": "slate_date", "start date": "slate_date",
+        "lineup": "lineup", "roster": "lineup", "players": "lineup", "draft group": "draft_group", "draftgroup": "draft_group",
+        "sport": "sport", "date": "slate_date", "contest date": "slate_date", "start date": "slate_date", "startdate": "slate_date",
+        "entries": "field_size", "contest entries": "field_size", "field size": "field_size", "fieldsize": "field_size",
+        "places paid": "places_paid", "placespaid": "places_paid", "paid places": "places_paid",
     }
     return aliases.get(s, s)
 
@@ -578,14 +871,39 @@ def _first_present(row: Dict[str, Any], keys: List[str], default: Any = "") -> A
     return default
 
 
+_ROSTER_POSITIONS = (
+    "CAPTAIN", "CPT", "FLEX", "UTIL", "D/ST", "DST", "QB", "RB", "WR", "TE", "K",
+    "SP", "RP", "P", "1B", "2B", "3B", "SS", "OF", "C", "PG", "SG", "SF", "PF", "G", "F",
+)
+
+
+def _normalize_roster_token(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    id_match = re.fullmatch(r"\s*(\d{4,12})\s*", text)
+    if id_match:
+        return id_match.group(1)
+    text = re.sub(r"^\s*(?:captain|cpt|flex|util|d/st|dst|qb|rb|wr|te|k|sp|rp|p|1b|2b|3b|ss|of|c|pg|sg|sf|pf|g|f)\s+", "", text, flags=re.I)
+    text = re.sub(r"\s*\(\s*\d{4,12}\s*\)\s*$", "", text)
+    text = re.sub(r"[^a-z0-9]+", " ", text).strip()
+    parts = text.split()
+    if parts and parts[-1] in {"jr", "sr", "ii", "iii", "iv", "v"}:
+        parts.pop()
+    return " ".join(parts)
+
+
+def _roster_signature(tokens: List[Any]) -> tuple[str, ...]:
+    normalized = [_normalize_roster_token(token) for token in tokens]
+    return tuple(sorted(token for token in normalized if token))
+
+
 def _extract_lineup_tokens(row: Dict[str, Any]) -> List[str]:
     """Extract likely DK player IDs from a result/entry row.
 
     DK exports vary. We accept a Lineup/Roster field or position columns. Numeric
     IDs are preferred, but name-like tokens are stored when IDs are absent.
     """
-    import re
-
     lineup_text = str(_first_present(row, ["lineup", "roster", "players"], "") or "")
     pos_cols = ["cpt", "captain", "flex", "qb", "rb", "rb1", "rb2", "wr", "wr1", "wr2", "wr3", "te", "dst", "p", "p1", "p2", "c", "1b", "2b", "3b", "ss", "of", "of1", "of2", "of3", "pg", "sg", "sf", "pf", "g", "f", "util"]
     parts: List[str] = []
@@ -594,8 +912,20 @@ def _extract_lineup_tokens(row: Dict[str, Any]) -> List[str]:
         if nums:
             parts.extend(nums)
         else:
-            split = [x.strip() for x in re.split(r"[;,|/]", lineup_text) if x.strip()]
-            parts.extend(split)
+            marker = re.compile(
+                r"(?:^|\s)(" + "|".join(re.escape(x) for x in _ROSTER_POSITIONS) + r")(?=\s)",
+                flags=re.I,
+            )
+            matches = list(marker.finditer(lineup_text))
+            if matches:
+                for i, match in enumerate(matches):
+                    start = match.end()
+                    end = matches[i + 1].start() if i + 1 < len(matches) else len(lineup_text)
+                    name = lineup_text[start:end].strip(" ,;|/")
+                    if name:
+                        parts.append(name)
+            else:
+                parts.extend(x.strip() for x in re.split(r"[;,|]", lineup_text) if x.strip())
     for k, v in row.items():
         lk = str(k or "").strip().lower()
         if lk in pos_cols or any(lk.startswith(pc) for pc in ("flex", "of", "wr", "rb")):
@@ -605,11 +935,9 @@ def _extract_lineup_tokens(row: Dict[str, Any]) -> List[str]:
             nums = re.findall(r"\b\d{4,12}\b", val)
             parts.extend(nums or [val])
     out: List[str] = []
-    seen = set()
     for p in parts:
         pp = str(p or "").strip()
-        if pp and pp not in seen:
-            seen.add(pp)
+        if pp:
             out.append(pp)
     return out
 
@@ -634,6 +962,7 @@ def init_historical_import_tables(conn: sqlite3.Connection) -> None:
             file_name TEXT,
             sport TEXT,
             rows_imported INTEGER,
+            file_sha256 TEXT,
             notes TEXT
         );
 
@@ -653,6 +982,14 @@ def init_historical_import_tables(conn: sqlite3.Connection) -> None:
             rank_text TEXT,
             lineup_tokens_json TEXT,
             raw_json TEXT,
+            field_size INTEGER,
+            places_paid INTEGER,
+            percentile REAL,
+            cashed INTEGER,
+            top_one_pct INTEGER,
+            matched_lineup_id TEXT,
+            matched_export_id TEXT,
+            match_method TEXT,
             FOREIGN KEY(import_id) REFERENCES historical_imports(import_id) ON DELETE CASCADE
         );
 
@@ -669,7 +1006,183 @@ def init_historical_import_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_hist_players_token ON historical_result_players(token);
         """
     )
+    _ensure_column(conn, "historical_imports", "file_sha256", "TEXT")
+    for column, definition in (
+        ("field_size", "INTEGER"), ("places_paid", "INTEGER"), ("percentile", "REAL"),
+        ("cashed", "INTEGER"), ("top_one_pct", "INTEGER"),
+        ("matched_lineup_id", "TEXT"), ("matched_export_id", "TEXT"), ("match_method", "TEXT"),
+    ):
+        _ensure_column(conn, "historical_results", column, definition)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_hist_results_lineup ON historical_results(matched_lineup_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_hist_import_hash ON historical_imports(file_sha256)")
     conn.commit()
+
+
+def _parse_rank(value: Any) -> int:
+    match = re.search(r"\d+", str(value or "").replace(",", ""))
+    return int(match.group(0)) if match else 0
+
+
+def _file_sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _finalize_import_outcomes(conn: sqlite3.Connection, import_id: str) -> None:
+    rows = conn.execute(
+        """
+        SELECT result_id, contest_name, source_file, rank_text, winnings, entry_fee,
+               field_size, places_paid, raw_json
+        FROM historical_results WHERE import_id=?
+        """,
+        (import_id,),
+    ).fetchall()
+    grouped: Dict[str, List[tuple]] = {}
+    for row in rows:
+        key = str(row[1] or row[2] or import_id)
+        grouped.setdefault(key, []).append(row)
+    for contest_rows in grouped.values():
+        ranks = [_parse_rank(row[3]) for row in contest_rows]
+        explicit_size = max((_safe_int(row[6], 0) for row in contest_rows), default=0)
+        if not explicit_size:
+            for row in contest_rows:
+                rank_size = re.search(r"(?:\bof\b|/)\s*([\d,]+)", str(row[3] or ""), flags=re.I)
+                if rank_size:
+                    explicit_size = max(explicit_size, _safe_int(rank_size.group(1).replace(",", ""), 0))
+        max_rank = max(ranks or [0])
+        inferred_size = len(contest_rows) if len(contest_rows) >= 5 and max_rank <= len(contest_rows) else 0
+        field_size = explicit_size or inferred_size
+        places_paid = max((_safe_int(row[7], 0) for row in contest_rows), default=0)
+        for row, rank in zip(contest_rows, ranks):
+            raw = {}
+            try:
+                raw = json.loads(row[8] or "{}")
+            except Exception:
+                pass
+            winnings_present = "winnings" in raw and str(raw.get("winnings", "")).strip() != ""
+            cashed: Optional[int]
+            if _safe_float(row[4], 0.0) > 0:
+                cashed = 1
+            elif places_paid > 0 and rank > 0:
+                cashed = 1 if rank <= places_paid else 0
+            elif winnings_present:
+                cashed = 0
+            else:
+                cashed = None
+            percentile = None
+            top_one = None
+            if field_size > 0 and rank > 0:
+                percentile = 100.0 * (1.0 - (rank - 1) / max(1, field_size))
+                percentile = max(0.0, min(100.0, percentile))
+                top_one = 1 if rank <= max(1, math.ceil(field_size * 0.01)) else 0
+            conn.execute(
+                """
+                UPDATE historical_results
+                SET field_size=?, places_paid=?, percentile=?, cashed=?, top_one_pct=?
+                WHERE result_id=?
+                """,
+                (field_size or None, places_paid or None, percentile, cashed, top_one, row[0]),
+            )
+
+
+def match_historical_results(
+    conn: sqlite3.Connection,
+    *,
+    result_ids: Optional[List[str]] = None,
+    import_ids: Optional[List[str]] = None,
+) -> Dict[str, int]:
+    """Link imported result rows to the newest exact exported roster."""
+    init_historical_import_tables(conn)
+    lineup_rows = conn.execute(
+        """
+        SELECT l.lineup_id, l.export_id, l.roster_ids_json
+        FROM lineups l JOIN exports e ON e.export_id=l.export_id
+        ORDER BY e.created_at DESC, l.lineup_index ASC
+        """
+    ).fetchall()
+    id_lookup: Dict[tuple[str, ...], tuple[str, str]] = {}
+    name_lookup: Dict[tuple[str, ...], tuple[str, str]] = {}
+    player_names_by_lineup: Dict[str, List[str]] = {}
+    for lineup_id, name in conn.execute(
+        "SELECT lineup_id, name FROM lineup_players ORDER BY lineup_id, slot"
+    ).fetchall():
+        player_names_by_lineup.setdefault(str(lineup_id), []).append(str(name or ""))
+    for lineup_id, export_id, roster_json in lineup_rows:
+        try:
+            roster_ids = json.loads(roster_json or "[]")
+        except Exception:
+            roster_ids = []
+        id_sig = _roster_signature(roster_ids)
+        if id_sig:
+            id_lookup.setdefault(id_sig, (lineup_id, export_id))
+        player_names = player_names_by_lineup.get(str(lineup_id), [])
+        name_sig = _roster_signature(player_names)
+        if name_sig:
+            name_lookup.setdefault(name_sig, (lineup_id, export_id))
+
+    sql = "SELECT result_id, lineup_tokens_json FROM historical_results WHERE matched_lineup_id IS NULL"
+    params: List[Any] = []
+    if import_ids:
+        placeholders = ",".join("?" for _ in import_ids)
+        sql += f" AND import_id IN ({placeholders})"
+        params.extend(import_ids)
+    elif result_ids:
+        placeholders = ",".join("?" for _ in result_ids)
+        sql += f" AND result_id IN ({placeholders})"
+        params.extend(result_ids)
+    result_rows = conn.execute(sql, params).fetchall()
+    matched = 0
+    for result_id, lineup_json in result_rows:
+        try:
+            tokens = json.loads(lineup_json or "[]")
+        except Exception:
+            tokens = []
+        signature = _roster_signature(tokens)
+        if not signature:
+            continue
+        target = None
+        method = ""
+        if all(token.isdigit() for token in signature):
+            target = id_lookup.get(signature)
+            method = "player_ids"
+        if target is None:
+            target = name_lookup.get(signature)
+            method = "player_names"
+        if target is None:
+            continue
+        conn.execute(
+            """
+            UPDATE historical_results
+            SET matched_lineup_id=?, matched_export_id=?, match_method=?
+            WHERE result_id=?
+            """,
+            (target[0], target[1], method, result_id),
+        )
+        matched += 1
+
+    linked_lineups = [
+        row[0]
+        for row in conn.execute(
+            "SELECT DISTINCT matched_lineup_id FROM historical_results WHERE matched_lineup_id IS NOT NULL"
+        ).fetchall()
+    ]
+    for lineup_id in linked_lineups:
+        aggregate = conn.execute(
+            """
+            SELECT AVG(actual_points), AVG(roi), MAX(cashed), MAX(top_one_pct)
+            FROM historical_results WHERE matched_lineup_id=?
+            """,
+            (lineup_id,),
+        ).fetchone()
+        conn.execute(
+            "UPDATE lineups SET actual_points=?, roi=?, cashed=?, top_one_pct=? WHERE lineup_id=?",
+            (aggregate[0], aggregate[1], aggregate[2], aggregate[3], lineup_id),
+        )
+    conn.commit()
+    return {"matched": matched, "unmatched": max(0, len(result_rows) - matched)}
 
 
 def import_historical_result_csvs(paths: List[str], *, db_path: Optional[str] = None, archive_files: bool = True) -> Dict[str, Any]:
@@ -681,12 +1194,14 @@ def import_historical_result_csvs(paths: List[str], *, db_path: Optional[str] = 
     import shutil
 
     files = [p for p in (paths or []) if p and os.path.isfile(p) and p.lower().endswith(".csv")]
-    folders = history_folder_structure()
+    folders = history_folder_structure() if archive_files else {}
     conn = _connect(db_path)
     total_rows = 0
     total_files = 0
     sports: Dict[str, int] = {}
     errors: List[str] = []
+    duplicates_skipped = 0
+    imported_import_ids: List[str] = []
     try:
         init_historical_import_tables(conn)
         for path in files:
@@ -694,6 +1209,13 @@ def import_historical_result_csvs(paths: List[str], *, db_path: Optional[str] = 
             rows_for_file = 0
             sport_for_file = "UNKNOWN"
             try:
+                file_hash = _file_sha256(path)
+                if conn.execute(
+                    "SELECT 1 FROM historical_imports WHERE file_sha256=? AND notes='ok' LIMIT 1",
+                    (file_hash,),
+                ).fetchone():
+                    duplicates_skipped += 1
+                    continue
                 with open(path, "r", newline="", encoding="utf-8-sig") as f:
                     sample = f.read(4096)
                     f.seek(0)
@@ -706,30 +1228,39 @@ def import_historical_result_csvs(paths: List[str], *, db_path: Optional[str] = 
                         raise ValueError("CSV has no header row")
                     with conn:
                         conn.execute(
-                            "INSERT INTO historical_imports (import_id, created_at, source_path, file_name, sport, rows_imported, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            (import_id, _now_iso(), path, os.path.basename(path), "UNKNOWN", 0, "started"),
+                            "INSERT INTO historical_imports (import_id, created_at, source_path, file_name, sport, rows_imported, file_sha256, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                            (import_id, _now_iso(), path, os.path.basename(path), "UNKNOWN", 0, file_hash, "started"),
                         )
                         for idx, raw in enumerate(reader, start=1):
                             row = {_canon_result_col(k): v for k, v in (raw or {}).items()}
                             tokens = _extract_lineup_tokens(row)
-                            # Store rows that have either lineup tokens or useful result values.
-                            useful = bool(tokens) or any(str(_first_present(row, [k], "")).strip() for k in ["actual_points", "winnings", "rank", "contest_name"])
+                            # DK standings files also contain player-result rows. Keep entry/result
+                            # records and ignore those separate player rows here.
+                            player_only = bool(str(row.get("player", "") or "").strip()) and not tokens and not str(row.get("rank", "") or "").strip()
+                            useful = bool(tokens) or any(
+                                str(_first_present(row, [k], "")).strip()
+                                for k in ["winnings", "rank", "entry_name"]
+                            )
+                            if player_only:
+                                useful = False
                             if not useful:
                                 continue
                             sport = _infer_sport_from_file_or_row(path, row)
                             if sport_for_file == "UNKNOWN" and sport != "UNKNOWN":
                                 sport_for_file = sport
-                            entry_fee = _money_to_float(_first_present(row, ["entry_fee"], 0.0))
-                            winnings = _money_to_float(_first_present(row, ["winnings"], 0.0))
-                            roi = winnings - entry_fee
+                            entry_fee = _money_to_float(row.get("entry_fee")) if "entry_fee" in row and str(row.get("entry_fee", "")).strip() else None
+                            winnings = _money_to_float(row.get("winnings")) if "winnings" in row and str(row.get("winnings", "")).strip() else None
+                            roi = ((winnings or 0.0) - (entry_fee or 0.0)) if entry_fee is not None or winnings is not None else None
+                            actual_points = _safe_float(row.get("actual_points")) if "actual_points" in row and str(row.get("actual_points", "")).strip() else None
                             result_id = str(uuid.uuid4())
                             conn.execute(
                                 """
                                 INSERT INTO historical_results (
                                     result_id, import_id, source_file, row_index, sport, slate_date,
                                     contest_name, entry_name, entry_fee, winnings, roi,
-                                    actual_points, rank_text, lineup_tokens_json, raw_json
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    actual_points, rank_text, lineup_tokens_json, raw_json,
+                                    field_size, places_paid
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 """,
                                 (
                                     result_id,
@@ -743,10 +1274,12 @@ def import_historical_result_csvs(paths: List[str], *, db_path: Optional[str] = 
                                     entry_fee,
                                     winnings,
                                     roi,
-                                    _safe_float(_first_present(row, ["actual_points"], 0.0), 0.0),
+                                    actual_points,
                                     str(_first_present(row, ["rank"], "") or ""),
                                     json.dumps(tokens),
                                     json.dumps(row, default=str),
+                                    _safe_int(row.get("field_size"), 0) or None,
+                                    _safe_int(row.get("places_paid"), 0) or None,
                                 ),
                             )
                             for slot_idx, tok in enumerate(tokens, start=1):
@@ -760,7 +1293,9 @@ def import_historical_result_csvs(paths: List[str], *, db_path: Optional[str] = 
                             "UPDATE historical_imports SET sport=?, rows_imported=?, notes=? WHERE import_id=?",
                             (sport_for_file, rows_for_file, "ok", import_id),
                         )
+                        _finalize_import_outcomes(conn, import_id)
                 if rows_for_file > 0:
+                    imported_import_ids.append(import_id)
                     total_files += 1
                     total_rows += rows_for_file
                     if archive_files:
@@ -771,12 +1306,20 @@ def import_historical_result_csvs(paths: List[str], *, db_path: Optional[str] = 
                             pass
             except Exception as e:
                 errors.append(f"{os.path.basename(path)}: {e}")
+        matching = (
+            match_historical_results(conn, import_ids=imported_import_ids)
+            if imported_import_ids
+            else {"matched": 0, "unmatched": 0}
+        )
         return {
             "files_imported": total_files,
             "rows_imported": total_rows,
             "sports": sports,
             "errors": errors,
-            "db_path": history_db_path(),
+            "duplicates_skipped": duplicates_skipped,
+            "matched_rows": matching["matched"],
+            "unmatched_rows": matching["unmatched"],
+            "db_path": db_path or history_db_path(),
             "folders": folders,
         }
     finally:
@@ -827,7 +1370,7 @@ def _top_rows(rows: List[tuple], *, value_kind: str = "count", limit: int = 8) -
     return out
 
 
-def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]:
+def _generate_legacy_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]:
     """Build a human-readable learning report from the local SQLite history.
 
     The report is intentionally conservative: when results/ROI are not imported yet,

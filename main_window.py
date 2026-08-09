@@ -1,6 +1,7 @@
 # main_window.py
 from __future__ import annotations
 
+import csv
 import json
 import os
 import traceback
@@ -440,6 +441,13 @@ from mlb_enrichment import apply_mlb_factors, clear_mlb_factors
 from mlb_batting_order import apply_batting_order, clear_batting_order, build_best_stacks
 from mlb_auto_data import apply_auto_mlb_context
 from nfl_auto_data import apply_auto_nfl_context
+from learning_db import (
+    archive_export_file,
+    generate_learning_report,
+    history_folder_structure,
+    import_historical_result_csvs,
+    record_export,
+)
 
 logger = logging.getLogger("dfs.ui")
 
@@ -852,10 +860,105 @@ class StackExposureDialog(QtWidgets.QDialog):
         self.tbl_pitcher.resizeColumnsToContents()
 
 
+class ResultsLearningDialog(QtWidgets.QDialog):
+    """Local results import and learning report."""
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.setWindowTitle("Results & Learning")
+        self.resize(820, 700)
+        layout = QtWidgets.QVBoxLayout(self)
+
+        intro = QtWidgets.QLabel(
+            "Import DraftKings contest standings or contest-history CSV files. "
+            "The app matches exact rosters to lineups exported from this app; all data stays local."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        self.summary = QtWidgets.QLabel("")
+        self.summary.setObjectName("learningSummary")
+        self.summary.setWordWrap(True)
+        layout.addWidget(self.summary)
+
+        self.report = QtWidgets.QPlainTextEdit(self)
+        self.report.setObjectName("learningReport")
+        self.report.setReadOnly(True)
+        layout.addWidget(self.report, 1)
+
+        buttons = QtWidgets.QHBoxLayout()
+        import_button = QtWidgets.QPushButton("Import DraftKings Results")
+        import_button.setObjectName("importResultsButton")
+        import_button.clicked.connect(self.import_results)
+        buttons.addWidget(import_button)
+
+        refresh_button = QtWidgets.QPushButton("Refresh Report")
+        refresh_button.clicked.connect(self.refresh_report)
+        buttons.addWidget(refresh_button)
+
+        folder_button = QtWidgets.QPushButton("Open Local History Folder")
+        folder_button.clicked.connect(self.open_history_folder)
+        buttons.addWidget(folder_button)
+        buttons.addStretch(1)
+
+        close_button = QtWidgets.QPushButton("Close")
+        close_button.clicked.connect(self.accept)
+        buttons.addWidget(close_button)
+        layout.addLayout(buttons)
+        self.refresh_report()
+
+    def refresh_report(self) -> None:
+        try:
+            payload = generate_learning_report()
+            roi = payload.get("roi_pct")
+            roi_text = f"{float(roi):+.1f}% ROI" if roi is not None else "ROI unavailable"
+            self.summary.setText(
+                f"{int(payload.get('exported_lineups', 0)):,} exported lineups  |  "
+                f"{int(payload.get('matched_rows', 0)):,} matched results  |  "
+                f"{float(payload.get('match_rate', 0.0)):.1f}% match rate  |  {roi_text}"
+            )
+            self.report.setPlainText(str(payload.get("text", "")))
+        except Exception as exc:
+            logger.exception("Learning report refresh failed")
+            self.summary.setText("Results report is temporarily unavailable.")
+            self.report.setPlainText(str(exc))
+
+    def import_results(self) -> None:
+        paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self,
+            "Select DraftKings Result CSV Files",
+            "",
+            "CSV Files (*.csv)",
+        )
+        if not paths:
+            return
+        try:
+            result = import_historical_result_csvs(paths)
+            self.refresh_report()
+            message = (
+                f"Imported {int(result.get('rows_imported', 0)):,} result entries from "
+                f"{int(result.get('files_imported', 0)):,} file(s).\n\n"
+                f"Exact lineup matches: {int(result.get('matched_rows', 0)):,}\n"
+                f"Unmatched entries: {int(result.get('unmatched_rows', 0)):,}"
+            )
+            if int(result.get("duplicates_skipped", 0)):
+                message += f"\nAlready imported files skipped: {int(result.get('duplicates_skipped', 0)):,}"
+            if result.get("errors"):
+                message += "\n\nSome files could not be imported:\n" + "\n".join(result["errors"])
+            QtWidgets.QMessageBox.information(self, "Results Imported", message)
+        except Exception as exc:
+            logger.exception("Results import failed")
+            QtWidgets.QMessageBox.critical(self, "Results Import Error", str(exc))
+
+    def open_history_folder(self) -> None:
+        folder = history_folder_structure()["history"]
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(folder))
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DFS Optimizer - NFL Context Upgrade v2")
+        self.setWindowTitle("DFS Optimizer - Results & Learning Upgrade v3")
         self.resize(1300, 820)
 
         self.players: List[Dict[str, Any]] = []
@@ -892,6 +995,12 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_refresh_inj.setToolTip("Refresh injuries plus automatic NFL role, usage, matchup, and weather context.")
         btn_refresh_inj.clicked.connect(self.on_refresh_injuries)
         row1.addWidget(btn_refresh_inj)
+
+        btn_learning = QtWidgets.QPushButton("Results & Learning")
+        btn_learning.setObjectName("resultsLearningButton")
+        btn_learning.setToolTip("Import DraftKings results and review local lineup performance.")
+        btn_learning.clicked.connect(self.on_results_learning)
+        row1.addWidget(btn_learning)
 
         row1.addSpacing(18)
         row1.addWidget(QtWidgets.QLabel("Sport:"))
@@ -1150,6 +1259,11 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_sd_unsave_all.clicked.connect(self.on_sd_unsave_all)
         sd_controls.addWidget(btn_sd_unsave_all)
 
+        btn_export_sd = QtWidgets.QPushButton("Export Saved CSV")
+        btn_export_sd.setToolTip("Save DraftKings roster IDs and record these lineups for local result matching.")
+        btn_export_sd.clicked.connect(lambda: self.on_export_saved("showdown"))
+        sd_controls.addWidget(btn_export_sd)
+
         sd_controls.addStretch(1)
         sd_layout.addLayout(sd_controls)
 
@@ -1190,6 +1304,11 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_cl_unsave_all = QtWidgets.QPushButton("Unsave All")
         btn_cl_unsave_all.clicked.connect(self.on_cl_unsave_all)
         cl_controls.addWidget(btn_cl_unsave_all)
+
+        btn_export_cl = QtWidgets.QPushButton("Export Saved CSV")
+        btn_export_cl.setToolTip("Save DraftKings roster IDs and record these lineups for local result matching.")
+        btn_export_cl.clicked.connect(lambda: self.on_export_saved("classic"))
+        cl_controls.addWidget(btn_export_cl)
 
         cl_controls.addStretch(1)
         cl_layout.addLayout(cl_controls)
@@ -2749,6 +2868,111 @@ class MainWindow(QtWidgets.QMainWindow):
         sport = self._current_sport()
         logger.info("Building %s classic/sport lineups (n=%d cap=%.0f)", sport, num, cap)
         self._start_lineup_build(kind="classic", sport=sport, num=num, cap=cap)
+
+    def on_results_learning(self) -> None:
+        ResultsLearningDialog(self).exec_()
+
+    def on_export_saved(self, kind: str) -> None:
+        kind_l = str(kind or "classic").lower()
+        sport = self._current_sport()
+        if kind_l == "showdown":
+            lineups: List[Any] = list(self.saved_showdown or [])
+            headers = ["CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX"]
+            rows = []
+            for lineup in lineups:
+                captain = lineup.get("Captain") or {}
+                flex = list(lineup.get("Flex") or [])
+                rows.append(
+                    [self._display_id(captain, slot="CPT")]
+                    + [self._display_id(player, slot="FLEX") for player in flex]
+                )
+            cap = self._safe_float(self.edit_sd_cap.text(), 50000.0)
+        else:
+            lineups = list(self.saved_classic or [])
+            headers = get_roster_slots_for_sport(sport)
+            rows = [self._classic_export_cells(lineup, sport) for lineup in lineups]
+            cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
+
+        if not lineups:
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Saved Lineups",
+                "Save at least one lineup first, then export it for DraftKings and local learning.",
+            )
+            return
+
+        expected = len(headers)
+        incomplete = sum(1 for row in rows if len(row) != expected or any(not str(cell).strip() for cell in row))
+        if incomplete:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Incomplete Lineups",
+                f"{incomplete} saved lineup(s) are missing a DraftKings player ID. Reload the salary CSV and rebuild them.",
+            )
+            return
+
+        suggested = f"DK_{sport}_{kind_l}_lineups.csv"
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Export Saved Lineups",
+            suggested,
+            "CSV Files (*.csv)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".csv"):
+            path += ".csv"
+
+        try:
+            with open(path, "w", newline="", encoding="utf-8-sig") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(headers)
+                writer.writerows(rows)
+        except Exception as exc:
+            logger.exception("Saved lineup export failed")
+            QtWidgets.QMessageBox.critical(self, "Export Error", str(exc))
+            return
+
+        learning_note = ""
+        try:
+            settings = {
+                "build_style": self.combo_build_style.currentText(),
+                "own_mode": self.combo_build_own_mode.currentText(),
+                "own_weight": self.spin_build_own_weight.value(),
+                "mlb_stack_pref": self.combo_mlb_stack_pref.currentText(),
+                "salary_strategy": self.combo_salary_strategy.currentText(),
+            }
+            validation = {
+                "valid": True,
+                "complete_lineups": len(rows),
+                "expected_slots": expected,
+            }
+            saved = record_export(
+                kind=kind_l,
+                sport=sport,
+                lineups=lineups,
+                rows=rows,
+                salary_cap=cap,
+                export_path=path,
+                validation=validation,
+                settings=settings,
+                grade_func=lineup_grade_for_sport,
+                app_version="results-learning-v3",
+            )
+            archive_export_file(path, sport=sport, kind=kind_l)
+            learning_note = f" Recorded {int(saved.get('lineups_recorded', 0))} lineup(s) for Results & Learning."
+        except Exception as exc:
+            logger.exception("Lineups exported but local learning record failed")
+            learning_note = f" The CSV was saved, but its local learning record failed: {exc}"
+
+        self.status.showMessage(f"Exported {len(rows)} saved lineup(s) to {path}.{learning_note}", 10000)
+        QtWidgets.QMessageBox.information(
+            self,
+            "Export Complete",
+            f"Saved {len(rows)} lineup(s) to:\n{path}\n\n"
+            "These exact rosters are now ready to match when you import DraftKings results."
+            + ("" if "failed" not in learning_note.lower() else f"\n\n{learning_note.strip()}"),
+        )
 
 
     # ---------------- Save logic ----------------
