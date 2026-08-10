@@ -54,6 +54,61 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIn("Live data", window.findChild(QtWidgets.QLabel, "liveDataStatusLabel").text())
         window.close()
 
+    def test_compact_workspace_keeps_primary_actions_and_saved_views(self):
+        window = MainWindow()
+        self.assertIsNotNone(window.findChild(QtWidgets.QFrame, "compactCommandBar"))
+        self.assertEqual(window.btn_primary_build.text(), "Generate")
+        self.assertIn("Showdown", window.btn_primary_build.toolTip())
+        self.assertEqual(window.tabs_workspace_controls.count(), 3)
+        self.assertEqual(
+            [window.tabs_workspace_controls.tabText(i) for i in range(3)],
+            ["Build Strategy", "Portfolio Rules", "Data & Learning"],
+        )
+        self.assertIsNotNone(window.findChild(QtWidgets.QGroupBox, "playerInspector"))
+        self.assertEqual(window.tabs_saved.count(), 2)
+        window.close()
+
+    def test_player_columns_follow_the_selected_sport(self):
+        window = MainWindow()
+        self.assertFalse(window.tbl_players.isColumnHidden(10))  # NFL role
+        self.assertTrue(window.tbl_players.isColumnHidden(20))   # MLB order
+        self.assertTrue(window.tbl_players.isColumnHidden(18))   # limits live in inspector
+
+        window.combo_sport.setCurrentText("MLB")
+        self.assertEqual(window.tbl_players.horizontalHeaderItem(10).text(), "Park")
+        self.assertFalse(window.tbl_players.isColumnHidden(20))
+        self.assertFalse(window.tbl_players.isColumnHidden(22))
+        if hasattr(window.tabs_lineups, "isTabVisible"):
+            self.assertTrue(window.tabs_lineups.isTabVisible(2))
+
+        window.combo_sport.setCurrentText("NBA")
+        self.assertTrue(window.tbl_players.isColumnHidden(7))
+        self.assertTrue(window.tbl_players.isColumnHidden(20))
+        if hasattr(window.tabs_lineups, "isTabVisible"):
+            self.assertFalse(window.tabs_lineups.isTabVisible(2))
+        window.close()
+
+    def test_selected_player_updates_contextual_inspector(self):
+        window = MainWindow()
+        window.players = [{
+            "Name": "Example QB", "Team": "BUF", "Position": "QB",
+            "FlexSalary": 7000, "FlexProjection": 20.5, "ProjOwnPct": 14.2,
+            "NFLAvailability": "STARTER", "MaxPct": 25.0,
+        }]
+        window._refresh_players_table()
+        window.tbl_players.selectRow(0)
+        window._update_player_inspector()
+        self.assertEqual(window.lbl_player_inspector_title.text(), "Example QB")
+        self.assertIn("BUF · QB", window.lbl_player_inspector_meta.text())
+        self.assertIn("Exposure max 25%", window.lbl_player_inspector_meta.text())
+        self.assertTrue(all(button.isEnabled() for button in window._player_action_buttons))
+
+        window.tabs_lineups.setCurrentIndex(1)
+        self.assertEqual(window.btn_primary_build.text(), "Generate")
+        self.assertIn("NFL Classic", window.btn_primary_build.toolTip())
+        self.assertTrue(all(button.isHidden() for button in window._captain_action_buttons))
+        window.close()
+
     def test_live_data_settings_masks_the_odds_api_key(self):
         dialog = LiveDataSettingsDialog("secret-test-key")
         field = dialog.findChild(QtWidgets.QLineEdit, "oddsApiKeyEdit")
