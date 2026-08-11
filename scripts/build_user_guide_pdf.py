@@ -14,6 +14,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     HRFlowable,
+    Image as RLImage,
+    KeepTogether,
     ListFlowable,
     ListItem,
     PageBreak,
@@ -87,6 +89,10 @@ def styles_for_guide():
             "List", parent=base["BodyText"], fontName="Helvetica",
             fontSize=9.4, leading=13.7, textColor=NAVY, leftIndent=4,
         ),
+        "caption": ParagraphStyle(
+            "Caption", parent=base["BodyText"], fontName="Helvetica-Oblique",
+            fontSize=8, leading=11, textColor=MUTED, alignment=TA_CENTER,
+        ),
     }
 
 
@@ -148,7 +154,7 @@ def cover_story(version: str, styles):
     ]
 
 
-def markdown_story(markdown: str, styles):
+def markdown_story(markdown: str, styles, source_dir: Path):
     story = []
     paragraph_lines = []
     list_items = []
@@ -216,6 +222,26 @@ def markdown_story(markdown: str, styles):
             ]))
             story.extend([box, Spacer(1, 8)])
             continue
+        image_match = re.fullmatch(r"!\[([^]]*)\]\(([^)]+)\)", line)
+        if image_match:
+            flush_paragraph()
+            flush_list()
+            alt_text, relative_path = image_match.groups()
+            image_path = (source_dir / relative_path).resolve()
+            if not image_path.exists():
+                raise FileNotFoundError(f"Guide image not found: {image_path}")
+            figure = RLImage(str(image_path))
+            scale = min(
+                (6.25 * inch) / figure.imageWidth,
+                (4.35 * inch) / figure.imageHeight,
+                1.0,
+            )
+            figure.drawWidth *= scale
+            figure.drawHeight *= scale
+            figure.hAlign = "CENTER"
+            caption = Paragraph(f"Figure: {inline_markup(alt_text)}", styles["caption"])
+            story.append(KeepTogether([figure, Spacer(1, 5), caption, Spacer(1, 10)]))
+            continue
         numbered = re.match(r"^\d+\.\s+(.*)$", line)
         bulleted = re.match(r"^-\s+(.*)$", line)
         if numbered or bulleted:
@@ -245,7 +271,7 @@ def build_pdf(source: Path, output: Path, version: str) -> None:
         subject=f"DFS Optimizer user documentation, version {version}",
     )
     story = cover_story(version, styles)
-    story.extend(markdown_story(source.read_text(encoding="utf-8"), styles))
+    story.extend(markdown_story(source.read_text(encoding="utf-8"), styles, source.parent))
     doc.build(story, onFirstPage=page_footer, onLaterPages=page_footer)
 
 
@@ -253,7 +279,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", default="docs/USER_GUIDE.md")
     parser.add_argument("--output", default="dist/DFS-Optimizer-User-Guide.pdf")
-    parser.add_argument("--version", default="1.6")
+    parser.add_argument("--version", default="1.6.1")
     args = parser.parse_args()
     build_pdf(Path(args.source), Path(args.output), args.version)
     print(Path(args.output).resolve())
