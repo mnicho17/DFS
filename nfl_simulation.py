@@ -29,10 +29,19 @@ class SimLineup(list):
         *,
         metrics: Optional[Dict[str, Any]] = None,
         top_hits: Optional[Iterable[int]] = None,
+        top_five_hits: Optional[Iterable[int]] = None,
+        win_hits: Optional[Iterable[int]] = None,
+        scenario_values: Optional[Dict[int, float]] = None,
     ) -> None:
         super().__init__(players)
         self.sim_metrics = dict(metrics or {})
         self.sim_top_hits = set(top_hits or [])
+        self.sim_top_five_hits = set(top_five_hits or [])
+        self.sim_win_hits = set(win_hits or [])
+        # Only positive, tournament-relevant scenarios are retained.  This
+        # keeps portfolio scoring sparse while allowing diminishing returns
+        # when several lineups succeed in the same game script.
+        self.sim_scenario_values = dict(scenario_values or {})
 
 
 def player_key(player: Dict[str, Any]) -> str:
@@ -555,8 +564,13 @@ def simulate_nfl_contest(
     rng = random.Random(seed)
     scores_by_candidate: List[List[float]] = [[] for _ in candidate_lists]
     top_hits: List[set[int]] = [set() for _ in candidate_lists]
+    top_five_hits: List[set[int]] = [set() for _ in candidate_lists]
+    win_hits: List[set[int]] = [set() for _ in candidate_lists]
+    scenario_values: List[Dict[int, float]] = [dict() for _ in candidate_lists]
     wins = [0 for _ in candidate_lists]
     cashes = [0 for _ in candidate_lists]
+    busts = [0 for _ in candidate_lists]
+    return_scores = [0.0 for _ in candidate_lists]
     percentile_sums = [0.0 for _ in candidate_lists]
     completed = 0
     batch = max(10, scenario_count // 25)
@@ -572,7 +586,9 @@ def simulate_nfl_contest(
         if not field_scores:
             continue
         top_one_threshold = field_scores[max(0, int(math.floor(0.99 * (len(field_scores) - 1))))]
+        top_five_threshold = field_scores[max(0, int(math.floor(0.95 * (len(field_scores) - 1))))]
         cash_threshold = field_scores[max(0, int(math.floor(0.80 * (len(field_scores) - 1))))]
+        bust_threshold = field_scores[max(0, int(math.floor(0.40 * (len(field_scores) - 1))))]
         winning_score = field_scores[-1]
         for index, signature in enumerate(candidate_keys):
             score = sum(outcomes.get(key, 0.0) for key in signature)
@@ -581,10 +597,31 @@ def simulate_nfl_contest(
             percentile_sums[index] += percentile
             if score >= top_one_threshold:
                 top_hits[index].add(scenario_index)
+            if score >= top_five_threshold:
+                top_five_hits[index].add(scenario_index)
             if score >= cash_threshold:
                 cashes[index] += 1
+            if score < bust_threshold:
+                busts[index] += 1
             if score >= winning_score:
                 wins[index] += 1
+                win_hits[index].add(scenario_index)
+
+            # A compact payout-shape proxy.  The values are not dollars and
+            # deliberately emphasize tournament tails over median outcomes.
+            if score >= winning_score:
+                scenario_value = 16.0
+            elif score >= top_one_threshold:
+                scenario_value = 6.0 + max(0.0, percentile - 0.99) * 200.0
+            elif score >= top_five_threshold:
+                scenario_value = 1.5 + max(0.0, percentile - 0.95) * 75.0
+            elif score >= cash_threshold:
+                scenario_value = 0.20
+            else:
+                scenario_value = -1.0
+            return_scores[index] += scenario_value
+            if scenario_value >= 1.5:
+                scenario_values[index][scenario_index] = scenario_value
         completed += 1
         if progress_callback and ((scenario_index + 1) % batch == 0 or scenario_index + 1 == scenario_count):
             progress_callback(scenario_index + 1, scenario_count, "Ranking candidates against simulated NFL fields")
@@ -601,37 +638,55 @@ def simulate_nfl_contest(
         preliminary.append({
             "sim_win_rate": wins[index] / denominator * 100.0,
             "sim_top_one_pct": len(top_hits[index]) / denominator * 100.0,
+            "sim_top_five_pct": len(top_five_hits[index]) / denominator * 100.0,
             "sim_cash_rate": cashes[index] / denominator * 100.0,
+            "sim_bust_rate": busts[index] / denominator * 100.0,
             "sim_average_percentile": percentile_sums[index] / denominator * 100.0,
             "sim_mean": sum(scores_by_candidate[index]) / max(1, len(scores_by_candidate[index])),
             "sim_ceiling": _quantile(scores_by_candidate[index], 0.90),
+            "sim_return_score": return_scores[index] / denominator,
             "duplication_raw": duplication_raw,
             "field_exact_matches": exact_matches,
             "field_duplicate_estimate": exact_matches * (float(field_size) / max(1.0, float(len(field_lineups)))),
         })
 
     top_values = [item["sim_top_one_pct"] for item in preliminary]
+    top_five_values = [item["sim_top_five_pct"] for item in preliminary]
     win_values = [item["sim_win_rate"] for item in preliminary]
     ceiling_values = [item["sim_ceiling"] for item in preliminary]
+    return_values = [item["sim_return_score"] for item in preliminary]
     dup_values = [item["duplication_raw"] for item in preliminary]
     wrapped: List[SimLineup] = []
     for index, lineup in enumerate(candidate_lists):
         metrics = preliminary[index]
         top_rank = _percentile_rank(top_values, metrics["sim_top_one_pct"])
+        top_five_rank = _percentile_rank(top_five_values, metrics["sim_top_five_pct"])
         win_rank = _percentile_rank(win_values, metrics["sim_win_rate"])
         ceiling_rank = _percentile_rank(ceiling_values, metrics["sim_ceiling"])
+        return_rank = _percentile_rank(return_values, metrics["sim_return_score"])
         duplicate_rank = _percentile_rank(dup_values, metrics["duplication_raw"])
         edge = 100.0 * (
-            0.45 * top_rank
-            + 0.15 * win_rank
-            + 0.25 * ceiling_rank
-            + 0.15 * (1.0 - duplicate_rank)
+            0.32 * top_rank
+            + 0.12 * win_rank
+            + 0.16 * top_five_rank
+            + 0.15 * ceiling_rank
+            + 0.15 * return_rank
+            + 0.10 * (1.0 - duplicate_rank)
         )
         metrics["duplicate_risk"] = duplicate_rank * 100.0
+        metrics["sim_return_index"] = return_rank * 100.0
+        metrics["sim_leverage"] = 100.0 * (0.58 * top_rank + 0.42 * (1.0 - duplicate_rank))
         metrics["sim_edge"] = max(0.0, min(100.0, edge))
         metrics["sim_scenarios"] = completed
         metrics["sim_field_lineups"] = len(field_lineups)
-        wrapped.append(SimLineup(lineup, metrics=metrics, top_hits=top_hits[index]))
+        wrapped.append(SimLineup(
+            lineup,
+            metrics=metrics,
+            top_hits=top_hits[index],
+            top_five_hits=top_five_hits[index],
+            win_hits=win_hits[index],
+            scenario_values=scenario_values[index],
+        ))
 
     wrapped.sort(
         key=lambda lineup: (
@@ -648,5 +703,6 @@ def simulate_nfl_contest(
             "field_size": int(field_size),
             "role_pool_size": len(role_pool),
             "candidate_count": len(wrapped),
+            "model": "scenario-portfolio-v2",
         },
     }

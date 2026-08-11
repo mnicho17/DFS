@@ -171,6 +171,39 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(progress[-1][:2], (150, 150))
         self.assertEqual([event[0] for event in progress], sorted(event[0] for event in progress))
 
+    def test_nfl_sim_worker_builds_a_wider_pool_and_reports_portfolio_coverage(self):
+        finished = []
+        worker = LineupBuildWorker(
+            _fixture_players(),
+            kind="classic",
+            sport="NFL",
+            num_lineups=24,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules={
+                "min_unique": 2,
+                "max_team_pct": 100.0,
+                "max_game_pct": 100.0,
+                "balance_ownership": True,
+                "groups": [],
+                "player_constraints": {},
+            },
+            sim_enabled=True,
+            sim_scenarios=100,
+        )
+        worker.finished.connect(finished.append)
+
+        worker.run()
+
+        self.assertTrue(finished)
+        payload = finished[0]
+        self.assertEqual(len(payload["lineups"]), 24)
+        self.assertGreater(payload["candidate_count"], 24)
+        self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v2")
+        self.assertGreater(payload["portfolio_report"]["sim_summary"]["top_one_scenarios_covered"], 0)
+        self.assertTrue(all(hasattr(lineup, "sim_scenario_values") for lineup in payload["lineups"]))
+
     def test_saved_export_writes_csv_and_learning_record(self):
         window = MainWindow()
         window.saved_showdown = [_showdown_lineup()]

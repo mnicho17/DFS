@@ -243,29 +243,80 @@ def select_portfolio(
                 report["text"] = _report_text(report)
             return {"lineups": pool, "report": report, "candidate_count": len(pool)}
 
+    # Cache every immutable candidate property once.  A 150-lineup SIM build
+    # scores hundreds of candidates at each selection step; re-reading nine
+    # player dictionaries millions of times dominated the v1 selector.
+    candidate_meta: Dict[int, Dict[str, Any]] = {}
+    for lineup in pool:
+        keys, teams, games = _lineup_sets(lineup, kind)
+        captain = lineup_captain(lineup, kind)
+        candidate_meta[id(lineup)] = {
+            "keys": keys,
+            "teams": teams,
+            "games": games,
+            "projection": _projection(lineup, kind),
+            "ownership": _ownership(lineup, kind),
+            "signature": _candidate_signature(lineup, kind),
+            "captain_key": player_key(captain) if captain else "",
+            "sim": _sim_metrics(lineup),
+            "top_hits": set(getattr(lineup, "sim_top_hits", set()) or set()),
+            "top_five_hits": set(getattr(lineup, "sim_top_five_hits", set()) or set()),
+            "win_hits": set(getattr(lineup, "sim_win_hits", set()) or set()),
+            "scenario_values": dict(getattr(lineup, "sim_scenario_values", {}) or {}),
+        }
+
     selected: List[Any] = []
-    selected_key_sets: List[set[str]] = []
+    selected_candidate_ids: set[int] = set()
     total_counts: Counter[str] = Counter()
     cpt_counts: Counter[str] = Counter()
     team_counts: Counter[str] = Counter()
     game_counts: Counter[str] = Counter()
     warnings: List[str] = []
     current_min_unique = normalized["min_unique"]
-    covered_sim_hits: set[int] = set()
+    sim_top_counts: Counter[int] = Counter()
+    sim_top_five_counts: Counter[int] = Counter()
+    sim_win_counts: Counter[int] = Counter()
+    sim_value_counts: Counter[int] = Counter()
+
+    uniqueness_cache: Dict[int, Dict[int, set[int]]] = {}
+
+    def uniqueness_conflicts(min_unique: int) -> Dict[int, set[int]]:
+        if min_unique <= 1:
+            return {}
+        if min_unique not in uniqueness_cache:
+            conflicts: Dict[int, set[int]] = {id(lineup): set() for lineup in pool}
+            for index, lineup in enumerate(pool):
+                lineup_id = id(lineup)
+                keys = candidate_meta[lineup_id]["keys"]
+                for previous in pool[:index]:
+                    previous_id = id(previous)
+                    if len(keys - candidate_meta[previous_id]["keys"]) < min_unique:
+                        conflicts[lineup_id].add(previous_id)
+                        conflicts[previous_id].add(lineup_id)
+            uniqueness_cache[min_unique] = conflicts
+        return uniqueness_cache[min_unique]
+
+    current_uniqueness_conflicts = uniqueness_conflicts(current_min_unique)
+
+    def diminishing(hits: set[int], counts: Counter[int], weight: float) -> float:
+        if not hits:
+            return 0.0
+        return weight * sum(1.0 / (1.0 + counts[hit]) for hit in hits) / len(hits)
 
     def admissible(lineup: Any, min_unique: int) -> bool:
-        keys, teams, games = _lineup_sets(lineup, kind)
+        meta = candidate_meta[id(lineup)]
+        keys = meta["keys"]
+        teams = meta["teams"]
+        games = meta["games"]
         if not keys or not _group_ok(keys, normalized["groups"]):
             return False
-        for previous in selected_key_sets:
-            if len(keys - previous) < min_unique:
-                return False
+        if min_unique > 1 and current_uniqueness_conflicts.get(id(lineup), set()).intersection(selected_candidate_ids):
+            return False
         for key in keys:
             limit = max_total.get(key)
             if limit is not None and total_counts[key] >= limit:
                 return False
-        captain = lineup_captain(lineup, kind)
-        captain_key = player_key(captain) if captain else ""
+        captain_key = meta["captain_key"]
         if captain_key:
             limit = max_cpt.get(captain_key)
             if limit is not None and cpt_counts[captain_key] >= limit:
@@ -277,29 +328,59 @@ def select_portfolio(
         return True
 
     def score(lineup: Any) -> float:
-        keys, teams, games = _lineup_sets(lineup, kind)
-        captain = lineup_captain(lineup, kind)
-        captain_key = player_key(captain) if captain else ""
+        meta = candidate_meta[id(lineup)]
+        keys = meta["keys"]
+        teams = meta["teams"]
+        games = meta["games"]
+        captain_key = meta["captain_key"]
         deficit_bonus = sum(500.0 for key in keys if total_counts[key] < min_total.get(key, 0))
         if captain_key and cpt_counts[captain_key] < min_cpt.get(captain_key, 0):
             deficit_bonus += 650.0
         concentration_penalty = sum(total_counts[key] for key in keys) * 0.08
         team_penalty = sum(team_counts[team] for team in teams) * 0.04
         game_penalty = sum(game_counts[game] for game in games) * 0.03
-        ownership_penalty = _ownership(lineup, kind) * 0.018 if normalized["balance_ownership"] else 0.0
-        overlap_penalty = max((len(keys.intersection(previous)) for previous in selected_key_sets), default=0) * 0.10
-        sim = _sim_metrics(lineup)
+        ownership_penalty = meta["ownership"] * 0.018 if normalized["balance_ownership"] else 0.0
+        # Exposure concentration already captures repeated player overlap and
+        # is much cheaper than comparing every candidate to every selected set.
+        overlap_penalty = 0.0
+        sim = meta["sim"]
         sim_edge = _pct(sim.get("sim_edge"), None)
         if sim_edge is None:
-            quality_score = _projection(lineup, kind)
+            quality_score = meta["projection"]
             scenario_bonus = 0.0
+            duplicate_penalty = 0.0
         else:
-            # SIM Edge is slate-relative and should lead candidate quality while
-            # retaining a smaller projection term as a stability guardrail.
-            quality_score = 0.35 * _projection(lineup, kind) + 0.95 * sim_edge
-            hits = set(getattr(lineup, "sim_top_hits", set()) or set())
-            marginal = len(hits - covered_sim_hits)
-            scenario_bonus = 35.0 * (marginal / max(1, len(hits))) if hits else 0.0
+            # V2 uses both individual tournament strength and marginal value to
+            # the portfolio.  Scenario bonuses diminish after a game script is
+            # already covered, so 150 variants of the same ceiling outcome do
+            # not crowd out different winning paths.
+            return_index = _pct(sim.get("sim_return_index"), 0.0) or 0.0
+            duplicate_risk = _pct(sim.get("duplicate_risk"), 0.0) or 0.0
+            quality_score = (
+                0.30 * meta["projection"]
+                + 0.72 * sim_edge
+                + 0.28 * return_index
+            )
+            top_hits = meta["top_hits"]
+            top_five_hits = meta["top_five_hits"]
+            win_hits = meta["win_hits"]
+            values = meta["scenario_values"]
+
+            if values:
+                total_value = sum(max(0.0, float(value)) for value in values.values())
+                value_ratio = sum(
+                    max(0.0, float(value)) / (1.0 + sim_value_counts[scenario])
+                    for scenario, value in values.items()
+                ) / max(1e-9, total_value)
+            else:
+                value_ratio = 0.0
+            scenario_bonus = (
+                34.0 * value_ratio
+                + diminishing(top_hits, sim_top_counts, 18.0)
+                + diminishing(win_hits, sim_win_counts, 10.0)
+                + diminishing(top_five_hits, sim_top_five_counts, 6.0)
+            )
+            duplicate_penalty = duplicate_risk * 0.12
         return (
             quality_score
             + scenario_bonus
@@ -309,6 +390,7 @@ def select_portfolio(
             - game_penalty
             - ownership_penalty
             - overlap_penalty
+            - duplicate_penalty
         )
 
     remaining = list(pool)
@@ -317,21 +399,31 @@ def select_portfolio(
         if not eligible:
             if current_min_unique > 1:
                 current_min_unique -= 1
+                current_uniqueness_conflicts = uniqueness_conflicts(current_min_unique)
                 warnings.append(f"Minimum unique players relaxed to {current_min_unique} to finish the portfolio.")
                 continue
             break
-        chosen = max(eligible, key=lambda lineup: (score(lineup), _candidate_signature(lineup, kind)))
+        chosen = max(eligible, key=lambda lineup: (score(lineup), candidate_meta[id(lineup)]["signature"]))
         remaining.remove(chosen)
-        keys, teams, games = _lineup_sets(chosen, kind)
+        chosen_meta = candidate_meta[id(chosen)]
+        keys = chosen_meta["keys"]
+        teams = chosen_meta["teams"]
+        games = chosen_meta["games"]
         selected.append(chosen)
-        selected_key_sets.append(keys)
+        selected_candidate_ids.add(id(chosen))
         total_counts.update(keys)
         team_counts.update(teams)
         game_counts.update(games)
-        captain = lineup_captain(chosen, kind)
-        if captain:
-            cpt_counts[player_key(captain)] += 1
-        covered_sim_hits.update(set(getattr(chosen, "sim_top_hits", set()) or set()))
+        if chosen_meta["captain_key"]:
+            cpt_counts[chosen_meta["captain_key"]] += 1
+        chosen_top_hits = chosen_meta["top_hits"]
+        chosen_top_five_hits = chosen_meta["top_five_hits"]
+        chosen_win_hits = chosen_meta["win_hits"]
+        chosen_values = chosen_meta["scenario_values"]
+        sim_top_counts.update(chosen_top_hits)
+        sim_top_five_counts.update(chosen_top_five_hits)
+        sim_win_counts.update(chosen_win_hits)
+        sim_value_counts.update(chosen_values.keys())
 
     if len(selected) < requested:
         warnings.append(
@@ -439,6 +531,39 @@ def portfolio_report(
             "cpt_pct": (cpt_counts[key] / max(1, total)) * 100.0,
         })
 
+    sim_rows = [_sim_metrics(lineup) for lineup in lineups or []]
+    sim_rows = [row for row in sim_rows if row]
+    sim_summary: Dict[str, Any] = {}
+    if sim_rows:
+        scenario_count = max(int(row.get("sim_scenarios", 0) or 0) for row in sim_rows)
+        top_counts: Counter[int] = Counter()
+        top_five_counts: Counter[int] = Counter()
+        win_counts: Counter[int] = Counter()
+        for lineup in lineups or []:
+            top_counts.update(set(getattr(lineup, "sim_top_hits", set()) or set()))
+            top_five_counts.update(set(getattr(lineup, "sim_top_five_hits", set()) or set()))
+            win_counts.update(set(getattr(lineup, "sim_win_hits", set()) or set()))
+
+        def average(field: str) -> float:
+            return sum(float(row.get(field, 0.0) or 0.0) for row in sim_rows) / len(sim_rows)
+
+        sim_summary = {
+            "scenario_count": scenario_count,
+            "average_edge": average("sim_edge"),
+            "average_top_one_pct": average("sim_top_one_pct"),
+            "average_top_five_pct": average("sim_top_five_pct"),
+            "average_cash_rate": average("sim_cash_rate"),
+            "average_bust_rate": average("sim_bust_rate"),
+            "average_return_index": average("sim_return_index"),
+            "average_duplicate_risk": average("duplicate_risk"),
+            "top_one_scenarios_covered": len(top_counts),
+            "top_five_scenarios_covered": len(top_five_counts),
+            "win_scenarios_covered": len(win_counts),
+            "exclusive_top_one_scenarios": sum(1 for count in top_counts.values() if count == 1),
+            "top_one_coverage_pct": len(top_counts) / max(1, scenario_count) * 100.0,
+            "top_five_coverage_pct": len(top_five_counts) / max(1, scenario_count) * 100.0,
+        }
+
     report = {
         "lineup_count": total,
         "requested": target,
@@ -449,6 +574,7 @@ def portfolio_report(
         "min_observed_unique": min_observed_unique,
         "warnings": warnings,
         "compliant": not warnings and total >= target,
+        "sim_summary": sim_summary,
     }
     report["text"] = _report_text(report)
     return report
@@ -467,6 +593,21 @@ def _report_text(report: Dict[str, Any]) -> str:
         "",
         "Top player exposure:",
     ]
+    sim = report.get("sim_summary") or {}
+    if sim:
+        lines[3:3] = [
+            "",
+            (
+                f"SIM portfolio: edge {float(sim.get('average_edge', 0.0)):.0f} | "
+                f"top 1% {float(sim.get('average_top_one_pct', 0.0)):.2f}% | "
+                f"return index {float(sim.get('average_return_index', 0.0)):.0f}"
+            ),
+            (
+                f"Scenario coverage: top 1% in {int(sim.get('top_one_scenarios_covered', 0))}/"
+                f"{int(sim.get('scenario_count', 0))} | representative wins in "
+                f"{int(sim.get('win_scenarios_covered', 0))}"
+            ),
+        ]
     for row in (report.get("players") or [])[:12]:
         captain = f" | CPT {float(row.get('cpt_pct', 0.0)):.1f}%" if float(row.get("cpt_pct", 0.0)) > 0 else ""
         lines.append(f"- {row.get('name')}: {float(row.get('pct', 0.0)):.1f}%{captain}")
