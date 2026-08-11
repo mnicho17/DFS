@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.6 | Windows desktop app
+Version 1.6.1 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -26,6 +26,10 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 7. Save the lineups you want and inspect **Portfolio Summary**.
 8. Choose **Export CSV**, upload to DraftKings, and do a final pre-lock review.
 9. After the contest, import DraftKings results through **Results & Learning**.
+
+![Main NFL workspace with Build Strategy, the player pool, and Classic lineup results](images/main-workspace.png)
+
+The pictured examples use representative NFL data. Player names, projections, ownership, live context, odds, and SIM results will differ by slate.
 
 ## 3. Classic and Showdown
 
@@ -91,6 +95,8 @@ Portfolio rules shape the whole set rather than one lineup at a time.
 
 Locks, fades, salary, roster eligibility, and hard maximums remain hard rules. Some minimums and uniqueness targets may be relaxed when the requested portfolio is impossible. The completion message and **Portfolio Summary** disclose those shortfalls.
 
+![Portfolio Rules tab with uniqueness, concentration, and group controls](images/portfolio-rules.png)
+
 ## 8. Generate and review lineups
 
 Choose **Generate** from the active Classic or Showdown area. During a build, the progress area reports the current stage and offers **Cancel**. Cancellation keeps valid lineups already completed.
@@ -123,6 +129,8 @@ NFL SIM Edge is for NFL Classic tournament decisions. The app builds a represent
 
 The top line in Classic shows Edge and top-one-percent rate. Hover or open the detail tooltip for the rest. Do not choose by one number alone. Compare ceiling, top-five rate, leverage, duplication, construction, news risk, and portfolio coverage.
 
+![NFL Classic results ranked with slate-relative SIM Edge and top-one-percent rates](images/nfl-sim-results.png)
+
 ## 10. Save and export
 
 Use **Save All**, individual save choices, or **Unsave** to control the portfolio. Saved-lineup tools include player exposure, stack and team exposure, and a portfolio summary.
@@ -146,9 +154,11 @@ The app can compare exact exported rosters with DraftKings standings or contest-
 4. Choose **Import DraftKings Results** and select the file.
 5. Review the match rate, ROI, cash rate, finish percentile, projection error, and guarded breakdowns.
 
-The v1.6.0 executable reports general outcomes and projection calibration. In builds after v1.6.0, NFL SIM exports also retain their original Edge, top-finish, cash, return, leverage, and duplication estimates. When the Results & Learning summary shows matched SIM results, the report compares predicted and actual top-one-percent, top-five-percent, and cash rates. It also checks whether Edge tracks finish percentile and whether the return index tracks net results.
+The app reports general outcomes and projection calibration. Starting with v1.6.1, NFL SIM exports also retain their original Edge, top-finish, cash, return, leverage, and duplication estimates. When the Results & Learning summary shows matched SIM results, the report compares predicted and actual top-one-percent, top-five-percent, and cash rates. It also checks whether Edge tracks finish percentile and whether the return index tracks net results.
 
 SIM validation is labeled directional until at least 50 matched entries. The app does not automatically tune strategy from a small sample.
+
+![Results and Learning report comparing predicted SIM rates with actual outcomes](images/results-learning.png)
 
 Exact matching matters. An entry can remain unmatched if it was edited after export or if its result row lacks a parseable lineup.
 
