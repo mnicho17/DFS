@@ -146,7 +146,7 @@ The app can compare exact exported rosters with DraftKings standings or contest-
 4. Choose **Import DraftKings Results** and select the file.
 5. Review the match rate, ROI, cash rate, finish percentile, projection error, and guarded breakdowns.
 
-NFL SIM exports retain their original Edge, top-finish, cash, return, leverage, and duplication estimates. Once results are matched, the report compares predicted and actual top-one-percent, top-five-percent, and cash rates. It also checks whether Edge tracks finish percentile and whether the return index tracks net results.
+The v1.6.0 executable reports general outcomes and projection calibration. In builds after v1.6.0, NFL SIM exports also retain their original Edge, top-finish, cash, return, leverage, and duplication estimates. When the Results & Learning summary shows matched SIM results, the report compares predicted and actual top-one-percent, top-five-percent, and cash rates. It also checks whether Edge tracks finish percentile and whether the return index tracks net results.
 
 SIM validation is labeled directional until at least 50 matched entries. The app does not automatically tune strategy from a small sample.
 
