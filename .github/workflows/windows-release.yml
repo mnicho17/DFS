@@ -36,6 +36,9 @@ jobs:
       - name: Run tests
         run: python -m unittest discover -v
 
+      - name: Build user guide
+        run: python scripts/build_user_guide_pdf.py --output dist\DFS-Optimizer-User-Guide.pdf
+
       - name: Build executable
         run: >-
           python -m PyInstaller
@@ -60,6 +63,7 @@ jobs:
           path: |
             dist/DFS-Optimizer.exe
             dist/DFS-Optimizer.exe.sha256
+            dist/DFS-Optimizer-User-Guide.pdf
           if-no-files-found: error
           retention-days: 14
 
@@ -73,7 +77,7 @@ jobs:
           $repo = "${{ github.repository }}"
           gh release view $tag --repo $repo *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag "dist\DFS-Optimizer.exe" "dist\DFS-Optimizer.exe.sha256" --repo $repo --clobber
+            gh release upload $tag "dist\DFS-Optimizer.exe" "dist\DFS-Optimizer.exe.sha256" "dist\DFS-Optimizer-User-Guide.pdf" --repo $repo --clobber
           } else {
-            gh release create $tag "dist\DFS-Optimizer.exe" "dist\DFS-Optimizer.exe.sha256" --repo $repo --title "DFS Optimizer $tag" --generate-notes --verify-tag
+            gh release create $tag "dist\DFS-Optimizer.exe" "dist\DFS-Optimizer.exe.sha256" "dist\DFS-Optimizer-User-Guide.pdf" --repo $repo --title "DFS Optimizer $tag" --generate-notes --verify-tag
           }

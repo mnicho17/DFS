@@ -2,6 +2,15 @@
 
 A Windows desktop lineup optimizer for DraftKings NFL, MLB, NBA, NHL, and WNBA slates.
 
+## User documentation
+
+- [Five-minute quick start](docs/QUICK_START.md)
+- [Complete user guide](docs/USER_GUIDE.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Release notes](docs/releases/)
+
+Tagged releases include a downloadable `DFS-Optimizer-User-Guide.pdf`.
+
 ## Download the Windows app
 
 1. Open the repository's [latest release](../../releases/latest).
@@ -63,7 +72,9 @@ NFL Classic builds can use the **NFL SIM Edge** option. The app first removes in
 - ranks every candidate against the same representative field in each scenario; and
 - selects a 150-lineup portfolio that covers different top-one-percent outcomes while respecting exposure rules.
 
-The Classic results table shows a slate-relative SIM Edge grade. Its tooltip includes top-one-percent rate, representative win rate, cash rate, simulated ceiling, and duplication risk. These metrics are decision aids based on the loaded projections and assumptions, not guarantees of contest results.
+The Classic results table shows slate-relative SIM Edge and top-one-percent rate. Its tooltip also includes top-five-percent rate, representative win rate, cash and bust rates, average percentile, simulated ceiling, tournament return index, leverage, duplication risk, scenario count, and representative field size. These metrics are decision aids based on the loaded projections and assumptions, not guarantees of contest results.
+
+When an NFL SIM lineup is exported, Results & Learning retains those original estimates. Imported DraftKings results can then compare predicted and actual top-one-percent, top-five-percent, and cash rates, plus the relationship between SIM Edge and finish percentile. SIM analysis remains directional until at least 50 results are matched and never changes strategy automatically from a small sample.
 
 ## NFL Game-Day Check and Vegas lines
 
@@ -83,7 +94,7 @@ NFL Showdown generation uses those same live inputs without applying the Classic
 The `Windows Release` GitHub Actions workflow supports two modes:
 
 - **Manual build:** Open **Actions → Windows Release → Run workflow**. When it finishes, download the Windows artifact from the workflow run.
-- **Published release:** Push a version tag such as `v1.0.0`. The workflow runs the tests, builds the executable, calculates its SHA-256 checksum, and publishes both files to GitHub Releases.
+- **Published release:** Push a version tag such as `v1.0.0`. The workflow runs the tests, builds the executable and user-guide PDF, calculates the executable's SHA-256 checksum, and publishes all three files to GitHub Releases.
 
 Example release commands:
 

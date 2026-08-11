@@ -13,6 +13,8 @@ from learning_db import (
     import_historical_result_csvs,
     record_export,
 )
+from nfl_simulation import SimLineup
+from optimizers import lineup_grade_for_sport
 
 
 def _player(index: int, *, adjustment: float = 0.5):
@@ -50,6 +52,27 @@ def _export_rows():
     return [["20001", "10002", "10003", "10004", "10005", "10006"]]
 
 
+def _classic_sim_lineup():
+    return SimLineup(
+        [_player(i) for i in range(6)],
+        metrics={
+            "sim_edge": 82.0,
+            "sim_win_rate": 0.4,
+            "sim_top_one_pct": 3.2,
+            "sim_top_five_pct": 11.5,
+            "sim_cash_rate": 27.0,
+            "sim_bust_rate": 18.0,
+            "sim_average_percentile": 66.0,
+            "sim_ceiling": 168.5,
+            "sim_return_index": 76.0,
+            "sim_leverage": 71.0,
+            "duplicate_risk": 24.0,
+            "sim_scenarios": 500,
+            "sim_field_lineups": 1200,
+        },
+    )
+
+
 def _write_csv(path: str, rows):
     headers = [
         "Sport", "Contest Name", "Entry Name", "Entry Fee", "Winnings",
@@ -82,6 +105,20 @@ class ResultsLearningTests(unittest.TestCase):
             db_path=self.db_path,
         )
 
+    def _record_sim(self):
+        return record_export(
+            kind="classic",
+            sport="NFL",
+            lineups=[_classic_sim_lineup()],
+            rows=[[str(10001 + i) for i in range(6)]],
+            salary_cap=50000,
+            export_path=os.path.join(self.temp.name, "sim-export.csv"),
+            validation={"valid": True},
+            grade_func=lineup_grade_for_sport,
+            app_version="test-sim",
+            db_path=self.db_path,
+        )
+
     def test_export_records_base_adjusted_and_context_features(self):
         result = self._record()
         self.assertEqual(result["lineups_recorded"], 1)
@@ -99,6 +136,22 @@ class ResultsLearningTests(unittest.TestCase):
             self.assertAlmostEqual(player[0], 15.0)
             self.assertAlmostEqual(player[1], 0.75)
             self.assertEqual(json.loads(player[2])["NFLVegas"], 0.0)
+        finally:
+            conn.close()
+
+    def test_export_persists_nfl_sim_metrics(self):
+        self._record_sim()
+        conn = sqlite3.connect(self.db_path)
+        try:
+            row = conn.execute(
+                """
+                SELECT sim_edge, sim_top_one_pct, sim_top_five_pct, sim_cash_rate,
+                       sim_return_index, sim_leverage, sim_duplicate_risk,
+                       sim_scenarios, sim_field_lineups
+                FROM lineups
+                """
+            ).fetchone()
+            self.assertEqual(row, (82.0, 3.2, 11.5, 27.0, 76.0, 71.0, 24.0, 500, 1200))
         finally:
             conn.close()
 
@@ -204,6 +257,31 @@ class ResultsLearningTests(unittest.TestCase):
         self.assertIn("Base vs context comparison is directional only", report["text"])
         self.assertIn("No strategy tuning is recommended yet", report["text"])
         self.assertIn("Performance by ownership", report["text"])
+
+    def test_report_validates_sim_predictions_against_results(self):
+        self._record_sim()
+        path = os.path.join(self.temp.name, "NFL sim report.csv")
+        rows = []
+        for index in range(10):
+            rows.append({
+                "Sport": "NFL", "Contest Name": "SIM Review", "Entry Name": f"entry-{index}",
+                "Entry Fee": "10", "Winnings": "25" if index < 3 else "0",
+                "Points": str(130 - index), "Rank": str(1 + index * 25),
+                "Entries": "1000", "Places Paid": "200",
+                "Lineup": "10001,10002,10003,10004,10005,10006",
+            })
+        _write_csv(path, rows)
+        imported = import_historical_result_csvs([path], db_path=self.db_path, archive_files=False)
+        self.assertEqual(imported["matched_rows"], 10)
+
+        report = generate_learning_report(db_path=self.db_path)
+        self.assertEqual(report["sim_matched_rows"], 10)
+        self.assertIn("NFL SIM validation", report["text"])
+        self.assertIn("Predicted top 1%", report["text"])
+        self.assertIn("Predicted top 5%", report["text"])
+        self.assertIn("Predicted cash rate", report["text"])
+        self.assertIn("Performance by SIM Edge", report["text"])
+        self.assertIn("directional until 50 matched entries", report["text"])
 
     def test_lineup_parser_handles_slots_suffixes_and_ids(self):
         names = _extract_lineup_tokens({
