@@ -444,11 +444,19 @@ class LineupBuildWorker(QtCore.QObject):
                 or int(self.portfolio_rules.get("min_unique", 1) or 1) > built_in_unique
             )
             use_nfl_sim = self.kind != "showdown" and self.sport == "NFL" and self.sim_enabled
-            candidate_target = (
-                expanded_target
-                if self.kind == "showdown" or hard_portfolio_rules or use_nfl_sim
-                else self.num_lineups
-            )
+            if use_nfl_sim:
+                # Give the scenario model a genuinely wider set to choose from.
+                # About 2.7x optimizer candidates plus the ownership-shaped
+                # source below is the measured speed/coverage knee: a 150-entry
+                # build evaluates roughly 500 distinct lineups.
+                candidate_target = min(
+                    750,
+                    max(expanded_target, int(math.ceil(self.num_lineups * 8.0 / 3.0))),
+                )
+            elif self.kind == "showdown" or hard_portfolio_rules:
+                candidate_target = expanded_target
+            else:
+                candidate_target = self.num_lineups
             build_players = [dict(player) for player in self.players]
             required_group_keys = {
                 str(key)
@@ -507,7 +515,10 @@ class LineupBuildWorker(QtCore.QObject):
                 strategy_l = self.salary_strategy.strip().lower()
                 has_locks = any(bool(player.get("LockFlex")) for player in build_players)
                 if not hard_portfolio_rules and not has_locks:
-                    extra_count = min(90, max(30, self.num_lineups // 2))
+                    # Add a second, ownership-shaped source of candidates so
+                    # the optimizer's projection-led builds are not the only
+                    # game scripts available to the simulation.
+                    extra_count = min(180, max(60, int(math.ceil(self.num_lineups * 2.0 / 3.0))))
                     extras, _ = generate_nfl_field_lineups(
                         build_players,
                         extra_count,
@@ -557,6 +568,8 @@ class LineupBuildWorker(QtCore.QObject):
                 kind=self.kind,
             )
             lineups = selected["lineups"]
+            if sim_report and selected["report"].get("sim_summary"):
+                sim_report["portfolio"] = dict(selected["report"]["sim_summary"])
             self.finished.emit({
                 "kind": self.kind,
                 "sport": self.sport,
@@ -3640,7 +3653,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
             try:
                 grade_info = lineup_grade_for_sport(lu, sport, self._safe_float(self.edit_cl_cap.text(), 50000.0))
-                grade_txt = f"{grade_info.get('grade', '')} ({float(grade_info.get('score', 0.0)):.0f})"
+                if grade_info.get("sim_scenarios"):
+                    grade_txt = (
+                        f"{float(grade_info.get('sim_edge', 0.0)):.0f} | "
+                        f"T1 {float(grade_info.get('sim_top_one_pct', 0.0)):.1f}%"
+                    )
+                else:
+                    grade_txt = f"{grade_info.get('grade', '')} ({float(grade_info.get('score', 0.0)):.0f})"
                 grade_item = QtWidgets.QTableWidgetItem(grade_txt)
                 detail = (
                     f"Salary Used: ${float(grade_info.get('salary_used', 0.0)):,.0f}\n"
@@ -3651,15 +3670,23 @@ class MainWindow(QtWidgets.QMainWindow):
                 if grade_info.get("sim_scenarios"):
                     detail += (
                         f"Top 1% Rate: {float(grade_info.get('sim_top_one_pct', 0.0)):.2f}%\n"
+                        f"Top 5% Rate: {float(grade_info.get('sim_top_five_pct', 0.0)):.1f}%\n"
                         f"Representative Win Rate: {float(grade_info.get('sim_win_rate', 0.0)):.2f}%\n"
                         f"Cash Rate: {float(grade_info.get('sim_cash_rate', 0.0)):.1f}%\n"
+                        f"Bust Rate: {float(grade_info.get('sim_bust_rate', 0.0)):.1f}%\n"
                         f"Average Field Percentile: {float(grade_info.get('sim_average_percentile', 0.0)):.1f}\n"
                         f"90th-Percentile Score: {float(grade_info.get('sim_ceiling', 0.0)):.1f}\n"
+                        f"Tournament Return Index: {float(grade_info.get('sim_return_index', 0.0)):.0f}/100\n"
+                        f"Leverage: {float(grade_info.get('sim_leverage', 0.0)):.0f}/100\n"
                         f"Duplication Risk: {float(grade_info.get('duplicate_risk', 0.0)):.0f}/100\n"
                         f"Simulation: {int(grade_info.get('sim_scenarios', 0)):,} scenarios vs "
                         f"{int(grade_info.get('sim_field_lineups', 0)):,} field lineups\n"
                     )
-                detail += "UI-only grade; not included in DK export/saved ID table."
+                detail += (
+                    "Slate-relative simulation metrics; not included in DK export/saved ID table."
+                    if grade_info.get("sim_scenarios")
+                    else "UI-only grade; not included in DK export/saved ID table."
+                )
                 grade_item.setToolTip(detail)
                 self.tbl_cl.setItem(i, len(headers)-1, grade_item)
             except Exception:
@@ -3706,9 +3733,15 @@ class MainWindow(QtWidgets.QMainWindow):
                 if sim_rows:
                     avg_edge = sum(float(row.get("sim_edge", 0.0) or 0.0) for row in sim_rows) / len(sim_rows)
                     avg_top = sum(float(row.get("sim_top_one_pct", 0.0) or 0.0) for row in sim_rows) / len(sim_rows)
+                    avg_return = sum(float(row.get("sim_return_index", 0.0) or 0.0) for row in sim_rows) / len(sim_rows)
+                    scenarios = max(int(row.get("sim_scenarios", 0) or 0) for row in sim_rows)
+                    covered = set()
+                    for lineup in lineups:
+                        covered.update(set(getattr(lineup, "sim_top_hits", set()) or set()))
                     return (
                         f"Quality: {len(lineups)} NFL lineups | avg salary left ${avg_left:,.0f} | "
-                        f"avg SIM Edge {avg_edge:.0f} | avg top-1% rate {avg_top:.2f}%."
+                        f"avg SIM Edge {avg_edge:.0f} | avg top-1% {avg_top:.2f}% | "
+                        f"return index {avg_return:.0f} | top-1% paths {len(covered)}/{scenarios}."
                     )
             return f"Quality: {len(lineups)} {sport_u} lineups | avg salary left ${avg_left:,.0f}."
         except Exception as e:

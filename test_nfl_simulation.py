@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from nfl_simulation import (
+    lineup_signature,
     build_nfl_role_pool,
     generate_nfl_field_lineups,
     simulate_nfl_contest,
@@ -74,11 +75,43 @@ class NFLSimulationTests(unittest.TestCase):
         self.assertGreater(max(edges), min(edges))
         self.assertTrue(all(0.0 <= edge <= 100.0 for edge in edges))
         self.assertTrue(all(lineup.sim_metrics["sim_scenarios"] == 120 for lineup in lineups))
+        self.assertTrue(all(0.0 <= lineup.sim_metrics["sim_return_index"] <= 100.0 for lineup in lineups))
+        self.assertTrue(all(0.0 <= lineup.sim_metrics["sim_leverage"] <= 100.0 for lineup in lineups))
+        self.assertTrue(all("sim_top_five_pct" in lineup.sim_metrics for lineup in lineups))
+        self.assertTrue(all("sim_bust_rate" in lineup.sim_metrics for lineup in lineups))
+        self.assertTrue(all(lineup.sim_top_hits.issubset(lineup.sim_top_five_hits) for lineup in lineups))
+        self.assertEqual(result["report"]["model"], "scenario-portfolio-v2")
 
         grade = lineup_grade_for_sport(lineups[0], "NFL", 50000)
         self.assertAlmostEqual(grade["score"], lineups[0].sim_metrics["sim_edge"])
         self.assertIn("sim_top_one_pct", grade)
+        self.assertIn("sim_return_index", grade)
         self.assertIn(grade["grade"], {"A", "B", "C", "D"})
+
+    def test_contest_sim_is_deterministic_for_the_same_seed(self):
+        players = _fixture_players()
+        candidates = MultiSportClassicOptimizer(
+            players,
+            sport="NFL",
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+        ).build_lineups(12)
+
+        first = simulate_nfl_contest(candidates, players, scenarios=60, field_lineup_count=90, seed=117)
+        second = simulate_nfl_contest(candidates, players, scenarios=60, field_lineup_count=90, seed=117)
+
+        def snapshot(result):
+            return [
+                (
+                    lineup_signature(lineup),
+                    round(lineup.sim_metrics["sim_edge"], 8),
+                    tuple(sorted(lineup.sim_top_hits)),
+                    tuple(sorted(lineup.sim_top_five_hits)),
+                )
+                for lineup in result["lineups"]
+            ]
+
+        self.assertEqual(snapshot(first), snapshot(second))
 
 
 if __name__ == "__main__":
