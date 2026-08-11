@@ -1068,6 +1068,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.summary.setText(
                 f"{int(payload.get('exported_lineups', 0)):,} exported lineups  |  "
                 f"{int(payload.get('matched_rows', 0)):,} matched results  |  "
+                f"{int(payload.get('sim_matched_rows', 0)):,} SIM results  |  "
                 f"{float(payload.get('match_rate', 0.0)):.1f}% match rate  |  {roi_text}"
             )
             self.report.setPlainText(str(payload.get("text", "")))
@@ -4080,7 +4081,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 validation=validation,
                 settings=settings,
                 grade_func=lineup_grade_for_sport,
-                app_version="results-learning-v3",
+                app_version="results-learning-v4",
             )
             archive_export_file(path, sport=sport, kind=kind_l)
             learning_note = f" Recorded {int(saved.get('lineups_recorded', 0))} lineup(s) for Results & Learning."

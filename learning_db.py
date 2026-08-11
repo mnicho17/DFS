@@ -128,6 +128,19 @@ def init_db(conn: sqlite3.Connection) -> None:
             max_ownership REAL,
             warnings TEXT,
             explanation TEXT,
+            sim_edge REAL,
+            sim_win_rate REAL,
+            sim_top_one_pct REAL,
+            sim_top_five_pct REAL,
+            sim_cash_rate REAL,
+            sim_bust_rate REAL,
+            sim_average_percentile REAL,
+            sim_ceiling REAL,
+            sim_return_index REAL,
+            sim_leverage REAL,
+            sim_duplicate_risk REAL,
+            sim_scenarios INTEGER,
+            sim_field_lineups INTEGER,
             actual_points REAL,
             roi REAL,
             cashed INTEGER,
@@ -166,6 +179,22 @@ def init_db(conn: sqlite3.Connection) -> None:
     )
     _ensure_column(conn, "lineups", "base_projection", "REAL")
     _ensure_column(conn, "lineups", "context_adjustment", "REAL")
+    for column, definition in (
+        ("sim_edge", "REAL"),
+        ("sim_win_rate", "REAL"),
+        ("sim_top_one_pct", "REAL"),
+        ("sim_top_five_pct", "REAL"),
+        ("sim_cash_rate", "REAL"),
+        ("sim_bust_rate", "REAL"),
+        ("sim_average_percentile", "REAL"),
+        ("sim_ceiling", "REAL"),
+        ("sim_return_index", "REAL"),
+        ("sim_leverage", "REAL"),
+        ("sim_duplicate_risk", "REAL"),
+        ("sim_scenarios", "INTEGER"),
+        ("sim_field_lineups", "INTEGER"),
+    ):
+        _ensure_column(conn, "lineups", column, definition)
     _ensure_column(conn, "lineup_players", "base_projection", "REAL")
     _ensure_column(conn, "lineup_players", "context_adjustment", "REAL")
     _ensure_column(conn, "lineup_players", "context_json", "TEXT")
@@ -388,6 +417,33 @@ def record_export(
                         str(feature.get("explanation", "") or ""),
                     ),
                 )
+                if feature.get("sim_edge") is not None:
+                    conn.execute(
+                        """
+                        UPDATE lineups SET
+                            sim_edge=?, sim_win_rate=?, sim_top_one_pct=?, sim_top_five_pct=?,
+                            sim_cash_rate=?, sim_bust_rate=?, sim_average_percentile=?, sim_ceiling=?,
+                            sim_return_index=?, sim_leverage=?, sim_duplicate_risk=?, sim_scenarios=?,
+                            sim_field_lineups=?
+                        WHERE lineup_id=?
+                        """,
+                        (
+                            _safe_float(feature.get("sim_edge")),
+                            _safe_float(feature.get("sim_win_rate")),
+                            _safe_float(feature.get("sim_top_one_pct")),
+                            _safe_float(feature.get("sim_top_five_pct")),
+                            _safe_float(feature.get("sim_cash_rate")),
+                            _safe_float(feature.get("sim_bust_rate")),
+                            _safe_float(feature.get("sim_average_percentile")),
+                            _safe_float(feature.get("sim_ceiling")),
+                            _safe_float(feature.get("sim_return_index")),
+                            _safe_float(feature.get("sim_leverage")),
+                            _safe_float(feature.get("duplicate_risk")),
+                            _safe_int(feature.get("sim_scenarios")),
+                            _safe_int(feature.get("sim_field_lineups")),
+                            lineup_id,
+                        ),
+                    )
                 for slot, p in _lineup_players(kind, lineup, sport):
                     player_id = str(p.get("CptID") if slot == "CPT" else p.get("FlexID") or "").strip()
                     adjusted_projection, base_projection, context_adjustment, context = _player_projection_context(p, slot)
@@ -452,6 +508,46 @@ def _context_bucket(value: float) -> str:
     return "Neutral context"
 
 
+def _bucket_sim_edge(value: float) -> str:
+    if value < 60:
+        return "Under 60 Edge"
+    if value < 70:
+        return "60-69 Edge"
+    if value < 80:
+        return "70-79 Edge"
+    return "80+ Edge"
+
+
+def _bucket_sim_return(value: float) -> str:
+    if value < 40:
+        return "Under 40 return index"
+    if value < 60:
+        return "40-59 return index"
+    if value < 80:
+        return "60-79 return index"
+    return "80+ return index"
+
+
+def _bucket_sim_leverage(value: float) -> str:
+    if value < 40:
+        return "Under 40 leverage"
+    if value < 60:
+        return "40-59 leverage"
+    if value < 80:
+        return "60-79 leverage"
+    return "80+ leverage"
+
+
+def _bucket_sim_duplication(value: float) -> str:
+    if value < 25:
+        return "Under 25 duplication risk"
+    if value < 50:
+        return "25-49 duplication risk"
+    if value < 75:
+        return "50-74 duplication risk"
+    return "75+ duplication risk"
+
+
 def _correlation(xs: List[float], ys: List[float]) -> Optional[float]:
     if len(xs) < 2 or len(xs) != len(ys):
         return None
@@ -510,7 +606,11 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
             """
             SELECT hr.roi, hr.entry_fee, hr.winnings, hr.percentile, hr.cashed,
                    hr.top_one_pct, hr.actual_points, l.salary, l.avg_ownership,
-                   l.stack_shape, l.context_adjustment, e.salary_cap, e.sport
+                   l.stack_shape, l.context_adjustment, e.salary_cap, e.sport,
+                   l.sim_edge, l.sim_win_rate, l.sim_top_one_pct, l.sim_top_five_pct,
+                   l.sim_cash_rate, l.sim_bust_rate, l.sim_average_percentile,
+                   l.sim_ceiling, l.sim_return_index, l.sim_leverage,
+                   l.sim_duplicate_risk, l.sim_scenarios, l.sim_field_lineups
             FROM historical_results hr
             JOIN lineups l ON l.lineup_id=hr.matched_lineup_id
             JOIN exports e ON e.export_id=l.export_id
@@ -523,6 +623,13 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
                 "actual_points": row[6], "salary": row[7], "avg_ownership": row[8],
                 "stack_shape": row[9], "context_adjustment": row[10],
                 "salary_cap": row[11], "sport": row[12],
+                "sim_edge": row[13], "sim_win_rate": row[14],
+                "sim_top_one_pct": row[15], "sim_top_five_pct": row[16],
+                "sim_cash_rate": row[17], "sim_bust_rate": row[18],
+                "sim_average_percentile": row[19], "sim_ceiling": row[20],
+                "sim_return_index": row[21], "sim_leverage": row[22],
+                "sim_duplicate_risk": row[23], "sim_scenarios": row[24],
+                "sim_field_lineups": row[25],
             })
 
         calibration_rows = cur.execute(
@@ -563,6 +670,10 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
         stack_groups: Dict[str, List[Dict[str, Any]]] = {}
         context_groups: Dict[str, List[Dict[str, Any]]] = {}
         sport_groups: Dict[str, List[Dict[str, Any]]] = {}
+        sim_edge_groups: Dict[str, List[Dict[str, Any]]] = {}
+        sim_return_groups: Dict[str, List[Dict[str, Any]]] = {}
+        sim_leverage_groups: Dict[str, List[Dict[str, Any]]] = {}
+        sim_duplication_groups: Dict[str, List[Dict[str, Any]]] = {}
         for row in outcome_rows:
             salary_groups.setdefault(
                 _bucket_salary_unused(_safe_float(row["salary"]), _safe_float(row["salary_cap"], 50000.0)), []
@@ -571,6 +682,34 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
             stack_groups.setdefault(str(row.get("stack_shape") or "Unknown"), []).append(row)
             context_groups.setdefault(_context_bucket(_safe_float(row["context_adjustment"])), []).append(row)
             sport_groups.setdefault(str(row.get("sport") or "Unknown"), []).append(row)
+            if row.get("sim_edge") is not None:
+                sim_edge_groups.setdefault(_bucket_sim_edge(float(row["sim_edge"])), []).append(row)
+                sim_return_groups.setdefault(_bucket_sim_return(_safe_float(row.get("sim_return_index"))), []).append(row)
+                sim_leverage_groups.setdefault(_bucket_sim_leverage(_safe_float(row.get("sim_leverage"))), []).append(row)
+                sim_duplication_groups.setdefault(_bucket_sim_duplication(_safe_float(row.get("sim_duplicate_risk"))), []).append(row)
+
+        sim_rows = [row for row in outcome_rows if row.get("sim_edge") is not None]
+        sim_top_one_pred = [float(row["sim_top_one_pct"]) for row in sim_rows if row.get("sim_top_one_pct") is not None]
+        sim_top_one_actual = [int(row["top_one_pct"]) * 100.0 for row in sim_rows if row.get("top_one_pct") is not None]
+        sim_top_five_pred = [float(row["sim_top_five_pct"]) for row in sim_rows if row.get("sim_top_five_pct") is not None]
+        sim_top_five_actual = [100.0 if float(row["percentile"]) >= 95.0 else 0.0 for row in sim_rows if row.get("percentile") is not None]
+        sim_cash_pred = [float(row["sim_cash_rate"]) for row in sim_rows if row.get("sim_cash_rate") is not None]
+        sim_cash_actual = [int(row["cashed"]) * 100.0 for row in sim_rows if row.get("cashed") is not None]
+        edge_finish_pairs = [
+            (float(row["sim_edge"]), float(row["percentile"]))
+            for row in sim_rows if row.get("percentile") is not None
+        ]
+        return_roi_pairs = [
+            (float(row["sim_return_index"]), float(row["roi"]))
+            for row in sim_rows
+            if row.get("sim_return_index") is not None and row.get("roi") is not None
+        ]
+        edge_finish_corr = _correlation(
+            [pair[0] for pair in edge_finish_pairs], [pair[1] for pair in edge_finish_pairs]
+        )
+        return_roi_corr = _correlation(
+            [pair[0] for pair in return_roi_pairs], [pair[1] for pair in return_roi_pairs]
+        )
 
         match_rate = (matched_rows / imported_rows * 100.0) if imported_rows else 0.0
         confidence = _confidence_label(exported_lineups + imported_rows)
@@ -623,11 +762,49 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
         else:
             lines.append("- Export lineups, then import DraftKings results to measure projection accuracy.")
 
+        lines.extend(["", "NFL SIM validation"])
+        if sim_rows:
+            lines.append(f"- Matched NFL SIM entries: {len(sim_rows)}")
+            if sim_top_one_pred and sim_top_one_actual:
+                lines.append(
+                    f"- Predicted top 1%: {statistics.mean(sim_top_one_pred):.2f}% | "
+                    f"actual: {statistics.mean(sim_top_one_actual):.2f}%"
+                )
+            if sim_top_five_pred and sim_top_five_actual:
+                lines.append(
+                    f"- Predicted top 5%: {statistics.mean(sim_top_five_pred):.2f}% | "
+                    f"actual: {statistics.mean(sim_top_five_actual):.2f}%"
+                )
+            if sim_cash_pred and sim_cash_actual:
+                lines.append(
+                    f"- Predicted cash rate: {statistics.mean(sim_cash_pred):.1f}% | "
+                    f"actual: {statistics.mean(sim_cash_actual):.1f}%"
+                )
+            lines.append(
+                f"- SIM Edge / finish correlation: {edge_finish_corr:.3f}"
+                if edge_finish_corr is not None else "- SIM Edge correlation needs more result variation."
+            )
+            lines.append(
+                f"- Return index / net correlation: {return_roi_corr:.3f}"
+                if return_roi_corr is not None else "- Return index correlation needs more result variation."
+            )
+            if len(sim_rows) < 50:
+                lines.append(
+                    f"- SIM validation is directional until 50 matched entries ({len(sim_rows)}/50); no automatic tuning is applied."
+                )
+        else:
+            lines.append("- Generate and export NFL Classic SIM lineups, then import DraftKings results to validate the model.")
+
         lines.extend([""] + _render_breakdown("Performance by sport", sport_groups))
         lines.extend([""] + _render_breakdown("Performance by salary used", salary_groups))
         lines.extend([""] + _render_breakdown("Performance by ownership", ownership_groups))
         lines.extend([""] + _render_breakdown("Performance by stack / construction", stack_groups))
         lines.extend([""] + _render_breakdown("Performance by context adjustment", context_groups))
+        if sim_rows:
+            lines.extend([""] + _render_breakdown("Performance by SIM Edge", sim_edge_groups))
+            lines.extend([""] + _render_breakdown("Performance by tournament return index", sim_return_groups))
+            lines.extend([""] + _render_breakdown("Performance by SIM leverage", sim_leverage_groups))
+            lines.extend([""] + _render_breakdown("Performance by SIM duplication risk", sim_duplication_groups))
         lines.extend(["", "Guardrails"])
         if matched_rows < 25:
             lines.append(f"- No strategy tuning is recommended yet; collect at least 25 matched entries ({matched_rows}/25).")
@@ -646,6 +823,9 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
             "cash_rate": statistics.mean(cash_values) if cash_values else None,
             "avg_percentile": statistics.mean(percentile_values) if percentile_values else None,
             "adjusted_mae": adjusted_mae, "base_mae": base_mae,
+            "sim_matched_rows": len(sim_rows),
+            "sim_edge_finish_correlation": edge_finish_corr,
+            "sim_return_roi_correlation": return_roi_corr,
             "confidence": confidence, "outcome_confidence": outcome_confidence,
         }
     finally:
