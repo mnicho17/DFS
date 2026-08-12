@@ -9,9 +9,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtWidgets
 
-from main_window import LineupBuildWorker, LiveDataSettingsDialog, MainWindow, ResultsLearningDialog
+from main_window import LineupBuildWorker, LiveDataSettingsDialog, MainWindow, ResultsImportWorker, ResultsLearningDialog
 from learning_db import generate_learning_report
-from test_learning_results import _showdown_lineup
+from test_learning_results import _showdown_lineup, _write_csv
 from test_nfl_logic import _fixture_players
 
 
@@ -34,6 +34,9 @@ class ResultsLearningUITests(unittest.TestCase):
     def test_dialog_starts_with_local_empty_state(self):
         dialog = ResultsLearningDialog()
         self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "importResultsButton"))
+        self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "attachFieldSalaryButton"))
+        self.assertIsNotNone(dialog.findChild(QtWidgets.QProgressBar, "resultsImportProgress"))
+        self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "cancelResultsImportButton"))
         self.assertIn("0 exported lineups", dialog.summary.text())
         self.assertIn("All history stays on this computer", dialog.report.toPlainText())
         dialog.close()
@@ -49,6 +52,9 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIsNotNone(sim_toggle)
         self.assertTrue(sim_toggle.isChecked())
         self.assertIsNotNone(window.findChild(QtWidgets.QSpinBox, "nflSimScenarios"))
+        preset = window.findChild(QtWidgets.QComboBox, "nflFieldPreset")
+        self.assertIsNotNone(preset)
+        self.assertEqual(preset.currentText(), "150-Max")
         self.assertEqual(window.findChild(QtWidgets.QPushButton, "gameDayCheckButton").text(), "Game-Day Check")
         self.assertIsNotNone(window.findChild(QtWidgets.QPushButton, "liveDataSettingsButton"))
         self.assertIn("Live data", window.findChild(QtWidgets.QLabel, "liveDataStatusLabel").text())
@@ -116,6 +122,36 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(field.text(), "secret-test-key")
         self.assertEqual(field.echoMode(), QtWidgets.QLineEdit.Password)
         dialog.close()
+
+    def test_results_import_worker_reports_progress_and_supports_cancellation(self):
+        path = os.path.join(self.temp.name, "NFL Sunday 150-Max.csv")
+        rows = [
+            {
+                "Sport": "NFL", "Contest Name": "Sunday 150-Max",
+                "Entry Name": f"field-{index}", "Entry Fee": "", "Winnings": "",
+                "Points": str(100 - index), "Rank": str(index + 1),
+                "Entries": "30", "Places Paid": "6",
+                "Lineup": "10001,10002,10003,10004,10005,10006",
+            }
+            for index in range(30)
+        ]
+        _write_csv(path, rows)
+        progress = []
+        finished = []
+        worker = ResultsImportWorker([path])
+        worker.progress.connect(lambda done, total, text: progress.append((done, total, text)))
+        worker.finished.connect(finished.append)
+        worker.run()
+        self.assertTrue(finished)
+        self.assertEqual(finished[0]["field_only_files"], 1)
+        self.assertTrue(progress)
+
+        cancelled = []
+        second = ResultsImportWorker([path])
+        second.finished.connect(cancelled.append)
+        second.request_cancel()
+        second.run()
+        self.assertTrue(cancelled[0]["cancelled"])
 
     def test_player_table_shows_live_availability_and_implied_team_total(self):
         window = MainWindow()
@@ -200,7 +236,8 @@ class ResultsLearningUITests(unittest.TestCase):
         payload = finished[0]
         self.assertEqual(len(payload["lineups"]), 24)
         self.assertGreater(payload["candidate_count"], 24)
-        self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v2")
+        self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v3")
+        self.assertEqual(payload["sim_report"]["field_preset"], "150-Max")
         self.assertGreater(payload["portfolio_report"]["sim_summary"]["top_one_scenarios_covered"], 0)
         self.assertTrue(all(hasattr(lineup, "sim_scenario_values") for lineup in payload["lineups"]))
 

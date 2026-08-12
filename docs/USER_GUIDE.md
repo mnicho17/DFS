@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.6.1 | Windows desktop app
+Version 1.7.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -78,6 +78,7 @@ The **Build Strategy** tab controls how candidates are created and ranked. Avail
 - For MLB, choose stack preferences and use optional lineup, form, matchup, park, weather, and Vegas inputs.
 - Use salary strategy to discourage obviously under-cap builds without forcing every lineup to spend the full cap.
 - For NFL Classic, enable **NFL SIM Edge** for correlated scenario and field evaluation.
+- For NFL Classic, choose the contest entry-limit preset: **Single Entry**, **3-Max**, **20-Max**, or **150-Max**. This changes the opponent field size, salary floor, ownership emphasis, stack mix, bring-back rate, and FLEX mix used by the SIM.
 
 Start with moderate settings. Combine only rules you can explain and review.
 
@@ -116,6 +117,8 @@ Large candidate pools, NFL simulation, and restrictive portfolio rules take more
 
 NFL SIM Edge is for NFL Classic tournament decisions. The app builds a representative opponent field, simulates correlated game and player outcomes, ranks candidates against that same field, and then selects a portfolio that covers different strong scenarios.
 
+Choose the preset that matches the contest's maximum entries per person. The presets are conservative starting assumptions, not promises about a particular contest. When enough complete standings have been imported for that same preset, the app can blend measured local salary, construction, and winning-ownership patterns into the baseline. The learned blend requires at least three complete fields, 1,000 field entries, and 70% player metadata coverage; otherwise the measurements remain report-only and the baseline remains active.
+
 - **SIM Edge** is a slate-relative 0-100 summary. It is useful for comparing candidates from the same build, not as a universal score across slates.
 - **Top 1%** and **Top 5%** estimate how often the lineup reached those field thresholds.
 - **Win rate** is the representative-field first-place frequency, not an exact contest promise.
@@ -146,17 +149,36 @@ Before submitting:
 
 ## 11. Results & Learning
 
-The app can compare exact exported rosters with DraftKings standings or contest-history CSV files.
+The app can compare exact exported rosters with DraftKings standings or contest-history CSV files. It can also measure the whole opponent field when the selected file contains complete standings.
 
 1. Export the lineups you actually plan to use.
 2. After the contest, download the DraftKings result CSV.
 3. Open **Results & Learning**.
 4. Choose **Import DraftKings Results** and select the file.
-5. Review the match rate, ROI, cash rate, finish percentile, projection error, and guarded breakdowns.
+5. For complete NFL standings, choose **Attach Matching Salaries** and select the DraftKings salary CSV from that exact historical slate.
+6. Review the match rate, ROI, cash rate, finish percentile, projection error, and guarded breakdowns.
 
 The app reports general outcomes and projection calibration. Starting with v1.6.1, NFL SIM exports also retain their original Edge, top-finish, cash, return, leverage, and duplication estimates. When the Results & Learning summary shows matched SIM results, the report compares predicted and actual top-one-percent, top-five-percent, and cash rates. It also checks whether Edge tracks finish percentile and whether the return index tracks net results.
 
-SIM validation is labeled directional until at least 50 matched entries. The app does not automatically tune strategy from a small sample.
+For a complete standings file, the report also measures:
+
+- actual player ownership and its error versus the saved projection;
+- field-wide and top-one-percent total ownership, including low-owned and high-owned player counts;
+- ownership bands showing field share, top-one-percent rate, and exact-duplication rate;
+- exact duplicated rosters, including duplication among top-one-percent entries;
+- salary used and the low end of normal field salary;
+- QB stack and bring-back patterns; and
+- RB, WR, and TE FLEX usage.
+
+A file is treated as a complete field only when it contains at least 25 entries and roughly 95% of the advertised contest field. Personal entry-history files still update your results, but they are not used to model opponents. To associate a complete field with a SIM preset, include **Single Entry**, **3-Max**, **20-Max**, or **150-Max** in the contest name or CSV filename. Entry labels such as `(92/150)` can also identify a 150-Max contest. Unclassified fields remain report-only.
+
+Large complete standings are summarized in the background while they are read. The Results & Learning window stays responsive, shows progress, and lets you cancel safely. The app stores the field measurements rather than creating millions of local opponent-result records. DraftKings files that omit sport and contest-name columns can still be recognized from NFL roster slots and entry-name suffixes.
+
+The matching salary file is optional, but it unlocks accurate salary, QB-stack, bring-back, and FLEX analysis when the standings file only contains names and roster slots. The app checks the player overlap first and refuses to attach a mismatched slate; at least 70% of the historical field players must match.
+
+After generating and exporting an NFL Classic SIM build for the same preset, reopen **Results & Learning** to compare the latest simulated field with the measured real field. The comparison includes duplication, salary, construction, and ownership profile differences. It is a diagnostic comparison, not proof that the real contest will repeat.
+
+SIM validation is labeled directional until at least 50 matched entries. Complete-field learning has separate, stricter guardrails. When those guardrails are met, only a small part of the measured winning-ownership profile affects candidate scoring, while salary and construction patterns are blended conservatively into the preset.
 
 ![Results and Learning report comparing predicted SIM rates with actual outcomes](images/results-learning.png)
 
