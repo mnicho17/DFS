@@ -9,12 +9,15 @@ import unittest
 
 from learning_db import (
     _extract_lineup_tokens,
+    attach_salary_csv_to_latest_field,
     generate_learning_report,
     import_historical_result_csvs,
+    load_nfl_field_calibration,
     record_export,
 )
 from nfl_simulation import SimLineup
-from optimizers import lineup_grade_for_sport
+from optimizers import MultiSportClassicOptimizer, lineup_grade_for_sport
+from test_nfl_logic import _fixture_players
 
 
 def _player(index: int, *, adjustment: float = 0.5):
@@ -105,7 +108,7 @@ class ResultsLearningTests(unittest.TestCase):
             db_path=self.db_path,
         )
 
-    def _record_sim(self):
+    def _record_sim(self, validation=None):
         return record_export(
             kind="classic",
             sport="NFL",
@@ -113,7 +116,7 @@ class ResultsLearningTests(unittest.TestCase):
             rows=[[str(10001 + i) for i in range(6)]],
             salary_cap=50000,
             export_path=os.path.join(self.temp.name, "sim-export.csv"),
-            validation={"valid": True},
+            validation=validation or {"valid": True},
             grade_func=lineup_grade_for_sport,
             app_version="test-sim",
             db_path=self.db_path,
@@ -283,6 +286,45 @@ class ResultsLearningTests(unittest.TestCase):
         self.assertIn("Performance by SIM Edge", report["text"])
         self.assertIn("directional until 50 matched entries", report["text"])
 
+    def test_report_displays_latest_real_field_vs_sim_comparison(self):
+        self._record_sim({
+            "valid": True,
+            "sim_report": {
+                "field_comparison": {
+                    "available": True,
+                    "preset": "150-Max",
+                    "report_only": True,
+                    "simulated": {
+                        "duplicate_entry_pct": 20.0,
+                        "avg_salary": 49200.0,
+                        "ownership_profile": {
+                            "avg_total_ownership": 145.0,
+                            "avg_sub_five_players": 1.0,
+                            "avg_twenty_plus_players": 2.0,
+                        },
+                    },
+                    "real": {
+                        "contests": 1,
+                        "entries": 593447,
+                        "duplicate_entry_pct": 65.67,
+                        "avg_salary": None,
+                        "ownership_profile": {
+                            "field": {
+                                "avg_total_ownership": 155.0,
+                                "avg_sub_five_players": 0.7,
+                                "avg_twenty_plus_players": 3.0,
+                            }
+                        },
+                    },
+                }
+            },
+        })
+        report = generate_learning_report(db_path=self.db_path)
+        self.assertTrue(report["latest_sim_field_comparison"]["available"])
+        self.assertIn("Real Field vs latest NFL SIM", report["text"])
+        self.assertIn("SIM 20.0% | real 65.7%", report["text"])
+        self.assertIn("report-only comparison", report["text"])
+
     def test_lineup_parser_handles_slots_suffixes_and_ids(self):
         names = _extract_lineup_tokens({
             "lineup": "QB Patrick Mahomes WR Marvin Harrison Jr. WR Amon-Ra St. Brown DST Cowboys"
@@ -293,6 +335,182 @@ class ResultsLearningTests(unittest.TestCase):
         )
         ids = _extract_lineup_tokens({"lineup": "CPT 20001 FLEX 10002 FLEX 10003"})
         self.assertEqual(ids, ["20001", "10002", "10003"])
+
+    def test_complete_field_learns_duplication_construction_and_guarded_preset(self):
+        players = _fixture_players()
+        lineups = MultiSportClassicOptimizer(
+            players,
+            sport="NFL",
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+        ).build_lineups(4)
+        export_rows = [[str(player["FlexID"]) for player in lineup] for lineup in lineups]
+        record_export(
+            kind="classic",
+            sport="NFL",
+            lineups=lineups,
+            rows=export_rows,
+            salary_cap=50000,
+            export_path=os.path.join(self.temp.name, "field-export.csv"),
+            validation={"valid": True},
+            settings={"field_preset": "150-Max"},
+            grade_func=lineup_grade_for_sport,
+            app_version="test-field",
+            db_path=self.db_path,
+        )
+        path = os.path.join(self.temp.name, "NFL Sunday 150-Max standings.csv")
+        rows = []
+        for index in range(30):
+            lineup_ids = export_rows[index % len(export_rows)]
+            rows.append({
+                "Sport": "NFL",
+                "Contest Name": "Sunday 150-Max",
+                "Entry Name": f"opponent-{index}",
+                "Entry Fee": "10",
+                "Winnings": "20" if index < 6 else "0",
+                "Points": str(180 - index),
+                "Rank": str(index + 1),
+                "Entries": "30",
+                "Places Paid": "6",
+                "Lineup": ",".join(lineup_ids),
+            })
+        _write_csv(path, rows)
+
+        imported = import_historical_result_csvs([path], db_path=self.db_path, archive_files=False)
+        self.assertEqual(imported["field_contests_analyzed"], 1)
+        self.assertEqual(imported["field_entries_analyzed"], 30)
+        self.assertEqual(imported["field_presets"], {"150-Max": 1})
+
+        conn = sqlite3.connect(self.db_path)
+        try:
+            summary = conn.execute(
+                """
+                SELECT roster_size, metadata_coverage_pct, duplicate_entry_pct,
+                       max_duplicate_count, stack_rates_json, flex_rates_json
+                FROM contest_field_summaries
+                """
+            ).fetchone()
+            self.assertEqual(summary[0], 9)
+            self.assertEqual(summary[1], 100.0)
+            self.assertEqual(summary[2], 100.0)
+            self.assertGreaterEqual(summary[3], 7)
+            self.assertAlmostEqual(sum(json.loads(summary[4]).values()), 1.0)
+            self.assertAlmostEqual(sum(json.loads(summary[5]).values()), 1.0)
+        finally:
+            conn.close()
+
+        guarded = load_nfl_field_calibration(
+            "150-Max",
+            db_path=self.db_path,
+            min_entries=25,
+            min_contests=1,
+        )
+        self.assertTrue(guarded["enabled"])
+        self.assertIn("stack_rates", guarded["field_config"])
+        report = generate_learning_report(db_path=self.db_path)
+        self.assertEqual(report["field_contests"], 1)
+        self.assertEqual(report["field_entries"], 30)
+        self.assertIn("Contest field learning", report["text"])
+        self.assertIn("Entries sharing a duplicated roster", report["text"])
+
+    def test_large_field_format_infers_nfl_and_150_max_without_row_expansion(self):
+        path = os.path.join(self.temp.name, "contest-standings-185073514.csv")
+        lineup = (
+            "DST Bengals FLEX Jameson Williams QB Patrick Mahomes RB Chase Brown "
+            "RB Javonte Williams TE Travis Kelce WR Rashee Rice WR CeeDee Lamb "
+            "WR Dontayvion Wicks"
+        )
+        with open(path, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=[
+                "Rank", "EntryId", "EntryName", "TimeRemaining", "Points", "Lineup", "",
+                "Player", "Roster Position", "%Drafted", "FPTS",
+            ])
+            writer.writeheader()
+            source_players = [
+                "Bengals", "Jameson Williams", "Patrick Mahomes", "Chase Brown",
+                "Javonte Williams", "Travis Kelce", "Rashee Rice", "CeeDee Lamb",
+                "Dontayvion Wicks",
+            ]
+            for index in range(30):
+                writer.writerow({
+                    "Rank": index + 1,
+                    "EntryId": 4900000000 + index,
+                    "EntryName": f"field-player ({index + 1}/150)",
+                    "TimeRemaining": 0,
+                    "Points": 200 - index,
+                    "Lineup": lineup,
+                    "Player": source_players[index] if index < len(source_players) else "",
+                    "Roster Position": "FLEX" if index < len(source_players) else "",
+                    "%Drafted": "100.00%" if index < len(source_players) else "",
+                    "FPTS": "10" if index < len(source_players) else "",
+                })
+
+        imported = import_historical_result_csvs([path], db_path=self.db_path, archive_files=False)
+        repeated = import_historical_result_csvs([path], db_path=self.db_path, archive_files=False)
+        self.assertEqual(imported["field_only_files"], 1)
+        self.assertEqual(imported["field_entries_analyzed"], 30)
+        self.assertEqual(imported["field_presets"], {"150-Max": 1})
+        self.assertEqual(imported["sports"], {"NFL": 30})
+        self.assertEqual(repeated["duplicates_skipped"], 1)
+        conn = sqlite3.connect(self.db_path)
+        try:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM historical_results").fetchone()[0], 0)
+            summary = conn.execute(
+                "SELECT sport, field_preset, roster_size, max_duplicate_count, ownership_profile_json FROM contest_field_summaries"
+            ).fetchone()
+            self.assertEqual(summary[:4], ("NFL", "150-Max", 9, 30))
+            profile = json.loads(summary[4])
+            self.assertEqual(profile["ownership_coverage_pct"], 100.0)
+            self.assertEqual(profile["field"]["avg_total_ownership"], 900.0)
+            self.assertEqual(profile["top_one"]["avg_total_ownership"], 900.0)
+            self.assertEqual(profile["buckets"]["280+"]["duplicate_pct"], 100.0)
+        finally:
+            conn.close()
+
+        calibration = load_nfl_field_calibration("150-Max", db_path=self.db_path)
+        self.assertFalse(calibration["enabled"])
+        self.assertEqual(calibration["reference"]["duplicate_entry_pct"], 100.0)
+        self.assertEqual(
+            calibration["reference"]["ownership_profile"]["field"]["avg_total_ownership"],
+            900.0,
+        )
+
+        salary_path = os.path.join(self.temp.name, "matching-salaries.csv")
+        salary_rows = [
+            ("DST", "Bengals", "CIN", 3000, "CIN@BAL"),
+            ("WR", "Jameson Williams", "DET", 5000, "KC@DET"),
+            ("QB", "Patrick Mahomes", "KC", 7000, "KC@DET"),
+            ("RB", "Chase Brown", "CIN", 6000, "CIN@BAL"),
+            ("RB", "Javonte Williams", "DEN", 6000, "DEN@LV"),
+            ("TE", "Travis Kelce", "KC", 5000, "KC@DET"),
+            ("WR", "Rashee Rice", "KC", 5000, "KC@DET"),
+            ("WR", "CeeDee Lamb", "DAL", 5000, "DAL@PHI"),
+            ("WR", "Dontayvion Wicks", "GB", 5000, "GB@CHI"),
+        ]
+        with open(salary_path, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=[
+                "Position", "Name + ID", "Name", "ID", "Roster Position",
+                "Salary", "Game Info", "TeamAbbrev", "AvgPointsPerGame", "Status",
+            ])
+            writer.writeheader()
+            for index, (position, name, team, salary, game) in enumerate(salary_rows, start=1):
+                writer.writerow({
+                    "Position": position, "Name + ID": f"{name} ({80000 + index})",
+                    "Name": name, "ID": str(80000 + index),
+                    "Roster Position": position if position in {"QB", "DST"} else f"{position}/FLEX",
+                    "Salary": salary, "Game Info": f"{game} 09/01/2024 01:00PM ET",
+                    "TeamAbbrev": team, "AvgPointsPerGame": 10, "Status": "",
+                })
+        attached = attach_salary_csv_to_latest_field(
+            salary_path, db_path=self.db_path
+        )
+        self.assertTrue(attached["attached"])
+        self.assertEqual(attached["match_pct"], 100.0)
+        self.assertEqual(attached["metadata_coverage_pct"], 100.0)
+        self.assertEqual(attached["avg_salary"], 47000.0)
+        self.assertEqual(attached["stack_rates"]["2"], 1.0)
+        self.assertEqual(attached["bringback_rates"]["2_plus"], 1.0)
+        self.assertEqual(attached["flex_rates"]["WR"], 1.0)
 
 
 if __name__ == "__main__":

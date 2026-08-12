@@ -45,6 +45,31 @@ Open **Portfolio Summary** and read the generation warning. The available player
 
 Results & Learning matches exact rosters previously exported by the app. A row may remain unmatched if the submitted lineup was edited after export, the result file omits its lineup, or its player names/IDs cannot be parsed.
 
+## A standings file did not count as a complete field
+
+- The file must contain at least 25 entry rows and about 95% of the advertised contest field.
+- A personal contest-history file can update your own outcomes without representing the opponent field.
+- Put **Single Entry**, **3-Max**, **20-Max**, or **150-Max** in the contest name or CSV filename if you want the field associated with that SIM preset.
+- Learned preset tuning also needs three complete fields, 1,000 entries, and at least 70% player metadata coverage. Until then, the selected baseline preset remains active.
+
+## A large standings import looks slow
+
+- Complete contests can contain hundreds of thousands of entry rows and may take about a minute to inspect and summarize.
+- Results & Learning remains usable enough to show progress while the import runs. Choose **Cancel Import** to stop after the current batch; a partially read file is not saved.
+- The app saves compact field summaries instead of a local record for every opponent entry.
+
+## Matching salaries were not attached
+
+- Select the DraftKings salary CSV from the exact historical slate represented by the latest imported complete NFL field.
+- The app requires at least 70% of field players to match before replacing the field summary with salary and construction details.
+- A rejected or cancelled attachment leaves the existing field summary unchanged.
+
+## Real Field vs latest NFL SIM is missing
+
+- Import a complete NFL Classic field associated with a named preset.
+- Generate and export an NFL Classic SIM build using that same preset.
+- Reopen or refresh Results & Learning. The comparison is report-only until the complete-field learning guardrails are satisfied.
+
 ## Where local data is stored
 
 Choose **Results & Learning**, then **Open Local History Folder**. Exports, imported results, and slate snapshots remain on the computer.

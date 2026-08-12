@@ -6,6 +6,7 @@ from nfl_simulation import (
     lineup_signature,
     build_nfl_role_pool,
     generate_nfl_field_lineups,
+    nfl_field_preset,
     simulate_nfl_contest,
     simulate_nfl_field_ownership,
 )
@@ -80,7 +81,7 @@ class NFLSimulationTests(unittest.TestCase):
         self.assertTrue(all("sim_top_five_pct" in lineup.sim_metrics for lineup in lineups))
         self.assertTrue(all("sim_bust_rate" in lineup.sim_metrics for lineup in lineups))
         self.assertTrue(all(lineup.sim_top_hits.issubset(lineup.sim_top_five_hits) for lineup in lineups))
-        self.assertEqual(result["report"]["model"], "scenario-portfolio-v2")
+        self.assertEqual(result["report"]["model"], "scenario-portfolio-v3")
 
         grade = lineup_grade_for_sport(lineups[0], "NFL", 50000)
         self.assertAlmostEqual(grade["score"], lineups[0].sim_metrics["sim_edge"])
@@ -112,6 +113,92 @@ class NFLSimulationTests(unittest.TestCase):
             ]
 
         self.assertEqual(snapshot(first), snapshot(second))
+
+    def test_contest_preset_controls_field_size_and_is_reported(self):
+        players = _fixture_players()
+        candidates = MultiSportClassicOptimizer(
+            players,
+            sport="NFL",
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+        ).build_lineups(8)
+        config = nfl_field_preset("Single Entry")
+        result = simulate_nfl_contest(
+            candidates,
+            players,
+            scenarios=30,
+            field_lineup_count=60,
+            field_config=config,
+            seed=811,
+        )
+        self.assertEqual(result["report"]["field_preset"], "Single Entry")
+        self.assertEqual(result["report"]["field_size"], 5000)
+        self.assertFalse(result["report"]["learned_field_model"])
+
+    def test_real_field_reference_is_compared_without_enabling_learning(self):
+        players = _fixture_players()
+        candidates = MultiSportClassicOptimizer(players, sport="NFL").build_lineups(8)
+        config = nfl_field_preset("150-Max", {
+            "enabled": False,
+            "reference": {
+                "contests": 1,
+                "entries": 593447,
+                "duplicate_entry_pct": 65.67,
+                "ownership_profile": {
+                    "field": {
+                        "avg_total_ownership": 155.0,
+                        "avg_sub_five_players": 0.8,
+                        "avg_sub_ten_players": 2.1,
+                        "avg_twenty_plus_players": 3.0,
+                        "avg_thirty_plus_players": 1.0,
+                    }
+                },
+                "report_only": True,
+            },
+        })
+        result = simulate_nfl_contest(
+            candidates,
+            players,
+            scenarios=30,
+            field_lineup_count=60,
+            field_config=config,
+            seed=812,
+        )
+        comparison = result["report"]["field_comparison"]
+        self.assertTrue(comparison["available"])
+        self.assertTrue(comparison["report_only"])
+        self.assertEqual(comparison["real"]["entries"], 593447)
+        self.assertIn("duplicate_entry_pct", comparison["differences"])
+
+    def test_guarded_learned_profile_adds_only_a_small_candidate_fit_signal(self):
+        players = _fixture_players()
+        for index, player in enumerate(players):
+            player["ProjOwnPct"] = 5.0 + (index % 18)
+        candidates = MultiSportClassicOptimizer(players, sport="NFL").build_lineups(8)
+        config = nfl_field_preset("150-Max", {
+            "enabled": True,
+            "entries": 3000,
+            "contests": 3,
+            "field_config": {
+                "winning_ownership_profile": {
+                    "lineups": 100,
+                    "avg_total_ownership": 150.0,
+                    "avg_sub_five_players": 1.0,
+                    "avg_sub_ten_players": 2.0,
+                    "avg_twenty_plus_players": 3.0,
+                    "avg_thirty_plus_players": 1.0,
+                }
+            },
+        })
+        result = simulate_nfl_contest(
+            candidates, players, scenarios=30, field_lineup_count=60,
+            field_config=config, seed=813,
+        )
+        self.assertTrue(result["report"]["learned_field_model"])
+        self.assertTrue(all(
+            lineup.sim_metrics.get("learned_profile_fit") is not None
+            for lineup in result["lineups"]
+        ))
 
 
 if __name__ == "__main__":

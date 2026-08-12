@@ -20,6 +20,78 @@ ROLE_LIMITS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
 POSITION_CV = {"QB": 0.32, "RB": 0.55, "WR": 0.65, "TE": 0.70, "DST": 0.80}
 
 
+# These are conservative starting assumptions, not claims about every contest.
+# Results & Learning can blend sufficiently large local contest samples into a
+# selected preset without replacing these guardrailed baselines.
+NFL_FIELD_PRESETS: Dict[str, Dict[str, Any]] = {
+    "Single Entry": {
+        "field_size": 5000,
+        "min_salary_pct": 0.980,
+        "ownership_exponent": 0.70,
+        "flex_rates": {"RB": 0.49, "WR": 0.40, "TE": 0.11},
+        "stack_rates": {"0": 0.06, "1": 0.78, "2": 0.13, "3": 0.03},
+        "bringback_rates": {"0": 0.10, "1": 0.38, "2_plus": 0.52},
+    },
+    "3-Max": {
+        "field_size": 15000,
+        "min_salary_pct": 0.975,
+        "ownership_exponent": 0.64,
+        "flex_rates": {"RB": 0.48, "WR": 0.41, "TE": 0.11},
+        "stack_rates": {"0": 0.08, "1": 0.76, "2": 0.13, "3": 0.03},
+        "bringback_rates": {"0": 0.10, "1": 0.40, "2_plus": 0.54},
+    },
+    "20-Max": {
+        "field_size": 50000,
+        "min_salary_pct": 0.960,
+        "ownership_exponent": 0.56,
+        "flex_rates": {"RB": 0.47, "WR": 0.42, "TE": 0.11},
+        "stack_rates": {"0": 0.09, "1": 0.74, "2": 0.13, "3": 0.04},
+        "bringback_rates": {"0": 0.11, "1": 0.42, "2_plus": 0.57},
+    },
+    "150-Max": {
+        "field_size": 100000,
+        "min_salary_pct": 0.940,
+        "ownership_exponent": 0.48,
+        "flex_rates": {"RB": 0.46, "WR": 0.42, "TE": 0.12},
+        "stack_rates": {"0": 0.10, "1": 0.727, "2": 0.13, "3": 0.043},
+        "bringback_rates": {"0": 0.12, "1": 0.42, "2_plus": 0.58},
+    },
+}
+
+
+def nfl_field_preset(
+    name: str = "150-Max",
+    learned: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Return a detached, normalized contest-field configuration."""
+    selected = name if name in NFL_FIELD_PRESETS else "150-Max"
+    config = {
+        key: (dict(value) if isinstance(value, dict) else value)
+        for key, value in NFL_FIELD_PRESETS[selected].items()
+    }
+    config["name"] = selected
+    reference = dict((learned or {}).get("reference") or {})
+    if reference:
+        config["real_field_reference"] = reference
+    learned_config = dict((learned or {}).get("field_config") or {})
+    if (learned or {}).get("enabled") and learned_config:
+        for key in ("min_salary_pct", "ownership_exponent", "field_size"):
+            if key in learned_config:
+                config[key] = learned_config[key]
+        for key in (
+            "flex_rates", "stack_rates", "bringback_rates",
+            "field_ownership_profile", "winning_ownership_profile",
+        ):
+            if isinstance(learned_config.get(key), dict):
+                config[key] = dict(learned_config[key])
+        config["learned"] = True
+        config["learned_entries"] = int((learned or {}).get("entries", 0) or 0)
+        config["learned_contests"] = int((learned or {}).get("contests", 0) or 0)
+    else:
+        config["learned"] = False
+    return config
+
+
 class SimLineup(list):
     """Normal lineup list carrying simulation metadata for UI/portfolio scoring."""
 
@@ -218,9 +290,17 @@ def _build_field_lineup(
     use_ownership: bool,
     precomputed_weights: Dict[int, float],
     candidate_mode: bool = False,
+    field_config: Optional[Dict[str, Any]] = None,
 ) -> Optional[List[Dict[str, Any]]]:
-    # Historical field-like FLEX mix: RB/WR dominate; TE remains uncommon.
-    flex_pos = rng.choices(["RB", "WR", "TE"], weights=[0.46, 0.42, 0.12], k=1)[0]
+    config = dict(field_config or {})
+    # Field-like FLEX mix: RB/WR dominate; TE remains uncommon. A selected
+    # contest preset (and, eventually, guarded local learning) can refine it.
+    flex_rates = dict(config.get("flex_rates") or {"RB": 0.46, "WR": 0.42, "TE": 0.12})
+    flex_pos = rng.choices(
+        ["RB", "WR", "TE"],
+        weights=[max(0.001, _number(flex_rates.get(pos), 0.0)) for pos in ("RB", "WR", "TE")],
+        k=1,
+    )[0]
     needs = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
     needs[flex_pos] += 1
     lineup: List[Dict[str, Any]] = []
@@ -272,7 +352,16 @@ def _build_field_lineup(
         # historically appear more often near the top than in the field.
         stack_target = 3 if roll < 0.077 else 2 if roll < 0.267 else 1
     else:
-        stack_target = 3 if roll < 0.043 else 2 if roll < 0.173 else 1 if roll < 0.90 else 0
+        stack_rates = dict(
+            config.get("stack_rates")
+            or {"0": 0.10, "1": 0.727, "2": 0.13, "3": 0.043}
+        )
+        stack_values = [0, 1, 2, 3]
+        stack_target = rng.choices(
+            stack_values,
+            weights=[max(0.001, _number(stack_rates.get(str(value)), 0.0)) for value in stack_values],
+            k=1,
+        )[0]
     for _ in range(stack_target):
         stack_pool = [
             player
@@ -296,7 +385,13 @@ def _build_field_lineup(
     bringback_chance = (
         (0.68 if actual_stack >= 2 else 0.52 if actual_stack == 1 else 0.12)
         if candidate_mode
-        else (0.58 if actual_stack >= 2 else 0.42 if actual_stack == 1 else 0.12)
+        else _number(
+            (config.get("bringback_rates") or {}).get(
+                "2_plus" if actual_stack >= 2 else str(actual_stack),
+                0.58 if actual_stack >= 2 else 0.42 if actual_stack == 1 else 0.12,
+            ),
+            0.0,
+        )
     )
     if _opponent(qb) and rng.random() < bringback_chance:
         bring_pool = [
@@ -356,6 +451,7 @@ def generate_nfl_field_lineups(
     cancel_callback: Optional[Callable[[], bool]] = None,
     candidate_mode: bool = False,
     unique: bool = False,
+    field_config: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[List[Dict[str, Any]]], List[Dict[str, Any]]]:
     role_pool = build_nfl_role_pool(players, preserve_locks=False)
     by_pos: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
@@ -365,7 +461,9 @@ def generate_nfl_field_lineups(
         return [], role_pool
 
     requested = max(1, int(count or 1))
-    floor = float(min_salary if min_salary is not None else max(0.0, salary_cap - 1000.0))
+    config = dict(field_config or {})
+    default_floor = salary_cap * _number(config.get("min_salary_pct"), 0.98)
+    floor = float(min_salary if min_salary is not None else max(0.0, default_floor))
     ownership_sum = sum(max(0.0, _number(player.get("ProjOwnPct"), 0.0)) for player in role_pool)
     use_ownership = ownership_sum >= 300.0
     precomputed_weights: Dict[int, float] = {}
@@ -377,7 +475,8 @@ def generate_nfl_field_lineups(
         weight = math.exp(max(-8.0, min(8.0, quality / 8.0)))
         if use_ownership:
             ownership = max(0.05, _number(player.get("ProjOwnPct"), 0.0))
-            weight *= ownership ** 0.55
+            ownership_exponent = _number(config.get("ownership_exponent"), 0.55)
+            weight *= ownership ** max(0.05, min(1.25, ownership_exponent))
         precomputed_weights[id(player)] = max(1e-9, weight)
     rng = random.Random(seed)
     lineups: List[List[Dict[str, Any]]] = []
@@ -397,6 +496,7 @@ def generate_nfl_field_lineups(
             use_ownership=use_ownership,
             precomputed_weights=precomputed_weights,
             candidate_mode=candidate_mode,
+            field_config=config,
         )
         if lineup is None:
             continue
@@ -518,6 +618,136 @@ def _quantile(values: Sequence[float], percentile: float) -> float:
     return float(ordered[index])
 
 
+def _summarize_generated_field(
+    lineups: Sequence[Sequence[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    signatures = Counter(lineup_signature(lineup) for lineup in lineups)
+    duplicated_entries = sum(count for count in signatures.values() if count > 1)
+    salaries: List[float] = []
+    stack_counts: Counter[str] = Counter()
+    bringback_trials: Counter[str] = Counter()
+    bringback_hits: Counter[str] = Counter()
+    flex_counts: Counter[str] = Counter()
+    profile = Counter()
+    ownership_slots = 0
+    total_slots = 0
+    for lineup in lineups:
+        if not lineup:
+            continue
+        salaries.append(sum(_salary(player) for player in lineup))
+        ownership = [_number(player.get("ProjOwnPct"), 0.0) for player in lineup]
+        total_slots += len(ownership)
+        ownership_slots += sum(value > 0 for value in ownership)
+        if ownership and all(value > 0 for value in ownership):
+            total = sum(ownership)
+            profile.update({
+                "lineups": 1.0,
+                "total_ownership": total,
+                "player_ownership": total / len(ownership),
+                "sub_five_players": float(sum(value < 5.0 for value in ownership)),
+                "sub_ten_players": float(sum(value < 10.0 for value in ownership)),
+                "twenty_plus_players": float(sum(value >= 20.0 for value in ownership)),
+                "thirty_plus_players": float(sum(value >= 30.0 for value in ownership)),
+            })
+        quarterbacks = [player for player in lineup if _position(player) == "QB"]
+        if len(quarterbacks) == 1:
+            qb = quarterbacks[0]
+            stack_count = sum(
+                1 for player in lineup
+                if _team(player) == _team(qb) and _position(player) in {"WR", "TE"}
+            )
+            stack_counts[str(min(3, stack_count))] += 1
+            bring_key = "2_plus" if stack_count >= 2 else str(stack_count)
+            bringback_trials[bring_key] += 1
+            if _opponent(qb) and any(
+                _team(player) == _opponent(qb) and _position(player) in {"RB", "WR", "TE"}
+                for player in lineup
+            ):
+                bringback_hits[bring_key] += 1
+        position_counts = Counter(_position(player) for player in lineup)
+        excess = {
+            "RB": position_counts["RB"] - 2,
+            "WR": position_counts["WR"] - 3,
+            "TE": position_counts["TE"] - 1,
+        }
+        flex_pos = max(excess, key=lambda pos: excess[pos])
+        if excess[flex_pos] > 0:
+            flex_counts[flex_pos] += 1
+    lineup_count = len(lineups)
+    construction_count = sum(stack_counts.values())
+    flex_total = sum(flex_counts.values())
+    profile_count = int(profile.get("lineups", 0) or 0)
+    return {
+        "entries": lineup_count,
+        "unique_lineups": len(signatures),
+        "duplicate_entry_pct": duplicated_entries / max(1, lineup_count) * 100.0,
+        "avg_salary": sum(salaries) / max(1, len(salaries)) if salaries else None,
+        "salary_p10": _quantile(salaries, 0.10) if salaries else None,
+        "stack_rates": {
+            str(value): stack_counts[str(value)] / max(1, construction_count)
+            for value in range(4)
+        },
+        "bringback_rates": {
+            key: bringback_hits[key] / max(1, bringback_trials[key])
+            for key in ("0", "1", "2_plus")
+        },
+        "flex_rates": {
+            pos: flex_counts[pos] / max(1, flex_total)
+            for pos in ("RB", "WR", "TE")
+        },
+        "ownership_profile": {
+            "lineups": profile_count,
+            "ownership_coverage_pct": ownership_slots / max(1, total_slots) * 100.0,
+            **{
+                f"avg_{key}": float(profile.get(key, 0.0)) / max(1, profile_count)
+                for key in (
+                    "total_ownership", "player_ownership", "sub_five_players",
+                    "sub_ten_players", "twenty_plus_players", "thirty_plus_players",
+                )
+            },
+        },
+    }
+
+
+def _learned_ownership_profile_fit(
+    lineup: Sequence[Dict[str, Any]],
+    target: Dict[str, Any],
+) -> Optional[float]:
+    ownership = [_number(player.get("ProjOwnPct"), 0.0) for player in lineup]
+    if not ownership or not all(value > 0 for value in ownership) or not target.get("lineups"):
+        return None
+    actual = {
+        "avg_total_ownership": sum(ownership),
+        "avg_sub_five_players": float(sum(value < 5.0 for value in ownership)),
+        "avg_sub_ten_players": float(sum(value < 10.0 for value in ownership)),
+        "avg_twenty_plus_players": float(sum(value >= 20.0 for value in ownership)),
+        "avg_thirty_plus_players": float(sum(value >= 30.0 for value in ownership)),
+    }
+    scales = {
+        "avg_total_ownership": 45.0,
+        "avg_sub_five_players": 1.5,
+        "avg_sub_ten_players": 2.0,
+        "avg_twenty_plus_players": 2.5,
+        "avg_thirty_plus_players": 2.0,
+    }
+    weights = {
+        "avg_total_ownership": 0.40,
+        "avg_sub_five_players": 0.15,
+        "avg_sub_ten_players": 0.15,
+        "avg_twenty_plus_players": 0.20,
+        "avg_thirty_plus_players": 0.10,
+    }
+    score = 0.0
+    used_weight = 0.0
+    for key, weight in weights.items():
+        if target.get(key) is None:
+            continue
+        distance = abs(actual[key] - _number(target.get(key), actual[key]))
+        score += weight * math.exp(-distance / scales[key])
+        used_weight += weight
+    return score / used_weight * 100.0 if used_weight > 0 else None
+
+
 def simulate_nfl_contest(
     candidates: Sequence[Sequence[Dict[str, Any]]],
     players: Sequence[Dict[str, Any]],
@@ -525,7 +755,8 @@ def simulate_nfl_contest(
     scenarios: int = 750,
     field_lineup_count: int = 1200,
     salary_cap: float = 50000.0,
-    field_size: int = 100000,
+    field_size: Optional[int] = None,
+    field_config: Optional[Dict[str, Any]] = None,
     seed: int = 90210,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     cancel_callback: Optional[Callable[[], bool]] = None,
@@ -534,13 +765,23 @@ def simulate_nfl_contest(
     if not candidate_lists:
         return {"lineups": [], "report": {"scenarios": 0, "field_lineups": 0}}
 
+    config = dict(field_config or {})
+    effective_field_size = int(
+        field_size
+        if field_size is not None
+        else _number(config.get("field_size"), 100000.0)
+    )
+    field_floor = max(
+        0.0,
+        salary_cap * _number(config.get("min_salary_pct"), 0.98),
+    )
     field_lineups, role_pool = generate_nfl_field_lineups(
         players,
         field_lineup_count,
         salary_cap=salary_cap,
-        min_salary=max(0.0, salary_cap - 1000.0),
         seed=seed + 1,
         cancel_callback=cancel_callback,
+        field_config=config,
     )
     if not field_lineups:
         # A tiny or heavily locked fixture can still be graded against candidates.
@@ -559,6 +800,7 @@ def simulate_nfl_contest(
         key: count / max(1, len(field_lineups)) * 100.0
         for key, count in field_appearances.items()
     }
+    generated_field_summary = _summarize_generated_field(field_lineups)
 
     scenario_count = max(1, int(scenarios or 1))
     rng = random.Random(seed)
@@ -628,13 +870,15 @@ def simulate_nfl_contest(
 
     denominator = float(max(1, completed))
     preliminary: List[Dict[str, Any]] = []
+    winning_ownership_target = dict(config.get("winning_ownership_profile") or {})
     for index, lineup in enumerate(candidate_lists):
         signature = candidate_keys[index]
         ownership_values = [max(0.05, field_ownership.get(key, 0.05)) / 100.0 for key in signature]
         log_product = sum(math.log(value) for value in ownership_values)
         salary = sum(_salary(player) for player in lineup)
-        duplication_raw = log_product + max(0.0, salary - (salary_cap - 1000.0)) / 2500.0
+        duplication_raw = log_product + max(0.0, salary - field_floor) / 2500.0
         exact_matches = field_signatures.get(signature, 0)
+        learned_profile_fit = _learned_ownership_profile_fit(lineup, winning_ownership_target)
         preliminary.append({
             "sim_win_rate": wins[index] / denominator * 100.0,
             "sim_top_one_pct": len(top_hits[index]) / denominator * 100.0,
@@ -647,7 +891,8 @@ def simulate_nfl_contest(
             "sim_return_score": return_scores[index] / denominator,
             "duplication_raw": duplication_raw,
             "field_exact_matches": exact_matches,
-            "field_duplicate_estimate": exact_matches * (float(field_size) / max(1.0, float(len(field_lineups)))),
+            "field_duplicate_estimate": exact_matches * (float(effective_field_size) / max(1.0, float(len(field_lineups)))),
+            "learned_profile_fit": learned_profile_fit,
         })
 
     top_values = [item["sim_top_one_pct"] for item in preliminary]
@@ -665,13 +910,19 @@ def simulate_nfl_contest(
         ceiling_rank = _percentile_rank(ceiling_values, metrics["sim_ceiling"])
         return_rank = _percentile_rank(return_values, metrics["sim_return_score"])
         duplicate_rank = _percentile_rank(dup_values, metrics["duplication_raw"])
-        edge = 100.0 * (
+        base_edge = (
             0.32 * top_rank
             + 0.12 * win_rank
             + 0.16 * top_five_rank
             + 0.15 * ceiling_rank
             + 0.15 * return_rank
             + 0.10 * (1.0 - duplicate_rank)
+        )
+        learned_fit = metrics.get("learned_profile_fit")
+        edge = 100.0 * (
+            0.95 * base_edge + 0.05 * (_number(learned_fit, 0.0) / 100.0)
+            if config.get("learned") and learned_fit is not None
+            else base_edge
         )
         metrics["duplicate_risk"] = duplicate_rank * 100.0
         metrics["sim_return_index"] = return_rank * 100.0
@@ -695,14 +946,42 @@ def simulate_nfl_contest(
         ),
         reverse=True,
     )
+    real_reference = dict(config.get("real_field_reference") or {})
+    field_comparison: Dict[str, Any] = {
+        "available": bool(real_reference),
+        "preset": str(config.get("name") or "Custom"),
+        "simulated": generated_field_summary,
+        "real": real_reference,
+        "report_only": not bool(config.get("learned")),
+    }
+    if real_reference:
+        real_profile = dict((real_reference.get("ownership_profile") or {}).get("field") or {})
+        sim_profile = dict(generated_field_summary.get("ownership_profile") or {})
+        differences: Dict[str, float] = {}
+        if real_reference.get("duplicate_entry_pct") is not None:
+            differences["duplicate_entry_pct"] = (
+                _number(generated_field_summary.get("duplicate_entry_pct"), 0.0)
+                - _number(real_reference.get("duplicate_entry_pct"), 0.0)
+            )
+        for key in (
+            "avg_total_ownership", "avg_sub_five_players", "avg_sub_ten_players",
+            "avg_twenty_plus_players", "avg_thirty_plus_players",
+        ):
+            if real_profile.get(key) is not None and sim_profile.get(key) is not None:
+                differences[key] = _number(sim_profile.get(key), 0.0) - _number(real_profile.get(key), 0.0)
+        field_comparison["differences"] = differences
     return {
         "lineups": wrapped,
         "report": {
             "scenarios": completed,
             "field_lineups": len(field_lineups),
-            "field_size": int(field_size),
+            "field_size": effective_field_size,
             "role_pool_size": len(role_pool),
             "candidate_count": len(wrapped),
-            "model": "scenario-portfolio-v2",
+            "field_preset": str(config.get("name") or "Custom"),
+            "learned_field_model": bool(config.get("learned")),
+            "learned_entries": int(config.get("learned_entries", 0) or 0),
+            "field_comparison": field_comparison,
+            "model": "scenario-portfolio-v3",
         },
     }

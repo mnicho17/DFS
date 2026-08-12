@@ -45,8 +45,9 @@ On Windows, `Launch_DFS.bat` also starts the app after its dependencies have bee
 1. Save the lineups you plan to enter, then choose **Export Saved CSV** on the Showdown or Classic tab.
 2. After the contest, download the DraftKings contest standings or contest-history CSV.
 3. Open **Results & Learning** and choose **Import DraftKings Results**.
+4. For complete NFL standings, choose **Attach Matching Salaries** and select the salary CSV from the same historical slate.
 
-The app matches result rosters to exact lineups it previously exported. The report includes net return, ROI, cash rate, finish percentile, projection error, and guarded breakdowns by salary use, ownership, construction, and context adjustment. Small samples are clearly labeled and are not used to automatically change optimizer strategy.
+The app matches result rosters to exact lineups it previously exported. The report includes net return, ROI, cash rate, finish percentile, projection error, and guarded breakdowns by salary use, ownership, construction, and context adjustment. Complete standings can also measure actual and winning ownership profiles, exact duplication, salary use, QB stacks, bring-backs, and FLEX patterns. Large fields import in the background with progress and cancellation. Personal entry history is never mistaken for a complete opponent field.
 
 Export history and imported results stay on the computer. They are stored in the app's local `history` folder and are not uploaded to this repository.
 
@@ -67,6 +68,7 @@ The app generates a larger candidate pool and selects a compliant portfolio from
 
 NFL Classic builds can use the **NFL SIM Edge** option. The app first removes inactive and low-depth players from the automatic field pool while preserving manual locks. It then:
 
+- applies a **Single Entry**, **3-Max**, **20-Max**, or **150-Max** opponent-field preset;
 - creates only complete, near-cap field lineups with realistic QB-stack, bring-back, and FLEX construction;
 - simulates correlated game, team, passing, rushing, and player outcomes;
 - ranks every candidate against the same representative field in each scenario; and
@@ -74,7 +76,7 @@ NFL Classic builds can use the **NFL SIM Edge** option. The app first removes in
 
 The Classic results table shows slate-relative SIM Edge and top-one-percent rate. Its tooltip also includes top-five-percent rate, representative win rate, cash and bust rates, average percentile, simulated ceiling, tournament return index, leverage, duplication risk, scenario count, and representative field size. These metrics are decision aids based on the loaded projections and assumptions, not guarantees of contest results.
 
-When an NFL SIM lineup is exported, Results & Learning retains those original estimates. Imported DraftKings results can then compare predicted and actual top-one-percent, top-five-percent, and cash rates, plus the relationship between SIM Edge and finish percentile. SIM analysis remains directional until at least 50 results are matched and never changes strategy automatically from a small sample.
+When an NFL SIM lineup is exported, Results & Learning retains those original estimates. Imported DraftKings results can then compare predicted and actual top-one-percent, top-five-percent, and cash rates, plus the relationship between SIM Edge and finish percentile. Complete fields can also be compared directly with the latest representative NFL SIM field for the same preset. After three complete fields, 1,000 entries, and 70% metadata coverage for a named preset, a guarded blend can refine its salary, construction, and winning-ownership assumptions. Small samples remain report-only.
 
 ## NFL Game-Day Check and Vegas lines
 

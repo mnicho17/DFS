@@ -387,6 +387,8 @@ class LineupBuildWorker(QtCore.QObject):
         portfolio_rules: Optional[Dict[str, Any]] = None,
         sim_enabled: bool = False,
         sim_scenarios: int = 750,
+        field_preset: str = "150-Max",
+        field_calibration: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
         self.players = players
@@ -402,6 +404,8 @@ class LineupBuildWorker(QtCore.QObject):
         self.portfolio_rules = dict(portfolio_rules or {})
         self.sim_enabled = bool(sim_enabled)
         self.sim_scenarios = max(100, int(sim_scenarios or 750))
+        self.field_preset = field_preset or "150-Max"
+        self.field_calibration = dict(field_calibration or {})
         self._cancel_event = threading.Event()
 
     def request_cancel(self) -> None:
@@ -512,6 +516,7 @@ class LineupBuildWorker(QtCore.QObject):
                 )
             sim_report: Dict[str, Any] = {}
             if use_nfl_sim and lineups and not self._cancel_event.is_set():
+                field_config = nfl_field_preset(self.field_preset, self.field_calibration)
                 strategy_l = self.salary_strategy.strip().lower()
                 has_locks = any(bool(player.get("LockFlex")) for player in build_players)
                 if not hard_portfolio_rules and not has_locks:
@@ -528,6 +533,7 @@ class LineupBuildWorker(QtCore.QObject):
                         cancel_callback=self._cancel_event.is_set,
                         candidate_mode=True,
                         unique=True,
+                        field_config=field_config,
                     )
                     unique_lineups: Dict[tuple[str, ...], List[Dict[str, Any]]] = {}
                     for lineup in list(lineups) + list(extras):
@@ -552,6 +558,7 @@ class LineupBuildWorker(QtCore.QObject):
                     salary_cap=self.salary_cap,
                     progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
                     cancel_callback=self._cancel_event.is_set,
+                    field_config=field_config,
                 )
                 lineups = sim_result.get("lineups") or lineups
                 sim_report = dict(sim_result.get("report") or {})
@@ -594,13 +601,15 @@ from mlb_auto_data import apply_auto_mlb_context
 from nfl_auto_data import apply_auto_nfl_context, configured_odds_api_key, refresh_live_nfl_data
 from learning_db import (
     archive_export_file,
+    attach_salary_csv_to_latest_field,
     generate_learning_report,
     history_folder_structure,
     import_historical_result_csvs,
+    load_nfl_field_calibration,
     record_export,
 )
 from portfolio_rules import player_key, portfolio_report, select_portfolio
-from nfl_simulation import build_nfl_role_pool, generate_nfl_field_lineups, simulate_nfl_contest, simulate_nfl_field_ownership
+from nfl_simulation import build_nfl_role_pool, generate_nfl_field_lineups, nfl_field_preset, simulate_nfl_contest, simulate_nfl_field_ownership
 
 logger = logging.getLogger("dfs.ui")
 
@@ -1013,6 +1022,60 @@ class StackExposureDialog(QtWidgets.QDialog):
         self.tbl_pitcher.resizeColumnsToContents()
 
 
+class ResultsImportWorker(QtCore.QObject):
+    """Read large standings files without blocking the desktop interface."""
+
+    progress = QtCore.pyqtSignal(int, int, str)
+    finished = QtCore.pyqtSignal(dict)
+    error = QtCore.pyqtSignal(str)
+
+    def __init__(self, paths: List[str]):
+        super().__init__()
+        self.paths = list(paths or [])
+        self._cancel_event = threading.Event()
+
+    def request_cancel(self) -> None:
+        self._cancel_event.set()
+
+    @QtCore.pyqtSlot()
+    def run(self) -> None:
+        try:
+            result = import_historical_result_csvs(
+                self.paths,
+                progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
+                cancel_callback=self._cancel_event.is_set,
+            )
+            self.finished.emit(result)
+        except Exception:
+            self.error.emit(traceback.format_exc())
+
+
+class FieldSalaryAttachWorker(QtCore.QObject):
+    progress = QtCore.pyqtSignal(int, int, str)
+    finished = QtCore.pyqtSignal(dict)
+    error = QtCore.pyqtSignal(str)
+
+    def __init__(self, salary_path: str):
+        super().__init__()
+        self.salary_path = salary_path
+        self._cancel_event = threading.Event()
+
+    def request_cancel(self) -> None:
+        self._cancel_event.set()
+
+    @QtCore.pyqtSlot()
+    def run(self) -> None:
+        try:
+            result = attach_salary_csv_to_latest_field(
+                self.salary_path,
+                progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
+                cancel_callback=self._cancel_event.is_set,
+            )
+            self.finished.emit(result)
+        except Exception:
+            self.error.emit(traceback.format_exc())
+
+
 class ResultsLearningDialog(QtWidgets.QDialog):
     """Local results import and learning report."""
 
@@ -1020,11 +1083,16 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("Results & Learning")
         self.resize(820, 700)
+        self._import_thread: Optional[QtCore.QThread] = None
+        self._import_worker: Optional[QtCore.QObject] = None
+        self._close_after_import = False
         layout = QtWidgets.QVBoxLayout(self)
 
         intro = QtWidgets.QLabel(
             "Import DraftKings contest standings or contest-history CSV files. "
-            "The app matches exact rosters to lineups exported from this app; all data stays local."
+            "The app matches exact rosters to lineups exported from this app and can summarize "
+            "complete NFL fields. Attach the matching salary file for salary and construction detail; "
+            "all data stays local."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -1040,14 +1108,22 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         layout.addWidget(self.report, 1)
 
         buttons = QtWidgets.QHBoxLayout()
-        import_button = QtWidgets.QPushButton("Import DraftKings Results")
-        import_button.setObjectName("importResultsButton")
-        import_button.clicked.connect(self.import_results)
-        buttons.addWidget(import_button)
+        self.import_button = QtWidgets.QPushButton("Import DraftKings Results")
+        self.import_button.setObjectName("importResultsButton")
+        self.import_button.clicked.connect(self.import_results)
+        buttons.addWidget(self.import_button)
 
-        refresh_button = QtWidgets.QPushButton("Refresh Report")
-        refresh_button.clicked.connect(self.refresh_report)
-        buttons.addWidget(refresh_button)
+        self.attach_salary_button = QtWidgets.QPushButton("Attach Matching Salaries")
+        self.attach_salary_button.setObjectName("attachFieldSalaryButton")
+        self.attach_salary_button.setToolTip(
+            "Attach the DraftKings salary CSV from the same historical slate to the latest complete NFL field."
+        )
+        self.attach_salary_button.clicked.connect(self.attach_matching_salaries)
+        buttons.addWidget(self.attach_salary_button)
+
+        self.refresh_button = QtWidgets.QPushButton("Refresh Report")
+        self.refresh_button.clicked.connect(self.refresh_report)
+        buttons.addWidget(self.refresh_button)
 
         folder_button = QtWidgets.QPushButton("Open Local History Folder")
         folder_button.clicked.connect(self.open_history_folder)
@@ -1055,9 +1131,25 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         buttons.addStretch(1)
 
         close_button = QtWidgets.QPushButton("Close")
-        close_button.clicked.connect(self.accept)
+        close_button.clicked.connect(self.close)
         buttons.addWidget(close_button)
         layout.addLayout(buttons)
+
+        import_status = QtWidgets.QHBoxLayout()
+        self.import_progress = QtWidgets.QProgressBar(self)
+        self.import_progress.setObjectName("resultsImportProgress")
+        self.import_progress.setVisible(False)
+        import_status.addWidget(self.import_progress, 1)
+        self.import_cancel = QtWidgets.QPushButton("Cancel Import")
+        self.import_cancel.setObjectName("cancelResultsImportButton")
+        self.import_cancel.setVisible(False)
+        self.import_cancel.clicked.connect(self.cancel_import)
+        import_status.addWidget(self.import_cancel)
+        layout.addLayout(import_status)
+        self.import_status_label = QtWidgets.QLabel("")
+        self.import_status_label.setObjectName("resultsImportStatus")
+        self.import_status_label.setVisible(False)
+        layout.addWidget(self.import_status_label)
         self.refresh_report()
 
     def refresh_report(self) -> None:
@@ -1069,6 +1161,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
                 f"{int(payload.get('exported_lineups', 0)):,} exported lineups  |  "
                 f"{int(payload.get('matched_rows', 0)):,} matched results  |  "
                 f"{int(payload.get('sim_matched_rows', 0)):,} SIM results  |  "
+                f"{int(payload.get('field_entries', 0)):,} field entries  |  "
                 f"{float(payload.get('match_rate', 0.0)):.1f}% match rate  |  {roi_text}"
             )
             self.report.setPlainText(str(payload.get("text", "")))
@@ -1078,6 +1171,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.report.setPlainText(str(exc))
 
     def import_results(self) -> None:
+        if self._import_thread is not None and self._import_thread.isRunning():
+            return
         paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
             self,
             "Select DraftKings Result CSV Files",
@@ -1086,23 +1181,150 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         )
         if not paths:
             return
-        try:
-            result = import_historical_result_csvs(paths)
-            self.refresh_report()
+        self.import_button.setEnabled(False)
+        self.attach_salary_button.setEnabled(False)
+        self.refresh_button.setEnabled(False)
+        self.import_progress.setRange(0, 0)
+        self.import_progress.setVisible(True)
+        self.import_cancel.setEnabled(True)
+        self.import_cancel.setVisible(True)
+        self.import_status_label.setText("Inspecting selected DraftKings files...")
+        self.import_status_label.setVisible(True)
+
+        self._start_background_import(
+            ResultsImportWorker(paths),
+            self._on_import_finished,
+        )
+
+    def _start_background_import(self, worker: QtCore.QObject, finished_slot: Any) -> None:
+        self._import_thread = QtCore.QThread(self)
+        self._import_worker = worker
+        self._import_worker.moveToThread(self._import_thread)
+        self._import_thread.started.connect(self._import_worker.run)
+        self._import_worker.progress.connect(self._on_import_progress)
+        self._import_worker.finished.connect(finished_slot)
+        self._import_worker.error.connect(self._on_import_error)
+        self._import_worker.finished.connect(self._import_thread.quit)
+        self._import_worker.error.connect(self._import_thread.quit)
+        self._import_worker.finished.connect(self._import_worker.deleteLater)
+        self._import_worker.error.connect(self._import_worker.deleteLater)
+        self._import_thread.finished.connect(self._on_import_thread_finished)
+        self._import_thread.finished.connect(self._import_thread.deleteLater)
+        self._import_thread.start()
+
+    def attach_matching_salaries(self) -> None:
+        if self._import_thread is not None and self._import_thread.isRunning():
+            return
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select Matching DraftKings Salary CSV",
+            "",
+            "CSV Files (*.csv)",
+        )
+        if not path:
+            return
+        self.import_button.setEnabled(False)
+        self.attach_salary_button.setEnabled(False)
+        self.refresh_button.setEnabled(False)
+        self.import_progress.setRange(0, 0)
+        self.import_progress.setVisible(True)
+        self.import_cancel.setEnabled(True)
+        self.import_cancel.setVisible(True)
+        self.import_status_label.setText("Checking salary-file slate match...")
+        self.import_status_label.setVisible(True)
+        self._start_background_import(
+            FieldSalaryAttachWorker(path),
+            self._on_salary_attach_finished,
+        )
+
+    def _on_import_progress(self, done: int, total: int, text: str) -> None:
+        if total > 0:
+            self.import_progress.setRange(0, total)
+            self.import_progress.setValue(min(done, total))
+        else:
+            self.import_progress.setRange(0, 0)
+        self.import_status_label.setText(text)
+
+    def cancel_import(self) -> None:
+        if self._import_worker is not None:
+            self._import_worker.request_cancel()
+            self.import_cancel.setEnabled(False)
+            self.import_status_label.setText("Cancelling after the current batch...")
+
+    def _finish_import_ui(self) -> None:
+        self.import_button.setEnabled(True)
+        self.attach_salary_button.setEnabled(True)
+        self.refresh_button.setEnabled(True)
+        self.import_progress.setVisible(False)
+        self.import_cancel.setVisible(False)
+        self.import_status_label.setVisible(False)
+
+    def _on_salary_attach_finished(self, result: Dict[str, Any]) -> None:
+        self._finish_import_ui()
+        self.refresh_report()
+        title = "Salary Attachment Cancelled" if result.get("cancelled") else (
+            "Salaries Attached" if result.get("attached") else "Salary File Not Attached"
+        )
+        QtWidgets.QMessageBox.information(
+            self,
+            title,
+            str(result.get("message") or "Salary attachment finished."),
+        )
+
+    def _on_import_finished(self, result: Dict[str, Any]) -> None:
+        self._finish_import_ui()
+        self.refresh_report()
+        if result.get("cancelled"):
+            QtWidgets.QMessageBox.information(
+                self, "Import Cancelled",
+                f"Import cancelled. Completed files: {int(result.get('files_imported', 0)):,}.",
+            )
+        else:
             message = (
-                f"Imported {int(result.get('rows_imported', 0)):,} result entries from "
+                f"Imported {int(result.get('rows_imported', 0)):,} rows from "
                 f"{int(result.get('files_imported', 0)):,} file(s).\n\n"
                 f"Exact lineup matches: {int(result.get('matched_rows', 0)):,}\n"
-                f"Unmatched entries: {int(result.get('unmatched_rows', 0)):,}"
+                f"Unmatched personal entries: {int(result.get('unmatched_rows', 0)):,}\n"
+                f"Complete fields analyzed: {int(result.get('field_contests_analyzed', 0)):,} "
+                f"({int(result.get('field_entries_analyzed', 0)):,} valid lineups)"
             )
             if int(result.get("duplicates_skipped", 0)):
                 message += f"\nAlready imported files skipped: {int(result.get('duplicates_skipped', 0)):,}"
+            if int(result.get("field_only_files", 0)):
+                message += (
+                    "\n\nComplete standings were summarized as opponent-field data without "
+                    "creating a result record for every opponent entry. Import personal contest "
+                    "history separately when you want exact results matched to your exports."
+                )
             if result.get("errors"):
                 message += "\n\nSome files could not be imported:\n" + "\n".join(result["errors"])
             QtWidgets.QMessageBox.information(self, "Results Imported", message)
-        except Exception as exc:
-            logger.exception("Results import failed")
-            QtWidgets.QMessageBox.critical(self, "Results Import Error", str(exc))
+
+    def _on_import_error(self, message: str) -> None:
+        self._finish_import_ui()
+        logger.error("Results import failed:\n%s", message)
+        QtWidgets.QMessageBox.critical(self, "Results Import Error", message)
+
+    def _on_import_thread_finished(self) -> None:
+        self._import_thread = None
+        self._import_worker = None
+        if self._close_after_import:
+            QtCore.QTimer.singleShot(0, self.accept)
+
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        if self._import_thread is not None and self._import_thread.isRunning():
+            self._close_after_import = True
+            self.cancel_import()
+            event.ignore()
+            return
+        super().closeEvent(event)
+
+    def reject(self) -> None:
+        if self._import_thread is not None and self._import_thread.isRunning():
+            self._close_after_import = True
+            self.cancel_import()
+            return
+        super().reject()
 
     def open_history_folder(self) -> None:
         folder = history_folder_structure()["history"]
@@ -1166,6 +1388,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.saved_classic: List[List[Dict[str, Any]]] = []
         self.portfolio_groups: List[Dict[str, Any]] = []
         self.last_portfolio_report: Dict[str, Any] = {}
+        self.last_sim_report: Dict[str, Any] = {}
         self.last_live_check_summary: Dict[str, Any] = {}
         self._last_live_check_epoch = 0.0
         self.app_settings = QtCore.QSettings("DFS Optimizer", "DFS Optimizer")
@@ -1342,6 +1565,18 @@ class MainWindow(QtWidgets.QMainWindow):
             "More scenarios stabilize SIM Edge estimates but take longer. 750 is the desktop default."
         )
         row2.addWidget(self.spin_nfl_sim_scenarios)
+
+        self.lbl_field_preset = QtWidgets.QLabel("Contest preset")
+        self.combo_field_preset = QtWidgets.QComboBox()
+        self.combo_field_preset.setObjectName("nflFieldPreset")
+        self.combo_field_preset.addItems(["Single Entry", "3-Max", "20-Max", "150-Max"])
+        self.combo_field_preset.setCurrentText("150-Max")
+        self.combo_field_preset.setToolTip(
+            "Shapes the simulated opponent field for the contest's entry limit.\n"
+            "Complete imported standings can refine this preset after the learning guardrails are met."
+        )
+        row2.addWidget(self.lbl_field_preset)
+        row2.addWidget(self.combo_field_preset)
 
         row2.addStretch(1)
         top_box.addLayout(row2)
@@ -1593,11 +1828,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lbl_mlb_stack_pref = QtWidgets.QLabel("MLB stack")
         strategy_grid.addWidget(self.lbl_mlb_stack_pref, 3, 0)
         strategy_grid.addWidget(self.combo_mlb_stack_pref, 3, 1)
-        strategy_grid.addWidget(self.chk_nfl_contest_sim, 3, 2)
+        strategy_grid.addWidget(self.lbl_field_preset, 3, 2)
+        strategy_grid.addWidget(self.combo_field_preset, 3, 3)
+        strategy_grid.addWidget(self.chk_nfl_contest_sim, 3, 4)
         self.lbl_nfl_scenarios = QtWidgets.QLabel("Scenarios")
-        strategy_grid.addWidget(self.lbl_nfl_scenarios, 3, 3)
-        strategy_grid.addWidget(self.spin_nfl_sim_scenarios, 3, 4)
-        strategy_grid.setColumnStretch(5, 1)
+        strategy_grid.addWidget(self.lbl_nfl_scenarios, 3, 5)
+        strategy_grid.addWidget(self.spin_nfl_sim_scenarios, 3, 6)
+        strategy_grid.setColumnStretch(7, 1)
         self.tabs_workspace_controls.addTab(strategy_panel, "Build Strategy")
 
         portfolio_panel = QtWidgets.QWidget(self)
@@ -2036,6 +2273,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.chk_nfl_contest_sim.setVisible(is_nfl_classic)
             self.lbl_nfl_scenarios.setVisible(is_nfl_classic)
             self.spin_nfl_sim_scenarios.setVisible(is_nfl_classic)
+            self.lbl_field_preset.setVisible(is_nfl_classic)
+            self.combo_field_preset.setVisible(is_nfl_classic)
         if hasattr(self, "chk_sd_template_sim"):
             self.chk_sd_template_sim.setVisible(is_showdown)
 
@@ -3497,8 +3736,16 @@ class MainWindow(QtWidgets.QMainWindow):
         salary_strategy = salary_strategy_widget.currentText() if salary_strategy_widget is not None else "Near Cap"
         sim_checkbox = getattr(self, "chk_nfl_contest_sim", None)
         sim_spin = getattr(self, "spin_nfl_sim_scenarios", None)
+        field_preset_widget = getattr(self, "combo_field_preset", None)
         sim_enabled = bool(sim_checkbox.isChecked()) if sim_checkbox is not None else True
         sim_scenarios = int(sim_spin.value()) if sim_spin is not None else 750
+        field_preset = field_preset_widget.currentText() if field_preset_widget is not None else "150-Max"
+        field_calibration: Dict[str, Any] = {}
+        if str(sport or "").strip().upper() == "NFL" and kind != "showdown" and sim_enabled:
+            try:
+                field_calibration = load_nfl_field_calibration(field_preset)
+            except Exception:
+                logger.exception("NFL field calibration could not be loaded; using baseline preset")
 
         label_sport = sport if kind != "showdown" else "Showdown"
         self._build_progress.setRange(0, num)
@@ -3525,6 +3772,8 @@ class MainWindow(QtWidgets.QMainWindow):
             portfolio_rules=self._portfolio_rules(),
             sim_enabled=sim_enabled,
             sim_scenarios=sim_scenarios,
+            field_preset=field_preset,
+            field_calibration=field_calibration,
         )
         self._build_worker.moveToThread(self._build_thread)
 
@@ -3760,6 +4009,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.last_sim_report = dict(payload.get("sim_report") or {})
             warning_count = len(self.last_portfolio_report.get("warnings") or [])
             portfolio_note = f" Portfolio warnings: {warning_count}." if warning_count else " Portfolio rules satisfied."
+            comparison_note = ""
+            field_comparison = dict(self.last_sim_report.get("field_comparison") or {})
+            if field_comparison.get("available"):
+                simulated = dict(field_comparison.get("simulated") or {})
+                real = dict(field_comparison.get("real") or {})
+                comparison_note = (
+                    f" Field check: SIM duplication {float(simulated.get('duplicate_entry_pct', 0.0)):.1f}% "
+                    f"vs real {float(real.get('duplicate_entry_pct', 0.0)):.1f}%"
+                    + (" (report-only)." if field_comparison.get("report_only") else " (learned blend active).")
+                )
 
             if kind == "showdown":
                 self._populate_showdown_lineups(lineups)
@@ -3769,7 +4028,7 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self._populate_classic_lineups(lineups, sport)
                 built = len(self.last_classic)
-                self.status.showMessage(f"Built {built} of {requested} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}", 9000)
+                self.status.showMessage(f"Built {built} of {requested} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}{comparison_note}", 12000)
         finally:
             self._finish_lineup_build_ui()
 
@@ -4064,6 +4323,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "own_weight": self.spin_build_own_weight.value(),
                 "mlb_stack_pref": self.combo_mlb_stack_pref.currentText(),
                 "salary_strategy": self.combo_salary_strategy.currentText(),
+                "field_preset": self.combo_field_preset.currentText(),
                 "portfolio_rules": self._portfolio_rules(),
             }
             validation = {
@@ -4071,6 +4331,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 "complete_lineups": len(rows),
                 "expected_slots": expected,
             }
+            if kind_l == "classic" and sport == "NFL" and self.last_sim_report:
+                validation["sim_report"] = self.last_sim_report
             saved = record_export(
                 kind=kind_l,
                 sport=sport,
