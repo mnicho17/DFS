@@ -1632,6 +1632,9 @@ def lineup_grade_for_sport(lineup: List[Dict[str, Any]], sport: str, salary_cap:
             "sim_leverage": float(sim_metrics.get("sim_leverage", 0.0) or 0.0),
             "duplicate_risk": duplicate_risk,
             "field_duplicate_estimate": float(sim_metrics.get("field_duplicate_estimate", 0.0) or 0.0),
+            "sim_edge_components": dict(sim_metrics.get("sim_edge_components") or {}),
+            "sim_edge_drivers": list(sim_metrics.get("sim_edge_drivers") or []),
+            "learned_profile_fit": sim_metrics.get("learned_profile_fit"),
             "sim_scenarios": int(sim_metrics.get("sim_scenarios", 0) or 0),
             "sim_field_lineups": int(sim_metrics.get("sim_field_lineups", 0) or 0),
         }

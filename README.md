@@ -91,6 +91,14 @@ The **Vegas ITT** column displays each team's implied point total rather than an
 
 NFL Showdown generation uses those same live inputs without applying the Classic low-depth pool filter. Strategic Showdown builds softly favor favorite-heavy 4-2 and plausible 5-1 constructions, passing correlations in higher-total or trailing-team scripts, and RB/K/DST combinations in lower-total favorite scripts. When a confirmed starter is unavailable, the next active depth-chart player receives a small, reversible opportunity adjustment; manual locks and exposure limits remain hard rules.
 
+## Slate Readiness
+
+**Slate Readiness** is a one-click, report-only preflight. For NFL it refreshes stale player status first, then audits roster viability, projections, ownership, locks, role certainty, news freshness, and optional Vegas context. After generation it also checks complete lineups, salary use, and how the portfolio's QB stacks, bring-backs, FLEX mix, and ownership coverage compare with the selected contest preset.
+
+Findings are separated into Pass, Review, and Block. Missing early-week odds remain a review item; hard problems such as missing positions, poor projection coverage, or a locked unavailable player are blockers. The audit never changes player settings or lineups.
+
+NFL Classic SIM tooltips include a **Why this SIM Edge** breakdown showing each component's slate percentile, direction, and model weight. Build progress identifies candidate generation, field simulation, and portfolio selection as separate phases.
+
 ## Create a release
 
 The `Windows Release` GitHub Actions workflow supports two modes:

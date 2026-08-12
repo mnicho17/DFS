@@ -415,7 +415,7 @@ class LineupBuildWorker(QtCore.QObject):
     @QtCore.pyqtSlot()
     def run(self) -> None:
         try:
-            self.progress.emit(0, self.num_lineups, "Starting lineup build")
+            self.progress.emit(0, self.num_lineups, "Phase 1 of 3 - starting lineup build")
             expanded_target = min(450, max(self.num_lineups + 30, int(math.ceil(self.num_lineups * 1.5))))
             constraints = self.portfolio_rules.get("player_constraints") or {}
 
@@ -490,7 +490,7 @@ class LineupBuildWorker(QtCore.QObject):
                     progress_callback=lambda done, total, text: self.progress.emit(
                         min(self.num_lineups, int(done * self.num_lineups / max(1, total))),
                         self.num_lineups,
-                        "Generating portfolio candidates",
+                        "Phase 1 of 3 - generating portfolio candidates",
                     ),
                     cancel_callback=self._cancel_event.is_set,
                 )
@@ -510,7 +510,7 @@ class LineupBuildWorker(QtCore.QObject):
                     progress_callback=lambda done, total, text: self.progress.emit(
                         min(self.num_lineups, int(done * self.num_lineups / max(1, total))),
                         self.num_lineups,
-                        text,
+                        f"Phase 1 of 3 - {text}",
                     ),
                     cancel_callback=self._cancel_event.is_set,
                 )
@@ -549,14 +549,14 @@ class LineupBuildWorker(QtCore.QObject):
                     if len(near_cap) >= self.num_lineups:
                         lineups = near_cap
                 field_count = max(600, min(2400, self.num_lineups * 8))
-                self.progress.emit(0, self.sim_scenarios, "Preparing NFL contest simulation")
+                self.progress.emit(0, self.sim_scenarios, "Phase 2 of 3 - preparing NFL contest simulation")
                 sim_result = simulate_nfl_contest(
                     lineups,
                     build_players,
                     scenarios=self.sim_scenarios,
                     field_lineup_count=field_count,
                     salary_cap=self.salary_cap,
-                    progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
+                    progress_callback=lambda done, total, text: self.progress.emit(done, total, f"Phase 2 of 3 - {text}"),
                     cancel_callback=self._cancel_event.is_set,
                     field_config=field_config,
                 )
@@ -566,7 +566,7 @@ class LineupBuildWorker(QtCore.QObject):
             self.progress.emit(
                 min(self.num_lineups, len(lineups)),
                 self.num_lineups,
-                "Selecting portfolio",
+                "Phase 3 of 3 - selecting portfolio",
             )
             selected = select_portfolio(
                 lineups,
@@ -577,6 +577,12 @@ class LineupBuildWorker(QtCore.QObject):
             lineups = selected["lineups"]
             if sim_report and selected["report"].get("sim_summary"):
                 sim_report["portfolio"] = dict(selected["report"]["sim_summary"])
+            if sim_report:
+                sim_report["preset_comparison"] = compare_nfl_lineups_to_preset(
+                    lineups,
+                    nfl_field_preset(self.field_preset, self.field_calibration),
+                    salary_cap=self.salary_cap,
+                )
             self.finished.emit({
                 "kind": self.kind,
                 "sport": self.sport,
@@ -609,7 +615,8 @@ from learning_db import (
     record_export,
 )
 from portfolio_rules import player_key, portfolio_report, select_portfolio
-from nfl_simulation import build_nfl_role_pool, generate_nfl_field_lineups, nfl_field_preset, simulate_nfl_contest, simulate_nfl_field_ownership
+from nfl_simulation import build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, nfl_field_preset, simulate_nfl_contest, simulate_nfl_field_ownership
+from slate_readiness import audit_slate
 
 logger = logging.getLogger("dfs.ui")
 
@@ -1374,6 +1381,88 @@ class LiveDataSettingsDialog(QtWidgets.QDialog):
         return self.api_key_edit.text().strip()
 
 
+class SlateReadinessDialog(QtWidgets.QDialog):
+    """Visual, report-only slate preflight summary."""
+
+    def __init__(self, report: Dict[str, Any], parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.report = dict(report or {})
+        self.setWindowTitle("Slate Readiness")
+        self.setModal(True)
+        self.resize(960, 560)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        status = str(self.report.get("status") or "review")
+        color = {"ready": "#8FE3A1", "review": "#FFD180", "blocked": "#FF8A80"}.get(status, "#FFD180")
+        title = QtWidgets.QLabel(
+            f"{self.report.get('title', 'Review')} - {int(self.report.get('score', 0) or 0)}/100"
+        )
+        title.setObjectName("slateReadinessTitle")
+        title.setStyleSheet(f"color: {color}; font-size: 18pt; font-weight: 700;")
+        layout.addWidget(title)
+
+        context = QtWidgets.QLabel(
+            f"{self.report.get('sport', '')} {str(self.report.get('mode', '')).title()} | "
+            f"{int(self.report.get('players', 0) or 0)} players | "
+            f"{int(self.report.get('eligible_players', 0) or 0)} eligible | "
+            f"{int(self.report.get('blockers', 0) or 0)} blockers | "
+            f"{int(self.report.get('reviews', 0) or 0)} items to review"
+        )
+        context.setWordWrap(True)
+        layout.addWidget(context)
+
+        sources = list(self.report.get("sources") or [])
+        if sources:
+            source_text = "Data confidence: " + " | ".join(
+                f"{source.get('name')} {source.get('confidence')} ({source.get('freshness')})"
+                for source in sources
+            )
+            source_label = QtWidgets.QLabel(source_text)
+            source_label.setObjectName("slateReadinessSources")
+            source_label.setWordWrap(True)
+            source_label.setStyleSheet("color: #AEB7C5;")
+            layout.addWidget(source_label)
+
+        checks = list(self.report.get("checks") or [])
+        table = QtWidgets.QTableWidget(len(checks), 4, self)
+        table.setObjectName("slateReadinessChecks")
+        table.setHorizontalHeaderLabels(["State", "Check", "Finding", "Next step"])
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setVisible(False)
+        for row, check in enumerate(checks):
+            check_status = str(check.get("status") or "review")
+            state = QtWidgets.QTableWidgetItem(check_status.upper())
+            state.setForeground(QtGui.QColor({"pass": "#8FE3A1", "review": "#FFD180", "block": "#FF8A80"}.get(check_status, "#FFD180")))
+            state.setTextAlignment(QtCore.Qt.AlignCenter)
+            table.setItem(row, 0, state)
+            table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(check.get("label") or "")))
+            table.setItem(row, 2, QtWidgets.QTableWidgetItem(str(check.get("summary") or "")))
+            table.setItem(row, 3, QtWidgets.QTableWidgetItem(str(check.get("action") or "")))
+        table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        table.resizeRowsToContents()
+        layout.addWidget(table, 1)
+
+        note = QtWidgets.QLabel(
+            "This is a report-only preflight. It does not change projections, ownership, locks, fades, or lineups."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        copy_button = buttons.addButton("Copy Report", QtWidgets.QDialogButtonBox.ActionRole)
+        copy_button.setObjectName("copySlateReadinessReport")
+        copy_button.clicked.connect(
+            lambda: QtWidgets.QApplication.clipboard().setText(str(self.report.get("text") or ""))
+        )
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1390,6 +1479,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.last_portfolio_report: Dict[str, Any] = {}
         self.last_sim_report: Dict[str, Any] = {}
         self.last_live_check_summary: Dict[str, Any] = {}
+        self.last_readiness_report: Dict[str, Any] = {}
         self._last_live_check_epoch = 0.0
         self.app_settings = QtCore.QSettings("DFS Optimizer", "DFS Optimizer")
 
@@ -1773,6 +1863,13 @@ class MainWindow(QtWidgets.QMainWindow):
         command_layout.addSpacing(8)
         command_layout.addWidget(btn_load)
         command_layout.addWidget(btn_refresh_inj)
+        self.btn_slate_readiness = QtWidgets.QPushButton("Slate Readiness")
+        self.btn_slate_readiness.setObjectName("slateReadinessButton")
+        self.btn_slate_readiness.setToolTip(
+            "Refresh stale NFL news, then audit projections, ownership, roles, Vegas context, locks, salary use, and preset fit."
+        )
+        self.btn_slate_readiness.clicked.connect(self.on_slate_readiness)
+        command_layout.addWidget(self.btn_slate_readiness)
         command_layout.addSpacing(8)
         command_layout.addWidget(QtWidgets.QLabel("Sport"))
         command_layout.addWidget(self.combo_sport)
@@ -1800,6 +1897,11 @@ class MainWindow(QtWidgets.QMainWindow):
         live_strip_layout = QtWidgets.QHBoxLayout(live_strip)
         live_strip_layout.setContentsMargins(8, 2, 8, 2)
         live_strip_layout.addWidget(self.lbl_live_data, 1)
+        self.lbl_readiness = QtWidgets.QLabel("Readiness: load a slate")
+        self.lbl_readiness.setObjectName("slateReadinessStatus")
+        self.lbl_readiness.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.lbl_readiness.setStyleSheet("color: #AEB7C5; padding: 1px 3px;")
+        live_strip_layout.addWidget(self.lbl_readiness)
         left_layout.addWidget(live_strip)
 
         # Secondary controls are grouped by intent instead of competing for
@@ -2256,6 +2358,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._apply_player_column_visibility(sport)
         self._update_sport_controls(sport)
         self._update_player_inspector()
+        self._update_readiness_badge()
 
     def _update_sport_controls(self, sport: str) -> None:
         """Keep sport-only choices out of the way until they apply."""
@@ -2996,6 +3099,17 @@ class MainWindow(QtWidgets.QMainWindow):
             logger.info("Loading CSV: %s", path)
             self._load_step(progress, 5, "Reading DraftKings CSV…")
             self.players = read_players_csv(path)
+            self.last_showdown = []
+            self.last_classic = []
+            self.last_portfolio_report = {}
+            self.last_sim_report = {}
+            self.last_readiness_report = {}
+            self.last_live_check_summary = {}
+            self._last_live_check_epoch = 0.0
+            if hasattr(self, "tbl_sd"):
+                self.tbl_sd.setRowCount(0)
+            if hasattr(self, "tbl_cl"):
+                self.tbl_cl.setRowCount(0)
             parsed_opponents = sum(1 for p in self.players if str(p.get("Opponent") or "").strip())
             parsed_games = len({str(p.get("GameKey") or "").strip() for p in self.players if str(p.get("GameKey") or "").strip()})
             logger.info(
@@ -3086,6 +3200,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"Loaded {len(self.players)} players ({detected_mode}, {self._current_sport()}) from {os.path.basename(path)}{extra}",
                 6000
             )
+            self._update_readiness_badge()
         except Exception as e:
             logger.exception("Failed to load CSV")
             traceback.print_exc()
@@ -3114,6 +3229,72 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lbl_live_data.setText("Live data: settings saved • Vegas " + ("configured" if self._odds_api_key() else "key needed"))
         if self.players and self._current_sport() == "NFL":
             self._run_live_nfl_check(show_dialog=True, full_context=False)
+
+    def _calculate_slate_readiness(self) -> Dict[str, Any]:
+        sport = self._current_sport()
+        mode = self._contest_mode()
+        if mode == "showdown":
+            cap = self._safe_float(self.edit_sd_cap.text(), 50000.0)
+            lineups: List[Any] = list(self.last_showdown)
+        else:
+            cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
+            lineups = list(self.last_classic)
+        preset_name = self.combo_field_preset.currentText() if hasattr(self, "combo_field_preset") else "150-Max"
+        calibration: Dict[str, Any] = {}
+        if sport == "NFL" and mode == "classic":
+            try:
+                calibration = load_nfl_field_calibration(preset_name)
+            except Exception:
+                logger.exception("Slate readiness could not load NFL field calibration")
+        selected_preset = (
+            nfl_field_preset(preset_name, calibration)
+            if sport == "NFL" and mode == "classic"
+            else {"name": "", "min_salary_pct": 0.90 if mode == "showdown" else 0.94}
+        )
+        report = audit_slate(
+            self.players,
+            sport=sport,
+            mode=mode,
+            salary_cap=cap,
+            field_preset=selected_preset,
+            live_summary=self.last_live_check_summary,
+            generated_lineups=lineups,
+            sim_report=self.last_sim_report if mode == "classic" else {},
+        )
+        self.last_readiness_report = report
+        return report
+
+    def _update_readiness_badge(self) -> None:
+        if not hasattr(self, "lbl_readiness"):
+            return
+        if not self.players:
+            self.lbl_readiness.setText("Readiness: load a slate")
+            self.lbl_readiness.setStyleSheet("color: #AEB7C5; padding: 1px 3px;")
+            return
+        report = self._calculate_slate_readiness()
+        status = str(report.get("status") or "review")
+        color = {"ready": "#8FE3A1", "review": "#FFD180", "blocked": "#FF8A80"}.get(status, "#FFD180")
+        self.lbl_readiness.setText(
+            f"Readiness: {str(report.get('title') or 'Review')} {int(report.get('score', 0) or 0)}/100"
+        )
+        self.lbl_readiness.setStyleSheet(f"color: {color}; font-weight: 700; padding: 1px 3px;")
+        self.lbl_readiness.setToolTip(
+            f"{int(report.get('blockers', 0) or 0)} blocker(s); "
+            f"{int(report.get('reviews', 0) or 0)} item(s) to review. Click Slate Readiness for details."
+        )
+
+    def on_slate_readiness(self) -> None:
+        if self.players and self._current_sport() == "NFL":
+            stale = not self._last_live_check_epoch or (time.time() - self._last_live_check_epoch) > 15 * 60
+            if stale:
+                try:
+                    self._run_live_nfl_check(show_dialog=False, full_context=False)
+                except Exception:
+                    logger.exception("Slate Readiness live refresh failed; reporting cached state")
+                    self.status.showMessage("Live refresh was unavailable; readiness uses the last known data.", 6000)
+        report = self._calculate_slate_readiness()
+        self._update_readiness_badge()
+        SlateReadinessDialog(report, self).exec_()
 
     def _record_live_check(self, summary: Dict[str, Any]) -> None:
         had_previous = bool(self.last_live_check_summary)
@@ -3164,6 +3345,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             color = "#8FE3A1"
         self.lbl_live_data.setStyleSheet(f"color: {color}; padding: 1px 3px;")
+        self._update_readiness_badge()
 
     def _locked_live_conflicts(self) -> List[Dict[str, Any]]:
         return [
@@ -3701,6 +3883,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows,
                     )
         self._update_player_inspector()
+        self._update_readiness_badge()
 
     def _start_lineup_build(self, *, kind: str, sport: str, num: int, cap: float) -> None:
         """Run a lineup build in a worker thread and show status-bar progress."""
@@ -3932,6 +4115,16 @@ class MainWindow(QtWidgets.QMainWindow):
                         f"Simulation: {int(grade_info.get('sim_scenarios', 0)):,} scenarios vs "
                         f"{int(grade_info.get('sim_field_lineups', 0)):,} field lineups\n"
                     )
+                    drivers = list(grade_info.get("sim_edge_drivers") or [])
+                    if drivers:
+                        detail += "Why this SIM Edge:\n"
+                        for driver in drivers:
+                            detail += (
+                                f"  {driver.get('label')}: {float(driver.get('percentile', 0.0)):.0f}th percentile "
+                                f"({driver.get('direction')}, {int(driver.get('weight_pct', 0) or 0)}% weight)\n"
+                            )
+                    if grade_info.get("learned_profile_fit") is not None:
+                        detail += f"Learned winning-profile fit: {float(grade_info.get('learned_profile_fit', 0.0)):.0f}/100\n"
                 detail += (
                     "Slate-relative simulation metrics; not included in DK export/saved ID table."
                     if grade_info.get("sim_scenarios")
@@ -4010,11 +4203,14 @@ class MainWindow(QtWidgets.QMainWindow):
             warning_count = len(self.last_portfolio_report.get("warnings") or [])
             portfolio_note = f" Portfolio warnings: {warning_count}." if warning_count else " Portfolio rules satisfied."
             comparison_note = ""
+            preset_comparison = dict(self.last_sim_report.get("preset_comparison") or {})
+            if preset_comparison.get("available"):
+                comparison_note = f" Preset fit: {float(preset_comparison.get('fit_score', 0.0)):.0f}/100."
             field_comparison = dict(self.last_sim_report.get("field_comparison") or {})
             if field_comparison.get("available"):
                 simulated = dict(field_comparison.get("simulated") or {})
                 real = dict(field_comparison.get("real") or {})
-                comparison_note = (
+                comparison_note += (
                     f" Field check: SIM duplication {float(simulated.get('duplicate_entry_pct', 0.0)):.1f}% "
                     f"vs real {float(real.get('duplicate_entry_pct', 0.0)):.1f}%"
                     + (" (report-only)." if field_comparison.get("report_only") else " (learned blend active).")
@@ -4029,6 +4225,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._populate_classic_lineups(lineups, sport)
                 built = len(self.last_classic)
                 self.status.showMessage(f"Built {built} of {requested} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}{comparison_note}", 12000)
+            self._update_readiness_badge()
         finally:
             self._finish_lineup_build_ui()
 
@@ -4228,6 +4425,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if hasattr(self, "btn_primary_build") and self._contest_mode() == "classic":
                 self.btn_primary_build.setToolTip(f"Generate {sport_u} Classic lineups.")
             self.status.showMessage(f"Sport set to {sport_u}. Classic tab now uses: {', '.join(slots)}", 5000)
+            self._update_readiness_badge()
         except Exception:
             pass
 
