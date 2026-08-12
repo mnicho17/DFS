@@ -415,6 +415,7 @@ class LineupBuildWorker(QtCore.QObject):
     @QtCore.pyqtSlot()
     def run(self) -> None:
         try:
+            build_started = time.perf_counter()
             self.progress.emit(0, self.num_lineups, "Phase 1 of 3 - starting lineup build")
             expanded_target = min(450, max(self.num_lineups + 30, int(math.ceil(self.num_lineups * 1.5))))
             constraints = self.portfolio_rules.get("player_constraints") or {}
@@ -514,7 +515,9 @@ class LineupBuildWorker(QtCore.QObject):
                     ),
                     cancel_callback=self._cancel_event.is_set,
                 )
+            generation_seconds = time.perf_counter() - build_started
             sim_report: Dict[str, Any] = {}
+            simulation_started = time.perf_counter()
             if use_nfl_sim and lineups and not self._cancel_event.is_set():
                 field_config = nfl_field_preset(self.field_preset, self.field_calibration)
                 strategy_l = self.salary_strategy.strip().lower()
@@ -562,7 +565,9 @@ class LineupBuildWorker(QtCore.QObject):
                 )
                 lineups = sim_result.get("lineups") or lineups
                 sim_report = dict(sim_result.get("report") or {})
+            simulation_seconds = time.perf_counter() - simulation_started if use_nfl_sim else 0.0
 
+            selection_started = time.perf_counter()
             self.progress.emit(
                 min(self.num_lineups, len(lineups)),
                 self.num_lineups,
@@ -583,6 +588,19 @@ class LineupBuildWorker(QtCore.QObject):
                     nfl_field_preset(self.field_preset, self.field_calibration),
                     salary_cap=self.salary_cap,
                 )
+            selection_seconds = time.perf_counter() - selection_started
+            timing_report = {
+                "generation_seconds": max(0.0, generation_seconds),
+                "simulation_seconds": max(0.0, simulation_seconds),
+                "selection_seconds": max(0.0, selection_seconds),
+                "total_seconds": max(0.0, time.perf_counter() - build_started),
+                "candidate_target": int(candidate_target),
+                "candidate_count": int(selected.get("candidate_count", 0) or 0),
+                "selected_count": len(lineups),
+                "requested_count": self.num_lineups,
+                "build_pool_size": len(build_players),
+                "sim_scenarios": self.sim_scenarios if use_nfl_sim else 0,
+            }
             self.finished.emit({
                 "kind": self.kind,
                 "sport": self.sport,
@@ -592,6 +610,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "portfolio_report": selected["report"],
                 "candidate_count": selected["candidate_count"],
                 "sim_report": sim_report,
+                "timing_report": timing_report,
             })
         except Exception:
             self.error.emit(traceback.format_exc())
@@ -616,6 +635,7 @@ from learning_db import (
 )
 from portfolio_rules import player_key, portfolio_report, select_portfolio
 from nfl_simulation import build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, nfl_field_preset, simulate_nfl_contest, simulate_nfl_field_ownership
+from lineup_space import calculate_lineup_space
 from slate_readiness import audit_slate
 
 logger = logging.getLogger("dfs.ui")
@@ -1425,6 +1445,8 @@ class SlateReadinessDialog(QtWidgets.QDialog):
 
         checks = list(self.report.get("checks") or [])
         table = QtWidgets.QTableWidget(len(checks), 4, self)
+        self.checks = checks
+        self.table = table
         table.setObjectName("slateReadinessChecks")
         table.setHorizontalHeaderLabels(["State", "Check", "Finding", "Next step"])
         table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
@@ -1454,6 +1476,14 @@ class SlateReadinessDialog(QtWidgets.QDialog):
         layout.addWidget(note)
 
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        show_players = buttons.addButton("Show Players", QtWidgets.QDialogButtonBox.ActionRole)
+        show_players.setObjectName("showReadinessPlayers")
+        show_players.setToolTip("Close this report and filter the player table to this finding.")
+        show_players.setEnabled(False)
+        self.show_players_button = show_players
+        show_players.clicked.connect(self._show_selected_players)
+        table.currentCellChanged.connect(lambda *_args: self._update_show_players_button())
+        table.cellDoubleClicked.connect(lambda *_args: self._show_selected_players())
         copy_button = buttons.addButton("Copy Report", QtWidgets.QDialogButtonBox.ActionRole)
         copy_button.setObjectName("copySlateReadinessReport")
         copy_button.clicked.connect(
@@ -1461,6 +1491,26 @@ class SlateReadinessDialog(QtWidgets.QDialog):
         )
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _selected_check(self) -> Dict[str, Any]:
+        row = self.table.currentRow()
+        if 0 <= row < len(self.checks):
+            return dict(self.checks[row] or {})
+        return {}
+
+    def _update_show_players_button(self) -> None:
+        details = dict(self._selected_check().get("details") or {})
+        self.show_players_button.setEnabled(bool(details.get("player_names")))
+
+    def _show_selected_players(self) -> None:
+        check = self._selected_check()
+        names = list((check.get("details") or {}).get("player_names") or [])
+        if not names:
+            return
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "focus_readiness_players"):
+            self.accept()
+            parent.focus_readiness_players(check)
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -1480,6 +1530,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.last_sim_report: Dict[str, Any] = {}
         self.last_live_check_summary: Dict[str, Any] = {}
         self.last_readiness_report: Dict[str, Any] = {}
+        self.last_build_timing_report: Dict[str, Any] = {}
+        self._readiness_filter_names: set[str] = set()
+        self._lineup_space_phase = ""
         self._last_live_check_epoch = 0.0
         self.app_settings = QtCore.QSettings("DFS Optimizer", "DFS Optimizer")
 
@@ -1897,6 +1950,18 @@ class MainWindow(QtWidgets.QMainWindow):
         live_strip_layout = QtWidgets.QHBoxLayout(live_strip)
         live_strip_layout.setContentsMargins(8, 2, 8, 2)
         live_strip_layout.addWidget(self.lbl_live_data, 1)
+        self.lbl_lineup_space = QtWidgets.QLabel("Lineup space: load a slate")
+        self.lbl_lineup_space.setObjectName("lineupSpaceStatus")
+        self.lbl_lineup_space.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.lbl_lineup_space.setStyleSheet("color: #C7D2E3; padding: 1px 6px;")
+        live_strip_layout.addWidget(self.lbl_lineup_space)
+        self.btn_clear_readiness_filter = QtWidgets.QToolButton(self)
+        self.btn_clear_readiness_filter.setObjectName("clearReadinessFilterButton")
+        self.btn_clear_readiness_filter.setText("Clear player filter")
+        self.btn_clear_readiness_filter.setToolTip("Show the full player pool again.")
+        self.btn_clear_readiness_filter.clicked.connect(self.clear_readiness_player_filter)
+        self.btn_clear_readiness_filter.setVisible(False)
+        live_strip_layout.addWidget(self.btn_clear_readiness_filter)
         self.lbl_readiness = QtWidgets.QLabel("Readiness: load a slate")
         self.lbl_readiness.setObjectName("slateReadinessStatus")
         self.lbl_readiness.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
@@ -2082,6 +2147,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spin_sd = QtWidgets.QSpinBox()
         self.spin_sd.setRange(1, 150)
         self.spin_sd.setValue(5)
+        self.spin_sd.valueChanged.connect(self._update_lineup_space_dashboard)
         sd_controls.addWidget(self.spin_sd)
 
         sd_controls.addWidget(QtWidgets.QLabel("Cap:"))
@@ -2131,6 +2197,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spin_cl = QtWidgets.QSpinBox()
         self.spin_cl.setRange(1, 150)
         self.spin_cl.setValue(5)
+        self.spin_cl.valueChanged.connect(self._update_lineup_space_dashboard)
         cl_controls.addWidget(self.spin_cl)
 
         cl_controls.addWidget(QtWidgets.QLabel("Cap:"))
@@ -2329,6 +2396,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._on_sport_changed(self._current_sport())
         self._on_lineup_tab_changed(self.tabs_lineups.currentIndex())
         self._update_player_inspector()
+        self.chk_nfl_contest_sim.toggled.connect(self._update_lineup_space_dashboard)
+        self._update_lineup_space_dashboard()
 
     def _on_primary_build(self) -> None:
         """Run the action represented by the primary command-bar button."""
@@ -2359,6 +2428,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_sport_controls(sport)
         self._update_player_inspector()
         self._update_readiness_badge()
+        self._lineup_space_phase = ""
+        self._update_lineup_space_dashboard()
 
     def _update_sport_controls(self, sport: str) -> None:
         """Keep sport-only choices out of the way until they apply."""
@@ -3104,6 +3175,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.last_portfolio_report = {}
             self.last_sim_report = {}
             self.last_readiness_report = {}
+            self.last_build_timing_report = {}
+            self._readiness_filter_names.clear()
+            self._lineup_space_phase = ""
             self.last_live_check_summary = {}
             self._last_live_check_epoch = 0.0
             if hasattr(self, "tbl_sd"):
@@ -3263,6 +3337,107 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.last_readiness_report = report
         return report
+
+    def _calculate_lineup_space(self) -> Dict[str, Any]:
+        mode = self._contest_mode()
+        sport = self._current_sport()
+        requested = 0
+        if mode == "showdown" and hasattr(self, "spin_sd"):
+            requested = int(self.spin_sd.value())
+        elif hasattr(self, "spin_cl"):
+            requested = int(self.spin_cl.value())
+
+        pool = list(self.players or [])
+        pool_label = "active player pool"
+        sim_enabled = bool(
+            hasattr(self, "chk_nfl_contest_sim") and self.chk_nfl_contest_sim.isChecked()
+        )
+        if sport == "NFL" and mode == "classic" and sim_enabled and pool:
+            pool = build_nfl_role_pool(pool, preserve_locks=True)
+            pool_label = "NFL SIM starter/rotation pool"
+        return calculate_lineup_space(
+            pool,
+            sport=sport,
+            mode=mode,
+            requested=requested,
+            loaded_total=len(self.players or []),
+            pool_label=pool_label,
+        )
+
+    def _update_lineup_space_dashboard(self, *_args: Any) -> None:
+        if not hasattr(self, "lbl_lineup_space"):
+            return
+        if not self.players:
+            self.lbl_lineup_space.setText("Lineup space: load a slate")
+            self.lbl_lineup_space.setToolTip(
+                "Load a salary file to see how fades, inactive players, locks, and the NFL role pool shrink the build space."
+            )
+            return
+        report = self._calculate_lineup_space()
+        count = int(report.get("structural_combinations", 0) or 0)
+        count_prefix = "" if report.get("exact") else "≤"
+        text = (
+            f"Space: {int(report.get('eligible', 0))}/{int(report.get('loaded', 0))} pool • "
+            f"{count_prefix}{report.get('compact_combinations', '0')} possible • "
+            f"{int(report.get('requested', 0))} target"
+        )
+        if self._lineup_space_phase:
+            text += f" • {self._lineup_space_phase}"
+        self.lbl_lineup_space.setText(text)
+        tooltip = [
+            f"Pool: {int(report.get('eligible', 0)):,} of {int(report.get('loaded', 0)):,} ({report.get('pool_label')})",
+            f"Omitted from this pool: {int(report.get('omitted', 0)):,}",
+            f"Locked in every lineup: {int(report.get('locked', 0)):,}",
+            f"Structural combinations: {count:,}" + (" (exact roster shapes)" if report.get("exact") else " (upper bound)"),
+            str(report.get("explanation") or ""),
+            "This intentionally excludes salary-cap, stacking, correlation, exposure, and uniqueness checks.",
+        ]
+        timing = dict(self.last_build_timing_report or {})
+        if timing:
+            tooltip.extend([
+                "",
+                "Last build timing:",
+                f"Generate {float(timing.get('generation_seconds', 0.0)):.2f}s • "
+                f"SIM {float(timing.get('simulation_seconds', 0.0)):.2f}s • "
+                f"Select {float(timing.get('selection_seconds', 0.0)):.2f}s • "
+                f"Total {float(timing.get('total_seconds', 0.0)):.2f}s",
+                f"Candidates {int(timing.get('candidate_count', 0)):,} → selected {int(timing.get('selected_count', 0)):,}",
+            ])
+        self.lbl_lineup_space.setToolTip("\n".join(line for line in tooltip if line is not None))
+
+    def _apply_readiness_player_filter(self) -> None:
+        if not hasattr(self, "tbl_players"):
+            return
+        wanted = {name.casefold() for name in self._readiness_filter_names if name}
+        first_visible = -1
+        visible = 0
+        for row in range(self.tbl_players.rowCount()):
+            item = self.tbl_players.item(row, 0)
+            matches = not wanted or (item is not None and item.text().strip().casefold() in wanted)
+            self.tbl_players.setRowHidden(row, not matches)
+            if matches:
+                visible += 1
+                if first_visible < 0:
+                    first_visible = row
+        if hasattr(self, "btn_clear_readiness_filter"):
+            self.btn_clear_readiness_filter.setVisible(bool(wanted))
+        if wanted and first_visible >= 0:
+            self.tbl_players.selectRow(first_visible)
+            self.tbl_players.scrollToItem(self.tbl_players.item(first_visible, 0))
+        if wanted:
+            self.status.showMessage(f"Showing {visible} player(s) from the readiness finding.", 5000)
+
+    def focus_readiness_players(self, check: Dict[str, Any]) -> None:
+        details = dict((check or {}).get("details") or {})
+        self._readiness_filter_names = {
+            str(name).strip() for name in details.get("player_names") or [] if str(name).strip()
+        }
+        self._apply_readiness_player_filter()
+
+    def clear_readiness_player_filter(self) -> None:
+        self._readiness_filter_names.clear()
+        self._apply_readiness_player_filter()
+        self.status.showMessage("Showing the full player pool.", 3000)
 
     def _update_readiness_badge(self) -> None:
         if not hasattr(self, "lbl_readiness"):
@@ -3883,7 +4058,9 @@ class MainWindow(QtWidgets.QMainWindow):
                         QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows,
                     )
         self._update_player_inspector()
+        self._apply_readiness_player_filter()
         self._update_readiness_badge()
+        self._update_lineup_space_dashboard()
 
     def _start_lineup_build(self, *, kind: str, sport: str, num: int, cap: float) -> None:
         """Run a lineup build in a worker thread and show status-bar progress."""
@@ -3938,6 +4115,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_eta.setVisible(True)
         self._build_cancel.setEnabled(True)
         self._build_cancel.setVisible(True)
+        self._lineup_space_phase = f"Generate 0/{num:,}"
+        self._update_lineup_space_dashboard()
         self.status.showMessage(f"Building {label_sport} lineups ({num:,}) • {build_style} • {salary_strategy}…")
 
         self._build_thread = QtCore.QThread(self)
@@ -3988,6 +4167,15 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self._build_progress.setRange(0, 0)
             self._build_eta.setText(text or "Building…")
+
+        phase_text = str(text or "").lower()
+        if "phase 2" in phase_text:
+            self._lineup_space_phase = f"SIM {done:,}/{total:,}" if total > 0 else "SIM"
+        elif "phase 3" in phase_text:
+            self._lineup_space_phase = "Selecting"
+        else:
+            self._lineup_space_phase = f"Generate {done:,}/{total:,}" if total > 0 else "Generating"
+        self._update_lineup_space_dashboard()
 
     def _cancel_lineup_build(self) -> None:
         worker = getattr(self, "_build_worker", None)
@@ -4200,6 +4388,7 @@ class MainWindow(QtWidgets.QMainWindow):
             cancelled = bool(payload.get("cancelled", False))
             self.last_portfolio_report = dict(payload.get("portfolio_report") or {})
             self.last_sim_report = dict(payload.get("sim_report") or {})
+            self.last_build_timing_report = dict(payload.get("timing_report") or {})
             warning_count = len(self.last_portfolio_report.get("warnings") or [])
             portfolio_note = f" Portfolio warnings: {warning_count}." if warning_count else " Portfolio rules satisfied."
             comparison_note = ""
@@ -4215,22 +4404,33 @@ class MainWindow(QtWidgets.QMainWindow):
                     f"vs real {float(real.get('duplicate_entry_pct', 0.0)):.1f}%"
                     + (" (report-only)." if field_comparison.get("report_only") else " (learned blend active).")
                 )
+            timing_note = ""
+            if self.last_build_timing_report:
+                timing_note = (
+                    f" Timing: generate {float(self.last_build_timing_report.get('generation_seconds', 0.0)):.1f}s, "
+                    f"SIM {float(self.last_build_timing_report.get('simulation_seconds', 0.0)):.1f}s, "
+                    f"select {float(self.last_build_timing_report.get('selection_seconds', 0.0)):.1f}s."
+                )
 
             if kind == "showdown":
                 self._populate_showdown_lineups(lineups)
                 built = len(self.last_showdown)
                 result = f"Cancelled after {built} of {requested}" if cancelled else f"Built {built} of {requested}"
-                self.status.showMessage(f"{result} showdown lineups. {self._lineup_quality_summary(self.last_showdown, sport, kind)}{portfolio_note}", 9000)
+                self.status.showMessage(f"{result} showdown lineups. {self._lineup_quality_summary(self.last_showdown, sport, kind)}{portfolio_note}{timing_note}", 9000)
             else:
                 self._populate_classic_lineups(lineups, sport)
                 built = len(self.last_classic)
-                self.status.showMessage(f"Built {built} of {requested} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}{comparison_note}", 12000)
+                self.status.showMessage(f"Built {built} of {requested} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}{comparison_note}{timing_note}", 12000)
+            self._lineup_space_phase = ""
             self._update_readiness_badge()
+            self._update_lineup_space_dashboard()
         finally:
             self._finish_lineup_build_ui()
 
     def _on_lineup_build_error(self, msg: str) -> None:
         self._finish_lineup_build_ui()
+        self._lineup_space_phase = ""
+        self._update_lineup_space_dashboard()
         self.status.showMessage("Lineup build failed.", 5000)
         logger.error("Lineup build failed:\n%s", msg)
         QtWidgets.QMessageBox.critical(self, "Optimization Error", msg)

@@ -21,7 +21,7 @@ if str(REPO_ROOT) not in sys.path:
 from PyQt5 import QtCore, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
-from main_window import MainWindow, ResultsLearningDialog  # noqa: E402
+from main_window import MainWindow, ResultsLearningDialog, SlateReadinessDialog  # noqa: E402
 from nfl_simulation import SimLineup  # noqa: E402
 from optimizers import MultiSportClassicOptimizer  # noqa: E402
 
@@ -191,6 +191,40 @@ def capture(output_dir: Path) -> None:
         window.show()
         app.processEvents()
         save_widget(window, output_dir / "main-workspace.png")
+
+        # Show the compact lineup-space dashboard under realistic pruning and
+        # mid-build progress. The full workspace context makes the small strip
+        # easy to locate when a reader returns to the live application.
+        for player in players:
+            if player["Name"] in {"MIA WR3", "DEN RB2", "DAL WR3", "SEA RB2"}:
+                player["FadeFlex"] = True
+                player["FadeCpt"] = True
+        window._lineup_space_phase = "SIM 420/750"
+        window._refresh_players_table()
+        app.processEvents()
+        save_widget(window, output_dir / "lineup-space.png")
+
+        window.last_live_check_summary = {
+            "sleeper_state": "ok",
+            "sleeper": len(players),
+            "total": len(players),
+            "checked_at": "2026-09-13T15:55:00Z",
+            "odds_state": "ok",
+            "odds_matched_games": len(GAMES),
+        }
+        readiness = window._calculate_slate_readiness()
+        readiness_dialog = SlateReadinessDialog(readiness, window)
+        readiness_dialog.resize(1000, 600)
+        for row, check in enumerate(readiness.get("checks") or []):
+            if check.get("key") == "roles":
+                readiness_dialog.table.selectRow(row)
+                readiness_dialog.table.setCurrentCell(row, 0)
+                break
+        readiness_dialog.show()
+        app.processEvents()
+        save_widget(readiness_dialog, output_dir / "slate-readiness.png")
+        readiness_dialog.close()
+        window._lineup_space_phase = ""
 
         window.spin_portfolio_unique.setValue(2)
         window.spin_team_exposure.setValue(70.0)
