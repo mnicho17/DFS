@@ -50,7 +50,19 @@ class SlateReadinessTests(unittest.TestCase):
         report = audit_slate(players, sport="NFL", mode="classic")
         locks = next(check for check in report["checks"] if check["key"] == "locks")
         self.assertEqual(locks["status"], "block")
+        self.assertIn(players[0]["Name"], locks["details"]["player_names"])
         self.assertEqual(report["status"], "blocked")
+
+    def test_missing_inputs_and_role_findings_identify_players_for_click_through(self):
+        players = _fixture_players()
+        players[0]["FlexProjection"] = 0
+        players[1]["ProjOwnPct"] = 0
+        players[2]["NFLDepthOrder"] = 3
+        report = audit_slate(players, sport="NFL", mode="classic")
+        by_key = {check["key"]: check for check in report["checks"]}
+        self.assertIn(players[0]["Name"], by_key["projections"]["details"]["player_names"])
+        self.assertIn(players[1]["Name"], by_key["ownership"]["details"]["player_names"])
+        self.assertIn(players[2]["Name"], by_key["roles"]["details"]["player_names"])
 
     def test_generated_lineups_receive_an_explainable_preset_fit(self):
         players = _fixture_players()

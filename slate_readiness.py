@@ -245,6 +245,12 @@ def audit_slate(
             f"Positive projections for {projection_count}/{len(eligible)} eligible players ({projection_pct:.0f}%).",
             "Add projections or remove non-starters before generation." if projection_status != "pass" else "",
             weight=2.0,
+            details={
+                "player_names": [
+                    str(player.get("Name") or "") for player in eligible
+                    if _number(player.get("FlexProjection"), 0.0) <= 0
+                ],
+            },
         ))
 
         ownership_count = sum(_number(player.get("ProjOwnPct"), 0.0) > 0 for player in eligible)
@@ -259,6 +265,12 @@ def audit_slate(
             + (f" vs about {expected_total:.0f}% expected." if expected_total else "."),
             "Run Recalc Own% (Sim) or import better ownership estimates." if own_status != "pass" else "",
             weight=1.25,
+            details={
+                "player_names": [
+                    str(player.get("Name") or "") for player in eligible
+                    if _number(player.get("ProjOwnPct"), 0.0) <= 0
+                ],
+            },
         ))
 
         locked_conflicts = [
@@ -271,6 +283,9 @@ def audit_slate(
             f"{len(locked_conflicts)} locked unavailable player(s)." if locked_conflicts else "No locked unavailable players.",
             "Unlock or manually resolve: " + ", ".join(str(player.get("Name") or "Unknown") for player in locked_conflicts[:6]) if locked_conflicts else "",
             weight=2.0,
+            details={
+                "player_names": [str(player.get("Name") or "") for player in locked_conflicts],
+            },
         ))
 
     if sport_u == "NFL" and players:
@@ -305,6 +320,9 @@ def audit_slate(
             details={
                 "uncertain": [str(player.get("Name") or "") for player in uncertain[:12]],
                 "deep_backups": [str(player.get("Name") or "") for player in deep_backups[:12]],
+                "player_names": list(dict.fromkeys(
+                    [str(player.get("Name") or "") for player in uncertain + deep_backups]
+                )),
             },
         ))
 

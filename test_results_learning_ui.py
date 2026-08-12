@@ -60,6 +60,8 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIn("Live data", window.findChild(QtWidgets.QLabel, "liveDataStatusLabel").text())
         self.assertEqual(window.findChild(QtWidgets.QPushButton, "slateReadinessButton").text(), "Slate Readiness")
         self.assertIn("Readiness", window.findChild(QtWidgets.QLabel, "slateReadinessStatus").text())
+        self.assertIn("Lineup space", window.findChild(QtWidgets.QLabel, "lineupSpaceStatus").text())
+        self.assertIsNotNone(window.findChild(QtWidgets.QToolButton, "clearReadinessFilterButton"))
         window.close()
 
     def test_compact_workspace_keeps_primary_actions_and_saved_views(self):
@@ -208,6 +210,29 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(progress[0][:2], (0, 150))
         self.assertEqual(progress[-1][:2], (150, 150))
         self.assertEqual([event[0] for event in progress], sorted(event[0] for event in progress))
+        timing = finished[0]["timing_report"]
+        self.assertGreaterEqual(timing["generation_seconds"], 0.0)
+        self.assertGreaterEqual(timing["selection_seconds"], 0.0)
+        self.assertGreaterEqual(timing["total_seconds"], timing["generation_seconds"])
+        self.assertEqual(timing["selected_count"], 150)
+
+    def test_readiness_player_filter_can_be_cleared(self):
+        window = MainWindow()
+        window.players = [
+            {"Name": "Starter", "Position": "QB", "FlexSalary": 7000, "FlexProjection": 20},
+            {"Name": "Backup", "Position": "QB", "FlexSalary": 5000, "FlexProjection": 8},
+        ]
+        window._refresh_players_table()
+        window.focus_readiness_players({"details": {"player_names": ["Backup"]}})
+        visible = [
+            window.tbl_players.item(row, 0).text()
+            for row in range(window.tbl_players.rowCount()) if not window.tbl_players.isRowHidden(row)
+        ]
+        self.assertEqual(visible, ["Backup"])
+        self.assertFalse(window.btn_clear_readiness_filter.isHidden())
+        window.clear_readiness_player_filter()
+        self.assertTrue(all(not window.tbl_players.isRowHidden(row) for row in range(2)))
+        window.close()
 
     def test_nfl_sim_worker_builds_a_wider_pool_and_reports_portfolio_coverage(self):
         finished = []

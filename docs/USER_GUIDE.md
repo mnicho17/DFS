@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.8.0 | Windows desktop app
+Version 1.8.1 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -73,6 +73,8 @@ Run the check again near lock. No automated data source is a substitute for late
 
 Choose **Slate Readiness** for a report-only preflight before generation and again before export. It gives the loaded slate a 0-100 score and separates findings into **Pass**, **Review**, and **Block**.
 
+Select a finding and choose **Show Players**—or double-click it—to filter the player table to the affected players. Choose **Clear player filter** in the status strip to restore the full table. This is a visual filter only; it never changes lineup eligibility by itself.
+
 The audit checks:
 
 - salary-file identity and enough eligible players at each roster position;
@@ -86,6 +88,8 @@ The audit checks:
 Only hard preparation problems are blockers, such as a missing roster position, poor projection coverage, or a locked-out player. Missing early-week Vegas lines remain a review item because odds are useful but optional. The audit never changes a player, projection, ownership value, lock, fade, or lineup. Choose **Copy Report** when you want to keep or share the findings.
 
 Reopen Slate Readiness after generation. The portfolio check then compares salary use, QB-stack mix, bring-backs, FLEX mix, and ownership coverage with the selected NFL field preset.
+
+![Slate Readiness findings with player drill-down](images/slate-readiness.png)
 
 ## 6. Build Strategy
 
@@ -120,7 +124,13 @@ Locks, fades, salary, roster eligibility, and hard maximums remain hard rules. S
 
 Choose **Generate** from the active Classic or Showdown area. During a build, the progress area reports the current stage and offers **Cancel**. Cancellation keeps valid lineups already completed.
 
-After generation:
+The compact **Space** display shows the current eligible build pool, structural lineup possibilities, and requested lineup count. Fading or locking players recalculates it immediately. With NFL SIM Edge enabled, it uses the same starter/rotation role pool as generation, so omitted inactive players and deep backups visibly shrink the count. NFL Classic is an exact roster-shape count; Showdown and multi-position sports are labeled as upper bounds. Salary cap, stacking, correlation, exposure, and uniqueness rules narrow the real build space further.
+
+During generation, the Space display follows the Generate, SIM, and Select stages. After completion, hover it for the last build's phase timing and the number of candidates evaluated versus lineups selected.
+
+![Compact lineup Space dashboard during NFL simulation](images/lineup-space.png)
+
+### After generation
 
 - review salary and every roster slot;
 - inspect the grade or NFL SIM Edge details;
@@ -218,7 +228,7 @@ Exact matching matters. An entry can remain unmatched if it was edited after exp
 
 See the separate Troubleshooting guide for more detail.
 
-## 13. Local data and privacy
+## Section 13: Local data and privacy
 
 The optimizer stores exports, imported results, slate snapshots, and settings on the computer. Choose **Open Local History Folder** in Results & Learning to inspect the history location.
 
