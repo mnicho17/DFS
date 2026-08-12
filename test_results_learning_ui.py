@@ -58,6 +58,8 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(window.findChild(QtWidgets.QPushButton, "gameDayCheckButton").text(), "Game-Day Check")
         self.assertIsNotNone(window.findChild(QtWidgets.QPushButton, "liveDataSettingsButton"))
         self.assertIn("Live data", window.findChild(QtWidgets.QLabel, "liveDataStatusLabel").text())
+        self.assertEqual(window.findChild(QtWidgets.QPushButton, "slateReadinessButton").text(), "Slate Readiness")
+        self.assertIn("Readiness", window.findChild(QtWidgets.QLabel, "slateReadinessStatus").text())
         window.close()
 
     def test_compact_workspace_keeps_primary_actions_and_saved_views(self):
@@ -238,6 +240,8 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertGreater(payload["candidate_count"], 24)
         self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v3")
         self.assertEqual(payload["sim_report"]["field_preset"], "150-Max")
+        self.assertTrue(payload["sim_report"]["preset_comparison"]["available"])
+        self.assertIn("largest gap", payload["sim_report"]["preset_comparison"]["summary"])
         self.assertGreater(payload["portfolio_report"]["sim_summary"]["top_one_scenarios_covered"], 0)
         self.assertTrue(all(hasattr(lineup, "sim_scenario_values") for lineup in payload["lineups"]))
 

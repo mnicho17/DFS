@@ -80,13 +80,17 @@ class NFLSimulationTests(unittest.TestCase):
         self.assertTrue(all(0.0 <= lineup.sim_metrics["sim_leverage"] <= 100.0 for lineup in lineups))
         self.assertTrue(all("sim_top_five_pct" in lineup.sim_metrics for lineup in lineups))
         self.assertTrue(all("sim_bust_rate" in lineup.sim_metrics for lineup in lineups))
+        self.assertTrue(all(len(lineup.sim_metrics["sim_edge_drivers"]) == 6 for lineup in lineups))
+        self.assertTrue(all("Duplication safety" in lineup.sim_metrics["sim_edge_components"] for lineup in lineups))
         self.assertTrue(all(lineup.sim_top_hits.issubset(lineup.sim_top_five_hits) for lineup in lineups))
         self.assertEqual(result["report"]["model"], "scenario-portfolio-v3")
+        self.assertTrue(result["report"]["field_model_preset_comparison"]["available"])
 
         grade = lineup_grade_for_sport(lineups[0], "NFL", 50000)
         self.assertAlmostEqual(grade["score"], lineups[0].sim_metrics["sim_edge"])
         self.assertIn("sim_top_one_pct", grade)
         self.assertIn("sim_return_index", grade)
+        self.assertIn("sim_edge_drivers", grade)
         self.assertIn(grade["grade"], {"A", "B", "C", "D"})
 
     def test_contest_sim_is_deterministic_for_the_same_seed(self):

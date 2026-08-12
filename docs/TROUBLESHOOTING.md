@@ -22,6 +22,14 @@ The app is not code-signed. Download it only from this repository's Releases pag
 
 Choose **Game-Day Check** immediately before generating and again near lock. The app uses structured availability, practice, roster, and depth-chart data, but late-breaking news can lead the data source. A manually locked unavailable player stops generation instead of being silently removed.
 
+## Slate Readiness says Review or Blocked
+
+- Open the report and follow the **Next step** beside each item.
+- **Blocked** identifies a hard preparation problem such as missing roster eligibility, poor projection coverage, or a locked unavailable player.
+- **Review** identifies uncertainty or an optional gap such as stale news, questionable players, deep backups, incomplete ownership, no posted Vegas lines, or no generated portfolio yet.
+- Generate lineups and reopen the report to add salary and contest-preset fit checks.
+- The score is a preflight summary, not a prediction of lineup results, and the audit never changes the slate.
+
 ## Generation is slow
 
 - Start with fewer requested lineups while testing settings.

@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.7.0 | Windows desktop app
+Version 1.8.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -18,7 +18,7 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 ## 2. Five-minute workflow
 
 1. Choose the sport and load the DraftKings salary CSV.
-2. For NFL, run **Game-Day Check** and review the live-data message.
+2. Choose **Slate Readiness**. For NFL, it refreshes a stale game-day check before auditing the slate.
 3. Choose **Showdown** or **Classic** and set the lineup count.
 4. Review **Build Strategy** and **Portfolio Rules**.
 5. For NFL Classic, turn on **NFL SIM Edge** when you want field-based tournament scoring.
@@ -68,6 +68,24 @@ To add Vegas spreads and totals:
 The key remains in the current Windows user's local settings. If lines are unavailable, the status message says whether the key is missing, rejected, or the provider returned no games.
 
 Run the check again near lock. No automated data source is a substitute for late-news review.
+
+### Slate Readiness
+
+Choose **Slate Readiness** for a report-only preflight before generation and again before export. It gives the loaded slate a 0-100 score and separates findings into **Pass**, **Review**, and **Block**.
+
+The audit checks:
+
+- salary-file identity and enough eligible players at each roster position;
+- positive projection and ownership coverage, including unrealistic ownership-pool totals;
+- locked players whose latest status is unavailable;
+- freshness and coverage of NFL player news and depth roles;
+- questionable players and active depth-order 3+ backups that deserve review;
+- availability of optional Vegas context; and
+- after generation, complete rosters, salary use, and the NFL portfolio's fit with the selected contest preset.
+
+Only hard preparation problems are blockers, such as a missing roster position, poor projection coverage, or a locked-out player. Missing early-week Vegas lines remain a review item because odds are useful but optional. The audit never changes a player, projection, ownership value, lock, fade, or lineup. Choose **Copy Report** when you want to keep or share the findings.
+
+Reopen Slate Readiness after generation. The portfolio check then compares salary use, QB-stack mix, bring-backs, FLEX mix, and ownership coverage with the selected NFL field preset.
 
 ## 6. Build Strategy
 
@@ -130,7 +148,9 @@ Choose the preset that matches the contest's maximum entries per person. The pre
 - **Leverage** rewards useful paths that differ from expected field behavior.
 - **Duplication risk** estimates how likely the construction is to be shared. Lower is generally better when other qualities are similar.
 
-The top line in Classic shows Edge and top-one-percent rate. Hover or open the detail tooltip for the rest. Do not choose by one number alone. Compare ceiling, top-five rate, leverage, duplication, construction, news risk, and portfolio coverage.
+The top line in Classic shows Edge and top-one-percent rate. Hover or open the detail tooltip for the rest. The **Why this SIM Edge** section shows the slate percentile, direction, and model weight for top-one-percent outcomes, representative wins, top-five-percent outcomes, ceiling, tournament return, and duplication safety. The generation message and Slate Readiness report also show how closely the selected portfolio fits the chosen contest preset.
+
+Do not choose by one number alone. Compare ceiling, top-five rate, leverage, duplication, construction, news risk, preset fit, and portfolio coverage.
 
 ![NFL Classic results ranked with slate-relative SIM Edge and top-one-percent rates](images/nfl-sim-results.png)
 

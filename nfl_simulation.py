@@ -709,6 +709,99 @@ def _summarize_generated_field(
     }
 
 
+def compare_nfl_lineups_to_preset(
+    lineups: Sequence[Sequence[Dict[str, Any]]],
+    field_config: Optional[Dict[str, Any]] = None,
+    *,
+    salary_cap: float = 50000.0,
+) -> Dict[str, Any]:
+    """Explain how a lineup set differs from the selected contest preset.
+
+    This is descriptive and report-only.  It does not reject a creative
+    portfolio or modify the optimizer's selected lineups.
+    """
+    config = dict(field_config or {})
+    summary = _summarize_generated_field(lineups)
+    entries = int(summary.get("entries", 0) or 0)
+    if not entries:
+        return {
+            "available": False,
+            "fit_score": 0.0,
+            "summary": "No generated lineups are available for preset comparison.",
+            "components": {},
+            "generated": summary,
+            "preset": str(config.get("name") or "Custom"),
+        }
+
+    def distribution_fit(actual: Dict[str, Any], target: Dict[str, Any], keys: Sequence[str]) -> float:
+        if not target:
+            return 100.0
+        distance = sum(abs(_number(actual.get(key), 0.0) - _number(target.get(key), 0.0)) for key in keys)
+        return max(0.0, min(100.0, (1.0 - distance / 2.0) * 100.0))
+
+    floor = float(salary_cap or 50000.0) * _number(config.get("min_salary_pct"), 0.94)
+    salary_p10 = _number(summary.get("salary_p10"), 0.0)
+    salary_fit = max(0.0, min(100.0, 100.0 - max(0.0, floor - salary_p10) / 20.0))
+    stack_fit = distribution_fit(
+        dict(summary.get("stack_rates") or {}), dict(config.get("stack_rates") or {}), ("0", "1", "2", "3")
+    )
+    bringback_fit = distribution_fit(
+        dict(summary.get("bringback_rates") or {}), dict(config.get("bringback_rates") or {}), ("0", "1", "2_plus")
+    )
+    flex_fit = distribution_fit(
+        dict(summary.get("flex_rates") or {}), dict(config.get("flex_rates") or {}), ("RB", "WR", "TE")
+    )
+    ownership_coverage = _number((summary.get("ownership_profile") or {}).get("ownership_coverage_pct"), 0.0)
+    ownership_fit = max(0.0, min(100.0, ownership_coverage / 0.8))
+    components = {
+        "salary": round(salary_fit, 1),
+        "qb_stacks": round(stack_fit, 1),
+        "bring_backs": round(bringback_fit, 1),
+        "flex_mix": round(flex_fit, 1),
+        "ownership_coverage": round(ownership_fit, 1),
+    }
+    fit_score = (
+        0.35 * salary_fit
+        + 0.25 * stack_fit
+        + 0.18 * bringback_fit
+        + 0.17 * flex_fit
+        + 0.05 * ownership_fit
+    )
+    weakest = min(components, key=components.get)
+    weakest_label = {
+        "salary": "salary use",
+        "qb_stacks": "QB-stack mix",
+        "bring_backs": "bring-back mix",
+        "flex_mix": "FLEX mix",
+        "ownership_coverage": "ownership coverage",
+    }[weakest]
+    if fit_score >= 85.0:
+        fit_text = "closely matches"
+    elif fit_score >= 70.0:
+        fit_text = "generally matches"
+    elif fit_score >= 50.0:
+        fit_text = "partly matches"
+    else:
+        fit_text = "differs materially from"
+    return {
+        "available": True,
+        "fit_score": round(fit_score, 1),
+        "summary": (
+            f"Portfolio {fit_text} the {config.get('name', 'selected')} preset "
+            f"({fit_score:.0f}/100); largest gap is {weakest_label}."
+        ),
+        "components": components,
+        "generated": summary,
+        "preset": str(config.get("name") or "Custom"),
+        "targets": {
+            "salary_floor": floor,
+            "stack_rates": dict(config.get("stack_rates") or {}),
+            "bringback_rates": dict(config.get("bringback_rates") or {}),
+            "flex_rates": dict(config.get("flex_rates") or {}),
+        },
+    }
+
+
 def _learned_ownership_profile_fit(
     lineup: Sequence[Dict[str, Any]],
     target: Dict[str, Any],
@@ -928,6 +1021,36 @@ def simulate_nfl_contest(
         metrics["sim_return_index"] = return_rank * 100.0
         metrics["sim_leverage"] = 100.0 * (0.58 * top_rank + 0.42 * (1.0 - duplicate_rank))
         metrics["sim_edge"] = max(0.0, min(100.0, edge))
+        metrics["sim_edge_components"] = {
+            "Top-1% outcomes": round(top_rank * 100.0, 1),
+            "Representative wins": round(win_rank * 100.0, 1),
+            "Top-5% outcomes": round(top_five_rank * 100.0, 1),
+            "Ceiling": round(ceiling_rank * 100.0, 1),
+            "Tournament return": round(return_rank * 100.0, 1),
+            "Duplication safety": round((1.0 - duplicate_rank) * 100.0, 1),
+        }
+        component_weights = {
+            "Top-1% outcomes": 0.32,
+            "Representative wins": 0.12,
+            "Top-5% outcomes": 0.16,
+            "Ceiling": 0.15,
+            "Tournament return": 0.15,
+            "Duplication safety": 0.10,
+        }
+        ranked_drivers = sorted(
+            metrics["sim_edge_components"].items(),
+            key=lambda item: abs(item[1] - 50.0) * component_weights[item[0]],
+            reverse=True,
+        )
+        metrics["sim_edge_drivers"] = [
+            {
+                "label": label,
+                "percentile": percentile,
+                "weight_pct": int(round(component_weights[label] * 100.0)),
+                "direction": "helping" if percentile >= 60.0 else ("hurting" if percentile <= 40.0 else "neutral"),
+            }
+            for label, percentile in ranked_drivers
+        ]
         metrics["sim_scenarios"] = completed
         metrics["sim_field_lineups"] = len(field_lineups)
         wrapped.append(SimLineup(
@@ -954,6 +1077,9 @@ def simulate_nfl_contest(
         "real": real_reference,
         "report_only": not bool(config.get("learned")),
     }
+    field_model_preset_comparison = compare_nfl_lineups_to_preset(
+        field_lineups, config, salary_cap=salary_cap
+    )
     if real_reference:
         real_profile = dict((real_reference.get("ownership_profile") or {}).get("field") or {})
         sim_profile = dict(generated_field_summary.get("ownership_profile") or {})
@@ -982,6 +1108,7 @@ def simulate_nfl_contest(
             "learned_field_model": bool(config.get("learned")),
             "learned_entries": int(config.get("learned_entries", 0) or 0),
             "field_comparison": field_comparison,
+            "field_model_preset_comparison": field_model_preset_comparison,
             "model": "scenario-portfolio-v3",
         },
     }
