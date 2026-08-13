@@ -32,10 +32,12 @@ Choose **Game-Day Check** immediately before generating and again near lock. The
 
 ## Generation is slow
 
+- After the build completes, choose **Settings > Copy Last Build Report**. It identifies whether Generate, SIM, or Select consumed the most time and includes the candidate counts and active rules needed to reproduce the issue.
 - Start with fewer requested lineups while testing settings.
 - Remove impossible minimum exposures or conflicting player groups.
 - Relax very high uniqueness or very low team/game caps.
 - NFL SIM Edge does additional field and outcome simulation, so it normally takes longer than a projection-only build.
+- Use **Settings > Build History…** to compare the same slate and settings across app releases.
 - Use **Cancel** to keep completed lineups from the current build.
 
 ## Fewer lineups were returned than requested
@@ -80,4 +82,4 @@ Results & Learning matches exact rosters previously exported by the app. A row m
 
 ## Where local data is stored
 
-Choose **Results & Learning**, then **Open Local History Folder**. Exports, imported results, and slate snapshots remain on the computer.
+Choose **Results & Learning**, then **Open Local History Folder**. Exports, imported results, slate snapshots, and build diagnostics remain on the computer.

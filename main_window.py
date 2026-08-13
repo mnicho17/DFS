@@ -637,6 +637,14 @@ from portfolio_rules import player_key, portfolio_report, select_portfolio
 from nfl_simulation import build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, nfl_field_preset, simulate_nfl_contest, simulate_nfl_field_ownership
 from lineup_space import calculate_lineup_space
 from slate_readiness import audit_slate
+from build_diagnostics import (
+    build_history_label,
+    clear_build_history,
+    create_build_diagnostic,
+    format_build_report,
+    load_build_history,
+    save_build_diagnostic,
+)
 
 logger = logging.getLogger("dfs.ui")
 
@@ -1513,6 +1521,108 @@ class SlateReadinessDialog(QtWidgets.QDialog):
             parent.focus_readiness_players(check)
 
 
+class BuildDiagnosticsDialog(QtWidgets.QDialog):
+    """Review and copy recent aggregate build diagnostics."""
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.setWindowTitle("Build History")
+        self.setModal(True)
+        self.resize(980, 620)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        intro = QtWidgets.QLabel(
+            "Recent lineup builds are saved locally so timing and settings can be compared between app releases. "
+            "Reports contain aggregate counts only—never player names, lineups, file paths, or API keys."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
+        self.history_list = QtWidgets.QListWidget(splitter)
+        self.history_list.setObjectName("buildHistoryList")
+        self.history_list.setMinimumWidth(360)
+        self.report = QtWidgets.QPlainTextEdit(splitter)
+        self.report.setObjectName("buildHistoryReport")
+        self.report.setReadOnly(True)
+        self.report.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
+        self.report.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+        splitter.setSizes([390, 590])
+        layout.addWidget(splitter, 1)
+
+        self.note = QtWidgets.QLabel("")
+        self.note.setObjectName("buildHistoryNote")
+        self.note.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(self.note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        self.copy_button = buttons.addButton("Copy Selected Report", QtWidgets.QDialogButtonBox.ActionRole)
+        self.copy_button.setObjectName("copySelectedBuildReport")
+        self.copy_button.clicked.connect(self.copy_selected_report)
+        self.clear_button = buttons.addButton("Clear History", QtWidgets.QDialogButtonBox.DestructiveRole)
+        self.clear_button.setObjectName("clearBuildHistory")
+        self.clear_button.clicked.connect(self.clear_history)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.history_list.currentItemChanged.connect(lambda *_args: self._show_selected())
+        self.reload()
+
+    def reload(self) -> None:
+        self.history_list.clear()
+        records = load_build_history()
+        for record in records:
+            item = QtWidgets.QListWidgetItem(build_history_label(record))
+            item.setData(QtCore.Qt.UserRole, record)
+            self.history_list.addItem(item)
+        has_records = bool(records)
+        self.copy_button.setEnabled(has_records)
+        self.clear_button.setEnabled(has_records)
+        if has_records:
+            self.history_list.setCurrentRow(0)
+            self.note.setText(f"Showing {len(records)} most recent build{'s' if len(records) != 1 else ''}.")
+        else:
+            self.report.setPlainText("No completed lineup builds have been recorded yet.")
+            self.note.setText("Generate lineups to create the first local build report.")
+
+    def selected_record(self) -> Dict[str, Any]:
+        item = self.history_list.currentItem()
+        if item is None:
+            return {}
+        value = item.data(QtCore.Qt.UserRole)
+        return dict(value) if isinstance(value, dict) else {}
+
+    def _show_selected(self) -> None:
+        record = self.selected_record()
+        self.report.setPlainText(format_build_report(record) if record else "Select a build to view its report.")
+        self.copy_button.setEnabled(bool(record))
+
+    def copy_selected_report(self) -> None:
+        record = self.selected_record()
+        if not record:
+            return
+        QtWidgets.QApplication.clipboard().setText(format_build_report(record))
+        self.note.setText("Build report copied to the clipboard.")
+
+    def clear_history(self) -> None:
+        if not load_build_history(limit=1):
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Clear Build History",
+            "Clear all locally saved build diagnostics? This does not remove exported lineups or contest results.",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if answer != QtWidgets.QMessageBox.Yes:
+            return
+        clear_build_history()
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "_on_build_history_cleared"):
+            parent._on_build_history_cleared()
+        self.reload()
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1531,6 +1641,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.last_live_check_summary: Dict[str, Any] = {}
         self.last_readiness_report: Dict[str, Any] = {}
         self.last_build_timing_report: Dict[str, Any] = {}
+        history = load_build_history(limit=1)
+        self.last_build_diagnostic: Dict[str, Any] = dict(history[0]) if history else {}
+        self._active_build_context: Dict[str, Any] = {}
         self._readiness_filter_names: set[str] = set()
         self._lineup_space_phase = ""
         self._last_live_check_epoch = 0.0
@@ -1935,6 +2048,14 @@ class MainWindow(QtWidgets.QMainWindow):
         settings_menu = QtWidgets.QMenu(settings_button)
         settings_menu.addAction("Live Data Settings", self.on_live_data_settings)
         settings_menu.addAction("Results & Learning", self.on_results_learning)
+        settings_menu.addSeparator()
+        self.action_copy_build_report = settings_menu.addAction(
+            "Copy Last Build Report", self.copy_last_build_report
+        )
+        self.action_copy_build_report.setObjectName("copyLastBuildReportAction")
+        self.action_copy_build_report.setEnabled(bool(self.last_build_diagnostic))
+        build_history_action = settings_menu.addAction("Build History…", self.on_build_history)
+        build_history_action.setObjectName("buildHistoryAction")
         settings_button.setMenu(settings_menu)
         command_layout.addWidget(settings_button)
 
@@ -3176,6 +3297,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.last_sim_report = {}
             self.last_readiness_report = {}
             self.last_build_timing_report = {}
+            self._active_build_context = {}
             self._readiness_filter_names.clear()
             self._lineup_space_phase = ""
             self.last_live_check_summary = {}
@@ -3402,6 +3524,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"Select {float(timing.get('selection_seconds', 0.0)):.2f}s • "
                 f"Total {float(timing.get('total_seconds', 0.0)):.2f}s",
                 f"Candidates {int(timing.get('candidate_count', 0)):,} → selected {int(timing.get('selected_count', 0)):,}",
+                "Use Settings > Copy Last Build Report to share the full diagnostic.",
             ])
         self.lbl_lineup_space.setToolTip("\n".join(line for line in tooltip if line is not None))
 
@@ -4107,6 +4230,28 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception:
                 logger.exception("NFL field calibration could not be loaded; using baseline preset")
 
+        portfolio_rules = self._portfolio_rules()
+        effective_sim_enabled = bool(
+            str(sport or "").strip().upper() == "NFL" and kind != "showdown" and sim_enabled
+        )
+        self._active_build_context = {
+            "sport": str(sport or "NFL").strip().upper(),
+            "kind": str(kind or "classic").strip().lower(),
+            "salary_cap": float(cap),
+            "requested_count": int(num),
+            "lineup_space": self._calculate_lineup_space(),
+            "settings": {
+                "build_style": build_style,
+                "salary_strategy": salary_strategy,
+                "ownership_mode": mode,
+                "ownership_weight": lam,
+                "sim_enabled": effective_sim_enabled,
+                "sim_scenarios": sim_scenarios if effective_sim_enabled else 0,
+                "field_preset": field_preset if effective_sim_enabled else "",
+            },
+            "portfolio_rules": portfolio_rules,
+        }
+
         label_sport = sport if kind != "showdown" else "Showdown"
         self._build_progress.setRange(0, num)
         self._build_progress.setValue(0)
@@ -4131,7 +4276,7 @@ class MainWindow(QtWidgets.QMainWindow):
             build_style=build_style,
             mlb_stack_pref=mlb_stack_pref,
             salary_strategy=salary_strategy,
-            portfolio_rules=self._portfolio_rules(),
+            portfolio_rules=portfolio_rules,
             sim_enabled=sim_enabled,
             sim_scenarios=sim_scenarios,
             field_preset=field_preset,
@@ -4421,6 +4566,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._populate_classic_lineups(lineups, sport)
                 built = len(self.last_classic)
                 self.status.showMessage(f"Built {built} of {requested} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}{comparison_note}{timing_note}", 12000)
+            self._record_build_diagnostic(payload, displayed_count=built)
             self._lineup_space_phase = ""
             self._update_readiness_badge()
             self._update_lineup_space_dashboard()
@@ -4429,6 +4575,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_lineup_build_error(self, msg: str) -> None:
         self._finish_lineup_build_ui()
+        self._active_build_context = {}
         self._lineup_space_phase = ""
         self._update_lineup_space_dashboard()
         self.status.showMessage("Lineup build failed.", 5000)
@@ -4648,6 +4795,79 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_results_learning(self) -> None:
         ResultsLearningDialog(self).exec_()
+
+    def _record_build_diagnostic(self, payload: Dict[str, Any], *, displayed_count: int) -> None:
+        context = dict(self._active_build_context or {})
+        self._active_build_context = {}
+        if not context:
+            kind = str(payload.get("kind") or "classic").strip().lower()
+            context = {
+                "sport": str(payload.get("sport") or self._current_sport()).strip().upper(),
+                "kind": kind,
+                "salary_cap": self._safe_float(
+                    self.edit_sd_cap.text() if kind == "showdown" else self.edit_cl_cap.text(),
+                    50000.0,
+                ),
+                "requested_count": int(payload.get("requested", 0) or 0),
+                "lineup_space": self._calculate_lineup_space(),
+                "settings": {
+                    "build_style": self.combo_build_style.currentText(),
+                    "salary_strategy": self.combo_salary_strategy.currentText(),
+                    "ownership_mode": self.combo_build_own_mode.currentText(),
+                    "ownership_weight": self.spin_build_own_weight.value(),
+                    "sim_enabled": bool(
+                        kind == "classic"
+                        and self._current_sport() == "NFL"
+                        and self.chk_nfl_contest_sim.isChecked()
+                    ),
+                    "sim_scenarios": self.spin_nfl_sim_scenarios.value(),
+                    "field_preset": self.combo_field_preset.currentText(),
+                },
+                "portfolio_rules": self._portfolio_rules(),
+            }
+        diagnostic = create_build_diagnostic(
+            context=context,
+            timing_report=dict(payload.get("timing_report") or {}),
+            portfolio_report=dict(payload.get("portfolio_report") or {}),
+            sim_report=dict(payload.get("sim_report") or {}),
+            displayed_count=displayed_count,
+            cancelled=bool(payload.get("cancelled")),
+        )
+        self.last_build_diagnostic = diagnostic
+        try:
+            self.last_build_diagnostic = save_build_diagnostic(diagnostic)
+        except Exception:
+            logger.exception("Build diagnostic could not be saved locally")
+            self.status.showMessage(
+                "Lineups were built, but the local diagnostic history could not be saved.",
+                6000,
+            )
+        if hasattr(self, "action_copy_build_report"):
+            self.action_copy_build_report.setEnabled(True)
+
+    def copy_last_build_report(self) -> None:
+        record = dict(self.last_build_diagnostic or {})
+        if not record:
+            history = load_build_history(limit=1)
+            record = dict(history[0]) if history else {}
+        if not record:
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Build Report",
+                "Generate lineups first, then the completed build report can be copied.",
+            )
+            return
+        self.last_build_diagnostic = record
+        QtWidgets.QApplication.clipboard().setText(format_build_report(record))
+        self.status.showMessage("Last build report copied to the clipboard.", 4000)
+
+    def on_build_history(self) -> None:
+        BuildDiagnosticsDialog(self).exec_()
+
+    def _on_build_history_cleared(self) -> None:
+        self.last_build_diagnostic = {}
+        if hasattr(self, "action_copy_build_report"):
+            self.action_copy_build_report.setEnabled(False)
 
     def on_export_saved(self, kind: str) -> None:
         kind_l = str(kind or "classic").lower()
