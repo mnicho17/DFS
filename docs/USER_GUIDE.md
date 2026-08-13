@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.8.1 | Windows desktop app
+Version 1.9.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -128,6 +128,12 @@ The compact **Space** display shows the current eligible build pool, structural 
 
 During generation, the Space display follows the Generate, SIM, and Select stages. After completion, hover it for the last build's phase timing and the number of candidates evaluated versus lineups selected.
 
+To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate target, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. It also identifies the slowest phase so a performance problem can be isolated without guessing.
+
+Choose **Settings > Build History…** to compare the 25 most recent runs and copy any earlier report. History is saved automatically after a completed or cancelled build and stays on this computer. Choose **Clear History** in that window when you no longer need it.
+
+![Build History comparing a completed NFL Classic performance report](images/build-history.png)
+
 ![Compact lineup Space dashboard during NFL simulation](images/lineup-space.png)
 
 ### After generation
@@ -230,7 +236,9 @@ See the separate Troubleshooting guide for more detail.
 
 ## Section 13: Local data and privacy
 
-The optimizer stores exports, imported results, slate snapshots, and settings on the computer. Choose **Open Local History Folder** in Results & Learning to inspect the history location.
+The optimizer stores exports, imported results, slate snapshots, build diagnostics, and settings on the computer. Choose **Open Local History Folder** in Results & Learning to inspect the history location.
+
+Build diagnostics contain aggregate settings, timing, counts, and generalized warning categories. They do not store player names, lineup contents, salary-file paths, or API keys.
 
 The Odds API key is stored in the current Windows user's local settings. It is not placed in lineup exports, logs, or this repository.
 

@@ -21,7 +21,8 @@ if str(REPO_ROOT) not in sys.path:
 from PyQt5 import QtCore, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
-from main_window import MainWindow, ResultsLearningDialog, SlateReadinessDialog  # noqa: E402
+from main_window import BuildDiagnosticsDialog, MainWindow, ResultsLearningDialog, SlateReadinessDialog  # noqa: E402
+from build_diagnostics import create_build_diagnostic, save_build_diagnostic  # noqa: E402
 from nfl_simulation import SimLineup  # noqa: E402
 from optimizers import MultiSportClassicOptimizer  # noqa: E402
 
@@ -203,6 +204,56 @@ def capture(output_dir: Path) -> None:
         window._refresh_players_table()
         app.processEvents()
         save_widget(window, output_dir / "lineup-space.png")
+
+        diagnostic = create_build_diagnostic(
+            context={
+                "sport": "NFL",
+                "kind": "classic",
+                "salary_cap": 50000,
+                "requested_count": 150,
+                "lineup_space": window._calculate_lineup_space(),
+                "settings": {
+                    "build_style": "Strategic",
+                    "salary_strategy": "Near Cap",
+                    "ownership_mode": "Leverage",
+                    "ownership_weight": 0.15,
+                    "sim_enabled": True,
+                    "sim_scenarios": 750,
+                    "field_preset": "150-Max",
+                },
+                "portfolio_rules": {
+                    "min_unique": 2,
+                    "max_team_pct": 70,
+                    "max_game_pct": 65,
+                    "balance_ownership": True,
+                    "groups": [{"kind": "never_together"}],
+                    "player_constraints": {"representative-limit": {"MaxPct": 35}},
+                },
+            },
+            timing_report={
+                "generation_seconds": 8.42,
+                "simulation_seconds": 17.86,
+                "selection_seconds": 1.24,
+                "total_seconds": 27.52,
+                "candidate_target": 600,
+                "candidate_count": 594,
+                "selected_count": 150,
+                "requested_count": 150,
+            },
+            portfolio_report={"compliant": True, "warnings": []},
+            sim_report={
+                "field_lineup_count": 1500,
+                "preset_comparison": {"available": True, "fit_score": 91},
+            },
+            displayed_count=150,
+        )
+        save_build_diagnostic(diagnostic)
+        build_history = BuildDiagnosticsDialog(window)
+        build_history.resize(1040, 650)
+        build_history.show()
+        app.processEvents()
+        save_widget(build_history, output_dir / "build-history.png")
+        build_history.close()
 
         window.last_live_check_summary = {
             "sleeper_state": "ok",

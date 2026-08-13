@@ -169,7 +169,14 @@ def markdown_story(markdown: str, styles, source_dir: Path):
     def flush_list():
         nonlocal list_kind
         if list_items:
-            flow = [ListItem(Paragraph(inline_markup(item), styles["list"]), leftIndent=10) for item in list_items]
+            flow = [
+                ListItem(
+                    Paragraph(inline_markup(item), styles["list"]),
+                    leftIndent=10,
+                    spaceAfter=1.5,
+                )
+                for item in list_items
+            ]
             list_options = {
                 "bulletType": "1" if list_kind == "number" else "bullet",
                 "leftIndent": 22,
@@ -279,7 +286,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", default="docs/USER_GUIDE.md")
     parser.add_argument("--output", default="dist/DFS-Optimizer-User-Guide.pdf")
-    parser.add_argument("--version", default="1.8.1")
+    parser.add_argument("--version", default="1.9.0")
     args = parser.parse_args()
     build_pdf(Path(args.source), Path(args.output), args.version)
     print(Path(args.output).resolve())

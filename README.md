@@ -101,6 +101,12 @@ Findings are separated into Pass, Review, and Block. Missing early-week odds rem
 
 NFL Classic SIM tooltips include a **Why this SIM Edge** breakdown showing each component's slate percentile, direction, and model weight. Build progress identifies candidate generation, field simulation, and portfolio selection as separate phases.
 
+## Build diagnostics
+
+After lineup generation, **Settings > Copy Last Build Report** copies a shareable snapshot of the build-space count, pool size, candidate flow, phase timing, active strategy, portfolio rules, preset fit, and generalized warnings. **Settings > Build History…** keeps the 25 most recent runs available for comparison and lets the user copy an earlier report or clear the history.
+
+Build diagnostics stay in the app's local history folder. They contain aggregate settings and counts only—not player names, lineup contents, source-file paths, or API keys.
+
 ## Create a release
 
 The `Windows Release` GitHub Actions workflow supports two modes:

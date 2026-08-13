@@ -9,7 +9,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtWidgets
 
-from main_window import LineupBuildWorker, LiveDataSettingsDialog, MainWindow, ResultsImportWorker, ResultsLearningDialog
+from main_window import BuildDiagnosticsDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, ResultsImportWorker, ResultsLearningDialog
+from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
 from learning_db import generate_learning_report
 from test_learning_results import _showdown_lineup, _write_csv
 from test_nfl_logic import _fixture_players
@@ -62,6 +63,41 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIn("Readiness", window.findChild(QtWidgets.QLabel, "slateReadinessStatus").text())
         self.assertIn("Lineup space", window.findChild(QtWidgets.QLabel, "lineupSpaceStatus").text())
         self.assertIsNotNone(window.findChild(QtWidgets.QToolButton, "clearReadinessFilterButton"))
+        copy_action = window.findChild(QtWidgets.QAction, "copyLastBuildReportAction")
+        self.assertIsNotNone(copy_action)
+        self.assertFalse(copy_action.isEnabled())
+        self.assertIsNotNone(window.findChild(QtWidgets.QAction, "buildHistoryAction"))
+        window.close()
+
+    def test_build_history_dialog_and_copy_report_use_local_diagnostics(self):
+        diagnostic = create_build_diagnostic(
+            context={
+                "sport": "NFL", "kind": "classic", "salary_cap": 50000,
+                "requested_count": 150,
+                "lineup_space": {"loaded": 80, "eligible": 55, "structural_combinations": 500000},
+                "settings": {"build_style": "Strategic", "sim_enabled": True, "sim_scenarios": 750},
+                "portfolio_rules": {"min_unique": 2},
+            },
+            timing_report={
+                "generation_seconds": 1, "simulation_seconds": 2, "selection_seconds": 0.5,
+                "total_seconds": 3.5, "candidate_target": 600, "candidate_count": 600,
+                "selected_count": 150, "requested_count": 150,
+            },
+            displayed_count=150,
+        )
+        save_build_diagnostic(diagnostic)
+        dialog = BuildDiagnosticsDialog()
+        self.assertEqual(dialog.history_list.count(), 1)
+        self.assertIn("DFS Optimizer Build Report", dialog.report.toPlainText())
+        dialog.copy_selected_report()
+        self.assertIn("NFL Classic", QtWidgets.QApplication.clipboard().text())
+        dialog.close()
+
+        window = MainWindow()
+        self.assertTrue(window.action_copy_build_report.isEnabled())
+        window.copy_last_build_report()
+        self.assertIn("Candidates: 600 generated", QtWidgets.QApplication.clipboard().text())
+        self.assertEqual(len(load_build_history()), 1)
         window.close()
 
     def test_compact_workspace_keeps_primary_actions_and_saved_views(self):
