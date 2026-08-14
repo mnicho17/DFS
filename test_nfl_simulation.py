@@ -6,6 +6,7 @@ from nfl_simulation import (
     lineup_signature,
     build_nfl_role_pool,
     generate_nfl_field_lineups,
+    generate_nfl_scenario_lineups,
     nfl_field_preset,
     should_use_nfl_role_pool,
     simulate_nfl_contest,
@@ -82,6 +83,30 @@ class NFLSimulationTests(unittest.TestCase):
         self.assertEqual(ownership["meta"]["valid_lineups"], 80)
         self.assertAlmostEqual(sum(ownership["total"].values()), 900.0, places=6)
 
+    def test_scenario_generator_builds_unique_near_cap_archetypes_deterministically(self):
+        players = _fixture_players()
+        for index, player in enumerate(players):
+            player["ProjOwnPct"] = 4.0 + (index % 24)
+
+        first, first_report = generate_nfl_scenario_lineups(players, 32, seed=818)
+        second, second_report = generate_nfl_scenario_lineups(players, 32, seed=818)
+
+        self.assertEqual(len(first), 32)
+        self.assertEqual(
+            [lineup_signature(lineup) for lineup in first],
+            [lineup_signature(lineup) for lineup in second],
+        )
+        self.assertEqual(first_report, second_report)
+        self.assertEqual(first_report["model"], "correlated-scenario-candidates-v1")
+        self.assertEqual(sum(first_report["archetypes"].values()), 32)
+        self.assertEqual(set(first_report["archetypes"]), {"Ceiling", "Balanced", "Leverage", "Low-Dup"})
+        self.assertEqual(len({lineup_signature(lineup) for lineup in first}), 32)
+        for lineup in first:
+            self.assertEqual(len(lineup), 9)
+            salary = sum(float(player["FlexSalary"]) for player in lineup)
+            self.assertGreaterEqual(salary, 49000)
+            self.assertLessEqual(salary, 50000)
+
     def test_contest_sim_attaches_slate_relative_edge_metrics(self):
         players = _fixture_players()
         candidates = MultiSportClassicOptimizer(
@@ -111,7 +136,7 @@ class NFLSimulationTests(unittest.TestCase):
         self.assertTrue(all(len(lineup.sim_metrics["sim_edge_drivers"]) == 6 for lineup in lineups))
         self.assertTrue(all("Duplication safety" in lineup.sim_metrics["sim_edge_components"] for lineup in lineups))
         self.assertTrue(all(lineup.sim_top_hits.issubset(lineup.sim_top_five_hits) for lineup in lineups))
-        self.assertEqual(result["report"]["model"], "scenario-portfolio-v3")
+        self.assertEqual(result["report"]["model"], "scenario-portfolio-v4")
         self.assertTrue(result["report"]["field_model_preset_comparison"]["available"])
 
         grade = lineup_grade_for_sport(lineups[0], "NFL", 50000)

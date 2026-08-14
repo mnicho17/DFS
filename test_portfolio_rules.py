@@ -62,6 +62,32 @@ class PortfolioRulesTests(unittest.TestCase):
         self.assertEqual(result["report"]["sim_summary"]["top_one_scenarios_covered"], len(selected_hits))
         self.assertIn("SIM portfolio", result["report"]["text"])
 
+    def test_sim_portfolio_does_not_use_a_c_grade_only_for_novelty(self):
+        candidates = []
+        for index, (edge, hits) in enumerate(((95.0, {0}), (90.0, {0}), (60.0, {1}))):
+            players = [_player(f"Q{index}-{slot}", f"T{index}", f"G{index}", 25 - slot) for slot in range(3)]
+            candidates.append(SimLineup(
+                players,
+                metrics={
+                    "sim_edge": edge,
+                    "sim_return_index": edge,
+                    "duplicate_risk": 20.0,
+                    "sim_top_one_pct": 10.0,
+                    "sim_top_five_pct": 20.0,
+                    "sim_cash_rate": 30.0,
+                    "sim_bust_rate": 20.0,
+                    "sim_scenarios": 10,
+                },
+                top_hits=hits,
+                top_five_hits=hits,
+                scenario_values={scenario: 6.0 for scenario in hits},
+            ))
+
+        result = select_portfolio(candidates, 2, rules={"min_unique": 1}, kind="classic")
+        selected_edges = {lineup.sim_metrics["sim_edge"] for lineup in result["lineups"]}
+
+        self.assertEqual(selected_edges, {95.0, 90.0})
+
     def test_sim_portfolio_selection_stays_fast_at_150(self):
         candidates = []
         for index in range(600):

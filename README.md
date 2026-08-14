@@ -69,8 +69,9 @@ The app generates a larger candidate pool and selects a compliant portfolio from
 NFL Classic builds can use the **NFL SIM Edge** option. The app first removes inactive and low-depth players from the automatic field pool while preserving manual locks. It then:
 
 - applies a **Single Entry**, **3-Max**, **20-Max**, or **150-Max** opponent-field preset;
+- creates candidates from projection-led optimization, realistic field constructions, and correlated ceiling, balanced, leverage, and low-duplication scenarios;
 - creates only complete, near-cap field lineups with realistic QB-stack, bring-back, and FLEX construction;
-- simulates correlated game, team, passing, rushing, and player outcomes;
+- evaluates candidates with a separate set of correlated game, team, passing, rushing, and player outcomes;
 - ranks every candidate against the same representative field in each scenario; and
 - selects a 150-lineup portfolio that covers different top-one-percent outcomes while respecting exposure rules.
 
@@ -103,7 +104,7 @@ NFL Classic SIM tooltips include a **Why this SIM Edge** breakdown showing each 
 
 ## Build diagnostics
 
-After lineup generation, **Settings > Copy Last Build Report** copies a shareable snapshot of the build-space count, pool size, candidate flow, phase timing, active strategy, portfolio rules, preset fit, and generalized warnings. The candidate budget distinguishes optimizer candidates from the additional field-shaped candidates used by NFL SIM Edge. **Settings > Build History…** keeps the 25 most recent runs available for comparison and lets the user copy an earlier report or clear the history.
+After lineup generation, **Settings > Copy Last Build Report** copies a shareable snapshot of the build-space count, pool size, candidate flow, phase timing, active strategy, portfolio rules, preset fit, and generalized warnings. The NFL SIM Edge candidate budget distinguishes projection-led optimizer candidates, realistic field-shaped candidates, and correlated scenario-built candidates. **Settings > Build History…** keeps the 25 most recent runs available for comparison and lets the user copy an earlier report or clear the history.
 
 Build diagnostics stay in the app's local history folder. They contain aggregate settings and counts only—not player names, lineup contents, source-file paths, or API keys.
 

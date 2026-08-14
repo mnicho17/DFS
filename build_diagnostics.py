@@ -190,6 +190,7 @@ def create_build_diagnostic(
             "target": max(0, _integer(timing.get("candidate_target"))),
             "optimizer_target": max(0, _integer(timing.get("optimizer_candidate_target"))),
             "field_shaped_target": max(0, _integer(timing.get("ownership_candidate_target"))),
+            "scenario_built_target": max(0, _integer(timing.get("scenario_candidate_target"))),
             "generated": max(0, _integer(timing.get("candidate_count"))),
             "selected": max(0, _integer(timing.get("selected_count"), displayed_count)),
         },
@@ -271,8 +272,14 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     candidate_detail = ""
     optimizer_target = _integer(candidates.get("optimizer_target"))
     field_target = _integer(candidates.get("field_shaped_target"))
-    if optimizer_target or field_target:
-        candidate_detail = f" ({optimizer_target:,} optimizer + {field_target:,} field-shaped)"
+    scenario_target = _integer(candidates.get("scenario_built_target"))
+    if optimizer_target or field_target or scenario_target:
+        sources = [f"{optimizer_target:,} optimizer"]
+        if field_target:
+            sources.append(f"{field_target:,} field-shaped")
+        if scenario_target:
+            sources.append(f"{scenario_target:,} scenario-built")
+        candidate_detail = f" ({' + '.join(sources)})"
 
     lines = [
         "DFS Optimizer Build Report",

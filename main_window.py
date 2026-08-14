@@ -449,25 +449,47 @@ class LineupBuildWorker(QtCore.QObject):
                 or int(self.portfolio_rules.get("min_unique", 1) or 1) > built_in_unique
             )
             use_nfl_sim = self.kind != "showdown" and self.sport == "NFL" and self.sim_enabled
+            has_locks = any(bool(player.get("LockFlex")) for player in self.players)
             use_role_pool = should_use_nfl_role_pool(
                 sport=self.sport,
                 kind=self.kind,
                 build_style=self.build_style,
                 sim_enabled=self.sim_enabled,
             )
+            ownership_candidate_target = 0
+            scenario_candidate_target = 0
             if use_nfl_sim:
-                # Give the scenario model a genuinely wider set to choose from.
-                # About 2.7x optimizer candidates plus the ownership-shaped
-                # source below is the measured speed/coverage knee: a 150-entry
-                # build evaluates roughly 500 distinct lineups.
-                candidate_target = min(
+                # Keep the measured 500-candidate budget for a normal 150-Max
+                # build, but diversify its sources. Projection-led optimizer
+                # lineups remain the majority; field-shaped and correlated
+                # scenario-built lineups cover constructions it may not create.
+                total_candidate_budget = min(
                     750,
-                    max(expanded_target, int(math.ceil(self.num_lineups * 8.0 / 3.0))),
+                    max(expanded_target, int(math.ceil(self.num_lineups * 10.0 / 3.0))),
                 )
+                alternate_sources_allowed = not hard_portfolio_rules and not has_locks
+                if alternate_sources_allowed:
+                    candidate_target = max(
+                        expanded_target,
+                        int(math.ceil(total_candidate_budget * 0.60)),
+                    )
+                    remaining_budget = max(0, total_candidate_budget - candidate_target)
+                    scenario_candidate_target = int(math.ceil(remaining_budget * 0.70))
+                    ownership_candidate_target = max(0, remaining_budget - scenario_candidate_target)
+                else:
+                    # Locks and hard portfolio rules belong in the optimizer's
+                    # own search so every candidate respects them by construction.
+                    candidate_target = min(
+                        750,
+                        max(expanded_target, int(math.ceil(self.num_lineups * 8.0 / 3.0))),
+                    )
             elif self.kind == "showdown" or hard_portfolio_rules:
                 candidate_target = expanded_target
             else:
                 candidate_target = self.num_lineups
+            candidate_budget = candidate_target + ownership_candidate_target + scenario_candidate_target
+            if use_nfl_sim:
+                self.progress.emit(0, candidate_budget, "Phase 1 of 3 - starting diversified candidate bank")
             build_players = [dict(player) for player in self.players]
             unfiltered_build_pool_size = len(build_players)
             required_group_keys = {
@@ -503,8 +525,12 @@ class LineupBuildWorker(QtCore.QObject):
                 lineups = opt.build_lineups(
                     num_lineups=candidate_target,
                     progress_callback=lambda done, total, text: self.progress.emit(
-                        min(self.num_lineups, int(done * self.num_lineups / max(1, total))),
-                        self.num_lineups,
+                        (
+                            min(candidate_budget, int(done * candidate_target / max(1, total)))
+                            if use_nfl_sim
+                            else min(self.num_lineups, int(done * self.num_lineups / max(1, total)))
+                        ),
+                        candidate_budget if use_nfl_sim else self.num_lineups,
                         "Phase 1 of 3 - generating portfolio candidates",
                     ),
                     cancel_callback=self._cancel_event.is_set,
@@ -523,44 +549,78 @@ class LineupBuildWorker(QtCore.QObject):
                 lineups = opt.build_lineups(
                     num_lineups=candidate_target,
                     progress_callback=lambda done, total, text: self.progress.emit(
-                        min(self.num_lineups, int(done * self.num_lineups / max(1, total))),
-                        self.num_lineups,
+                        (
+                            min(candidate_budget, int(done * candidate_target / max(1, total)))
+                            if use_nfl_sim
+                            else min(self.num_lineups, int(done * self.num_lineups / max(1, total)))
+                        ),
+                        candidate_budget if use_nfl_sim else self.num_lineups,
                         f"Phase 1 of 3 - {text}",
                     ),
                     cancel_callback=self._cancel_event.is_set,
                 )
             generation_seconds = time.perf_counter() - build_started
             sim_report: Dict[str, Any] = {}
-            ownership_candidate_target = 0
-            candidate_budget = candidate_target
-            simulation_started = time.perf_counter()
+            scenario_candidate_report: Dict[str, Any] = {}
+            simulation_seconds = 0.0
             if use_nfl_sim and lineups and not self._cancel_event.is_set():
                 field_config = nfl_field_preset(self.field_preset, self.field_calibration)
                 strategy_l = self.salary_strategy.strip().lower()
-                has_locks = any(bool(player.get("LockFlex")) for player in build_players)
-                if not hard_portfolio_rules and not has_locks:
-                    # Add a second, ownership-shaped source of candidates so
-                    # the optimizer's projection-led builds are not the only
-                    # game scripts available to the simulation.
-                    extra_count = min(180, max(60, int(math.ceil(self.num_lineups * 2.0 / 3.0))))
-                    ownership_candidate_target = extra_count
-                    candidate_budget += extra_count
-                    extras, _ = generate_nfl_field_lineups(
+                if ownership_candidate_target > 0 or scenario_candidate_target > 0:
+                    # Add two independent sources. Field-shaped candidates mimic
+                    # realistic opponent constructions; scenario-built candidates
+                    # optimize for correlated ceiling, leverage, and low-dup paths.
+                    extras: List[List[Dict[str, Any]]] = []
+                    if ownership_candidate_target > 0:
+                        extras, _ = generate_nfl_field_lineups(
+                            build_players,
+                            ownership_candidate_target,
+                            salary_cap=self.salary_cap,
+                            min_salary=max(0.0, self.salary_cap - 1000.0),
+                            seed=20260913,
+                            cancel_callback=self._cancel_event.is_set,
+                            candidate_mode=True,
+                            unique=True,
+                            field_config=field_config,
+                        )
+                        self.progress.emit(
+                            min(candidate_budget, candidate_target + len(extras)),
+                            candidate_budget,
+                            "Phase 1 of 3 - adding field-shaped candidates",
+                        )
+                    scenario_extras, scenario_candidate_report = generate_nfl_scenario_lineups(
                         build_players,
-                        extra_count,
+                        scenario_candidate_target,
                         salary_cap=self.salary_cap,
                         min_salary=max(0.0, self.salary_cap - 1000.0),
-                        seed=20260913,
+                        seed=20261004,
+                        progress_callback=lambda done, total, text: self.progress.emit(
+                            min(
+                                candidate_budget,
+                                candidate_target
+                                + ownership_candidate_target
+                                + int(done * scenario_candidate_target / max(1, total)),
+                            ),
+                            candidate_budget,
+                            f"Phase 1 of 3 - {text}",
+                        ),
                         cancel_callback=self._cancel_event.is_set,
-                        candidate_mode=True,
-                        unique=True,
                         field_config=field_config,
                     )
                     unique_lineups: Dict[tuple[str, ...], List[Dict[str, Any]]] = {}
-                    for lineup in list(lineups) + list(extras):
-                        signature = tuple(sorted(player_key(player) for player in lineup))
-                        unique_lineups.setdefault(signature, lineup)
+                    source_additions = {"optimizer": 0, "field_shaped": 0, "scenario_built": 0}
+                    for source, source_lineups in (
+                        ("optimizer", lineups),
+                        ("field_shaped", extras),
+                        ("scenario_built", scenario_extras),
+                    ):
+                        for lineup in source_lineups:
+                            signature = tuple(sorted(player_key(player) for player in lineup))
+                            if signature not in unique_lineups:
+                                unique_lineups[signature] = lineup
+                                source_additions[source] += 1
                     lineups = list(unique_lineups.values())
+                    scenario_candidate_report["unique_source_additions"] = source_additions
                 if "leverage" not in strategy_l and "balanced" not in strategy_l:
                     hard_floor = self.salary_cap - (500.0 if "max" in strategy_l else 1000.0)
                     near_cap = [
@@ -569,8 +629,10 @@ class LineupBuildWorker(QtCore.QObject):
                     ]
                     if len(near_cap) >= self.num_lineups:
                         lineups = near_cap
+                generation_seconds = time.perf_counter() - build_started
                 field_count = max(600, min(2400, self.num_lineups * 8))
                 self.progress.emit(0, self.sim_scenarios, "Phase 2 of 3 - preparing NFL contest simulation")
+                simulation_started = time.perf_counter()
                 sim_result = simulate_nfl_contest(
                     lineups,
                     build_players,
@@ -583,7 +645,7 @@ class LineupBuildWorker(QtCore.QObject):
                 )
                 lineups = sim_result.get("lineups") or lineups
                 sim_report = dict(sim_result.get("report") or {})
-            simulation_seconds = time.perf_counter() - simulation_started if use_nfl_sim else 0.0
+                simulation_seconds = time.perf_counter() - simulation_started
 
             selection_started = time.perf_counter()
             self.progress.emit(
@@ -615,6 +677,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "candidate_target": int(candidate_budget),
                 "optimizer_candidate_target": int(candidate_target),
                 "ownership_candidate_target": int(ownership_candidate_target),
+                "scenario_candidate_target": int(scenario_candidate_target),
                 "candidate_count": int(selected.get("candidate_count", 0) or 0),
                 "selected_count": len(lineups),
                 "requested_count": self.num_lineups,
@@ -623,6 +686,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "role_pool_applied": bool(use_role_pool),
                 "role_pool_omitted": max(0, int(unfiltered_build_pool_size - len(build_players))),
                 "sim_scenarios": self.sim_scenarios if use_nfl_sim else 0,
+                "scenario_candidate_report": scenario_candidate_report,
             }
             self.finished.emit({
                 "kind": self.kind,
@@ -657,7 +721,7 @@ from learning_db import (
     record_export,
 )
 from portfolio_rules import player_key, portfolio_report, select_portfolio
-from nfl_simulation import build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, nfl_field_preset, should_use_nfl_role_pool, simulate_nfl_contest, simulate_nfl_field_ownership
+from nfl_simulation import build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, generate_nfl_scenario_lineups, nfl_field_preset, should_use_nfl_role_pool, simulate_nfl_contest, simulate_nfl_field_ownership
 from lineup_space import calculate_lineup_space
 from slate_readiness import audit_slate
 from build_diagnostics import (

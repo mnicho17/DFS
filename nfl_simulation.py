@@ -19,6 +19,7 @@ INACTIVE_STATUSES = {"OUT", "IR", "PUP", "NFI", "SUSP", "SUSPENDED"}
 ROLE_LIMITS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
 ROLE_POOL_BUILD_STYLES = {"strategic", "balanced", "contrarian", "chalk"}
 POSITION_CV = {"QB": 0.32, "RB": 0.55, "WR": 0.65, "TE": 0.70, "DST": 0.80}
+SCENARIO_ARCHETYPES = ("Ceiling", "Balanced", "Leverage", "Low-Dup")
 
 
 # These are conservative starting assumptions, not claims about every contest.
@@ -535,6 +536,171 @@ def generate_nfl_field_lineups(
     return lineups, role_pool
 
 
+def _scenario_candidate_weights(
+    players: Sequence[Dict[str, Any]],
+    outcomes: Dict[str, float],
+    archetype: str,
+) -> Dict[int, float]:
+    """Turn one simulated outcome into position-relative selection weights.
+
+    Position-relative ranks keep a volatile DST outcome comparable with a QB
+    outcome.  The four archetypes deliberately trade a little raw ceiling for
+    median strength or lower ownership, while every archetype is still led by
+    the simulated scenario rather than the base projection.
+    """
+    archetype_l = str(archetype or "Balanced").strip().lower()
+    utilities: Dict[int, float] = {}
+    by_pos: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for player in players:
+        by_pos[_position(player)].append(player)
+        outcome = max(-4.0, _number(outcomes.get(player_key(player)), 0.0))
+        projection = _projection(player)
+        ownership = max(0.25, _number(player.get("ProjOwnPct"), 10.0))
+        value = outcome / max(1.0, _salary(player) / 1000.0)
+        if archetype_l == "ceiling":
+            utility = 0.90 * outcome + 0.10 * projection + 0.45 * value
+        elif archetype_l == "leverage":
+            utility = 0.82 * outcome + 0.18 * projection + 0.55 * value - 1.70 * math.log1p(ownership)
+        elif archetype_l == "low-dup":
+            utility = 0.72 * outcome + 0.28 * projection + 0.60 * value - 2.35 * math.log1p(ownership)
+        else:
+            utility = 0.72 * outcome + 0.28 * projection + 0.50 * value
+        utilities[id(player)] = utility
+
+    weights: Dict[int, float] = {}
+    for group in by_pos.values():
+        ordered = sorted(group, key=lambda player: utilities[id(player)])
+        denominator = float(max(1, len(ordered) - 1))
+        for index, player in enumerate(ordered):
+            percentile = index / denominator if len(ordered) > 1 else 0.5
+            # A sharp but non-deterministic distribution lets salary feasibility
+            # and correlated roster construction remain part of the search.
+            weights[id(player)] = math.exp(4.5 * percentile)
+    return weights
+
+
+def _scenario_candidate_score(
+    lineup: Sequence[Dict[str, Any]],
+    outcomes: Dict[str, float],
+    archetype: str,
+    salary_cap: float,
+) -> float:
+    outcome_total = sum(_number(outcomes.get(player_key(player)), 0.0) for player in lineup)
+    projection_total = sum(_projection(player) for player in lineup)
+    ownership_total = sum(max(0.25, _number(player.get("ProjOwnPct"), 10.0)) for player in lineup)
+    salary_used = sum(_salary(player) for player in lineup)
+    archetype_l = str(archetype or "Balanced").strip().lower()
+    if archetype_l == "ceiling":
+        score = 0.92 * outcome_total + 0.08 * projection_total
+    elif archetype_l == "leverage":
+        score = 0.86 * outcome_total + 0.14 * projection_total - 0.10 * ownership_total
+    elif archetype_l == "low-dup":
+        score = 0.76 * outcome_total + 0.24 * projection_total - 0.16 * ownership_total
+    else:
+        score = 0.76 * outcome_total + 0.24 * projection_total
+    # Do not reward intentionally wasteful salary, but allow a Low-Dup lineup
+    # to leave a small, realistic amount on the table.
+    preferred_left = 300.0 if archetype_l == "low-dup" else 0.0
+    score -= abs(max(0.0, salary_cap - salary_used) - preferred_left) / 850.0
+    return score
+
+
+def generate_nfl_scenario_lineups(
+    players: Sequence[Dict[str, Any]],
+    count: int,
+    *,
+    salary_cap: float = 50000.0,
+    min_salary: Optional[float] = None,
+    seed: int = 20261004,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    cancel_callback: Optional[Callable[[], bool]] = None,
+    field_config: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[List[Dict[str, Any]]], Dict[str, Any]]:
+    """Build unique NFL candidates from simulated game scripts.
+
+    Each accepted lineup is created from a fresh correlated outcome scenario.
+    Several legal constructions are sampled for that scenario and the strongest
+    one for the rotating archetype is retained. Contest evaluation later uses a
+    separate random stream, avoiding selection against the same scenarios used
+    to create the candidates.
+    """
+    requested = max(0, int(count or 0))
+    if requested <= 0:
+        return [], {"requested": 0, "generated": 0, "scenarios_sampled": 0, "archetypes": {}}
+
+    role_pool = build_nfl_role_pool(players, preserve_locks=False)
+    by_pos: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for player in role_pool:
+        by_pos[_position(player)].append(player)
+    if any(not by_pos.get(pos) for pos in ("QB", "RB", "WR", "TE", "DST")):
+        return [], {
+            "requested": requested,
+            "generated": 0,
+            "scenarios_sampled": 0,
+            "archetypes": {},
+            "role_pool_size": len(role_pool),
+        }
+
+    config = dict(field_config or {})
+    default_floor = max(salary_cap - 1000.0, salary_cap * _number(config.get("min_salary_pct"), 0.94))
+    floor = float(min_salary if min_salary is not None else max(0.0, default_floor))
+    rng = random.Random(seed)
+    lineups: List[List[Dict[str, Any]]] = []
+    signatures: set[Tuple[str, ...]] = set()
+    archetype_counts: Counter[str] = Counter()
+    scenarios_sampled = 0
+    attempts = 0
+    max_attempts = max(200, requested * 12)
+    report_every = max(5, requested // 20)
+
+    while len(lineups) < requested and attempts < max_attempts:
+        if cancel_callback and cancel_callback():
+            break
+        attempts += 1
+        archetype = SCENARIO_ARCHETYPES[(attempts - 1) % len(SCENARIO_ARCHETYPES)]
+        outcomes = _scenario_outcomes(rng, role_pool)
+        scenarios_sampled += 1
+        weights = _scenario_candidate_weights(role_pool, outcomes, archetype)
+        alternatives: List[List[Dict[str, Any]]] = []
+        for _ in range(6):
+            lineup = _build_field_lineup(
+                rng,
+                by_pos,
+                salary_cap=salary_cap,
+                min_salary=floor,
+                use_ownership=False,
+                precomputed_weights=weights,
+                candidate_mode=True,
+                field_config=config,
+            )
+            if lineup is None:
+                continue
+            signature = lineup_signature(lineup)
+            if signature not in signatures:
+                alternatives.append(lineup)
+        if not alternatives:
+            continue
+        best = max(
+            alternatives,
+            key=lambda lineup: _scenario_candidate_score(lineup, outcomes, archetype, salary_cap),
+        )
+        signature = lineup_signature(best)
+        signatures.add(signature)
+        lineups.append(best)
+        archetype_counts[archetype] += 1
+        if progress_callback and (len(lineups) % report_every == 0 or len(lineups) == requested):
+            progress_callback(len(lineups), requested, "Creating scenario-driven NFL candidates")
+
+    return lineups, {
+        "requested": requested,
+        "generated": len(lineups),
+        "scenarios_sampled": scenarios_sampled,
+        "archetypes": dict(archetype_counts),
+        "role_pool_size": len(role_pool),
+        "model": "correlated-scenario-candidates-v1",
+    }
+
+
 def simulate_nfl_field_ownership(
     players: Sequence[Dict[str, Any]],
     num_lineups: int,
@@ -579,8 +745,10 @@ def _scenario_outcomes(
     rng: random.Random,
     players: Sequence[Dict[str, Any]],
 ) -> Dict[str, float]:
-    games = {_game(player) for player in players if _game(player)}
-    teams = {_team(player) for player in players if _team(player)}
+    # Sorted inputs make seeded builds reproducible across separate app runs;
+    # set iteration order varies with Python's per-process hash seed.
+    games = sorted({_game(player) for player in players if _game(player)})
+    teams = sorted({_team(player) for player in players if _team(player)})
     game_factor = {game: rng.gauss(0.0, 1.0) for game in games}
     team_environment = {team: rng.gauss(0.0, 1.0) for team in teams}
     team_style = {team: rng.gauss(0.0, 1.0) for team in teams}
@@ -1134,6 +1302,6 @@ def simulate_nfl_contest(
             "learned_entries": int(config.get("learned_entries", 0) or 0),
             "field_comparison": field_comparison,
             "field_model_preset_comparison": field_model_preset_comparison,
-            "model": "scenario-portfolio-v3",
+            "model": "scenario-portfolio-v4",
         },
     }

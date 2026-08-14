@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.9.1 | Windows desktop app
+Version 1.10.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -150,9 +150,9 @@ Large candidate pools, NFL simulation, and restrictive portfolio rules take more
 
 ## 9. Understand NFL SIM Edge
 
-NFL SIM Edge is for NFL Classic tournament decisions. The app builds a representative opponent field, simulates correlated game and player outcomes, ranks candidates against that same field, and then selects a portfolio that covers different strong scenarios.
+NFL SIM Edge is for NFL Classic tournament decisions. It combines projection-led optimizer lineups, realistic field-shaped lineups, and lineups built from correlated ceiling, balanced, leverage, and low-duplication scenarios. The app evaluates them against a representative opponent field with a separate set of simulated outcomes, then selects a portfolio that covers different strong scenarios. Separating candidate creation from evaluation reduces overfitting.
 
-Choose the preset that matches the contest's maximum entries per person. The presets are conservative starting assumptions, not promises about a particular contest. When enough complete standings have been imported for that same preset, the app can blend measured local salary, construction, and winning-ownership patterns into the baseline. The learned blend requires at least three complete fields, 1,000 field entries, and 70% player metadata coverage; otherwise the measurements remain report-only and the baseline remains active.
+Choose the preset that matches the contest's maximum entries per person. Presets are conservative starting assumptions, not promises. After at least three complete fields, 1,000 entries, and 70% player metadata coverage have been imported for that preset, the app can blend measured salary, construction, and winning-ownership patterns into its baseline. Until then, measurements remain report-only.
 
 - **SIM Edge** is a slate-relative 0-100 summary. It is useful for comparing candidates from the same build, not as a universal score across slates.
 - **Top 1%** and **Top 5%** estimate how often the lineup reached those field thresholds.
@@ -165,9 +165,9 @@ Choose the preset that matches the contest's maximum entries per person. The pre
 - **Leverage** rewards useful paths that differ from expected field behavior.
 - **Duplication risk** estimates how likely the construction is to be shared. Lower is generally better when other qualities are similar.
 
-The top line in Classic shows Edge and top-one-percent rate. Hover or open the detail tooltip for the rest. The **Why this SIM Edge** section shows the slate percentile, direction, and model weight for top-one-percent outcomes, representative wins, top-five-percent outcomes, ceiling, tournament return, and duplication safety. The generation message and Slate Readiness report also show how closely the selected portfolio fits the chosen contest preset.
+The Classic results show Edge and top-one-percent rate. The **Why this SIM Edge** detail explains slate percentile, direction, and model weight for top finishes, ceiling, tournament return, and duplication safety. Generation and Slate Readiness show preset fit; the copied build report separates optimizer, field-shaped, and scenario-built candidates.
 
-Do not choose by one number alone. Compare ceiling, top-five rate, leverage, duplication, construction, news risk, preset fit, and portfolio coverage.
+Portfolio selection rewards coverage of different strong scenarios, but applies a soft quality guardrail below the B-grade boundary so novelty alone does not rescue a weak candidate. Do not choose by one number alone. Compare ceiling, top-five rate, leverage, duplication, construction, news risk, preset fit, and portfolio coverage.
 
 ![NFL Classic results ranked with slate-relative SIM Edge and top-one-percent rates](images/nfl-sim-results.png)
 
