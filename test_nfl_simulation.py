@@ -7,6 +7,7 @@ from nfl_simulation import (
     build_nfl_role_pool,
     generate_nfl_field_lineups,
     nfl_field_preset,
+    should_use_nfl_role_pool,
     simulate_nfl_contest,
     simulate_nfl_field_ownership,
 )
@@ -15,6 +16,24 @@ from test_nfl_logic import _fixture_players
 
 
 class NFLSimulationTests(unittest.TestCase):
+    def test_role_pool_policy_covers_normal_classic_styles_and_preserves_broad_randomized_mode(self):
+        for style in ("Strategic", "Balanced", "Contrarian", "Chalk"):
+            self.assertTrue(should_use_nfl_role_pool(
+                sport="NFL", kind="classic", build_style=style, sim_enabled=False
+            ))
+        self.assertFalse(should_use_nfl_role_pool(
+            sport="NFL", kind="classic", build_style="Randomized", sim_enabled=False
+        ))
+        self.assertTrue(should_use_nfl_role_pool(
+            sport="NFL", kind="classic", build_style="Randomized", sim_enabled=True
+        ))
+        self.assertFalse(should_use_nfl_role_pool(
+            sport="NFL", kind="showdown", build_style="Strategic", sim_enabled=True
+        ))
+        self.assertFalse(should_use_nfl_role_pool(
+            sport="MLB", kind="classic", build_style="Strategic", sim_enabled=True
+        ))
+
     def test_role_pool_removes_inactive_and_backup_quarterbacks(self):
         players = _fixture_players()
         players.extend([
@@ -34,6 +53,15 @@ class NFLSimulationTests(unittest.TestCase):
         self.assertEqual(len(buf_qbs), 1)
         self.assertNotEqual(buf_qbs[0]["FlexID"], "inactive")
         self.assertNotEqual(buf_qbs[0]["FlexID"], "backup")
+
+        required_pool = build_nfl_role_pool(players, preserve_player_keys={"backup"})
+        required_buf_ids = {
+            player["FlexID"]
+            for player in required_pool
+            if player["Team"] == "BUF" and player["Position"] == "QB"
+        }
+        self.assertEqual(len(required_buf_ids), 2)
+        self.assertIn("backup", required_buf_ids)
 
     def test_field_generator_counts_only_complete_near_cap_lineups(self):
         players = _fixture_players()

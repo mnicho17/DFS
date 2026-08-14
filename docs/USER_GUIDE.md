@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.9.0 | Windows desktop app
+Version 1.9.1 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -96,6 +96,7 @@ Reopen Slate Readiness after generation. The portfolio check then compares salar
 The **Build Strategy** tab controls how candidates are created and ranked. Available choices vary by sport and contest type.
 
 - Choose a style that fits the contest, such as balanced, projection-oriented, or leverage-oriented.
+- For NFL Classic, Strategic, Balanced, Contrarian, and Chalk use the starter/rotation pool even when SIM Edge is off. Locks, minimum exposures, and required player groups are preserved. Choose Randomized with SIM Edge off when you intentionally want the broad player pool, including deep backups.
 - Use ownership mode and weight to decide how much popularity affects ranking.
 - For MLB, choose stack preferences and use optional lineup, form, matchup, park, weather, and Vegas inputs.
 - Use salary strategy to discourage obviously under-cap builds without forcing every lineup to spend the full cap.
@@ -124,17 +125,17 @@ Locks, fades, salary, roster eligibility, and hard maximums remain hard rules. S
 
 Choose **Generate** from the active Classic or Showdown area. During a build, the progress area reports the current stage and offers **Cancel**. Cancellation keeps valid lineups already completed.
 
-The compact **Space** display shows the current eligible build pool, structural lineup possibilities, and requested lineup count. Fading or locking players recalculates it immediately. With NFL SIM Edge enabled, it uses the same starter/rotation role pool as generation, so omitted inactive players and deep backups visibly shrink the count. NFL Classic is an exact roster-shape count; Showdown and multi-position sports are labeled as upper bounds. Salary cap, stacking, correlation, exposure, and uniqueness rules narrow the real build space further.
+The compact **Space** display shows the current eligible build pool, structural lineup possibilities, and requested lineup count. Fading, locking, or changing the NFL build style recalculates it immediately. Normal NFL Classic styles use the same starter/rotation role pool as generation whether SIM Edge is on or off, so omitted inactive players and deep backups visibly shrink the count. NFL Classic is an exact roster-shape count; Showdown and multi-position sports are labeled as upper bounds. Salary cap, stacking, correlation, exposure, and uniqueness rules narrow the real build space further.
 
 During generation, the Space display follows the Generate, SIM, and Select stages. After completion, hover it for the last build's phase timing and the number of candidates evaluated versus lineups selected.
 
-To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate target, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. It also identifies the slowest phase so a performance problem can be isolated without guessing.
+To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate budget, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. For NFL SIM Edge, the budget separates optimizer candidates from additional field-shaped candidates. It also identifies the slowest phase so a performance problem can be isolated without guessing.
 
 Choose **Settings > Build History…** to compare the 25 most recent runs and copy any earlier report. History is saved automatically after a completed or cancelled build and stays on this computer. Choose **Clear History** in that window when you no longer need it.
 
 ![Build History comparing a completed NFL Classic performance report](images/build-history.png)
 
-![Compact lineup Space dashboard during NFL simulation](images/lineup-space.png)
+![Compact Lineup Space dashboard during NFL Classic generation](images/lineup-space.png)
 
 ### After generation
 

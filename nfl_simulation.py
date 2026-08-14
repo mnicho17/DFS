@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 
 INACTIVE_STATUSES = {"OUT", "IR", "PUP", "NFI", "SUSP", "SUSPENDED"}
 ROLE_LIMITS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
+ROLE_POOL_BUILD_STYLES = {"strategic", "balanced", "contrarian", "chalk"}
 POSITION_CV = {"QB": 0.32, "RB": 0.55, "WR": 0.65, "TE": 0.70, "DST": 0.80}
 
 
@@ -200,16 +201,19 @@ def build_nfl_role_pool(
     players: Sequence[Dict[str, Any]],
     *,
     preserve_locks: bool = True,
+    preserve_player_keys: Iterable[str] = (),
 ) -> List[Dict[str, Any]]:
     """Return a compact active starter/rotation pool.
 
     When refreshed NFL depth data exists it leads the ranking.  Salary and
     projection provide a deterministic fallback for a raw DraftKings file.
-    Manual locks are always preserved for lineup generation.
+    Manual locks and players explicitly required by portfolio rules are always
+    preserved for lineup generation.
     """
 
     grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
-    locked: List[Dict[str, Any]] = []
+    preserve_keys = {str(key) for key in preserve_player_keys if str(key)}
+    preserved: List[Dict[str, Any]] = []
     for player in players:
         if not _is_active(player):
             continue
@@ -217,17 +221,38 @@ def build_nfl_role_pool(
         if pos not in ROLE_LIMITS:
             continue
         grouped[(_team(player), pos)].append(player)
-        if preserve_locks and player.get("LockFlex"):
-            locked.append(player)
+        if (preserve_locks and player.get("LockFlex")) or player_key(player) in preserve_keys:
+            preserved.append(player)
 
     selected: Dict[str, Dict[str, Any]] = {}
     for (_, pos), group in grouped.items():
         ranked = sorted(group, key=_role_rank, reverse=True)
         for player in ranked[: ROLE_LIMITS[pos]]:
             selected[player_key(player)] = player
-    for player in locked:
+    for player in preserved:
         selected[player_key(player)] = player
     return list(selected.values())
+
+
+def should_use_nfl_role_pool(
+    *,
+    sport: str,
+    kind: str,
+    build_style: str,
+    sim_enabled: bool,
+) -> bool:
+    """Return whether Classic generation should use the compact NFL role pool.
+
+    Normal NFL build styles exclude deep backups even when contest simulation is
+    disabled. Randomized remains the deliberate broad-pool option. SIM always
+    uses the role pool, and Showdown keeps its full single-game player pool.
+    """
+    if str(sport or "").strip().upper() != "NFL":
+        return False
+    if str(kind or "classic").strip().lower() == "showdown":
+        return False
+    style = str(build_style or "Strategic").strip().lower()
+    return bool(sim_enabled) or style in ROLE_POOL_BUILD_STYLES
 
 
 def _weighted_pick(
