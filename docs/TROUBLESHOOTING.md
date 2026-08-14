@@ -36,6 +36,7 @@ Choose **Game-Day Check** immediately before generating and again near lock. The
 - Start with fewer requested lineups while testing settings.
 - Remove impossible minimum exposures or conflicting player groups.
 - Relax very high uniqueness or very low team/game caps.
+- For NFL Classic, Strategic, Balanced, Contrarian, and Chalk use the compact starter/rotation pool. Randomized with SIM Edge off intentionally uses the broader pool and can take longer.
 - NFL SIM Edge does additional field and outcome simulation, so it normally takes longer than a projection-only build.
 - Use **Settings > Build History…** to compare the same slate and settings across app releases.
 - Use **Cancel** to keep completed lineups from the current build.

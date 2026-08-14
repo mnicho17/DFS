@@ -3,7 +3,7 @@
 1. Download `DFS-Optimizer.exe` from the [latest release](https://github.com/mnicho17/DFS/releases/latest) and open it.
 2. Choose the sport at the top of the app, then select **Load Player CSV** and open the DraftKings salary file for your slate.
 3. Choose **Slate Readiness**. For NFL it refreshes stale player news automatically; add a personal Odds API key under **Live Data Settings** if you want Vegas totals and spreads.
-4. Choose **Showdown** or **Classic**, set the number of lineups, and review **Build Strategy**. NFL Classic users can turn on **NFL SIM Edge** and choose **Single Entry**, **3-Max**, **20-Max**, or **150-Max**.
+4. Choose **Showdown** or **Classic**, set the number of lineups, and review **Build Strategy**. Normal NFL Classic styles automatically omit deep backups; use Randomized with SIM Edge off only when you want the broad player pool. NFL Classic users can turn on **NFL SIM Edge** and choose **Single Entry**, **3-Max**, **20-Max**, or **150-Max**.
 5. Use **Portfolio Rules** for minimum uniqueness, exposure caps, team or game limits, and player groups.
 6. Review the compact **Space** display, then choose **Generate**. It shows the usable player pool, structural lineup possibilities, requested total, current build phase, and—after completion—phase timing in its tooltip.
 7. Reopen **Slate Readiness** to review salary and contest-preset fit. Select a finding and choose **Show Players** to focus the player table. For a performance snapshot, choose **Settings > Copy Last Build Report**; **Build History…** keeps the 25 most recent reports locally. Then save the lineups you want, inspect **Portfolio Summary**, and choose **Export CSV**.

@@ -449,6 +449,12 @@ class LineupBuildWorker(QtCore.QObject):
                 or int(self.portfolio_rules.get("min_unique", 1) or 1) > built_in_unique
             )
             use_nfl_sim = self.kind != "showdown" and self.sport == "NFL" and self.sim_enabled
+            use_role_pool = should_use_nfl_role_pool(
+                sport=self.sport,
+                kind=self.kind,
+                build_style=self.build_style,
+                sim_enabled=self.sim_enabled,
+            )
             if use_nfl_sim:
                 # Give the scenario model a genuinely wider set to choose from.
                 # About 2.7x optimizer candidates plus the ownership-shaped
@@ -463,21 +469,29 @@ class LineupBuildWorker(QtCore.QObject):
             else:
                 candidate_target = self.num_lineups
             build_players = [dict(player) for player in self.players]
+            unfiltered_build_pool_size = len(build_players)
             required_group_keys = {
                 str(key)
                 for group in self.portfolio_rules.get("groups") or []
                 if str(group.get("type") or "") == "at_least_one"
                 for key in group.get("player_keys") or []
             }
+            required_role_pool_keys = set(required_group_keys)
             for player in build_players:
                 key = player_key(player)
                 configured = constraints.get(key) or {}
                 min_total = float(configured.get("MinPct", player.get("MinPct", 0.0)) or 0.0)
                 min_cpt = float(configured.get("MinCptPct", player.get("MinCptPct", 0.0)) or 0.0)
+                if min_total > 0.0 or min_cpt > 0.0:
+                    required_role_pool_keys.add(key)
                 player["_PortfolioCandidateBoost"] = min(12.0, min_total * 0.10) + (5.0 if key in required_group_keys else 0.0)
                 player["_PortfolioCptCandidateBoost"] = min(14.0, min_cpt * 0.12) + (3.0 if key in required_group_keys else 0.0)
-            if use_nfl_sim:
-                build_players = build_nfl_role_pool(build_players, preserve_locks=True)
+            if use_role_pool:
+                build_players = build_nfl_role_pool(
+                    build_players,
+                    preserve_locks=True,
+                    preserve_player_keys=required_role_pool_keys,
+                )
             if self.kind == "showdown":
                 opt = ShowdownOptimizer(
                     build_players,
@@ -517,6 +531,8 @@ class LineupBuildWorker(QtCore.QObject):
                 )
             generation_seconds = time.perf_counter() - build_started
             sim_report: Dict[str, Any] = {}
+            ownership_candidate_target = 0
+            candidate_budget = candidate_target
             simulation_started = time.perf_counter()
             if use_nfl_sim and lineups and not self._cancel_event.is_set():
                 field_config = nfl_field_preset(self.field_preset, self.field_calibration)
@@ -527,6 +543,8 @@ class LineupBuildWorker(QtCore.QObject):
                     # the optimizer's projection-led builds are not the only
                     # game scripts available to the simulation.
                     extra_count = min(180, max(60, int(math.ceil(self.num_lineups * 2.0 / 3.0))))
+                    ownership_candidate_target = extra_count
+                    candidate_budget += extra_count
                     extras, _ = generate_nfl_field_lineups(
                         build_players,
                         extra_count,
@@ -594,11 +612,16 @@ class LineupBuildWorker(QtCore.QObject):
                 "simulation_seconds": max(0.0, simulation_seconds),
                 "selection_seconds": max(0.0, selection_seconds),
                 "total_seconds": max(0.0, time.perf_counter() - build_started),
-                "candidate_target": int(candidate_target),
+                "candidate_target": int(candidate_budget),
+                "optimizer_candidate_target": int(candidate_target),
+                "ownership_candidate_target": int(ownership_candidate_target),
                 "candidate_count": int(selected.get("candidate_count", 0) or 0),
                 "selected_count": len(lineups),
                 "requested_count": self.num_lineups,
                 "build_pool_size": len(build_players),
+                "unfiltered_build_pool_size": int(unfiltered_build_pool_size),
+                "role_pool_applied": bool(use_role_pool),
+                "role_pool_omitted": max(0, int(unfiltered_build_pool_size - len(build_players))),
                 "sim_scenarios": self.sim_scenarios if use_nfl_sim else 0,
             }
             self.finished.emit({
@@ -634,7 +657,7 @@ from learning_db import (
     record_export,
 )
 from portfolio_rules import player_key, portfolio_report, select_portfolio
-from nfl_simulation import build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, nfl_field_preset, simulate_nfl_contest, simulate_nfl_field_ownership
+from nfl_simulation import build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, nfl_field_preset, should_use_nfl_role_pool, simulate_nfl_contest, simulate_nfl_field_ownership
 from lineup_space import calculate_lineup_space
 from slate_readiness import audit_slate
 from build_diagnostics import (
@@ -1775,7 +1798,8 @@ class MainWindow(QtWidgets.QMainWindow):
             "Balanced: lighter strategy bias with QB correlation intact.\n"
             "Contrarian: stronger portfolio diversity (3 uniques preferred) and leverage-friendly scoring.\n"
             "Chalk: projection/chalk-leaning builds with basic QB correlation.\n"
-            "Randomized: mostly projection/value, while retaining anti-correlation safety rails.\n"
+            "Randomized: mostly projection/value, while retaining anti-correlation safety rails. "
+            "With NFL SIM Edge off, it also keeps the broad player pool, including deep backups.\n"
             "Other sports keep their existing sport-specific strategy behavior."
         )
         row2.addWidget(self.combo_build_style)
@@ -2518,6 +2542,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._on_lineup_tab_changed(self.tabs_lineups.currentIndex())
         self._update_player_inspector()
         self.chk_nfl_contest_sim.toggled.connect(self._update_lineup_space_dashboard)
+        self.combo_build_style.currentTextChanged.connect(self._update_lineup_space_dashboard)
         self._update_lineup_space_dashboard()
 
     def _on_primary_build(self) -> None:
@@ -3474,9 +3499,44 @@ class MainWindow(QtWidgets.QMainWindow):
         sim_enabled = bool(
             hasattr(self, "chk_nfl_contest_sim") and self.chk_nfl_contest_sim.isChecked()
         )
-        if sport == "NFL" and mode == "classic" and sim_enabled and pool:
-            pool = build_nfl_role_pool(pool, preserve_locks=True)
-            pool_label = "NFL SIM starter/rotation pool"
+        build_style = (
+            self.combo_build_style.currentText()
+            if hasattr(self, "combo_build_style")
+            else "Strategic"
+        )
+        use_role_pool = should_use_nfl_role_pool(
+            sport=sport,
+            kind=mode,
+            build_style=build_style,
+            sim_enabled=sim_enabled,
+        )
+        if use_role_pool and pool:
+            def has_minimum_exposure(player: Dict[str, Any]) -> bool:
+                try:
+                    return (
+                        float(player.get("MinPct") or 0.0) > 0.0
+                        or float(player.get("MinCptPct") or 0.0) > 0.0
+                    )
+                except (TypeError, ValueError):
+                    return False
+
+            required_role_pool_keys = {
+                player_key(player)
+                for player in pool
+                if has_minimum_exposure(player)
+            }
+            required_role_pool_keys.update(
+                str(key)
+                for group in self.portfolio_groups
+                if str(group.get("type") or "") == "at_least_one"
+                for key in group.get("player_keys") or []
+            )
+            pool = build_nfl_role_pool(
+                pool,
+                preserve_locks=True,
+                preserve_player_keys=required_role_pool_keys,
+            )
+            pool_label = "NFL starter/rotation pool"
         return calculate_lineup_space(
             pool,
             sport=sport,
@@ -3523,7 +3583,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"SIM {float(timing.get('simulation_seconds', 0.0)):.2f}s • "
                 f"Select {float(timing.get('selection_seconds', 0.0)):.2f}s • "
                 f"Total {float(timing.get('total_seconds', 0.0)):.2f}s",
-                f"Candidates {int(timing.get('candidate_count', 0)):,} → selected {int(timing.get('selected_count', 0)):,}",
+                f"Candidates {int(timing.get('candidate_count', 0)):,}/"
+                f"{int(timing.get('candidate_target', 0)):,} budget → selected "
+                f"{int(timing.get('selected_count', 0)):,}",
                 "Use Settings > Copy Last Build Report to share the full diagnostic.",
             ])
         self.lbl_lineup_space.setToolTip("\n".join(line for line in tooltip if line is not None))

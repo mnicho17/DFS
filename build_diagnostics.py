@@ -188,6 +188,8 @@ def create_build_diagnostic(
         },
         "candidates": {
             "target": max(0, _integer(timing.get("candidate_target"))),
+            "optimizer_target": max(0, _integer(timing.get("optimizer_candidate_target"))),
+            "field_shaped_target": max(0, _integer(timing.get("ownership_candidate_target"))),
             "generated": max(0, _integer(timing.get("candidate_count"))),
             "selected": max(0, _integer(timing.get("selected_count"), displayed_count)),
         },
@@ -266,6 +268,12 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     if settings.get("sim_enabled"):
         sim_text = f"On ({_integer(settings.get('sim_scenarios')):,} scenarios, {settings.get('field_preset') or 'default preset'})"
 
+    candidate_detail = ""
+    optimizer_target = _integer(candidates.get("optimizer_target"))
+    field_target = _integer(candidates.get("field_shaped_target"))
+    if optimizer_target or field_target:
+        candidate_detail = f" ({optimizer_target:,} optimizer + {field_target:,} field-shaped)"
+
     lines = [
         "DFS Optimizer Build Report",
         f"Run: {_created_label(record.get('created_at'))}",
@@ -275,7 +283,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Contest: {str(record.get('sport') or 'NFL').upper()} {str(record.get('contest_type') or 'classic').title()}",
         f"- Salary cap: ${_number(record.get('salary_cap'), 50000.0):,.0f}",
         f"- Requested: {_integer(record.get('requested_count')):,}",
-        f"- Candidates: {_integer(candidates.get('generated')):,} generated / {_integer(candidates.get('target')):,} target",
+        f"- Candidates: {_integer(candidates.get('generated')):,} generated / {_integer(candidates.get('target')):,} budget{candidate_detail}",
         f"- Selected: {_integer(candidates.get('selected')):,} ({_integer(record.get('displayed_count')):,} displayed)",
         "",
         "Build space",

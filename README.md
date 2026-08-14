@@ -95,7 +95,7 @@ NFL Showdown generation uses those same live inputs without applying the Classic
 
 **Slate Readiness** is a one-click, report-only preflight. For NFL it refreshes stale player status first, then audits roster viability, projections, ownership, locks, role certainty, news freshness, and optional Vegas context. After generation it also checks complete lineups, salary use, and how the portfolio's QB stacks, bring-backs, FLEX mix, and ownership coverage compare with the selected contest preset.
 
-Actionable findings can filter the player table directly. The adjacent **Space** dashboard shows the current eligible pool, structural lineup possibilities, requested entries, and live generation phase. It updates after fades and locks; NFL Classic SIM builds use the same compact starter/rotation pool as generation. Its tooltip clearly distinguishes exact NFL roster-shape counts from upper bounds and reports generation, simulation, and selection timing after a build.
+Actionable findings can filter the player table directly. The adjacent **Space** dashboard shows the current eligible pool, structural lineup possibilities, requested entries, and live generation phase. It updates after fades and locks. Normal NFL Classic styles use a compact starter/rotation pool with or without SIM Edge; locks, minimum exposures, and required player groups remain eligible. **Randomized** with SIM Edge off is the deliberate broad-pool option. The tooltip clearly distinguishes exact NFL roster-shape counts from upper bounds and reports generation, simulation, and selection timing after a build.
 
 Findings are separated into Pass, Review, and Block. Missing early-week odds remain a review item; hard problems such as missing positions, poor projection coverage, or a locked unavailable player are blockers. The audit never changes player settings or lineups.
 
@@ -103,7 +103,7 @@ NFL Classic SIM tooltips include a **Why this SIM Edge** breakdown showing each 
 
 ## Build diagnostics
 
-After lineup generation, **Settings > Copy Last Build Report** copies a shareable snapshot of the build-space count, pool size, candidate flow, phase timing, active strategy, portfolio rules, preset fit, and generalized warnings. **Settings > Build History…** keeps the 25 most recent runs available for comparison and lets the user copy an earlier report or clear the history.
+After lineup generation, **Settings > Copy Last Build Report** copies a shareable snapshot of the build-space count, pool size, candidate flow, phase timing, active strategy, portfolio rules, preset fit, and generalized warnings. The candidate budget distinguishes optimizer candidates from the additional field-shaped candidates used by NFL SIM Edge. **Settings > Build History…** keeps the 25 most recent runs available for comparison and lets the user copy an earlier report or clear the history.
 
 Build diagnostics stay in the app's local history folder. They contain aggregate settings and counts only—not player names, lineup contents, source-file paths, or API keys.
 

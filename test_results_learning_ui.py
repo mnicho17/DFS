@@ -252,6 +252,75 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertGreaterEqual(timing["total_seconds"], timing["generation_seconds"])
         self.assertEqual(timing["selected_count"], 150)
 
+    def test_strategic_classic_prunes_deep_backups_without_sim_and_preserves_lock(self):
+        players = _fixture_players()
+        teams = sorted({str(player.get("Team")) for player in players})
+        locked_backup = None
+        next_id = 9000
+        for team in teams:
+            opponent = next(
+                str(player.get("Opponent")) for player in players if player.get("Team") == team
+            )
+            game = next(
+                str(player.get("GameKey")) for player in players if player.get("Team") == team
+            )
+            for position, depth in (("QB", 2), ("RB", 3), ("WR", 4), ("TE", 2)):
+                backup = {
+                    "Name": f"{team} deep {position}",
+                    "Team": team,
+                    "Opponent": opponent,
+                    "GameKey": game,
+                    "GameInfo": game,
+                    "Position": position,
+                    "FlexSalary": 5200,
+                    "FlexProjection": 12.0,
+                    "FlexID": str(next_id),
+                    "NFLDepthOrder": depth,
+                    "NFLRoleScore": 0.10,
+                }
+                next_id += 1
+                players.append(backup)
+                if team == "BUF" and position == "WR":
+                    backup["LockFlex"] = True
+                    locked_backup = backup
+
+        finished = []
+        worker = LineupBuildWorker(
+            players,
+            kind="classic",
+            sport="NFL",
+            num_lineups=12,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules={
+                "min_unique": 2,
+                "max_team_pct": 100.0,
+                "max_game_pct": 100.0,
+                "balance_ownership": True,
+                "groups": [],
+                "player_constraints": {},
+            },
+            sim_enabled=False,
+        )
+        worker.finished.connect(finished.append)
+        worker.run()
+
+        self.assertTrue(finished)
+        payload = finished[0]
+        timing = payload["timing_report"]
+        self.assertTrue(timing["role_pool_applied"])
+        self.assertEqual(timing["unfiltered_build_pool_size"], len(players))
+        self.assertEqual(timing["build_pool_size"], 64)
+        self.assertEqual(timing["role_pool_omitted"], len(players) - 64)
+        self.assertEqual(len(payload["lineups"]), 12)
+        self.assertIsNotNone(locked_backup)
+        locked_id = str(locked_backup["FlexID"])
+        self.assertTrue(all(
+            locked_id in {str(player.get("FlexID")) for player in lineup}
+            for lineup in payload["lineups"]
+        ))
+
     def test_readiness_player_filter_can_be_cleared(self):
         window = MainWindow()
         window.players = [
@@ -299,6 +368,13 @@ class ResultsLearningUITests(unittest.TestCase):
         payload = finished[0]
         self.assertEqual(len(payload["lineups"]), 24)
         self.assertGreater(payload["candidate_count"], 24)
+        timing = payload["timing_report"]
+        self.assertGreater(timing["ownership_candidate_target"], 0)
+        self.assertEqual(
+            timing["candidate_target"],
+            timing["optimizer_candidate_target"] + timing["ownership_candidate_target"],
+        )
+        self.assertLessEqual(payload["candidate_count"], timing["candidate_target"])
         self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v3")
         self.assertEqual(payload["sim_report"]["field_preset"], "150-Max")
         self.assertTrue(payload["sim_report"]["preset_comparison"]["available"])
