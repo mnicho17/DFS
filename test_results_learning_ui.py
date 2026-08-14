@@ -370,17 +370,67 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertGreater(payload["candidate_count"], 24)
         timing = payload["timing_report"]
         self.assertGreater(timing["ownership_candidate_target"], 0)
+        self.assertGreater(timing["scenario_candidate_target"], 0)
         self.assertEqual(
             timing["candidate_target"],
-            timing["optimizer_candidate_target"] + timing["ownership_candidate_target"],
+            timing["optimizer_candidate_target"]
+            + timing["ownership_candidate_target"]
+            + timing["scenario_candidate_target"],
         )
         self.assertLessEqual(payload["candidate_count"], timing["candidate_target"])
-        self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v3")
+        self.assertEqual(
+            timing["scenario_candidate_report"]["model"],
+            "correlated-scenario-candidates-v1",
+        )
+        self.assertGreater(
+            timing["scenario_candidate_report"]["unique_source_additions"]["scenario_built"],
+            0,
+        )
+        self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v4")
         self.assertEqual(payload["sim_report"]["field_preset"], "150-Max")
         self.assertTrue(payload["sim_report"]["preset_comparison"]["available"])
         self.assertIn("largest gap", payload["sim_report"]["preset_comparison"]["summary"])
         self.assertGreater(payload["portfolio_report"]["sim_summary"]["top_one_scenarios_covered"], 0)
         self.assertTrue(all(hasattr(lineup, "sim_scenario_values") for lineup in payload["lineups"]))
+
+    def test_nfl_sim_lock_keeps_candidate_generation_in_the_optimizer_path(self):
+        players = _fixture_players()
+        locked = next(player for player in players if player["Position"] == "QB")
+        locked["LockFlex"] = True
+        finished = []
+        worker = LineupBuildWorker(
+            players,
+            kind="classic",
+            sport="NFL",
+            num_lineups=8,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules={
+                "min_unique": 2,
+                "max_team_pct": 100.0,
+                "max_game_pct": 100.0,
+                "balance_ownership": True,
+                "groups": [],
+                "player_constraints": {},
+            },
+            sim_enabled=True,
+            sim_scenarios=100,
+        )
+        worker.finished.connect(finished.append)
+
+        worker.run()
+
+        self.assertTrue(finished)
+        payload = finished[0]
+        timing = payload["timing_report"]
+        self.assertEqual(timing["ownership_candidate_target"], 0)
+        self.assertEqual(timing["scenario_candidate_target"], 0)
+        locked_key = str(locked["FlexID"])
+        self.assertTrue(all(
+            locked_key in {str(player["FlexID"]) for player in lineup}
+            for lineup in payload["lineups"]
+        ))
 
     def test_saved_export_writes_csv_and_learning_record(self):
         window = MainWindow()

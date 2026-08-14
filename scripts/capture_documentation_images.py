@@ -201,7 +201,7 @@ def capture(output_dir: Path) -> None:
                 player["FadeFlex"] = True
                 player["FadeCpt"] = True
         window.chk_nfl_contest_sim.setChecked(False)
-        window._lineup_space_phase = "Generate 94/150"
+        window._lineup_space_phase = "Generate 314/500"
         window._refresh_players_table()
         app.processEvents()
         save_widget(window, output_dir / "lineup-space.png")
@@ -233,14 +233,15 @@ def capture(output_dir: Path) -> None:
                 },
             },
             timing_report={
-                "generation_seconds": 9.97,
-                "simulation_seconds": 5.27,
-                "selection_seconds": 3.06,
-                "total_seconds": 18.31,
+                "generation_seconds": 14.02,
+                "simulation_seconds": 5.11,
+                "selection_seconds": 4.16,
+                "total_seconds": 23.30,
                 "candidate_target": 500,
-                "optimizer_candidate_target": 400,
-                "ownership_candidate_target": 100,
-                "candidate_count": 493,
+                "optimizer_candidate_target": 300,
+                "ownership_candidate_target": 60,
+                "scenario_candidate_target": 140,
+                "candidate_count": 500,
                 "selected_count": 150,
                 "requested_count": 150,
             },
@@ -253,7 +254,7 @@ def capture(output_dir: Path) -> None:
         )
         save_build_diagnostic(diagnostic)
         build_history = BuildDiagnosticsDialog(window)
-        build_history.resize(1200, 650)
+        build_history.resize(1500, 650)
         build_history.show()
         app.processEvents()
         save_widget(build_history, output_dir / "build-history.png")

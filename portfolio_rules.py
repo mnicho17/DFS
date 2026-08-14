@@ -349,6 +349,7 @@ def select_portfolio(
             quality_score = meta["projection"]
             scenario_bonus = 0.0
             duplicate_penalty = 0.0
+            quality_floor_penalty = 0.0
         else:
             # V2 uses both individual tournament strength and marginal value to
             # the portfolio.  Scenario bonuses diminish after a game script is
@@ -381,6 +382,11 @@ def select_portfolio(
                 + diminishing(top_five_hits, sim_top_five_counts, 6.0)
             )
             duplicate_penalty = duplicate_risk * 0.12
+            # Scenario coverage should diversify strong lineups, not rescue a
+            # weak candidate merely because its path is unusual. Below the
+            # B-grade boundary, require increasingly more marginal scenario
+            # value before the lineup can enter the final portfolio.
+            quality_floor_penalty = max(0.0, 72.0 - sim_edge) * 1.25
         return (
             quality_score
             + scenario_bonus
@@ -391,6 +397,7 @@ def select_portfolio(
             - ownership_penalty
             - overlap_penalty
             - duplicate_penalty
+            - quality_floor_penalty
         )
 
     remaining = list(pool)

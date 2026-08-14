@@ -68,8 +68,9 @@ class BuildDiagnosticsTests(unittest.TestCase):
                 "selection_seconds": 1.0,
                 "total_seconds": total,
                 "candidate_target": 600,
-                "optimizer_candidate_target": 500,
-                "ownership_candidate_target": 100,
+                "optimizer_candidate_target": 400,
+                "ownership_candidate_target": 80,
+                "scenario_candidate_target": 120,
                 "candidate_count": 590,
                 "selected_count": 150,
                 "requested_count": 150,
@@ -84,7 +85,7 @@ class BuildDiagnosticsTests(unittest.TestCase):
         report = format_build_report(diagnostic)
         self.assertIn("NFL Classic", report)
         self.assertIn("590 generated / 600 budget", report)
-        self.assertIn("500 optimizer + 100 field-shaped", report)
+        self.assertIn("400 optimizer + 80 field-shaped + 120 scenario-built", report)
         self.assertIn("Slowest phase: SIM", report)
         self.assertIn("750 scenarios, 150-Max", report)
         self.assertIn("A player exposure constraint was not met", report)
