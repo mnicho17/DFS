@@ -7,7 +7,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 from main_window import BuildDiagnosticsDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, _deep_shortlist
 from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
@@ -234,6 +234,54 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertTrue(window.tbl_players.isColumnHidden(20))
         if hasattr(window.tabs_lineups, "isTabVisible"):
             self.assertFalse(window.tabs_lineups.isTabVisible(2))
+        window.close()
+
+    def test_player_and_lineup_columns_use_content_appropriate_alignment(self):
+        window = MainWindow()
+        window.resize(1540, 700)
+        window.show()
+        self.app.processEvents()
+        window.players = [{
+            "Name": "Example Receiver", "Team": "BUF", "Position": "WR",
+            "FlexSalary": 6100, "BaseProjection": 15.0, "FlexProjection": 16.2,
+            "NFLAvailability": "STARTER", "NFLAdjScore": 0.4,
+            "NFLUsageScore": 0.3, "NFLMatchupScore": 0.2,
+            "NFLRole": "SWR1", "NFLRoleScore": 0.8,
+            "NFLWeatherScore": -0.1, "NFLVegasTeamTotal": 25.5,
+            "ProjOwnPct": 12.4,
+        }]
+        window._refresh_players_table()
+        self.app.processEvents()
+
+        horizontal_mask = int(QtCore.Qt.AlignHorizontal_Mask)
+        self.assertEqual(
+            window.tbl_players.horizontalHeaderItem(0).textAlignment() & horizontal_mask,
+            int(QtCore.Qt.AlignLeft),
+        )
+        self.assertEqual(
+            window.tbl_players.horizontalHeaderItem(4).textAlignment() & horizontal_mask,
+            int(QtCore.Qt.AlignRight),
+        )
+        self.assertEqual(
+            window.tbl_players.item(0, 1).textAlignment() & horizontal_mask,
+            int(QtCore.Qt.AlignHCenter),
+        )
+        self.assertEqual(
+            window.tbl_players.item(0, 4).textAlignment() & horizontal_mask,
+            int(QtCore.Qt.AlignRight),
+        )
+        player_header = window.tbl_players.horizontalHeader()
+        self.assertLess(player_header.sectionSize(10), player_header.sectionSize(0))
+
+        window.tabs_lineups.setCurrentIndex(1)
+        total_column = window.tbl_cl.columnCount() - 2
+        grade_column = window.tbl_cl.columnCount() - 1
+        self.assertEqual(window.tbl_cl.horizontalHeader().sectionSize(total_column), 88)
+        self.assertEqual(window.tbl_cl.horizontalHeader().sectionSize(grade_column), 92)
+        self.assertEqual(
+            window.tbl_cl.horizontalHeaderItem(total_column).textAlignment() & horizontal_mask,
+            int(QtCore.Qt.AlignRight),
+        )
         window.close()
 
     def test_selected_player_updates_contextual_inspector(self):
