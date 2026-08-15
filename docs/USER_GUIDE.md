@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.11.0 | Windows desktop app
+Version 1.12.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -23,7 +23,7 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 4. Review **Build Strategy** and **Portfolio Rules**.
 5. For NFL Classic, turn on **NFL SIM Edge** when you want field-based tournament scoring.
 6. Choose **Generate** and wait for the progress message to finish.
-7. Open **Portfolio Insights**, then save the lineups you want.
+7. Open **Portfolio Insights**. Filter review signals, inspect player exposure, and remove or replace weak rows before saving.
 8. Choose **Export CSV**, upload to DraftKings, and do a final pre-lock review.
 9. After the contest, import DraftKings results through **Results & Learning**.
 
@@ -149,9 +149,17 @@ The Overview explains:
 - top-one-percent scenario coverage and portfolio concentration; and
 - automatic review flags for weak grades, high duplication, excessive unused salary, unstacked NFL lineups, or concentrated player cores.
 
-The sortable **Lineup details** tab shows the same signals for every lineup. Insights do not modify lineups, portfolio rules, or DraftKings exports.
+The sortable **Lineup details** tab identifies the exact rows behind those signals. Use **Show** to filter all flagged rows or one signal type, then choose **Select flagged**. You can also select rows manually.
 
-![Portfolio Insights explaining candidate sources, quality, construction, and review flags](images/portfolio-insights.png)
+- **Remove selected** deletes those rows from the generated or saved set after confirmation.
+- **Replace selected** keeps every unselected lineup fixed and generates only the open slots with the current slate, strategy, and portfolio rules.
+- Closing the window without choosing an action leaves the portfolio unchanged.
+
+The **Player exposure** tab lists every player's count, percentage, and lineup numbers. Select a player and choose **Show selected player's lineups** to jump back to the exact affected rows. This is useful for reviewing a concentrated core before deciding whether individual lineups need replacement.
+
+![Portfolio Insights filtering review signals and selecting rows for removal or replacement](images/portfolio-insights.png)
+
+![Player exposure drill-down showing the exact lineups that contain each player](images/portfolio-exposure.png)
 
 ![Compact Lineup Space dashboard during NFL Classic generation](images/lineup-space.png)
 
@@ -161,7 +169,7 @@ The sortable **Lineup details** tab shows the same signals for every lineup. Ins
 - inspect the grade or NFL SIM Edge details;
 - look for repeated cores and unexpected exposure;
 - save only lineups you might enter;
-- open **Portfolio Insights** before export; and
+- open **Portfolio Insights** before export and repair only the rows you do not want; and
 - correct warnings rather than assuming they are harmless.
 
 Large candidate pools, NFL simulation, and restrictive portfolio rules take more time than a simple projection build.
@@ -246,6 +254,8 @@ Exact matching matters. An entry can remain unmatched if it was edited after exp
 **Slow generation:** reduce the lineup count while testing, remove conflicting minimum exposures or groups, and relax extreme uniqueness or concentration limits.
 
 **Too few lineups:** read the generation message and Portfolio Insights. The player pool and combined rules may not support the requested count.
+
+**Replacement could not fill every selected row:** retained lineups stay fixed, so the remaining pool and current uniqueness, exposure, group, team, or game rules may leave no legal alternative. Replace fewer rows together or relax the rule named in the warning.
 
 **Rejected upload:** use a fresh DraftKings salary file from the exact slate and export again without modifying the upload columns.
 

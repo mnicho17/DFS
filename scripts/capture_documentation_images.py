@@ -254,10 +254,21 @@ def capture(output_dir: Path) -> None:
             sim_report=window.last_sim_report,
         )
         insights_dialog = PortfolioInsightsDialog(insights, window)
-        insights_dialog.resize(1180, 760)
+        insights_dialog.resize(1240, 760)
+        insights_dialog.tabs.setCurrentIndex(1)
+        flagged_index = insights_dialog.filter_combo.findData("flagged")
+        if flagged_index >= 0:
+            insights_dialog.filter_combo.setCurrentIndex(flagged_index)
+        insights_dialog._select_flagged()
         insights_dialog.show()
         app.processEvents()
         save_widget(insights_dialog, output_dir / "portfolio-insights.png")
+
+        insights_dialog.tabs.setCurrentIndex(2)
+        if insights_dialog.exposure_table.rowCount():
+            insights_dialog.exposure_table.selectRow(0)
+        app.processEvents()
+        save_widget(insights_dialog, output_dir / "portfolio-exposure.png")
         insights_dialog.close()
 
         diagnostic = create_build_diagnostic(

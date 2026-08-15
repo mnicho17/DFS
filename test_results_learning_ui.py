@@ -74,23 +74,40 @@ class ResultsLearningUITests(unittest.TestCase):
 
     def test_portfolio_insights_dialog_exposes_overview_details_and_copy(self):
         dialog = PortfolioInsightsDialog({
-            "status": "Ready",
+            "status": "Review 1 lineup",
             "text": "DFS Optimizer Portfolio Insights\nCandidate sources",
+            "flagged_count": 1,
             "lineup_rows": [{
                 "number": 1, "grade": "A", "source": "Scenario-built", "archetype": "Ceiling",
                 "salary": 49900, "stack": "QB+2", "bringback": "Yes", "flex": "WR",
                 "ownership": 108, "edge": 84, "leverage": 75, "duplication": 25,
                 "top_one_pct": 4.2, "return_index": 80, "top_scenarios": 9,
+                "flag_codes": ["concentrated_core"], "review": "concentrated core",
+                "player_keys": ["BUF QB"],
+            }],
+            "exposure_rows": [{
+                "key": "BUF QB", "name": "BUF QB", "team": "BUF", "position": "QB",
+                "count": 1, "pct": 100.0, "lineup_numbers": [1],
             }],
         })
-        self.assertEqual(dialog.findChild(QtWidgets.QTabWidget, "portfolioInsightsTabs").count(), 2)
+        self.assertEqual(dialog.findChild(QtWidgets.QTabWidget, "portfolioInsightsTabs").count(), 3)
         self.assertIn(
             "Candidate sources",
             dialog.findChild(QtWidgets.QPlainTextEdit, "portfolioInsightsReport").toPlainText(),
         )
         self.assertEqual(dialog.findChild(QtWidgets.QTableWidget, "portfolioInsightsLineups").rowCount(), 1)
+        self.assertEqual(dialog.findChild(QtWidgets.QTableWidget, "portfolioInsightsExposure").rowCount(), 1)
+        dialog.findChild(QtWidgets.QTableWidget, "portfolioInsightsExposure").selectRow(0)
+        dialog.findChild(QtWidgets.QPushButton, "showExposureLineups").click()
+        self.assertEqual(dialog.findChild(QtWidgets.QTabWidget, "portfolioInsightsTabs").currentIndex(), 1)
+        self.assertEqual(dialog.selected_lineup_indexes(), [0])
+        dialog.findChild(QtWidgets.QPushButton, "selectFlaggedLineups").click()
+        self.assertEqual(dialog.selected_lineup_indexes(), [0])
         dialog.findChild(QtWidgets.QPushButton, "copyPortfolioInsights").click()
         self.assertIn("Portfolio Insights", QtWidgets.QApplication.clipboard().text())
+        dialog.findChild(QtWidgets.QPushButton, "removeInsightLineups").click()
+        self.assertEqual(dialog.requested_action, "remove")
+        self.assertEqual(dialog.requested_indexes, [0])
         dialog.close()
 
     def test_build_history_dialog_and_copy_report_use_local_diagnostics(self):
@@ -275,6 +292,143 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertGreaterEqual(timing["selection_seconds"], 0.0)
         self.assertGreaterEqual(timing["total_seconds"], timing["generation_seconds"])
         self.assertEqual(timing["selected_count"], 150)
+
+    def test_classic_worker_replaces_only_open_portfolio_slots(self):
+        rules = {
+            "min_unique": 2,
+            "max_team_pct": 100.0,
+            "max_game_pct": 100.0,
+            "balance_ownership": True,
+            "groups": [],
+            "player_constraints": {},
+        }
+        initial = []
+        first = LineupBuildWorker(
+            _fixture_players(),
+            kind="classic",
+            sport="NFL",
+            num_lineups=8,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules=rules,
+            sim_enabled=False,
+        )
+        first.finished.connect(initial.append)
+        first.run()
+        self.assertTrue(initial)
+        retained = initial[0]["lineups"][:6]
+
+        repaired = []
+        worker = LineupBuildWorker(
+            _fixture_players(),
+            kind="classic",
+            sport="NFL",
+            num_lineups=8,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules=rules,
+            sim_enabled=False,
+            retained_lineups=retained,
+            repair_source="generated",
+        )
+        worker.finished.connect(repaired.append)
+        worker.run()
+
+        self.assertTrue(repaired)
+        payload = repaired[0]
+        self.assertEqual(len(payload["lineups"]), 8)
+        self.assertEqual(payload["lineups"][:6], retained)
+        self.assertEqual(payload["repair_source"], "generated")
+        self.assertEqual(payload["timing_report"]["retained_count"], 6)
+        self.assertEqual(payload["timing_report"]["replacement_requested"], 2)
+
+    def test_portfolio_insights_repair_keeps_unselected_rows_fixed(self):
+        window = MainWindow()
+        lineups = [object(), object(), object()]
+        with mock.patch.object(
+            QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes
+        ), mock.patch.object(window, "_start_lineup_build") as start_build:
+            window._handle_portfolio_insights_action(
+                kind="classic",
+                sport="NFL",
+                source_label="generated",
+                lineups=lineups,
+                action="replace",
+                indexes=[1],
+                salary_cap=50000,
+            )
+
+        start_build.assert_called_once_with(
+            kind="classic",
+            sport="NFL",
+            num=3,
+            cap=50000,
+            retained_lineups=[lineups[0], lineups[2]],
+            repair_source="generated",
+        )
+        window.close()
+
+    def test_sim_repair_rescores_retained_and_replacement_lineups_together(self):
+        rules = {
+            "min_unique": 2,
+            "max_team_pct": 100.0,
+            "max_game_pct": 100.0,
+            "balance_ownership": True,
+            "groups": [],
+            "player_constraints": {},
+        }
+        initial = []
+        first = LineupBuildWorker(
+            _fixture_players(),
+            kind="classic",
+            sport="NFL",
+            num_lineups=8,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules=rules,
+            sim_enabled=False,
+        )
+        first.finished.connect(initial.append)
+        first.run()
+        retained = initial[0]["lineups"][:6]
+        retained_signatures = {
+            tuple(sorted(str(player["FlexID"]) for player in lineup))
+            for lineup in retained
+        }
+
+        repaired = []
+        worker = LineupBuildWorker(
+            _fixture_players(),
+            kind="classic",
+            sport="NFL",
+            num_lineups=8,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules=rules,
+            sim_enabled=True,
+            sim_scenarios=100,
+            retained_lineups=retained,
+            repair_source="generated",
+        )
+        worker.finished.connect(repaired.append)
+        worker.run()
+
+        self.assertTrue(repaired)
+        output = repaired[0]["lineups"]
+        self.assertEqual(len(output), 8)
+        output_signatures = {
+            tuple(sorted(str(player["FlexID"]) for player in lineup))
+            for lineup in output
+        }
+        self.assertTrue(retained_signatures.issubset(output_signatures))
+        self.assertTrue(all(
+            int(getattr(lineup, "sim_metrics", {}).get("sim_scenarios", 0) or 0) == 100
+            for lineup in output
+        ))
 
     def test_strategic_classic_prunes_deep_backups_without_sim_and_preserves_lock(self):
         players = _fixture_players()

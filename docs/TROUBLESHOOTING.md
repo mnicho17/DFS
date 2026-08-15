@@ -45,6 +45,13 @@ Choose **Game-Day Check** immediately before generating and again near lock. The
 
 Open **Portfolio Insights** and read the review flags. The available player pool, locks, fades, exposures, uniqueness, team/game caps, and groups may not allow the requested count. The app returns the feasible portfolio it found rather than hiding the shortfall.
 
+## Selected replacement lineups were not filled
+
+- Replacement keeps every unselected lineup fixed, so the remaining player pool and portfolio rules may leave no legal alternative.
+- Review locks, minimum exposure, player groups, uniqueness, and team/game caps.
+- Try replacing fewer rows together or relax the specific rule named in the portfolio warning.
+- The retained rows are not silently changed when a full repair is impossible.
+
 ## A 20-Max build closes after SIM completes
 
 Update to version 1.10.1 or later and run the build again. Earlier versions could close while displaying a completed build when the saved 20-Max field reference did not contain a duplication measurement. The lineup generation and SIM had already finished; the failure was in the final comparison message. Missing historical measurements now display as **n/a** and do not interrupt the results.

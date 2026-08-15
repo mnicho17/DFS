@@ -33,6 +33,14 @@ def _team(player: Mapping[str, Any]) -> str:
     return str(player.get("Team") or "").strip().upper()
 
 
+def _player_key(player: Mapping[str, Any]) -> str:
+    return (
+        str(player.get("FlexNamePlusID") or "").strip()
+        or str(player.get("FlexID") or "").strip()
+        or str(player.get("Name") or "").strip()
+    )
+
+
 def _opponent(player: Mapping[str, Any]) -> str:
     direct = str(player.get("Opponent") or player.get("Opp") or "").strip().upper()
     if direct:
@@ -161,6 +169,7 @@ def build_portfolio_insights(
     leverage_values: List[float] = []
     duplication_values: List[float] = []
     rows: List[Dict[str, Any]] = []
+    exposure: Dict[str, Dict[str, Any]] = {}
 
     for index, lineup in enumerate(selected, start=1):
         players = _players(lineup, kind_l)
@@ -173,6 +182,22 @@ def build_portfolio_insights(
         ownership_totals.append(ownership_total)
         sub_five_counts.append(sum(value < 5.0 for value in ownership))
         twenty_plus_counts.append(sum(value >= 20.0 for value in ownership))
+        lineup_player_keys: List[str] = []
+        for player in players:
+            key = _player_key(player)
+            if not key:
+                continue
+            lineup_player_keys.append(key)
+            exposure_row = exposure.setdefault(key, {
+                "key": key,
+                "name": str(player.get("Name") or key),
+                "team": _team(player),
+                "position": _position(player),
+                "count": 0,
+                "lineup_numbers": [],
+            })
+            exposure_row["count"] += 1
+            exposure_row["lineup_numbers"].append(index)
 
         grade_info: Dict[str, Any] = {}
         if kind_l == "classic":
@@ -222,6 +247,21 @@ def build_portfolio_insights(
             ] += 1
         scenario_hits.update(set(getattr(lineup, "sim_top_hits", set()) or set()))
 
+        flag_codes: List[str] = []
+        flag_labels: List[str] = []
+        if grade in {"C", "D"}:
+            flag_codes.append("weak_grade")
+            flag_labels.append(f"{grade} grade")
+        if metrics and duplicate >= 70.0:
+            flag_codes.append("high_duplication")
+            flag_labels.append("high duplication")
+        if left > 2000.0:
+            flag_codes.append("unused_salary")
+            flag_labels.append(f"${left:,.0f} left")
+        if sport_u == "NFL" and kind_l == "classic" and int(construction.get("stack_count", 0) or 0) <= 0:
+            flag_codes.append("unstacked")
+            flag_labels.append("no QB stack")
+
         rows.append({
             "number": index,
             "grade": grade,
@@ -239,6 +279,9 @@ def build_portfolio_insights(
             "top_one_pct": _number(metrics.get("sim_top_one_pct")) if metrics else None,
             "return_index": _number(metrics.get("sim_return_index")) if metrics else None,
             "top_scenarios": len(set(getattr(lineup, "sim_top_hits", set()) or set())),
+            "player_keys": lineup_player_keys,
+            "flag_codes": flag_codes,
+            "review": "; ".join(flag_labels),
         })
 
     total = len(selected)
@@ -279,6 +322,26 @@ def build_portfolio_insights(
         review_flags.append(
             f"{len(concentrated)} player exposure(s) reach 70% or more; confirm those cores match your risk tolerance."
         )
+        exposure_keys_by_name = {
+            str(row.get("name") or "").strip().casefold(): str(row.get("key") or "")
+            for row in exposure.values()
+        }
+        concentrated_keys = {
+            str(row.get("key") or "").strip()
+            or exposure_keys_by_name.get(str(row.get("name") or "").strip().casefold(), "")
+            for row in concentrated
+        }
+        concentrated_keys.discard("")
+        for row in rows:
+            if concentrated_keys.intersection(row.get("player_keys") or []):
+                row["flag_codes"].append("concentrated_core")
+                row["review"] = "; ".join(filter(None, [str(row.get("review") or ""), "concentrated core"]))
+
+    exposure_rows = list(exposure.values())
+    for row in exposure_rows:
+        row["pct"] = float(row.get("count", 0) or 0) / max(1, total) * 100.0
+    exposure_rows.sort(key=lambda row: (-float(row.get("pct", 0.0)), str(row.get("name") or "")))
+    flagged_count = sum(bool(row.get("flag_codes")) for row in rows)
 
     source_generated = dict((sim.get("candidate_sources") or {}).get("generated") or {})
     preset_text = str(field_preset or fit.get("preset") or sim.get("field_preset") or "n/a")
@@ -337,6 +400,7 @@ def build_portfolio_insights(
             f"{row.get('name')}: {_number(row.get('pct')):.0f}%" for row in top_players[:6]
         )
         lines.extend(["", "Concentration", f"- Highest player exposure: {leaders or 'n/a'}"])
+    lines.append(f"- Lineups with individual review signals: {flagged_count}/{total}")
 
     lines.extend(["", "Review flags"])
     if review_flags:
@@ -351,13 +415,21 @@ def build_portfolio_insights(
 
     return {
         "lineup_count": total,
-        "status": "Ready" if not review_flags else f"Review {len(review_flags)} flag{'s' if len(review_flags) != 1 else ''}",
+        "status": (
+            "Ready"
+            if not flagged_count and not review_flags
+            else f"Review {flagged_count} lineup{'s' if flagged_count != 1 else ''}"
+            if flagged_count
+            else "Review portfolio"
+        ),
         "grade_counts": dict(grade_counts),
         "source_counts": dict(source_counts),
         "archetype_counts": dict(archetype_counts),
         "scenario_count": scenario_total,
         "scenario_coverage": len(scenario_hits),
         "review_flags": review_flags,
+        "flagged_count": flagged_count,
         "lineup_rows": rows,
+        "exposure_rows": exposure_rows,
         "text": "\n".join(lines),
     }
