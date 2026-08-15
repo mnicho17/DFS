@@ -96,6 +96,27 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertNotIn("MaxPct", serialized)
         self.assertNotIn("Secret Player", serialized)
 
+    def test_deep_build_report_includes_screening_validation_and_refinement(self):
+        diagnostic = self._diagnostic()
+        diagnostic["settings"]["compute_mode"] = "Deep"
+        diagnostic["candidates"]["shortlisted"] = 900
+        diagnostic["sim"].update({
+            "screening_scenarios": 500,
+            "validation_scenarios": 3000,
+            "refinement_swaps": 2,
+            "deep_time_limit_seconds": 300.0,
+            "deep_time_limit_reached": False,
+            "validation_top_overlap_pct": 78.4,
+        })
+
+        report = format_build_report(diagnostic)
+
+        self.assertIn("Compute: Deep", report)
+        self.assertIn("Deep shortlist: 900 candidates after 500 screening scenarios", report)
+        self.assertIn("3,000 independent scenarios; 2 portfolio swaps", report)
+        self.assertIn("completed before time budget", report)
+        self.assertIn("Independent top-candidate agreement: 78.4%", report)
+
     def test_history_keeps_newest_first_and_respects_limit(self):
         first = save_build_diagnostic(self._diagnostic(total=10.0), limit=2)
         second = save_build_diagnostic(self._diagnostic(total=20.0), limit=2)

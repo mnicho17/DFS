@@ -11,7 +11,7 @@ import time
 import random
 import threading
 from collections import Counter
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
@@ -365,6 +365,105 @@ class OwnershipSimWorker(QtCore.QObject):
         return {"total": total_pct, "cpt": cpt_pct, "flex": flex_pct}
 
 
+def _lineup_signature(lineup: Sequence[Dict[str, Any]]) -> Tuple[str, ...]:
+    return tuple(sorted(player_key(player) for player in lineup if player_key(player)))
+
+
+def _deep_candidate_quality(lineup: Any) -> Tuple[float, float, float, float, Tuple[str, ...]]:
+    metrics = getattr(lineup, "sim_metrics", {})
+    metrics = metrics if isinstance(metrics, dict) else {}
+
+    def number(value: Any) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    projection = sum(number(player.get("FlexProjection")) for player in lineup)
+    return (
+        number(metrics.get("sim_edge")),
+        number(metrics.get("sim_top_one_pct")),
+        number(metrics.get("sim_return_index")),
+        projection,
+        _lineup_signature(lineup),
+    )
+
+
+def _deep_shortlist(
+    lineups: Sequence[Any],
+    limit: int,
+    *,
+    reserved_signatures: Optional[Sequence[Tuple[str, ...]]] = None,
+) -> List[Any]:
+    """Keep the strongest coarse-SIM candidates without erasing rare sources.
+
+    One quarter of the shortlist is filled round-robin across candidate source
+    and scenario-archetype buckets.  The rest is pure coarse-SIM quality.  This
+    preserves distinct winning paths while preventing a weak construction from
+    surviving solely because its label is unusual.
+    """
+    target = max(0, min(int(limit or 0), len(lineups)))
+    if target <= 0:
+        return []
+    unique: Dict[Tuple[str, ...], Any] = {}
+    for lineup in lineups:
+        signature = _lineup_signature(lineup)
+        if signature and signature not in unique:
+            unique[signature] = lineup
+    reserved = {tuple(signature) for signature in (reserved_signatures or [])}
+    chosen: List[Any] = []
+    chosen_signatures: set[Tuple[str, ...]] = set()
+    for signature in reserved:
+        lineup = unique.get(signature)
+        if lineup is not None and len(chosen) < target:
+            chosen.append(lineup)
+            chosen_signatures.add(signature)
+
+    buckets: Dict[Tuple[str, str], List[Any]] = {}
+    for signature, lineup in unique.items():
+        if signature in chosen_signatures:
+            continue
+        source = str(getattr(lineup, "candidate_source", "") or "optimizer")
+        archetype = str(getattr(lineup, "candidate_archetype", "") or "general")
+        buckets.setdefault((source, archetype), []).append(lineup)
+    for bucket in buckets.values():
+        bucket.sort(key=_deep_candidate_quality, reverse=True)
+
+    diversity_slots = min(target - len(chosen), max(len(buckets), target // 4))
+    bucket_keys = sorted(buckets)
+    while diversity_slots > 0 and bucket_keys:
+        next_keys: List[Tuple[str, str]] = []
+        for key in bucket_keys:
+            bucket = buckets[key]
+            if not bucket:
+                continue
+            lineup = bucket.pop(0)
+            signature = _lineup_signature(lineup)
+            if signature not in chosen_signatures:
+                chosen.append(lineup)
+                chosen_signatures.add(signature)
+                diversity_slots -= 1
+                if diversity_slots <= 0 or len(chosen) >= target:
+                    break
+            if bucket:
+                next_keys.append(key)
+        else:
+            bucket_keys = next_keys
+            continue
+        break
+
+    remaining = sorted(
+        (
+            lineup for signature, lineup in unique.items()
+            if signature not in chosen_signatures
+        ),
+        key=_deep_candidate_quality,
+        reverse=True,
+    )
+    chosen.extend(remaining[: max(0, target - len(chosen))])
+    return chosen[:target]
+
+
 class LineupBuildWorker(QtCore.QObject):
     """Build lineups in a background thread so the UI/status bar stays responsive."""
 
@@ -390,6 +489,8 @@ class LineupBuildWorker(QtCore.QObject):
         sim_scenarios: int = 750,
         field_preset: str = "150-Max",
         field_calibration: Optional[Dict[str, Any]] = None,
+        compute_mode: str = "Fast",
+        deep_time_limit_seconds: float = 300.0,
         retained_lineups: Optional[List[Any]] = None,
         repair_source: str = "",
     ):
@@ -409,6 +510,8 @@ class LineupBuildWorker(QtCore.QObject):
         self.sim_scenarios = max(100, int(sim_scenarios or 750))
         self.field_preset = field_preset or "150-Max"
         self.field_calibration = dict(field_calibration or {})
+        self.compute_mode = str(compute_mode or "Fast").strip()
+        self.deep_time_limit_seconds = max(1.0, float(deep_time_limit_seconds or 300.0))
         self.retained_lineups = list(retained_lineups or [])[:self.num_lineups]
         self.repair_source = str(repair_source or "")
         self._cancel_event = threading.Event()
@@ -421,6 +524,43 @@ class LineupBuildWorker(QtCore.QObject):
     def run(self) -> None:
         try:
             build_started = time.perf_counter()
+            deep_requested = self.compute_mode.casefold().startswith("deep")
+            deep_build = bool(
+                deep_requested
+                and self.kind != "showdown"
+                and self.sport == "NFL"
+                and self.sim_enabled
+            )
+            deep_deadline = (
+                build_started + self.deep_time_limit_seconds
+                if deep_build else float("inf")
+            )
+            generation_deadline = (
+                build_started + self.deep_time_limit_seconds * 0.38
+                if deep_build else float("inf")
+            )
+            screening_deadline = (
+                build_started + self.deep_time_limit_seconds * 0.58
+                if deep_build else float("inf")
+            )
+            selection_reserve = (
+                min(20.0, max(2.0, self.deep_time_limit_seconds * 0.08))
+                if deep_build else 0.0
+            )
+            validation_deadline = deep_deadline - selection_reserve
+
+            def generation_should_stop() -> bool:
+                return self._cancel_event.is_set() or time.perf_counter() >= generation_deadline
+
+            def screening_should_stop() -> bool:
+                return self._cancel_event.is_set() or time.perf_counter() >= screening_deadline
+
+            def validation_should_stop() -> bool:
+                return self._cancel_event.is_set() or time.perf_counter() >= validation_deadline
+
+            def refinement_should_stop() -> bool:
+                return self._cancel_event.is_set() or time.perf_counter() >= deep_deadline
+
             build_request = max(0, self.num_lineups - len(self.retained_lineups))
             if build_request <= 0:
                 retained_report = portfolio_report(
@@ -449,11 +589,18 @@ class LineupBuildWorker(QtCore.QObject):
                         "requested_count": self.num_lineups,
                         "retained_count": len(self.retained_lineups),
                         "replacement_requested": 0,
+                        "compute_mode": "Deep" if deep_build else "Fast",
+                        "deep_time_limit_seconds": self.deep_time_limit_seconds if deep_build else 0.0,
                     },
                     "repair_source": self.repair_source,
                 })
                 return
-            self.progress.emit(0, build_request, "Phase 1 of 3 - starting lineup build")
+            self.progress.emit(
+                0,
+                build_request,
+                "Phase 1 of 4 - starting Deep explore"
+                if deep_build else "Phase 1 of 3 - starting lineup build",
+            )
             expanded_target = min(450, max(build_request + 30, int(math.ceil(build_request * 1.5))))
             constraints = self.portfolio_rules.get("player_constraints") or {}
 
@@ -496,37 +643,58 @@ class LineupBuildWorker(QtCore.QObject):
             ownership_candidate_target = 0
             scenario_candidate_target = 0
             if use_nfl_sim:
-                # Keep the measured 500-candidate budget for a normal 150-Max
-                # build, but diversify its sources. Projection-led optimizer
-                # lineups remain the majority; field-shaped and correlated
-                # scenario-built lineups cover constructions it may not create.
-                total_candidate_budget = min(
-                    750,
-                    max(expanded_target, int(math.ceil(build_request * 10.0 / 3.0))),
-                )
                 alternate_sources_allowed = not hard_portfolio_rules and not has_locks
-                if alternate_sources_allowed:
-                    candidate_target = max(
-                        expanded_target,
-                        int(math.ceil(total_candidate_budget * 0.60)),
+                if deep_build:
+                    # A Deep build explores roughly nine times the normal 150-Max
+                    # bank.  Generation is deadline-aware, so this is a ceiling,
+                    # not a promise that slower hardware must fill every slot.
+                    total_candidate_budget = min(
+                        6000,
+                        max(1200, int(math.ceil(build_request * 30.0))),
                     )
-                    remaining_budget = max(0, total_candidate_budget - candidate_target)
-                    scenario_candidate_target = int(math.ceil(remaining_budget * 0.70))
-                    ownership_candidate_target = max(0, remaining_budget - scenario_candidate_target)
+                    if alternate_sources_allowed:
+                        candidate_target = int(math.ceil(total_candidate_budget * 0.55))
+                        remaining_budget = max(0, total_candidate_budget - candidate_target)
+                        scenario_candidate_target = int(math.ceil(remaining_budget * 0.68))
+                        ownership_candidate_target = max(0, remaining_budget - scenario_candidate_target)
+                    else:
+                        candidate_target = min(
+                            5000,
+                            max(1200, int(math.ceil(build_request * 24.0))),
+                        )
                 else:
-                    # Locks and hard portfolio rules belong in the optimizer's
-                    # own search so every candidate respects them by construction.
-                    candidate_target = min(
+                    # Keep the measured 500-candidate budget for a normal 150-Max
+                    # build, but diversify its sources. Projection-led optimizer
+                    # lineups remain the majority; field-shaped and correlated
+                    # scenario-built lineups cover constructions it may not create.
+                    total_candidate_budget = min(
                         750,
-                        max(expanded_target, int(math.ceil(build_request * 8.0 / 3.0))),
+                        max(expanded_target, int(math.ceil(build_request * 10.0 / 3.0))),
                     )
+                    if alternate_sources_allowed:
+                        candidate_target = max(
+                            expanded_target,
+                            int(math.ceil(total_candidate_budget * 0.60)),
+                        )
+                        remaining_budget = max(0, total_candidate_budget - candidate_target)
+                        scenario_candidate_target = int(math.ceil(remaining_budget * 0.70))
+                        ownership_candidate_target = max(0, remaining_budget - scenario_candidate_target)
+                    else:
+                        # Locks and hard portfolio rules belong in the optimizer's
+                        # own search so every candidate respects them by construction.
+                        candidate_target = min(
+                            750,
+                            max(expanded_target, int(math.ceil(build_request * 8.0 / 3.0))),
+                        )
             elif self.kind == "showdown" or hard_portfolio_rules:
                 candidate_target = expanded_target
             else:
                 candidate_target = build_request
             candidate_budget = candidate_target + ownership_candidate_target + scenario_candidate_target
             if use_nfl_sim:
-                self.progress.emit(0, candidate_budget, "Phase 1 of 3 - starting diversified candidate bank")
+                phase_total = 4 if deep_build else 3
+                phase_label = "Deep explore" if deep_build else "starting diversified candidate bank"
+                self.progress.emit(0, candidate_budget, f"Phase 1 of {phase_total} - {phase_label}")
             build_players = [dict(player) for player in self.players]
             unfiltered_build_pool_size = len(build_players)
             required_group_keys = {
@@ -573,34 +741,74 @@ class LineupBuildWorker(QtCore.QObject):
                     cancel_callback=self._cancel_event.is_set,
                 )
             else:
-                opt = MultiSportClassicOptimizer(
-                    build_players,
-                    sport=self.sport,
-                    salary_cap=self.salary_cap,
-                    own_mode=self.own_mode,
-                    own_weight=self.own_weight,
-                    build_style=self.build_style,
-                    mlb_stack_pref=self.mlb_stack_pref,
-                    salary_strategy=self.salary_strategy,
-                )
-                lineups = opt.build_lineups(
-                    num_lineups=candidate_target,
-                    progress_callback=lambda done, total, text: self.progress.emit(
-                        (
-                            min(candidate_budget, int(done * candidate_target / max(1, total)))
-                            if use_nfl_sim
-                            else min(build_request, int(done * build_request / max(1, total)))
+                retained_signatures_for_build = [
+                    tuple(sorted(player_key(player) for player in lineup))
+                    for lineup in self.retained_lineups
+                ]
+                if deep_build:
+                    # Independent seeds expose different QB stacks, bring-backs,
+                    # salary shapes, and value combinations.  Batching also keeps
+                    # the generator's pairwise uniqueness work bounded.
+                    lineups = []
+                    seeds = (1337, 4241, 7919, 12007)
+                    remaining_optimizer = candidate_target
+                    completed_optimizer = 0
+                    for batch_index, seed in enumerate(seeds):
+                        if remaining_optimizer <= 0 or generation_should_stop():
+                            break
+                        batches_left = len(seeds) - batch_index
+                        batch_target = int(math.ceil(remaining_optimizer / max(1, batches_left)))
+                        opt = MultiSportClassicOptimizer(
+                            build_players,
+                            sport=self.sport,
+                            salary_cap=self.salary_cap,
+                            seed=seed,
+                            own_mode=self.own_mode,
+                            own_weight=self.own_weight,
+                            build_style=self.build_style,
+                            mlb_stack_pref=self.mlb_stack_pref,
+                            salary_strategy=self.salary_strategy,
+                        )
+                        batch_lineups = opt.build_lineups(
+                            num_lineups=batch_target,
+                            progress_callback=lambda done, total, text, offset=completed_optimizer: self.progress.emit(
+                                min(candidate_budget, offset + int(done)),
+                                candidate_budget,
+                                f"Phase 1 of 4 - Deep explore (seed {batch_index + 1}/{len(seeds)})",
+                            ),
+                            cancel_callback=generation_should_stop,
+                            excluded_signatures=retained_signatures_for_build,
+                            minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
+                        )
+                        lineups.extend(batch_lineups)
+                        completed_optimizer += len(batch_lineups)
+                        remaining_optimizer = max(0, candidate_target - completed_optimizer)
+                else:
+                    opt = MultiSportClassicOptimizer(
+                        build_players,
+                        sport=self.sport,
+                        salary_cap=self.salary_cap,
+                        own_mode=self.own_mode,
+                        own_weight=self.own_weight,
+                        build_style=self.build_style,
+                        mlb_stack_pref=self.mlb_stack_pref,
+                        salary_strategy=self.salary_strategy,
+                    )
+                    lineups = opt.build_lineups(
+                        num_lineups=candidate_target,
+                        progress_callback=lambda done, total, text: self.progress.emit(
+                            (
+                                min(candidate_budget, int(done * candidate_target / max(1, total)))
+                                if use_nfl_sim
+                                else min(build_request, int(done * build_request / max(1, total)))
+                            ),
+                            candidate_budget if use_nfl_sim else build_request,
+                            f"Phase 1 of 3 - {text}",
                         ),
-                        candidate_budget if use_nfl_sim else build_request,
-                        f"Phase 1 of 3 - {text}",
-                    ),
-                    cancel_callback=self._cancel_event.is_set,
-                    excluded_signatures=[
-                        tuple(sorted(player_key(player) for player in lineup))
-                        for lineup in self.retained_lineups
-                    ],
-                    minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
-                )
+                        cancel_callback=self._cancel_event.is_set,
+                        excluded_signatures=retained_signatures_for_build,
+                        minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
+                    )
             generation_seconds = time.perf_counter() - build_started
             sim_report: Dict[str, Any] = {}
             scenario_candidate_report: Dict[str, Any] = {}
@@ -610,14 +818,27 @@ class LineupBuildWorker(QtCore.QObject):
                 "scenario_built": 0,
             }
             simulation_seconds = 0.0
+            deep_report: Dict[str, Any] = {
+                "enabled": deep_build,
+                "time_limit_seconds": self.deep_time_limit_seconds if deep_build else 0.0,
+                "screening_scenarios": 0,
+                "validation_scenarios": 0,
+                "candidate_bank_count": 0,
+                "shortlist_count": 0,
+                "refinement_swaps": 0,
+                "validation_top_overlap_pct": None,
+                "time_limit_reached": False,
+            }
             if use_nfl_sim and lineups and not self._cancel_event.is_set():
                 field_config = nfl_field_preset(self.field_preset, self.field_calibration)
                 strategy_l = self.salary_strategy.strip().lower()
+                generation_cancel_callback = generation_should_stop if deep_build else self._cancel_event.is_set
                 if ownership_candidate_target > 0 or scenario_candidate_target > 0:
                     # Add two independent sources. Field-shaped candidates mimic
                     # realistic opponent constructions; scenario-built candidates
                     # optimize for correlated ceiling, leverage, and low-dup paths.
                     extras: List[List[Dict[str, Any]]] = []
+                    optimizer_generated_count = len(lineups)
                     if ownership_candidate_target > 0:
                         extras, _ = generate_nfl_field_lineups(
                             build_players,
@@ -625,16 +846,17 @@ class LineupBuildWorker(QtCore.QObject):
                             salary_cap=self.salary_cap,
                             min_salary=max(0.0, self.salary_cap - 1000.0),
                             seed=20260913,
-                            cancel_callback=self._cancel_event.is_set,
+                            cancel_callback=generation_cancel_callback,
                             candidate_mode=True,
                             unique=True,
                             field_config=field_config,
                         )
                         self.progress.emit(
-                            min(candidate_budget, candidate_target + len(extras)),
+                            min(candidate_budget, optimizer_generated_count + len(extras)),
                             candidate_budget,
-                            "Phase 1 of 3 - adding field-shaped candidates",
+                            f"Phase 1 of {4 if deep_build else 3} - adding field-shaped candidates",
                         )
+                    scenario_progress_offset = optimizer_generated_count + len(extras)
                     scenario_extras, scenario_candidate_report = generate_nfl_scenario_lineups(
                         build_players,
                         scenario_candidate_target,
@@ -644,36 +866,41 @@ class LineupBuildWorker(QtCore.QObject):
                         progress_callback=lambda done, total, text: self.progress.emit(
                             min(
                                 candidate_budget,
-                                candidate_target
-                                + ownership_candidate_target
+                                scenario_progress_offset
                                 + int(done * scenario_candidate_target / max(1, total)),
                             ),
                             candidate_budget,
-                            f"Phase 1 of 3 - {text}",
+                            f"Phase 1 of {4 if deep_build else 3} - {text}",
                         ),
-                        cancel_callback=self._cancel_event.is_set,
+                        cancel_callback=generation_cancel_callback,
                         field_config=field_config,
                     )
-                    unique_lineups: Dict[tuple[str, ...], List[Dict[str, Any]]] = {}
-                    source_additions = {"optimizer": 0, "field_shaped": 0, "scenario_built": 0}
-                    for source, source_lineups in (
-                        ("optimizer", lineups),
-                        ("field_shaped", extras),
-                        ("scenario_built", scenario_extras),
-                    ):
-                        for lineup in source_lineups:
-                            signature = tuple(sorted(player_key(player) for player in lineup))
-                            if signature not in unique_lineups:
-                                unique_lineups[signature] = SimLineup(
-                                    lineup,
-                                    candidate_source=source,
-                                    candidate_archetype=str(
-                                        getattr(lineup, "candidate_archetype", "") or ""
-                                    ),
-                                )
-                                source_additions[source] += 1
-                    lineups = list(unique_lineups.values())
-                    scenario_candidate_report["unique_source_additions"] = source_additions
+                else:
+                    extras = []
+                    scenario_extras = []
+
+                # Deep optimizer batches can overlap across seeds, so all NFL
+                # SIM sources pass through one exact-signature dedupe step.
+                unique_lineups: Dict[tuple[str, ...], List[Dict[str, Any]]] = {}
+                source_additions = {"optimizer": 0, "field_shaped": 0, "scenario_built": 0}
+                for source, source_lineups in (
+                    ("optimizer", lineups),
+                    ("field_shaped", extras),
+                    ("scenario_built", scenario_extras),
+                ):
+                    for lineup in source_lineups:
+                        signature = tuple(sorted(player_key(player) for player in lineup))
+                        if signature not in unique_lineups:
+                            unique_lineups[signature] = SimLineup(
+                                lineup,
+                                candidate_source=source,
+                                candidate_archetype=str(
+                                    getattr(lineup, "candidate_archetype", "") or ""
+                                ),
+                            )
+                            source_additions[source] += 1
+                lineups = list(unique_lineups.values())
+                scenario_candidate_report["unique_source_additions"] = source_additions
                 if "leverage" not in strategy_l and "balanced" not in strategy_l:
                     hard_floor = self.salary_cap - (500.0 if "max" in strategy_l else 1000.0)
                     near_cap = [
@@ -683,23 +910,142 @@ class LineupBuildWorker(QtCore.QObject):
                     if len(near_cap) >= build_request:
                         lineups = near_cap
                 generation_seconds = time.perf_counter() - build_started
-                field_count = max(600, min(2400, build_request * 8))
-                self.progress.emit(0, self.sim_scenarios, "Phase 2 of 3 - preparing NFL contest simulation")
                 simulation_started = time.perf_counter()
                 retained_signatures = {
                     tuple(sorted(player_key(player) for player in retained))
                     for retained in self.retained_lineups
                 }
-                sim_result = simulate_nfl_contest(
-                    list(self.retained_lineups) + list(lineups),
-                    build_players,
-                    scenarios=self.sim_scenarios,
-                    field_lineup_count=field_count,
-                    salary_cap=self.salary_cap,
-                    progress_callback=lambda done, total, text: self.progress.emit(done, total, f"Phase 2 of 3 - {text}"),
-                    cancel_callback=self._cancel_event.is_set,
-                    field_config=field_config,
-                )
+                candidate_bank_count = len(lineups)
+                deep_report["candidate_bank_count"] = candidate_bank_count
+
+                if deep_build:
+                    screening_scenarios = max(250, min(600, self.sim_scenarios))
+                    screening_field_count = max(800, min(1600, build_request * 8))
+                    self.progress.emit(
+                        0,
+                        screening_scenarios,
+                        "Phase 2 of 4 - screening the expanded candidate bank",
+                    )
+                    coarse_result = simulate_nfl_contest(
+                        list(self.retained_lineups) + list(lineups),
+                        build_players,
+                        scenarios=screening_scenarios,
+                        field_lineup_count=screening_field_count,
+                        salary_cap=self.salary_cap,
+                        seed=73129,
+                        progress_callback=lambda done, total, text: self.progress.emit(
+                            done, total, f"Phase 2 of 4 - {text}"
+                        ),
+                        cancel_callback=screening_should_stop,
+                        field_config=field_config,
+                    )
+                    coarse_report = dict(coarse_result.get("report") or {})
+                    deep_report["screening_scenarios"] = int(coarse_report.get("scenarios", 0) or 0)
+                    coarse_lineups = list(coarse_result.get("lineups") or [])
+                    shortlist_limit = min(
+                        len(coarse_lineups),
+                        max(
+                            400,
+                            self.num_lineups + len(self.retained_lineups) + 100,
+                            build_request * 6 + len(self.retained_lineups),
+                        ),
+                    )
+                    if coarse_lineups and deep_report["screening_scenarios"] > 0:
+                        shortlist_all = _deep_shortlist(
+                            coarse_lineups,
+                            shortlist_limit,
+                            reserved_signatures=list(retained_signatures),
+                        )
+                        coarse_by_signature = {
+                            _lineup_signature(lineup): lineup for lineup in shortlist_all
+                        }
+                        self.retained_lineups = [
+                            coarse_by_signature.get(_lineup_signature(retained), retained)
+                            for retained in self.retained_lineups
+                        ]
+                        lineups = [
+                            lineup for lineup in shortlist_all
+                            if _lineup_signature(lineup) not in retained_signatures
+                        ]
+                        coarse_result = {
+                            "lineups": shortlist_all,
+                            "report": coarse_report,
+                        }
+                        stability_count = min(
+                            len(shortlist_all),
+                            max(50, self.num_lineups),
+                        )
+                        coarse_top_signatures = {
+                            _lineup_signature(lineup)
+                            for lineup in sorted(
+                                shortlist_all,
+                                key=_deep_candidate_quality,
+                                reverse=True,
+                            )[:stability_count]
+                        }
+                    else:
+                        coarse_top_signatures = set()
+                    deep_report["shortlist_count"] = len(lineups) + len(self.retained_lineups)
+
+                    validation_scenarios = max(2500, self.sim_scenarios)
+                    validation_field_count = max(1800, min(3600, build_request * 18))
+                    sim_result = coarse_result
+                    if lineups and not validation_should_stop():
+                        self.progress.emit(
+                            0,
+                            validation_scenarios,
+                            "Phase 3 of 4 - validating the shortlist with independent scenarios",
+                        )
+                        validation_result = simulate_nfl_contest(
+                            list(self.retained_lineups) + list(lineups),
+                            build_players,
+                            scenarios=validation_scenarios,
+                            field_lineup_count=validation_field_count,
+                            salary_cap=self.salary_cap,
+                            seed=90210,
+                            progress_callback=lambda done, total, text: self.progress.emit(
+                                done, total, f"Phase 3 of 4 - {text}"
+                            ),
+                            cancel_callback=validation_should_stop,
+                            field_config=field_config,
+                        )
+                        validation_report = dict(validation_result.get("report") or {})
+                        deep_report["validation_scenarios"] = int(
+                            validation_report.get("scenarios", 0) or 0
+                        )
+                        if deep_report["validation_scenarios"] > 0:
+                            sim_result = validation_result
+                            if coarse_top_signatures:
+                                validation_top = {
+                                    _lineup_signature(lineup)
+                                    for lineup in list(validation_result.get("lineups") or [])[
+                                        : len(coarse_top_signatures)
+                                    ]
+                                }
+                                deep_report["validation_top_overlap_pct"] = round(
+                                    len(coarse_top_signatures.intersection(validation_top))
+                                    / max(1, len(coarse_top_signatures))
+                                    * 100.0,
+                                    1,
+                                )
+                    deep_report["time_limit_reached"] = bool(
+                        time.perf_counter() >= validation_deadline
+                    )
+                else:
+                    field_count = max(600, min(2400, build_request * 8))
+                    self.progress.emit(0, self.sim_scenarios, "Phase 2 of 3 - preparing NFL contest simulation")
+                    sim_result = simulate_nfl_contest(
+                        list(self.retained_lineups) + list(lineups),
+                        build_players,
+                        scenarios=self.sim_scenarios,
+                        field_lineup_count=field_count,
+                        salary_cap=self.salary_cap,
+                        progress_callback=lambda done, total, text: self.progress.emit(
+                            done, total, f"Phase 2 of 3 - {text}"
+                        ),
+                        cancel_callback=self._cancel_event.is_set,
+                        field_config=field_config,
+                    )
                 simulated_lineups = list(sim_result.get("lineups") or [])
                 if simulated_lineups:
                     simulated_by_signature = {
@@ -720,13 +1066,16 @@ class LineupBuildWorker(QtCore.QObject):
                         not in retained_signatures
                     ]
                 sim_report = dict(sim_result.get("report") or {})
+                if deep_build:
+                    sim_report["deep_build"] = dict(deep_report)
                 simulation_seconds = time.perf_counter() - simulation_started
 
             selection_started = time.perf_counter()
             self.progress.emit(
                 min(self.num_lineups, len(lineups) + len(self.retained_lineups)),
                 self.num_lineups,
-                "Phase 3 of 3 - selecting portfolio",
+                "Phase 4 of 4 - selecting and refining the portfolio"
+                if deep_build else "Phase 3 of 3 - selecting portfolio",
             )
             selected = select_portfolio(
                 lineups,
@@ -734,7 +1083,19 @@ class LineupBuildWorker(QtCore.QObject):
                 rules=self.portfolio_rules,
                 kind=self.kind,
                 retained_lineups=self.retained_lineups,
+                refinement_passes=3 if deep_build else 0,
+                refinement_stop_callback=refinement_should_stop if deep_build else None,
             )
+            if deep_build:
+                deep_report["refinement_swaps"] = int(
+                    selected.get("report", {}).get("refinement_swaps", 0) or 0
+                )
+                deep_report["time_limit_reached"] = bool(
+                    deep_report.get("time_limit_reached")
+                    or time.perf_counter() >= deep_deadline
+                )
+                if sim_report:
+                    sim_report["deep_build"] = dict(deep_report)
             lineups = selected["lineups"]
             if sim_report and selected["report"].get("sim_summary"):
                 sim_report["portfolio"] = dict(selected["report"]["sim_summary"])
@@ -759,6 +1120,11 @@ class LineupBuildWorker(QtCore.QObject):
                     salary_cap=self.salary_cap,
                 )
             selection_seconds = time.perf_counter() - selection_started
+            reported_candidate_count = (
+                int(deep_report.get("candidate_bank_count", 0) or 0)
+                if deep_build
+                else int(selected.get("candidate_count", 0) or 0)
+            )
             timing_report = {
                 "generation_seconds": max(0.0, generation_seconds),
                 "simulation_seconds": max(0.0, simulation_seconds),
@@ -768,7 +1134,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "optimizer_candidate_target": int(candidate_target),
                 "ownership_candidate_target": int(ownership_candidate_target),
                 "scenario_candidate_target": int(scenario_candidate_target),
-                "candidate_count": int(selected.get("candidate_count", 0) or 0),
+                "candidate_count": reported_candidate_count,
                 "selected_count": len(lineups),
                 "requested_count": self.num_lineups,
                 "retained_count": len(self.retained_lineups),
@@ -779,6 +1145,14 @@ class LineupBuildWorker(QtCore.QObject):
                 "role_pool_omitted": max(0, int(unfiltered_build_pool_size - len(build_players))),
                 "sim_scenarios": self.sim_scenarios if use_nfl_sim else 0,
                 "scenario_candidate_report": scenario_candidate_report,
+                "compute_mode": "Deep" if deep_build else "Fast",
+                "deep_time_limit_seconds": self.deep_time_limit_seconds if deep_build else 0.0,
+                "screening_scenarios": int(deep_report.get("screening_scenarios", 0) or 0),
+                "validation_scenarios": int(deep_report.get("validation_scenarios", 0) or 0),
+                "shortlist_count": int(deep_report.get("shortlist_count", 0) or 0),
+                "refinement_swaps": int(deep_report.get("refinement_swaps", 0) or 0),
+                "validation_top_overlap_pct": deep_report.get("validation_top_overlap_pct"),
+                "time_limit_reached": bool(deep_report.get("time_limit_reached")),
             }
             self.finished.emit({
                 "kind": self.kind,
@@ -787,7 +1161,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "requested": self.num_lineups,
                 "cancelled": self._cancel_event.is_set(),
                 "portfolio_report": selected["report"],
-                "candidate_count": selected["candidate_count"],
+                "candidate_count": reported_candidate_count,
                 "sim_report": sim_report,
                 "timing_report": timing_report,
                 "repair_source": self.repair_source,
@@ -2321,7 +2695,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spin_nfl_sim_scenarios.setSingleStep(250)
         self.spin_nfl_sim_scenarios.setValue(750)
         self.spin_nfl_sim_scenarios.setToolTip(
-            "More scenarios stabilize SIM Edge estimates but take longer. 750 is the desktop default."
+            "More scenarios stabilize SIM Edge estimates but take longer. 750 is the Fast default.\n"
+            "Deep uses this as a minimum and independently validates with at least 2,500 scenarios."
         )
         row2.addWidget(self.spin_nfl_sim_scenarios)
 
@@ -2336,6 +2711,18 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         row2.addWidget(self.lbl_field_preset)
         row2.addWidget(self.combo_field_preset)
+
+        self.lbl_nfl_compute_mode = QtWidgets.QLabel("Build depth")
+        self.combo_nfl_compute_mode = QtWidgets.QComboBox()
+        self.combo_nfl_compute_mode.setObjectName("nflComputeMode")
+        self.combo_nfl_compute_mode.addItems(["Fast (default)", "Deep (up to 5 min)"])
+        self.combo_nfl_compute_mode.setCurrentText("Fast (default)")
+        self.combo_nfl_compute_mode.setToolTip(
+            "Fast uses the normal candidate bank and selected scenario count.\n"
+            "Deep spends up to five minutes exploring thousands of candidates, then screens,\n"
+            "independently validates, and locally refines the final portfolio. NFL Classic only."
+        )
+        self.chk_nfl_contest_sim.toggled.connect(self.combo_nfl_compute_mode.setEnabled)
 
         row2.addStretch(1)
         top_box.addLayout(row2)
@@ -2627,6 +3014,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lbl_nfl_scenarios = QtWidgets.QLabel("Scenarios")
         strategy_grid.addWidget(self.lbl_nfl_scenarios, 3, 5)
         strategy_grid.addWidget(self.spin_nfl_sim_scenarios, 3, 6)
+        strategy_grid.addWidget(self.lbl_nfl_compute_mode, 4, 4)
+        strategy_grid.addWidget(self.combo_nfl_compute_mode, 4, 5, 1, 2)
         strategy_grid.setColumnStretch(7, 1)
         self.tabs_workspace_controls.addTab(strategy_panel, "Build Strategy")
 
@@ -3078,6 +3467,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.spin_nfl_sim_scenarios.setVisible(is_nfl_classic)
             self.lbl_field_preset.setVisible(is_nfl_classic)
             self.combo_field_preset.setVisible(is_nfl_classic)
+            self.lbl_nfl_compute_mode.setVisible(is_nfl_classic)
+            self.combo_nfl_compute_mode.setVisible(is_nfl_classic)
+            self.combo_nfl_compute_mode.setEnabled(
+                is_nfl_classic and self.chk_nfl_contest_sim.isChecked()
+            )
         if hasattr(self, "chk_sd_template_sim"):
             self.chk_sd_template_sim.setVisible(is_showdown)
 
@@ -4774,9 +5168,11 @@ class MainWindow(QtWidgets.QMainWindow):
         sim_checkbox = getattr(self, "chk_nfl_contest_sim", None)
         sim_spin = getattr(self, "spin_nfl_sim_scenarios", None)
         field_preset_widget = getattr(self, "combo_field_preset", None)
+        compute_mode_widget = getattr(self, "combo_nfl_compute_mode", None)
         sim_enabled = bool(sim_checkbox.isChecked()) if sim_checkbox is not None else True
         sim_scenarios = int(sim_spin.value()) if sim_spin is not None else 750
         field_preset = field_preset_widget.currentText() if field_preset_widget is not None else "150-Max"
+        compute_mode = compute_mode_widget.currentText() if compute_mode_widget is not None else "Fast (default)"
         field_calibration: Dict[str, Any] = {}
         if str(sport or "").strip().upper() == "NFL" and kind != "showdown" and sim_enabled:
             try:
@@ -4805,6 +5201,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 "sim_enabled": effective_sim_enabled,
                 "sim_scenarios": sim_scenarios if effective_sim_enabled else 0,
                 "field_preset": field_preset if effective_sim_enabled else "",
+                "compute_mode": (
+                    "Deep" if effective_sim_enabled and compute_mode.casefold().startswith("deep") else "Fast"
+                ),
             },
             "portfolio_rules": portfolio_rules,
             "repair_source": str(repair_source or ""),
@@ -4850,6 +5249,7 @@ class MainWindow(QtWidgets.QMainWindow):
             sim_scenarios=sim_scenarios,
             field_preset=field_preset,
             field_calibration=field_calibration,
+            compute_mode=compute_mode,
             retained_lineups=retained,
             repair_source=repair_source,
         )
@@ -4885,10 +5285,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self._build_eta.setText(text or "Building…")
 
         phase_text = str(text or "").lower()
-        if "phase 2" in phase_text:
-            self._lineup_space_phase = f"SIM {done:,}/{total:,}" if total > 0 else "SIM"
-        elif "phase 3" in phase_text:
+        if "phase 4" in phase_text or "selecting" in phase_text or "refining" in phase_text:
             self._lineup_space_phase = "Selecting"
+        elif "phase 2" in phase_text or "phase 3 of 4" in phase_text:
+            self._lineup_space_phase = f"SIM {done:,}/{total:,}" if total > 0 else "SIM"
         else:
             self._lineup_space_phase = f"Generate {done:,}/{total:,}" if total > 0 else "Generating"
         self._update_lineup_space_dashboard()
@@ -5422,6 +5822,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     ),
                     "sim_scenarios": self.spin_nfl_sim_scenarios.value(),
                     "field_preset": self.combo_field_preset.currentText(),
+                    "compute_mode": (
+                        "Deep"
+                        if self.combo_nfl_compute_mode.currentText().casefold().startswith("deep")
+                        else "Fast"
+                    ),
                 },
                 "portfolio_rules": self._portfolio_rules(),
             }
@@ -5542,6 +5947,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 "mlb_stack_pref": self.combo_mlb_stack_pref.currentText(),
                 "salary_strategy": self.combo_salary_strategy.currentText(),
                 "field_preset": self.combo_field_preset.currentText(),
+                "compute_mode": (
+                    "Deep"
+                    if self.combo_nfl_compute_mode.currentText().casefold().startswith("deep")
+                    else "Fast"
+                ),
                 "portfolio_rules": self._portfolio_rules(),
             }
             validation = {

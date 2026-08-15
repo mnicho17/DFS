@@ -203,6 +203,7 @@ def create_build_diagnostic(
             "scenario_built_target": max(0, _integer(timing.get("scenario_candidate_target"))),
             "generated": max(0, _integer(timing.get("candidate_count"))),
             "selected": max(0, _integer(timing.get("selected_count"), displayed_count)),
+            "shortlisted": max(0, _integer(timing.get("shortlist_count"))),
         },
         "settings": {
             "build_style": str(settings.get("build_style") or ""),
@@ -212,6 +213,9 @@ def create_build_diagnostic(
             "sim_enabled": bool(settings.get("sim_enabled")),
             "sim_scenarios": max(0, _integer(settings.get("sim_scenarios"))),
             "field_preset": str(settings.get("field_preset") or ""),
+            "compute_mode": str(
+                timing.get("compute_mode") or settings.get("compute_mode") or "Fast"
+            ),
         },
         "portfolio_rules": {
             "minimum_unique": max(0, _integer(rules.get("min_unique"))),
@@ -236,6 +240,16 @@ def create_build_diagnostic(
             "top_one_scenarios_covered": max(0, _integer(sim_summary.get("top_one_scenarios_covered"))),
             "generated_sources": aggregate_counts(candidate_sources.get("generated")),
             "selected_sources": aggregate_counts(candidate_sources.get("selected")),
+            "screening_scenarios": max(0, _integer(timing.get("screening_scenarios"))),
+            "validation_scenarios": max(0, _integer(timing.get("validation_scenarios"))),
+            "refinement_swaps": max(0, _integer(timing.get("refinement_swaps"))),
+            "deep_time_limit_seconds": max(0.0, _number(timing.get("deep_time_limit_seconds"))),
+            "deep_time_limit_reached": bool(timing.get("time_limit_reached")),
+            "validation_top_overlap_pct": (
+                _number(timing.get("validation_top_overlap_pct"))
+                if timing.get("validation_top_overlap_pct") is not None
+                else None
+            ),
         },
     }
     return diagnostic
@@ -298,6 +312,9 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             sources.append(f"{scenario_target:,} scenario-built")
         candidate_detail = f" ({' + '.join(sources)})"
 
+    compute_mode = str(settings.get("compute_mode") or "Fast")
+    deep_mode = compute_mode.casefold().startswith("deep")
+
     lines = [
         "DFS Optimizer Build Report",
         f"Run: {_created_label(record.get('created_at'))}",
@@ -317,6 +334,11 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     ]
     if str(pool.get("explanation") or "").strip():
         lines.append(f"- Note: {str(pool.get('explanation')).strip()}")
+    if deep_mode:
+        lines.append(
+            f"- Deep shortlist: {_integer(candidates.get('shortlisted')):,} candidates after "
+            f"{_integer(sim.get('screening_scenarios')):,} screening scenarios"
+        )
     lines.extend([
         "",
         "Timing",
@@ -331,12 +353,24 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Salary strategy: {settings.get('salary_strategy') or 'n/a'}",
         f"- Ownership: {settings.get('ownership_mode') or 'n/a'} (weight {_number(settings.get('ownership_weight')):.2f})",
         f"- NFL SIM Edge: {sim_text}",
+        f"- Compute: {compute_mode}",
         f"- Portfolio: minimum unique {_integer(rules.get('minimum_unique'))}; team max {_number(rules.get('team_max_pct'), 100.0):.0f}%; game max {_number(rules.get('game_max_pct'), 100.0):.0f}%",
         f"- Balance ownership/dup risk: {'On' if rules.get('balance_ownership') else 'Off'}",
         f"- Player groups: {_integer(rules.get('group_count'))} | Player limits: {_integer(rules.get('constrained_player_count'))}",
     ])
     if sim.get("preset_fit") is not None:
         lines.append(f"- Preset fit: {_number(sim.get('preset_fit')):.0f}/100")
+    if deep_mode:
+        deep_status = "validation time budget used" if sim.get("deep_time_limit_reached") else "completed before time budget"
+        lines.append(
+            f"- Deep validation: {_integer(sim.get('validation_scenarios')):,} independent scenarios; "
+            f"{_integer(sim.get('refinement_swaps')):,} portfolio swaps; {deep_status}"
+        )
+        if sim.get("validation_top_overlap_pct") is not None:
+            lines.append(
+                f"- Independent top-candidate agreement: "
+                f"{_number(sim.get('validation_top_overlap_pct')):.1f}%"
+            )
     if sim.get("average_edge") is not None:
         lines.append(
             f"- SIM portfolio: edge {_number(sim.get('average_edge')):.0f}/100; "

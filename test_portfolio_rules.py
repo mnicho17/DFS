@@ -131,13 +131,37 @@ class PortfolioRulesTests(unittest.TestCase):
             [others[1], others[3], others[5]],
             [others[2], others[4], others[5]],
         ]
-        result = select_portfolio(candidates, 4, rules={"min_unique": 1}, kind="classic")
+        result = select_portfolio(
+            candidates,
+            4,
+            rules={"min_unique": 1},
+            kind="classic",
+            refinement_passes=3,
+        )
         report = result["report"]
         exposures = {row["name"]: row["count"] for row in report["players"]}
         self.assertEqual(len(result["lineups"]), 4)
         self.assertEqual(exposures["A"], 2)
         self.assertLessEqual(exposures.get("B", 0), 1)
         self.assertFalse(any("A total exposure" in warning for warning in report["warnings"]))
+        self.assertIn("refinement_swaps", report)
+
+    def test_refinement_honors_its_time_stop_without_changing_the_greedy_result(self):
+        players = [_player(name, f"T{index}", f"G{index}", 30 - index) for index, name in enumerate("ABCDEFGHI")]
+        candidates = [list(combo) for combo in itertools.combinations(players, 3)]
+
+        baseline = select_portfolio(candidates, 6, rules={"min_unique": 1}, kind="classic")
+        stopped = select_portfolio(
+            candidates,
+            6,
+            rules={"min_unique": 1},
+            kind="classic",
+            refinement_passes=3,
+            refinement_stop_callback=lambda: True,
+        )
+
+        self.assertEqual(stopped["lineups"], baseline["lineups"])
+        self.assertEqual(stopped["report"]["refinement_swaps"], 0)
 
     def test_showdown_captain_minimum_and_maximum(self):
         a = _player("A", "T1", "G1", 30, MinCptPct=25, MaxCptPct=25)

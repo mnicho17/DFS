@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.12.0 | Windows desktop app
+Version 1.13.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -102,6 +102,7 @@ The **Build Strategy** tab controls how candidates are created and ranked. Avail
 - Use salary strategy to discourage obviously under-cap builds without forcing every lineup to spend the full cap.
 - For NFL Classic, enable **NFL SIM Edge** for correlated scenario and field evaluation.
 - For NFL Classic, choose the contest entry-limit preset: **Single Entry**, **3-Max**, **20-Max**, or **150-Max**. This changes the opponent field size, salary floor, ownership emphasis, stack mix, bring-back rate, and FLEX mix used by the SIM.
+- Choose **Build depth: Fast (default)** for normal generation. Choose **Deep (up to 5 min)** when you want the app to spend substantially more compute exploring, screening, and independently validating candidates. Deep applies only to NFL Classic with SIM Edge on.
 
 Start with moderate settings. Combine only rules you can explain and review.
 
@@ -129,7 +130,9 @@ The compact **Space** display shows the current eligible build pool, structural 
 
 During generation, the Space display follows the Generate, SIM, and Select stages. After completion, hover it for the last build's phase timing and the number of candidates evaluated versus lineups selected.
 
-To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate budget, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. For NFL SIM Edge, the budget separates optimizer candidates from additional field-shaped candidates. It also identifies the slowest phase so a performance problem can be isolated without guessing.
+Deep Build shows four stages: Explore, Screen, Validate, and Select/Refine. Its five-minute value is a ceiling, not a required wait. The app stops early when the candidate target and validation work finish, reserves enough time to select a portfolio, and keeps the strongest completed stage if you cancel or the compute budget is reached.
+
+To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate budget, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. For NFL SIM Edge, the budget separates optimizer candidates from additional field-shaped and scenario-built candidates. Deep reports also show the coarse shortlist, independent validation count, top-candidate agreement between the two SIM passes, portfolio swaps, and time-budget status. The report identifies the slowest phase so a performance problem can be isolated without guessing.
 
 Choose **Settings > Build History…** to review the 25 most recent runs and copy any earlier report. Select exactly two rows and choose **Compare Two Builds** for a side-by-side view of candidate counts, timing, contest preset, SIM quality, duplication risk, scenario coverage, and selected candidate sources. Compare similar slates and inputs; a score change is not meaningful when the underlying assumptions changed. History is saved automatically after a completed or cancelled build and stays on this computer. Choose **Clear History** in that window when you no longer need it.
 
@@ -174,9 +177,13 @@ The **Player exposure** tab lists every player's count, percentage, and lineup n
 
 Large candidate pools, NFL simulation, and restrictive portfolio rules take more time than a simple projection build.
 
+![Deep Build control in the NFL Classic Build Strategy tab](images/deep-build.png)
+
 ## 9. Understand NFL SIM Edge
 
 NFL SIM Edge is for NFL Classic tournament decisions. It combines projection-led optimizer lineups, realistic field-shaped lineups, and lineups built from correlated ceiling, balanced, leverage, and low-duplication scenarios. The app evaluates them against a representative opponent field with a separate set of simulated outcomes, then selects a portfolio that covers different strong scenarios. Separating candidate creation from evaluation reduces overfitting.
+
+Deep Build strengthens that separation. A coarse random stream screens the expanded bank, while a different random stream validates only the strongest source-diverse shortlist. The final pass uses at least 2,500 scenarios even when the Fast scenario control is lower. A local search can then replace a selected lineup only when the full portfolio improves and every hard group, uniqueness, player, team, and game limit remains satisfied.
 
 Choose the preset that matches the contest's maximum entries per person. Presets are conservative starting assumptions, not promises. After at least three complete fields, 1,000 entries, and 70% player metadata coverage have been imported for that preset, the app can blend measured salary, construction, and winning-ownership patterns into its baseline. Until then, measurements remain report-only.
 
