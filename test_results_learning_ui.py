@@ -432,6 +432,36 @@ class ResultsLearningUITests(unittest.TestCase):
             for lineup in payload["lineups"]
         ))
 
+    def test_build_completion_handles_missing_real_duplication_metric(self):
+        window = MainWindow()
+        payload = {
+            "kind": "classic",
+            "sport": "NFL",
+            "requested": 5,
+            "lineups": [],
+            "cancelled": False,
+            "portfolio_report": {"warnings": []},
+            "sim_report": {
+                "field_comparison": {
+                    "available": True,
+                    "simulated": {"duplicate_entry_pct": 12.5},
+                    "real": {"duplicate_entry_pct": None},
+                    "report_only": True,
+                },
+            },
+            "timing_report": {
+                "generation_seconds": 1.0,
+                "simulation_seconds": 2.0,
+                "selection_seconds": 0.1,
+            },
+        }
+
+        with mock.patch.object(window, "_record_build_diagnostic"):
+            window._on_lineup_build_finished(payload)
+
+        self.assertIn("SIM duplication 12.5% vs real n/a", window.status.currentMessage())
+        window.close()
+
     def test_saved_export_writes_csv_and_learning_record(self):
         window = MainWindow()
         window.saved_showdown = [_showdown_lineup()]

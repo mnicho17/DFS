@@ -4670,9 +4670,17 @@ class MainWindow(QtWidgets.QMainWindow):
             if field_comparison.get("available"):
                 simulated = dict(field_comparison.get("simulated") or {})
                 real = dict(field_comparison.get("real") or {})
+
+                def optional_pct(value: Any) -> str:
+                    try:
+                        number = float(value)
+                    except (TypeError, ValueError):
+                        return "n/a"
+                    return f"{number:.1f}%" if math.isfinite(number) else "n/a"
+
                 comparison_note += (
-                    f" Field check: SIM duplication {float(simulated.get('duplicate_entry_pct', 0.0)):.1f}% "
-                    f"vs real {float(real.get('duplicate_entry_pct', 0.0)):.1f}%"
+                    f" Field check: SIM duplication {optional_pct(simulated.get('duplicate_entry_pct'))} "
+                    f"vs real {optional_pct(real.get('duplicate_entry_pct'))}"
                     + (" (report-only)." if field_comparison.get("report_only") else " (learned blend active).")
                 )
             timing_note = ""

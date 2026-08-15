@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.10.0 | Windows desktop app
+Version 1.10.1 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -232,6 +232,8 @@ Exact matching matters. An entry can remain unmatched if it was edited after exp
 **Rejected upload:** use a fresh DraftKings salary file from the exact slate and export again without modifying the upload columns.
 
 **Unmatched results:** confirm the submitted roster exactly matches a lineup exported from this app.
+
+**Incomplete learning comparison:** a preset with partial historical field data may show the real-field duplication value as **n/a**. Generation and results remain available; importing a complete matching field can fill the missing measurement.
 
 See the separate Troubleshooting guide for more detail.
 
