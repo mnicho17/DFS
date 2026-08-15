@@ -3129,10 +3129,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tbl_players.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         # Enable click-to-sort without changing the visual layout.
         self.tbl_players.setSortingEnabled(True)
-        # Allow user to drag column widths; we still auto-size on refresh to keep the same initial look.
+        # Allow user to drag column widths; responsive defaults are applied
+        # after sport-specific columns are shown.
         self.tbl_players.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
-        for column in (0, 10, 14):
-            self.tbl_players.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
         self.tbl_players.setAlternatingRowColors(True)
         self.tbl_players.verticalHeader().setDefaultSectionSize(27)
         self.tbl_players.verticalHeader().setVisible(False)
@@ -3499,14 +3498,87 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @staticmethod
     def _fit_lineup_table_columns(table: QtWidgets.QTableWidget) -> None:
-        """Use the output width for roster slots instead of leaving a blank gutter."""
+        """Use the output width while keeping summary fields compact and aligned."""
         header = table.horizontalHeader()
         if table.columnCount() <= 0:
             return
         header.setSectionResizeMode(0, QtWidgets.QHeaderView.Fixed)
         header.resizeSection(0, 64)
+        save_header = table.horizontalHeaderItem(0)
+        if save_header is not None:
+            save_header.setTextAlignment(int(QtCore.Qt.AlignCenter))
         for column in range(1, table.columnCount()):
-            header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
+            header_item = table.horizontalHeaderItem(column)
+            label = header_item.text() if header_item is not None else ""
+            if label == "TotalSal":
+                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Fixed)
+                header.resizeSection(column, 88)
+                header_item.setTextAlignment(int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter))
+            elif label in {"Grade", "SIM Edge"}:
+                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Fixed)
+                header.resizeSection(column, 126 if label == "SIM Edge" else 92)
+                header_item.setTextAlignment(int(QtCore.Qt.AlignCenter))
+            else:
+                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
+                if header_item is not None:
+                    header_item.setTextAlignment(int(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter))
+
+    @staticmethod
+    def _player_column_alignment(column: int) -> int:
+        """Match cell alignment to the kind of information in each column."""
+        if column in {0, 3, 10, 14}:
+            return int(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        if column in {1, 2, 20, 21, 22}:
+            return int(QtCore.Qt.AlignCenter)
+        return int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+
+    def _fit_player_table_columns(self) -> None:
+        """Fit visible player fields predictably without oversized text columns."""
+        if not hasattr(self, "tbl_players"):
+            return
+        table = self.tbl_players
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        header.setMinimumSectionSize(38)
+        header.setStretchLastSection(False)
+
+        preferred = {
+            0: 168, 1: 48, 2: 42, 3: 104, 4: 64, 5: 68, 6: 64,
+            7: 58, 8: 58, 9: 68, 10: 108, 11: 46, 12: 74,
+            13: 66, 14: 100, 15: 74, 16: 76, 17: 76, 18: 64,
+            19: 64, 20: 54, 21: 48, 22: 54,
+        }
+        visible = [
+            column for column in range(table.columnCount())
+            if not table.isColumnHidden(column)
+        ]
+        for column in visible:
+            header.resizeSection(column, preferred.get(column, 64))
+            header_item = table.horizontalHeaderItem(column)
+            if header_item is not None:
+                header_item.setTextAlignment(self._player_column_alignment(column))
+
+        # Share any spare width among descriptive fields. This keeps Role near
+        # its values while letting names, injuries, and tags breathe.
+        available = max(0, table.viewport().width() - 2)
+        used = sum(header.sectionSize(column) for column in visible)
+        spare = max(0, available - used)
+        elastic = [(0, 0.40), (3, 0.15), (10, 0.20), (14, 0.25)]
+        elastic = [(column, weight) for column, weight in elastic if column in visible]
+        weight_total = sum(weight for _, weight in elastic)
+        distributed = 0
+        for index, (column, weight) in enumerate(elastic):
+            if index == len(elastic) - 1:
+                addition = spare - distributed
+            else:
+                addition = int(spare * weight / max(weight_total, 1e-9))
+                distributed += addition
+            header.resizeSection(column, preferred[column] + max(0, addition))
+
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "tbl_players"):
+            QtCore.QTimer.singleShot(0, self._fit_player_table_columns)
 
     def _set_saved_portfolio_visible(self, visible: bool) -> None:
         """Let the main player and lineup workspace use the full window."""
@@ -3618,6 +3690,7 @@ class MainWindow(QtWidgets.QMainWindow):
         visible = self._default_player_columns(sport)
         for column in range(self.tbl_players.columnCount()):
             self.tbl_players.setColumnHidden(column, column not in visible)
+        self._fit_player_table_columns()
 
     def _show_player_columns_menu(self, point: QtCore.QPoint) -> None:
         """Allow any compacted column to be restored on demand."""
@@ -5215,8 +5288,14 @@ class MainWindow(QtWidgets.QMainWindow):
             # Visual-only highlighting
             self._set_player_row_style(r, p)
 
-        # Keep the same initial look (auto-fit), but allow manual resizing after.
-        self.tbl_players.resizeColumnsToContents()
+            for column in range(self.tbl_players.columnCount()):
+                item = self.tbl_players.item(r, column)
+                if item is not None:
+                    item.setTextAlignment(self._player_column_alignment(column))
+
+        # Keep widths stable across data refreshes while still filling the
+        # current player-table viewport.
+        self._fit_player_table_columns()
 
         # Restore sorting state.
         if was_sorting:
@@ -5442,12 +5521,15 @@ class MainWindow(QtWidgets.QMainWindow):
             chk.stateChanged.connect(lambda state, row=i: self._sd_checkbox_changed(row, state))
             self.tbl_sd.setCellWidget(i, 0, chk)
 
-            self.tbl_sd.setItem(i, 1, QtWidgets.QTableWidgetItem(self._display_name(cpt)))
+            captain_item = QtWidgets.QTableWidgetItem(self._display_name(cpt))
+            captain_item.setTextAlignment(int(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter))
+            self.tbl_sd.setItem(i, 1, captain_item)
             for j in range(5):
-                self.tbl_sd.setItem(
-                    i, 2 + j,
-                    QtWidgets.QTableWidgetItem(self._display_name(flex[j]) if j < len(flex) else "")
+                flex_item = QtWidgets.QTableWidgetItem(
+                    self._display_name(flex[j]) if j < len(flex) else ""
                 )
+                flex_item.setTextAlignment(int(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter))
+                self.tbl_sd.setItem(i, 2 + j, flex_item)
             self._build_progress.setValue(i + 1)
             self._build_eta.setText(f"Rendering {i + 1:,}/{total:,}")
             QtWidgets.QApplication.processEvents()
@@ -5501,10 +5583,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
             cells = self._classic_display_cells(lu, sport)
             for col, txt in enumerate(cells, start=1):
-                self.tbl_cl.setItem(i, col, QtWidgets.QTableWidgetItem(txt))
+                player_item = QtWidgets.QTableWidgetItem(txt)
+                player_item.setTextAlignment(int(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter))
+                self.tbl_cl.setItem(i, col, player_item)
 
             total_sal = int(sum(float(p.get("FlexSalary", 0.0) or 0.0) for p in lu))
-            self.tbl_cl.setItem(i, len(headers)-2, QtWidgets.QTableWidgetItem(f"{total_sal:,}"))
+            salary_item = QtWidgets.QTableWidgetItem(f"{total_sal:,}")
+            salary_item.setTextAlignment(int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter))
+            self.tbl_cl.setItem(i, len(headers)-2, salary_item)
 
             try:
                 grade_info = lineup_grade_for_sport(lu, sport, self._safe_float(self.edit_cl_cap.text(), 50000.0))
@@ -5516,6 +5602,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 else:
                     grade_txt = f"{grade_info.get('grade', '')} ({float(grade_info.get('score', 0.0)):.0f})"
                 grade_item = QtWidgets.QTableWidgetItem(grade_txt)
+                grade_item.setTextAlignment(int(QtCore.Qt.AlignCenter))
                 detail = (
                     f"Salary Used: ${float(grade_info.get('salary_used', 0.0)):,.0f}\n"
                     f"Salary Left: ${float(grade_info.get('salary_left', 0.0)):,.0f}\n"
@@ -5555,7 +5642,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 grade_item.setToolTip(detail)
                 self.tbl_cl.setItem(i, len(headers)-1, grade_item)
             except Exception:
-                self.tbl_cl.setItem(i, len(headers)-1, QtWidgets.QTableWidgetItem(""))
+                grade_item = QtWidgets.QTableWidgetItem("")
+                grade_item.setTextAlignment(int(QtCore.Qt.AlignCenter))
+                self.tbl_cl.setItem(i, len(headers)-1, grade_item)
 
             self._build_progress.setValue(i + 1)
             self._build_eta.setText(f"Rendering {i + 1:,}/{total:,}")
