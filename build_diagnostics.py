@@ -151,6 +151,16 @@ def create_build_diagnostic(
     timing = dict(timing_report or {})
     portfolio = dict(portfolio_report or {})
     sim = dict(sim_report or {})
+    sim_summary = dict(portfolio.get("sim_summary") or sim.get("portfolio") or {})
+    candidate_sources = dict(sim.get("candidate_sources") or {})
+
+    def aggregate_counts(value: Any) -> Dict[str, int]:
+        allowed = {"optimizer", "field_shaped", "scenario_built"}
+        return {
+            str(key): max(0, _integer(count))
+            for key, count in dict(value or {}).items()
+            if str(key) in allowed
+        }
 
     warnings: List[str] = []
     for source in (portfolio.get("warnings") or [], sim.get("warnings") or []):
@@ -219,6 +229,13 @@ def create_build_diagnostic(
         "sim": {
             "preset_fit": _number(preset.get("fit_score")) if preset.get("available") else None,
             "field_lineups": max(0, _integer(sim.get("field_lineup_count"))),
+            "average_edge": _number(sim_summary.get("average_edge")) if sim_summary else None,
+            "average_return_index": _number(sim_summary.get("average_return_index")) if sim_summary else None,
+            "average_duplicate_risk": _number(sim_summary.get("average_duplicate_risk")) if sim_summary else None,
+            "scenario_count": max(0, _integer(sim_summary.get("scenario_count"))),
+            "top_one_scenarios_covered": max(0, _integer(sim_summary.get("top_one_scenarios_covered"))),
+            "generated_sources": aggregate_counts(candidate_sources.get("generated")),
+            "selected_sources": aggregate_counts(candidate_sources.get("selected")),
         },
     }
     return diagnostic
@@ -320,6 +337,29 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     ])
     if sim.get("preset_fit") is not None:
         lines.append(f"- Preset fit: {_number(sim.get('preset_fit')):.0f}/100")
+    if sim.get("average_edge") is not None:
+        lines.append(
+            f"- SIM portfolio: edge {_number(sim.get('average_edge')):.0f}/100; "
+            f"return {_number(sim.get('average_return_index')):.0f}/100; "
+            f"dup risk {_number(sim.get('average_duplicate_risk')):.0f}/100; "
+            f"top-1% paths {_integer(sim.get('top_one_scenarios_covered')):,}/"
+            f"{_integer(sim.get('scenario_count')):,}"
+        )
+    selected_sources = dict(sim.get("selected_sources") or {})
+    if selected_sources:
+        source_labels = {
+            "optimizer": "optimizer",
+            "field_shaped": "field-shaped",
+            "scenario_built": "scenario-built",
+        }
+        lines.append(
+            "- Selected sources: "
+            + " + ".join(
+                f"{_integer(selected_sources.get(key)):,} {source_labels[key]}"
+                for key in ("optimizer", "field_shaped", "scenario_built")
+                if _integer(selected_sources.get(key)) > 0
+            )
+        )
 
     warnings = [str(warning) for warning in portfolio.get("warnings") or [] if str(warning).strip()]
     lines.extend(["", "Warnings"])
@@ -330,5 +370,92 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     lines.extend([
         "",
         "Privacy: This report contains aggregate settings and counts only; no players, lineups, file paths, or API keys.",
+    ])
+    return "\n".join(lines)
+
+
+def format_build_comparison(first: Mapping[str, Any], second: Mapping[str, Any]) -> str:
+    """Compare two privacy-safe build-history records."""
+    records = sorted(
+        [dict(first or {}), dict(second or {})],
+        key=lambda record: str(record.get("created_at") or ""),
+    )
+    earlier, later = records
+
+    def value(record: Mapping[str, Any], section: str, key: str) -> Any:
+        return dict(record.get(section) or {}).get(key)
+
+    def delta(newer: Any, older: Any, *, digits: int = 1, suffix: str = "") -> str:
+        change = _number(newer) - _number(older)
+        return f"{change:+.{digits}f}{suffix}"
+
+    def source_text(record: Mapping[str, Any]) -> str:
+        sources = dict(value(record, "sim", "selected_sources") or {})
+        labels = {
+            "optimizer": "optimizer",
+            "field_shaped": "field-shaped",
+            "scenario_built": "scenario-built",
+        }
+        parts = [
+            f"{_integer(sources.get(key))} {labels[key]}"
+            for key in labels
+            if _integer(sources.get(key)) > 0
+        ]
+        return " + ".join(parts) if parts else "n/a"
+
+    lines = [
+        "DFS Optimizer Build Comparison",
+        f"A: {_created_label(earlier.get('created_at'))}",
+        f"B: {_created_label(later.get('created_at'))}",
+        "",
+        "Build",
+        f"- Contest: {str(earlier.get('sport') or 'NFL').upper()} {str(earlier.get('contest_type') or 'classic').title()} -> "
+        f"{str(later.get('sport') or 'NFL').upper()} {str(later.get('contest_type') or 'classic').title()}",
+        f"- Preset: {value(earlier, 'settings', 'field_preset') or 'n/a'} -> {value(later, 'settings', 'field_preset') or 'n/a'}",
+        f"- Selected: {_integer(value(earlier, 'candidates', 'selected')):,} -> {_integer(value(later, 'candidates', 'selected')):,} "
+        f"({delta(value(later, 'candidates', 'selected'), value(earlier, 'candidates', 'selected'), digits=0)})",
+        f"- Candidates: {_integer(value(earlier, 'candidates', 'generated')):,} -> {_integer(value(later, 'candidates', 'generated')):,} "
+        f"({delta(value(later, 'candidates', 'generated'), value(earlier, 'candidates', 'generated'), digits=0)})",
+        f"- Pool: {_integer(value(earlier, 'pool', 'eligible')):,} -> {_integer(value(later, 'pool', 'eligible')):,} "
+        f"({delta(value(later, 'pool', 'eligible'), value(earlier, 'pool', 'eligible'), digits=0)})",
+        "",
+        "Performance",
+        f"- Generate: {_number(value(earlier, 'timing', 'generation_seconds')):.2f}s -> {_number(value(later, 'timing', 'generation_seconds')):.2f}s "
+        f"({delta(value(later, 'timing', 'generation_seconds'), value(earlier, 'timing', 'generation_seconds'), digits=2, suffix='s')})",
+        f"- SIM: {_number(value(earlier, 'timing', 'simulation_seconds')):.2f}s -> {_number(value(later, 'timing', 'simulation_seconds')):.2f}s "
+        f"({delta(value(later, 'timing', 'simulation_seconds'), value(earlier, 'timing', 'simulation_seconds'), digits=2, suffix='s')})",
+        f"- Select: {_number(value(earlier, 'timing', 'selection_seconds')):.2f}s -> {_number(value(later, 'timing', 'selection_seconds')):.2f}s "
+        f"({delta(value(later, 'timing', 'selection_seconds'), value(earlier, 'timing', 'selection_seconds'), digits=2, suffix='s')})",
+        f"- Total: {_number(value(earlier, 'timing', 'total_seconds')):.2f}s -> {_number(value(later, 'timing', 'total_seconds')):.2f}s "
+        f"({delta(value(later, 'timing', 'total_seconds'), value(earlier, 'timing', 'total_seconds'), digits=2, suffix='s')}; negative is faster)",
+        "",
+        "SIM portfolio",
+    ]
+    for label, key in (
+        ("Preset fit", "preset_fit"),
+        ("Average Edge", "average_edge"),
+        ("Return index", "average_return_index"),
+        ("Duplication risk", "average_duplicate_risk"),
+    ):
+        old = value(earlier, "sim", key)
+        new = value(later, "sim", key)
+        if old is not None or new is not None:
+            lines.append(
+                f"- {label}: {_number(old):.1f} -> {_number(new):.1f} ({delta(new, old, digits=1)})"
+            )
+    old_covered = _integer(value(earlier, "sim", "top_one_scenarios_covered"))
+    new_covered = _integer(value(later, "sim", "top_one_scenarios_covered"))
+    old_scenarios = _integer(value(earlier, "sim", "scenario_count"))
+    new_scenarios = _integer(value(later, "sim", "scenario_count"))
+    if old_scenarios or new_scenarios:
+        lines.append(f"- Top-1% paths: {old_covered}/{old_scenarios} -> {new_covered}/{new_scenarios}")
+    lines.extend([
+        f"- Selected sources A: {source_text(earlier)}",
+        f"- Selected sources B: {source_text(later)}",
+        "",
+        "Interpretation: Compare builds only when the slate and inputs are meaningfully similar. "
+        "A higher score or broader scenario coverage is not automatically better if exposure, news, or contest assumptions changed.",
+        "",
+        "Privacy: This comparison contains aggregate settings and counts only; no players, lineups, file paths, or API keys.",
     ])
     return "\n".join(lines)

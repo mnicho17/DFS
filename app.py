@@ -4,8 +4,10 @@ from __future__ import annotations
 import os
 import sys
 import logging
+import traceback
+from typing import Any
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 DARK_QSS = """
 QWidget {
@@ -98,11 +100,57 @@ from logger_setup import setup_logging
 from main_window import MainWindow
 
 
+_DEFAULT_EXCEPTHOOK = sys.excepthook
+
+
+def _show_unhandled_exception_dialog(details: str) -> None:
+    try:
+        box = QtWidgets.QMessageBox()
+        box.setIcon(QtWidgets.QMessageBox.Critical)
+        box.setWindowTitle("DFS Optimizer recovered from an error")
+        box.setText("An unexpected error was contained, so the app can remain open.")
+        box.setInformativeText(
+            "The current action may not have completed. You can copy the technical details for troubleshooting, "
+            "then save or export any valid lineups that are still visible."
+        )
+        box.setDetailedText(details)
+        copy_button = box.addButton("Copy Details", QtWidgets.QMessageBox.ActionRole)
+        box.addButton(QtWidgets.QMessageBox.Ok)
+        box.exec_()
+        if box.clickedButton() is copy_button:
+            QtWidgets.QApplication.clipboard().setText(details)
+    except Exception:
+        logging.getLogger("dfs.crash").exception("Could not display the recovered-error dialog")
+
+
+def handle_unhandled_exception(exc_type: Any, exc_value: BaseException, exc_traceback: Any) -> None:
+    if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
+        _DEFAULT_EXCEPTHOOK(exc_type, exc_value, exc_traceback)
+        return
+    details = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    logging.getLogger("dfs.crash").critical(
+        "Unhandled UI exception was contained:\n%s",
+        details,
+    )
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return
+    if QtCore.QThread.currentThread() == app.thread():
+        _show_unhandled_exception_dialog(details)
+    else:
+        QtCore.QTimer.singleShot(0, lambda: _show_unhandled_exception_dialog(details))
+
+
+def install_exception_handler() -> None:
+    sys.excepthook = handle_unhandled_exception
+
+
 def main() -> int:
     setup_logging(name="dfs")
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setStyleSheet(DARK_QSS)
+    install_exception_handler()
     w = MainWindow()
     w.show()
     return app.exec_()

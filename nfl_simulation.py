@@ -106,6 +106,8 @@ class SimLineup(list):
         top_five_hits: Optional[Iterable[int]] = None,
         win_hits: Optional[Iterable[int]] = None,
         scenario_values: Optional[Dict[int, float]] = None,
+        candidate_source: str = "optimizer",
+        candidate_archetype: str = "",
     ) -> None:
         super().__init__(players)
         self.sim_metrics = dict(metrics or {})
@@ -116,6 +118,8 @@ class SimLineup(list):
         # keeps portfolio scoring sparse while allowing diminishing returns
         # when several lineups succeed in the same game script.
         self.sim_scenario_values = dict(scenario_values or {})
+        self.candidate_source = str(candidate_source or "optimizer")
+        self.candidate_archetype = str(candidate_archetype or "")
 
 
 def player_key(player: Dict[str, Any]) -> str:
@@ -686,7 +690,11 @@ def generate_nfl_scenario_lineups(
         )
         signature = lineup_signature(best)
         signatures.add(signature)
-        lineups.append(best)
+        lineups.append(SimLineup(
+            best,
+            candidate_source="scenario_built",
+            candidate_archetype=archetype,
+        ))
         archetype_counts[archetype] += 1
         if progress_callback and (len(lineups) % report_every == 0 or len(lineups) == requested):
             progress_callback(len(lineups), requested, "Creating scenario-driven NFL candidates")
@@ -1047,9 +1055,18 @@ def simulate_nfl_contest(
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     cancel_callback: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
-    candidate_lists = [list(lineup) for lineup in candidates if lineup]
+    candidate_objects = [lineup for lineup in candidates if lineup]
+    candidate_lists = [list(lineup) for lineup in candidate_objects]
     if not candidate_lists:
         return {"lineups": [], "report": {"scenarios": 0, "field_lineups": 0}}
+    candidate_sources = [
+        str(getattr(lineup, "candidate_source", "") or "optimizer")
+        for lineup in candidate_objects
+    ]
+    candidate_archetypes = [
+        str(getattr(lineup, "candidate_archetype", "") or "")
+        for lineup in candidate_objects
+    ]
 
     config = dict(field_config or {})
     effective_field_size = int(
@@ -1246,6 +1263,8 @@ def simulate_nfl_contest(
         ]
         metrics["sim_scenarios"] = completed
         metrics["sim_field_lineups"] = len(field_lineups)
+        metrics["candidate_source"] = candidate_sources[index]
+        metrics["candidate_archetype"] = candidate_archetypes[index]
         wrapped.append(SimLineup(
             lineup,
             metrics=metrics,
@@ -1253,6 +1272,8 @@ def simulate_nfl_contest(
             top_five_hits=top_five_hits[index],
             win_hits=win_hits[index],
             scenario_values=scenario_values[index],
+            candidate_source=candidate_sources[index],
+            candidate_archetype=candidate_archetypes[index],
         ))
 
     wrapped.sort(

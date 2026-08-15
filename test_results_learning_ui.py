@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtWidgets
 
-from main_window import BuildDiagnosticsDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, ResultsImportWorker, ResultsLearningDialog
+from main_window import BuildDiagnosticsDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog
 from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
 from learning_db import generate_learning_report
 from test_learning_results import _showdown_lineup, _write_csv
@@ -48,7 +48,10 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIsNotNone(button)
         self.assertEqual(button.text(), "Results & Learning")
         self.assertIsNotNone(window.findChild(QtWidgets.QSpinBox, "portfolioMinUnique"))
-        self.assertIsNotNone(window.findChild(QtWidgets.QPushButton, "portfolioSummaryButton"))
+        insights_button = window.findChild(QtWidgets.QPushButton, "portfolioSummaryButton")
+        self.assertIsNotNone(insights_button)
+        self.assertEqual(insights_button.text(), "Insights")
+        self.assertIsNotNone(window.findChild(QtWidgets.QAction, "portfolioInsightsAction"))
         sim_toggle = window.findChild(QtWidgets.QCheckBox, "nflSimEdgeCheck")
         self.assertIsNotNone(sim_toggle)
         self.assertTrue(sim_toggle.isChecked())
@@ -68,6 +71,27 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertFalse(copy_action.isEnabled())
         self.assertIsNotNone(window.findChild(QtWidgets.QAction, "buildHistoryAction"))
         window.close()
+
+    def test_portfolio_insights_dialog_exposes_overview_details_and_copy(self):
+        dialog = PortfolioInsightsDialog({
+            "status": "Ready",
+            "text": "DFS Optimizer Portfolio Insights\nCandidate sources",
+            "lineup_rows": [{
+                "number": 1, "grade": "A", "source": "Scenario-built", "archetype": "Ceiling",
+                "salary": 49900, "stack": "QB+2", "bringback": "Yes", "flex": "WR",
+                "ownership": 108, "edge": 84, "leverage": 75, "duplication": 25,
+                "top_one_pct": 4.2, "return_index": 80, "top_scenarios": 9,
+            }],
+        })
+        self.assertEqual(dialog.findChild(QtWidgets.QTabWidget, "portfolioInsightsTabs").count(), 2)
+        self.assertIn(
+            "Candidate sources",
+            dialog.findChild(QtWidgets.QPlainTextEdit, "portfolioInsightsReport").toPlainText(),
+        )
+        self.assertEqual(dialog.findChild(QtWidgets.QTableWidget, "portfolioInsightsLineups").rowCount(), 1)
+        dialog.findChild(QtWidgets.QPushButton, "copyPortfolioInsights").click()
+        self.assertIn("Portfolio Insights", QtWidgets.QApplication.clipboard().text())
+        dialog.close()
 
     def test_build_history_dialog_and_copy_report_use_local_diagnostics(self):
         diagnostic = create_build_diagnostic(
@@ -388,6 +412,12 @@ class ResultsLearningUITests(unittest.TestCase):
         )
         self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v4")
         self.assertEqual(payload["sim_report"]["field_preset"], "150-Max")
+        selected_sources = payload["sim_report"]["candidate_sources"]["selected"]
+        self.assertEqual(sum(selected_sources.values()), len(payload["lineups"]))
+        self.assertTrue(all(
+            getattr(lineup, "candidate_source", "") in {"optimizer", "field_shaped", "scenario_built"}
+            for lineup in payload["lineups"]
+        ))
         self.assertTrue(payload["sim_report"]["preset_comparison"]["available"])
         self.assertIn("largest gap", payload["sim_report"]["preset_comparison"]["summary"])
         self.assertGreater(payload["portfolio_report"]["sim_summary"]["top_one_scenarios_covered"], 0)

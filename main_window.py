@@ -10,6 +10,7 @@ import math
 import time
 import random
 import threading
+from collections import Counter
 from typing import Any, Dict, List, Optional
 
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -562,6 +563,11 @@ class LineupBuildWorker(QtCore.QObject):
             generation_seconds = time.perf_counter() - build_started
             sim_report: Dict[str, Any] = {}
             scenario_candidate_report: Dict[str, Any] = {}
+            source_additions = {
+                "optimizer": len(lineups),
+                "field_shaped": 0,
+                "scenario_built": 0,
+            }
             simulation_seconds = 0.0
             if use_nfl_sim and lineups and not self._cancel_event.is_set():
                 field_config = nfl_field_preset(self.field_preset, self.field_calibration)
@@ -617,7 +623,13 @@ class LineupBuildWorker(QtCore.QObject):
                         for lineup in source_lineups:
                             signature = tuple(sorted(player_key(player) for player in lineup))
                             if signature not in unique_lineups:
-                                unique_lineups[signature] = lineup
+                                unique_lineups[signature] = SimLineup(
+                                    lineup,
+                                    candidate_source=source,
+                                    candidate_archetype=str(
+                                        getattr(lineup, "candidate_archetype", "") or ""
+                                    ),
+                                )
                                 source_additions[source] += 1
                     lineups = list(unique_lineups.values())
                     scenario_candidate_report["unique_source_additions"] = source_additions
@@ -663,6 +675,20 @@ class LineupBuildWorker(QtCore.QObject):
             if sim_report and selected["report"].get("sim_summary"):
                 sim_report["portfolio"] = dict(selected["report"]["sim_summary"])
             if sim_report:
+                selected_source_counts = Counter(
+                    str(getattr(lineup, "candidate_source", "") or "optimizer")
+                    for lineup in lineups
+                )
+                selected_archetypes = Counter(
+                    str(getattr(lineup, "candidate_archetype", "") or "")
+                    for lineup in lineups
+                    if str(getattr(lineup, "candidate_archetype", "") or "")
+                )
+                sim_report["candidate_sources"] = {
+                    "generated": dict(source_additions),
+                    "selected": dict(selected_source_counts),
+                    "selected_archetypes": dict(selected_archetypes),
+                }
                 sim_report["preset_comparison"] = compare_nfl_lineups_to_preset(
                     lineups,
                     nfl_field_preset(self.field_preset, self.field_calibration),
@@ -721,13 +747,15 @@ from learning_db import (
     record_export,
 )
 from portfolio_rules import player_key, portfolio_report, select_portfolio
-from nfl_simulation import build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, generate_nfl_scenario_lineups, nfl_field_preset, should_use_nfl_role_pool, simulate_nfl_contest, simulate_nfl_field_ownership
+from nfl_simulation import SimLineup, build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, generate_nfl_scenario_lineups, nfl_field_preset, should_use_nfl_role_pool, simulate_nfl_contest, simulate_nfl_field_ownership
 from lineup_space import calculate_lineup_space
+from portfolio_insights import build_portfolio_insights
 from slate_readiness import audit_slate
 from build_diagnostics import (
     build_history_label,
     clear_build_history,
     create_build_diagnostic,
+    format_build_comparison,
     format_build_report,
     load_build_history,
     save_build_diagnostic,
@@ -1629,10 +1657,11 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         self.history_list = QtWidgets.QListWidget(splitter)
         self.history_list.setObjectName("buildHistoryList")
         self.history_list.setMinimumWidth(360)
+        self.history_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.report = QtWidgets.QPlainTextEdit(splitter)
         self.report.setObjectName("buildHistoryReport")
         self.report.setReadOnly(True)
-        self.report.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
+        self.report.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
         self.report.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
         splitter.setSizes([390, 590])
         layout.addWidget(splitter, 1)
@@ -1646,6 +1675,10 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         self.copy_button = buttons.addButton("Copy Selected Report", QtWidgets.QDialogButtonBox.ActionRole)
         self.copy_button.setObjectName("copySelectedBuildReport")
         self.copy_button.clicked.connect(self.copy_selected_report)
+        self.compare_button = buttons.addButton("Compare Two Builds", QtWidgets.QDialogButtonBox.ActionRole)
+        self.compare_button.setObjectName("compareBuildsButton")
+        self.compare_button.setToolTip("Select exactly two build-history rows, then compare their timing, settings, and SIM portfolio metrics.")
+        self.compare_button.clicked.connect(self.compare_selected)
         self.clear_button = buttons.addButton("Clear History", QtWidgets.QDialogButtonBox.DestructiveRole)
         self.clear_button.setObjectName("clearBuildHistory")
         self.clear_button.clicked.connect(self.clear_history)
@@ -1653,6 +1686,7 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         layout.addWidget(buttons)
 
         self.history_list.currentItemChanged.connect(lambda *_args: self._show_selected())
+        self.history_list.itemSelectionChanged.connect(self._update_compare_button)
         self.reload()
 
     def reload(self) -> None:
@@ -1665,6 +1699,7 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         has_records = bool(records)
         self.copy_button.setEnabled(has_records)
         self.clear_button.setEnabled(has_records)
+        self.compare_button.setEnabled(False)
         if has_records:
             self.history_list.setCurrentRow(0)
             self.note.setText(f"Showing {len(records)} most recent build{'s' if len(records) != 1 else ''}.")
@@ -1684,12 +1719,28 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         self.report.setPlainText(format_build_report(record) if record else "Select a build to view its report.")
         self.copy_button.setEnabled(bool(record))
 
-    def copy_selected_report(self) -> None:
-        record = self.selected_record()
-        if not record:
+    def _update_compare_button(self) -> None:
+        self.compare_button.setEnabled(len(self.history_list.selectedItems()) == 2)
+
+    def compare_selected(self) -> None:
+        items = self.history_list.selectedItems()
+        if len(items) != 2:
+            self.note.setText("Select exactly two build rows to compare.")
             return
-        QtWidgets.QApplication.clipboard().setText(format_build_report(record))
-        self.note.setText("Build report copied to the clipboard.")
+        records = [item.data(QtCore.Qt.UserRole) for item in items]
+        records = [dict(record) for record in records if isinstance(record, dict)]
+        if len(records) != 2:
+            return
+        self.report.setPlainText(format_build_comparison(records[0], records[1]))
+        self.copy_button.setEnabled(True)
+        self.note.setText("Comparing two aggregate build reports. Negative total-time change means the newer run was faster.")
+
+    def copy_selected_report(self) -> None:
+        report_text = self.report.toPlainText().strip()
+        if not report_text:
+            return
+        QtWidgets.QApplication.clipboard().setText(report_text)
+        self.note.setText("Displayed build report copied to the clipboard.")
 
     def clear_history(self) -> None:
         if not load_build_history(limit=1):
@@ -1708,6 +1759,124 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         if parent is not None and hasattr(parent, "_on_build_history_cleared"):
             parent._on_build_history_cleared()
         self.reload()
+
+
+class PortfolioInsightsDialog(QtWidgets.QDialog):
+    """Explain the patterns, strengths, and review flags in a lineup set."""
+
+    def __init__(self, insights: Dict[str, Any], parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.insights = dict(insights or {})
+        self.setObjectName("portfolioInsightsDialog")
+        self.setWindowTitle("Portfolio Insights")
+        self.setModal(True)
+        self.resize(1120, 720)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        header = QtWidgets.QHBoxLayout()
+        title = QtWidgets.QLabel("Portfolio Insights")
+        title.setObjectName("portfolioInsightsTitle")
+        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #F1F5F9;")
+        header.addWidget(title)
+        header.addStretch(1)
+        status = QtWidgets.QLabel(str(self.insights.get("status") or "Ready"))
+        status.setObjectName("portfolioInsightsStatus")
+        has_flags = bool(self.insights.get("review_flags"))
+        status.setStyleSheet(
+            "padding: 5px 10px; border-radius: 9px; font-weight: 700; "
+            + ("background: #4A2B12; color: #FFD28A;" if has_flags else "background: #123B31; color: #8BE0C3;")
+        )
+        header.addWidget(status)
+        layout.addLayout(header)
+
+        intro = QtWidgets.QLabel(
+            "See how the selected portfolio was built, where it creates tournament leverage, and what deserves a final review."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(intro)
+
+        tabs = QtWidgets.QTabWidget(self)
+        tabs.setObjectName("portfolioInsightsTabs")
+        overview = QtWidgets.QPlainTextEdit(self)
+        overview.setObjectName("portfolioInsightsReport")
+        overview.setReadOnly(True)
+        overview.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+        overview.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+        overview.setPlainText(str(self.insights.get("text") or "No portfolio insights are available."))
+        tabs.addTab(overview, "Overview")
+
+        table = QtWidgets.QTableWidget(self)
+        table.setObjectName("portfolioInsightsLineups")
+        headers = [
+            "#", "Grade", "Source", "Scenario", "Salary", "Stack", "Bring-back",
+            "FLEX", "Own sum", "Edge", "Leverage", "Dup risk", "Top 1%", "Return", "Top paths",
+        ]
+        table.setColumnCount(len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        rows = list(self.insights.get("lineup_rows") or [])
+        table.setRowCount(len(rows))
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setVisible(False)
+
+        def metric(value: Any, suffix: str = "") -> str:
+            if value is None:
+                return "—"
+            try:
+                return f"{float(value):.1f}{suffix}"
+            except (TypeError, ValueError):
+                return "—"
+
+        for row_index, row in enumerate(rows):
+            values = [
+                str(row.get("number") or row_index + 1),
+                str(row.get("grade") or "—"),
+                str(row.get("source") or "—"),
+                str(row.get("archetype") or "—"),
+                f"${float(row.get('salary', 0.0) or 0.0):,.0f}",
+                str(row.get("stack") or "—"),
+                str(row.get("bringback") or "—"),
+                str(row.get("flex") or "—"),
+                metric(row.get("ownership"), "%"),
+                metric(row.get("edge")),
+                metric(row.get("leverage")),
+                metric(row.get("duplication")),
+                metric(row.get("top_one_pct"), "%"),
+                metric(row.get("return_index")),
+                str(int(row.get("top_scenarios", 0) or 0)),
+            ]
+            for column, value in enumerate(values):
+                item = SortKeyItem(value)
+                numeric = row.get({
+                    0: "number", 4: "salary", 8: "ownership", 9: "edge", 10: "leverage",
+                    11: "duplication", 12: "top_one_pct", 13: "return_index", 14: "top_scenarios",
+                }.get(column, ""))
+                if numeric is not None:
+                    item.setData(QtCore.Qt.UserRole, float(numeric))
+                table.setItem(row_index, column, item)
+        table.setSortingEnabled(True)
+        table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setStretchLastSection(True)
+        tabs.addTab(table, "Lineup details")
+        layout.addWidget(tabs, 1)
+
+        note = QtWidgets.QLabel(
+            "Insights are slate-relative decision aids. They do not change the generated lineups or the DraftKings export."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        copy_button = buttons.addButton("Copy Insights", QtWidgets.QDialogButtonBox.ActionRole)
+        copy_button.setObjectName("copyPortfolioInsights")
+        copy_button.clicked.connect(
+            lambda: QtWidgets.QApplication.clipboard().setText(str(self.insights.get("text") or ""))
+        )
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -2137,6 +2306,8 @@ class MainWindow(QtWidgets.QMainWindow):
         settings_menu.addAction("Live Data Settings", self.on_live_data_settings)
         settings_menu.addAction("Results & Learning", self.on_results_learning)
         settings_menu.addSeparator()
+        portfolio_insights_action = settings_menu.addAction("Portfolio Insightsâ€¦", self.on_portfolio_summary)
+        portfolio_insights_action.setObjectName("portfolioInsightsAction")
         self.action_copy_build_report = settings_menu.addAction(
             "Copy Last Build Report", self.copy_last_build_report
         )
@@ -2487,11 +2658,13 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_view_exposure.setToolTip("Show player exposure based on the lineups currently saved on the right.")
         btn_view_exposure.clicked.connect(self.on_view_exposure)
 
-        btn_portfolio_summary = QtWidgets.QPushButton("Portfolio Summary")
+        btn_portfolio_summary = QtWidgets.QPushButton("Portfolio Insights")
         btn_portfolio_summary.setObjectName("portfolioSummaryButton")
-        btn_portfolio_summary.setToolTip("Review player, Captain, team, game, group, and uniqueness compliance before export.")
+        btn_portfolio_summary.setToolTip(
+            "Explain quality grades, candidate sources, stacks, salary, ownership, duplication risk, concentration, and scenario coverage."
+        )
         btn_portfolio_summary.clicked.connect(self.on_portfolio_summary)
-        btn_portfolio_summary.setText("Summary")
+        btn_portfolio_summary.setText("Insights")
 
         btn_view_stack_exp = QtWidgets.QPushButton("Stack Exposure Dashboard")
         btn_view_stack_exp.setToolTip("Show saved-lineup team, stack-shape, salary-band, and pitcher exposure.")
@@ -5271,16 +5444,37 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_portfolio_summary(self) -> None:
         kind = "showdown" if self.tabs_lineups.currentIndex() == 0 else "classic"
-        lineups = self.saved_showdown if kind == "showdown" else self.saved_classic
+        saved = self.saved_showdown if kind == "showdown" else self.saved_classic
+        generated = self.last_showdown if kind == "showdown" else self.last_classic
+        lineups = list(saved or generated)
         if not lineups:
             QtWidgets.QMessageBox.information(
                 self,
-                "Portfolio Summary",
-                "Save lineups first, then review the portfolio before export.",
+                "Portfolio Insights",
+                "Generate lineups first, then open Portfolio Insights to review their patterns.",
             )
             return
         report = self._saved_portfolio_report(kind, list(lineups))
-        QtWidgets.QMessageBox.information(self, "Portfolio Summary", str(report.get("text") or ""))
+        sport = self._current_sport()
+        cap = self._safe_float(
+            self.edit_sd_cap.text() if kind == "showdown" else self.edit_cl_cap.text(),
+            50000.0,
+        )
+        insights = build_portfolio_insights(
+            lineups,
+            sport=sport,
+            kind=kind,
+            salary_cap=cap,
+            field_preset=(
+                self.combo_field_preset.currentText()
+                if sport == "NFL" and kind == "classic"
+                else ""
+            ),
+            source_label="saved" if saved else "generated",
+            portfolio_report=report,
+            sim_report=self.last_sim_report if sport == "NFL" and kind == "classic" else {},
+        )
+        PortfolioInsightsDialog(insights, self).exec_()
 
     def _confirm_portfolio_export(self, kind: str, lineups: List[Any]) -> bool:
         report = self._saved_portfolio_report(kind, lineups)

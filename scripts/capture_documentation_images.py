@@ -3,6 +3,7 @@ from __future__ import annotations
 """Capture reproducible, representative screenshots for the user guide."""
 
 import argparse
+import copy
 import os
 import sys
 import tempfile
@@ -21,10 +22,12 @@ if str(REPO_ROOT) not in sys.path:
 from PyQt5 import QtCore, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
-from main_window import BuildDiagnosticsDialog, MainWindow, ResultsLearningDialog, SlateReadinessDialog  # noqa: E402
+from main_window import BuildDiagnosticsDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog  # noqa: E402
 from build_diagnostics import create_build_diagnostic, save_build_diagnostic  # noqa: E402
 from nfl_simulation import SimLineup  # noqa: E402
 from optimizers import MultiSportClassicOptimizer  # noqa: E402
+from portfolio_insights import build_portfolio_insights  # noqa: E402
+from portfolio_rules import portfolio_report  # noqa: E402
 
 
 GAMES = [
@@ -124,9 +127,20 @@ def representative_lineups(players: List[Dict[str, Any]]) -> List[SimLineup]:
         raise RuntimeError("Could not create enough representative NFL lineups for screenshots.")
 
     edges = [84.0, 79.0, 75.0, 71.0, 68.0, 65.0, 62.0, 59.0]
+    sources = [
+        ("scenario_built", "Ceiling"),
+        ("optimizer", ""),
+        ("scenario_built", "Leverage"),
+        ("field_shaped", ""),
+        ("optimizer", ""),
+        ("scenario_built", "Low-Dup"),
+        ("field_shaped", ""),
+        ("optimizer", ""),
+    ]
     lineups: List[SimLineup] = []
     for index, lineup in enumerate(raw_lineups):
         edge = edges[index]
+        source, archetype = sources[index]
         lineups.append(SimLineup(lineup, metrics={
             "sim_edge": edge,
             "sim_top_one_pct": round(3.4 - index * 0.22, 2),
@@ -142,7 +156,8 @@ def representative_lineups(players: List[Dict[str, Any]]) -> List[SimLineup]:
             "field_duplicate_estimate": round(0.8 + index * 0.18, 2),
             "sim_scenarios": 750,
             "sim_field_lineups": 1500,
-        }))
+        }, top_hits={index * 3 + 1, index * 3 + 2, index * 3 + 5},
+            candidate_source=source, candidate_archetype=archetype))
     return lineups
 
 
@@ -183,6 +198,27 @@ def capture(output_dir: Path) -> None:
         window._refresh_players_table()
         window._apply_player_column_visibility("NFL")
         window._populate_classic_lineups(lineups, "NFL")
+        window.last_portfolio_report = portfolio_report(
+            lineups,
+            window._portfolio_rules(),
+            kind="classic",
+            requested=len(lineups),
+        )
+        window.last_sim_report = {
+            "field_preset": "150-Max",
+            "field_lineup_count": 1500,
+            "candidate_sources": {
+                "generated": {"optimizer": 300, "field_shaped": 60, "scenario_built": 140},
+                "selected": {"optimizer": 3, "field_shaped": 2, "scenario_built": 3},
+                "selected_archetypes": {"Ceiling": 1, "Leverage": 1, "Low-Dup": 1},
+            },
+            "preset_comparison": {
+                "available": True,
+                "preset": "150-Max",
+                "fit_score": 91,
+                "summary": "Portfolio closely matches the 150-Max preset (91/100); largest gap is bring-back mix.",
+            },
+        }
         window.tabs_lineups.setCurrentIndex(1)
         window.tabs_workspace_controls.setCurrentIndex(0)
         window.tbl_players.selectRow(0)
@@ -206,6 +242,23 @@ def capture(output_dir: Path) -> None:
         app.processEvents()
         save_widget(window, output_dir / "lineup-space.png")
         window.chk_nfl_contest_sim.setChecked(True)
+
+        insights = build_portfolio_insights(
+            lineups,
+            sport="NFL",
+            kind="classic",
+            salary_cap=50000,
+            field_preset="150-Max",
+            source_label="generated",
+            portfolio_report=window.last_portfolio_report,
+            sim_report=window.last_sim_report,
+        )
+        insights_dialog = PortfolioInsightsDialog(insights, window)
+        insights_dialog.resize(1180, 760)
+        insights_dialog.show()
+        app.processEvents()
+        save_widget(insights_dialog, output_dir / "portfolio-insights.png")
+        insights_dialog.close()
 
         diagnostic = create_build_diagnostic(
             context={
@@ -245,16 +298,34 @@ def capture(output_dir: Path) -> None:
                 "selected_count": 150,
                 "requested_count": 150,
             },
-            portfolio_report={"compliant": True, "warnings": []},
-            sim_report={
-                "field_lineup_count": 1500,
-                "preset_comparison": {"available": True, "fit_score": 91},
-            },
+            portfolio_report=window.last_portfolio_report,
+            sim_report=window.last_sim_report,
             displayed_count=150,
         )
+        earlier_diagnostic = copy.deepcopy(diagnostic)
+        earlier_diagnostic["created_at"] = "2026-08-14T19:58:12-04:00"
+        earlier_diagnostic["settings"]["field_preset"] = "20-Max"
+        earlier_diagnostic["timing"].update({
+            "generation_seconds": 17.80,
+            "simulation_seconds": 5.40,
+            "selection_seconds": 3.80,
+            "total_seconds": 27.00,
+        })
+        earlier_diagnostic["sim"].update({
+            "preset_fit": 84.0,
+            "average_edge": 69.0,
+            "average_return_index": 67.0,
+            "average_duplicate_risk": 46.0,
+            "top_one_scenarios_covered": 17,
+        })
+        diagnostic["created_at"] = "2026-08-14T20:03:35-04:00"
+        save_build_diagnostic(earlier_diagnostic)
         save_build_diagnostic(diagnostic)
         build_history = BuildDiagnosticsDialog(window)
         build_history.resize(1500, 650)
+        build_history.history_list.item(0).setSelected(True)
+        build_history.history_list.item(1).setSelected(True)
+        build_history.compare_selected()
         build_history.show()
         app.processEvents()
         save_widget(build_history, output_dir / "build-history.png")
