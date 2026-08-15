@@ -9,9 +9,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtWidgets
 
-from main_window import BuildDiagnosticsDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog
+from main_window import BuildDiagnosticsDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, _deep_shortlist
 from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
 from learning_db import generate_learning_report
+from nfl_simulation import SimLineup
 from test_learning_results import _showdown_lineup, _write_csv
 from test_nfl_logic import _fixture_players
 
@@ -59,6 +60,9 @@ class ResultsLearningUITests(unittest.TestCase):
         preset = window.findChild(QtWidgets.QComboBox, "nflFieldPreset")
         self.assertIsNotNone(preset)
         self.assertEqual(preset.currentText(), "150-Max")
+        compute = window.findChild(QtWidgets.QComboBox, "nflComputeMode")
+        self.assertIsNotNone(compute)
+        self.assertEqual(compute.currentText(), "Fast (default)")
         self.assertEqual(window.findChild(QtWidgets.QPushButton, "gameDayCheckButton").text(), "Game-Day Check")
         self.assertIsNotNone(window.findChild(QtWidgets.QPushButton, "liveDataSettingsButton"))
         self.assertIn("Live data", window.findChild(QtWidgets.QLabel, "liveDataStatusLabel").text())
@@ -71,6 +75,43 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertFalse(copy_action.isEnabled())
         self.assertIsNotNone(window.findChild(QtWidgets.QAction, "buildHistoryAction"))
         window.close()
+
+    def test_deep_shortlist_preserves_retained_and_candidate_source_diversity(self):
+        lineups = []
+        for index in range(18):
+            source = "optimizer" if index < 14 else ("field_shaped" if index < 16 else "scenario_built")
+            archetype = "general" if source != "scenario_built" else ("Ceiling" if index == 16 else "Low-Dup")
+            players = [{
+                "Name": f"Deep {index}-{slot}",
+                "FlexID": f"deep-{index}-{slot}",
+                "FlexProjection": 20.0 - slot,
+            } for slot in range(3)]
+            lineups.append(SimLineup(
+                players,
+                metrics={
+                    "sim_edge": float(95 - index),
+                    "sim_top_one_pct": 5.0,
+                    "sim_return_index": float(90 - index),
+                },
+                candidate_source=source,
+                candidate_archetype=archetype,
+            ))
+        retained_signature = tuple(sorted(player["FlexID"] for player in lineups[-1]))
+
+        shortlisted = _deep_shortlist(
+            lineups,
+            8,
+            reserved_signatures=[retained_signature],
+        )
+
+        signatures = {
+            tuple(sorted(player["FlexID"] for player in lineup))
+            for lineup in shortlisted
+        }
+        sources = {lineup.candidate_source for lineup in shortlisted}
+        self.assertEqual(len(shortlisted), 8)
+        self.assertIn(retained_signature, signatures)
+        self.assertEqual(sources, {"optimizer", "field_shaped", "scenario_built"})
 
     def test_portfolio_insights_dialog_exposes_overview_details_and_copy(self):
         dialog = PortfolioInsightsDialog({
@@ -576,6 +617,49 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIn("largest gap", payload["sim_report"]["preset_comparison"]["summary"])
         self.assertGreater(payload["portfolio_report"]["sim_summary"]["top_one_scenarios_covered"], 0)
         self.assertTrue(all(hasattr(lineup, "sim_scenario_values") for lineup in payload["lineups"]))
+
+    def test_deep_worker_keeps_best_completed_stage_under_a_short_time_budget(self):
+        progress = []
+        finished = []
+        worker = LineupBuildWorker(
+            _fixture_players(),
+            kind="classic",
+            sport="NFL",
+            num_lineups=8,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules={
+                "min_unique": 2,
+                "max_team_pct": 100.0,
+                "max_game_pct": 100.0,
+                "balance_ownership": True,
+                "groups": [],
+                "player_constraints": {},
+            },
+            sim_enabled=True,
+            sim_scenarios=250,
+            compute_mode="Deep (up to 5 min)",
+            deep_time_limit_seconds=4.0,
+        )
+        worker.progress.connect(lambda done, total, text: progress.append(text))
+        worker.finished.connect(finished.append)
+
+        worker.run()
+
+        self.assertTrue(finished)
+        payload = finished[0]
+        timing = payload["timing_report"]
+        deep = payload["sim_report"]["deep_build"]
+        self.assertEqual(len(payload["lineups"]), 8)
+        self.assertEqual(timing["compute_mode"], "Deep")
+        self.assertGreater(payload["candidate_count"], 8)
+        self.assertGreater(deep["screening_scenarios"], 0)
+        self.assertGreaterEqual(deep["shortlist_count"], 8)
+        self.assertIn("refinement_swaps", deep)
+        self.assertTrue(any("Phase 1 of 4" in text for text in progress))
+        self.assertTrue(any("Phase 2 of 4" in text for text in progress))
+        self.assertTrue(any("Phase 4 of 4" in text for text in progress))
 
     def test_nfl_sim_lock_keeps_candidate_generation_in_the_optimizer_path(self):
         players = _fixture_players()

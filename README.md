@@ -77,6 +77,15 @@ NFL Classic builds can use the **NFL SIM Edge** option. The app first removes in
 
 The Classic results table shows slate-relative SIM Edge and top-one-percent rate. Its tooltip also includes top-five-percent rate, representative win rate, cash and bust rates, average percentile, simulated ceiling, tournament return index, leverage, duplication risk, scenario count, and representative field size. These metrics are decision aids based on the loaded projections and assumptions, not guarantees of contest results.
 
+**Build depth** offers two compute profiles. **Fast (default)** preserves the normal candidate budget and scenario setting. **Deep (up to 5 min)** is an optional NFL Classic SIM mode that:
+
+- explores as many as 6,000 unique candidates across four independent optimizer seeds plus field-shaped and correlated scenario constructions;
+- runs a quick screening SIM over the expanded bank and keeps a source-diverse shortlist;
+- validates that shortlist with a different random stream, at least 2,500 scenarios, and a larger representative field; and
+- performs constraint-safe lineup swaps when they improve the complete portfolio.
+
+Deep Build reserves time for final selection and always retains the strongest completed stage. Cancellation and a slower computer therefore return the best valid portfolio available instead of discarding the run. The copied build report records the expanded bank, shortlist, screening and validation scenarios, independent top-candidate agreement, refinement swaps, and whether the time budget was used.
+
 When an NFL SIM lineup is exported, Results & Learning retains those original estimates. Imported DraftKings results can then compare predicted and actual top-one-percent, top-five-percent, and cash rates, plus the relationship between SIM Edge and finish percentile. Complete fields can also be compared directly with the latest representative NFL SIM field for the same preset. After three complete fields, 1,000 entries, and 70% metadata coverage for a named preset, a guarded blend can refine its salary, construction, and winning-ownership assumptions. Small samples remain report-only.
 
 ## NFL Game-Day Check and Vegas lines

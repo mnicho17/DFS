@@ -166,6 +166,8 @@ def select_portfolio(
     rules: Optional[Dict[str, Any]] = None,
     kind: str = "classic",
     retained_lineups: Optional[Sequence[Any]] = None,
+    refinement_passes: int = 0,
+    refinement_stop_callback: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
@@ -459,12 +461,187 @@ def select_portfolio(
         sim_win_counts.update(chosen_win_hits)
         sim_value_counts.update(chosen_values.keys())
 
+    # Deep builds have enough candidates to benefit from a small local-search
+    # pass after the greedy portfolio is complete.  Only non-retained lineups
+    # can be swapped.  Every hard maximum, player group, and uniqueness rule is
+    # rechecked before a change is accepted, while minimum-exposure shortfalls
+    # retain the same strong priority used during greedy selection.
+    refinement_swaps = 0
+    refinement_passes = max(0, min(8, int(refinement_passes or 0)))
+    retained_ids = {id(lineup) for lineup in retained}
+
+    def fixed_quality(lineup: Any) -> float:
+        meta = candidate_meta[id(lineup)]
+        sim = meta["sim"]
+        sim_edge = _pct(sim.get("sim_edge"), None)
+        if sim_edge is None:
+            return meta["projection"]
+        return_index = _pct(sim.get("sim_return_index"), 0.0) or 0.0
+        duplicate_risk = _pct(sim.get("duplicate_risk"), 0.0) or 0.0
+        return (
+            0.30 * meta["projection"]
+            + 0.72 * sim_edge
+            + 0.28 * return_index
+            - 0.12 * duplicate_risk
+            - max(0.0, 72.0 - sim_edge) * 1.25
+        )
+
+    def counter_swap_delta(
+        counts: Counter[str],
+        outgoing: set[str],
+        incoming: set[str],
+        weight: float,
+    ) -> float:
+        delta = 0.0
+        for key in outgoing.union(incoming):
+            before = counts[key]
+            after = before - int(key in outgoing) + int(key in incoming)
+            delta -= weight * float(after * after - before * before)
+        return delta
+
+    def scenario_swap_delta(
+        counts: Counter[int],
+        outgoing: set[int],
+        incoming: set[int],
+        weight: float,
+    ) -> float:
+        touched = outgoing.union(incoming)
+        if not touched:
+            return 0.0
+        scale = 100.0 / max(1, len(counts))
+        delta = 0.0
+        for scenario in touched:
+            before = max(0, counts[scenario])
+            after = max(0, before - int(scenario in outgoing) + int(scenario in incoming))
+            delta += math.log1p(after) - math.log1p(before)
+        return weight * scale * delta
+
+    def swap_is_admissible(outgoing: Any, incoming: Any) -> bool:
+        out_meta = candidate_meta[id(outgoing)]
+        in_meta = candidate_meta[id(incoming)]
+        keys = in_meta["keys"]
+        if not keys or not _group_ok(keys, normalized["groups"]):
+            return False
+        other_selected = selected_candidate_ids - {id(outgoing)}
+        if current_min_unique > 1 and current_uniqueness_conflicts.get(id(incoming), set()).intersection(other_selected):
+            return False
+        for key in out_meta["keys"].union(keys):
+            limit = max_total.get(key)
+            after = total_counts[key] - int(key in out_meta["keys"]) + int(key in keys)
+            if limit is not None and after > limit:
+                return False
+        out_captain = out_meta["captain_key"]
+        in_captain = in_meta["captain_key"]
+        for key in {out_captain, in_captain} - {""}:
+            limit = max_cpt.get(key)
+            after = cpt_counts[key] - int(key == out_captain) + int(key == in_captain)
+            if limit is not None and after > limit:
+                return False
+        for team in out_meta["teams"].union(in_meta["teams"]):
+            after = team_counts[team] - int(team in out_meta["teams"]) + int(team in in_meta["teams"])
+            if max_team is not None and after > max_team:
+                return False
+        for game in out_meta["games"].union(in_meta["games"]):
+            after = game_counts[game] - int(game in out_meta["games"]) + int(game in in_meta["games"])
+            if max_game is not None and after > max_game:
+                return False
+        return True
+
+    def swap_score_delta(outgoing: Any, incoming: Any) -> float:
+        out_meta = candidate_meta[id(outgoing)]
+        in_meta = candidate_meta[id(incoming)]
+        delta = fixed_quality(incoming) - fixed_quality(outgoing)
+        touched_players = out_meta["keys"].union(in_meta["keys"])
+        before_shortfall = sum(max(0, min_total.get(key, 0) - total_counts[key]) for key in touched_players)
+        after_shortfall = sum(
+            max(
+                0,
+                min_total.get(key, 0)
+                - (
+                    total_counts[key]
+                    - int(key in out_meta["keys"])
+                    + int(key in in_meta["keys"])
+                ),
+            )
+            for key in touched_players
+        )
+        delta += 500.0 * float(before_shortfall - after_shortfall)
+        delta += counter_swap_delta(total_counts, out_meta["keys"], in_meta["keys"], 0.08)
+        delta += counter_swap_delta(team_counts, out_meta["teams"], in_meta["teams"], 0.04)
+        delta += counter_swap_delta(game_counts, out_meta["games"], in_meta["games"], 0.03)
+        delta += scenario_swap_delta(sim_top_counts, out_meta["top_hits"], in_meta["top_hits"], 18.0)
+        delta += scenario_swap_delta(sim_win_counts, out_meta["win_hits"], in_meta["win_hits"], 10.0)
+        delta += scenario_swap_delta(
+            sim_top_five_counts,
+            out_meta["top_five_hits"],
+            in_meta["top_five_hits"],
+            6.0,
+        )
+        delta += scenario_swap_delta(
+            sim_value_counts,
+            set(out_meta["scenario_values"]),
+            set(in_meta["scenario_values"]),
+            14.0,
+        )
+        return delta
+
+    def apply_swap(outgoing: Any, incoming: Any) -> None:
+        out_meta = candidate_meta[id(outgoing)]
+        in_meta = candidate_meta[id(incoming)]
+        index = selected.index(outgoing)
+        selected[index] = incoming
+        selected_candidate_ids.remove(id(outgoing))
+        selected_candidate_ids.add(id(incoming))
+        for counts, out_values, in_values in (
+            (total_counts, out_meta["keys"], in_meta["keys"]),
+            (team_counts, out_meta["teams"], in_meta["teams"]),
+            (game_counts, out_meta["games"], in_meta["games"]),
+            (sim_top_counts, out_meta["top_hits"], in_meta["top_hits"]),
+            (sim_top_five_counts, out_meta["top_five_hits"], in_meta["top_five_hits"]),
+            (sim_win_counts, out_meta["win_hits"], in_meta["win_hits"]),
+            (sim_value_counts, set(out_meta["scenario_values"]), set(in_meta["scenario_values"])),
+        ):
+            counts.subtract(out_values)
+            counts.update(in_values)
+        if out_meta["captain_key"]:
+            cpt_counts[out_meta["captain_key"]] -= 1
+        if in_meta["captain_key"]:
+            cpt_counts[in_meta["captain_key"]] += 1
+        remaining.remove(incoming)
+        remaining.append(outgoing)
+
+    for _pass_index in range(refinement_passes):
+        if refinement_stop_callback and refinement_stop_callback():
+            break
+        movable = [lineup for lineup in selected if id(lineup) not in retained_ids]
+        if not movable or not remaining:
+            break
+        outgoing_pool = sorted(movable, key=fixed_quality)[: min(30, len(movable))]
+        incoming_pool = sorted(remaining, key=fixed_quality, reverse=True)[: min(250, len(remaining))]
+        best_delta = 0.15
+        best_pair: Optional[Tuple[Any, Any]] = None
+        for outgoing in outgoing_pool:
+            if refinement_stop_callback and refinement_stop_callback():
+                break
+            for incoming in incoming_pool:
+                if not swap_is_admissible(outgoing, incoming):
+                    continue
+                delta = swap_score_delta(outgoing, incoming)
+                if delta > best_delta:
+                    best_delta = delta
+                    best_pair = (outgoing, incoming)
+        if best_pair is None:
+            break
+        apply_swap(*best_pair)
+        refinement_swaps += 1
+
     if len(selected) < requested:
         warnings.append(
             f"Built {len(selected)} of {requested} requested lineups; hard exposure, group, team, or game limits exhausted the feasible candidate pool."
         )
 
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
+    report["refinement_swaps"] = refinement_swaps
     for warning in warnings:
         if warning not in report["warnings"]:
             report["warnings"].append(warning)
