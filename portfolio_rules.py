@@ -165,6 +165,7 @@ def select_portfolio(
     *,
     rules: Optional[Dict[str, Any]] = None,
     kind: str = "classic",
+    retained_lineups: Optional[Sequence[Any]] = None,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
@@ -177,17 +178,25 @@ def select_portfolio(
     normalized = normalize_rules(rules)
     kind = str(kind or "classic").lower()
 
+    retained_by_signature: Dict[Tuple[str, ...], Any] = {}
+    for lineup in retained_lineups or []:
+        signature = _candidate_signature(lineup, kind)
+        if signature and signature not in retained_by_signature and len(retained_by_signature) < requested:
+            retained_by_signature[signature] = lineup
+    retained = list(retained_by_signature.values())
+
     unique_candidates: Dict[Tuple[str, ...], Any] = {}
     for lineup in candidates or []:
         signature = _candidate_signature(lineup, kind)
-        if signature and signature not in unique_candidates:
+        if signature and signature not in retained_by_signature and signature not in unique_candidates:
             unique_candidates[signature] = lineup
     pool = list(unique_candidates.values())
+    all_lineups = retained + pool
 
     player_lookup: Dict[str, Dict[str, Any]] = {
         key: dict(value) for key, value in normalized["player_constraints"].items()
     }
-    for lineup in pool:
+    for lineup in all_lineups:
         for player in lineup_players(lineup, kind):
             key = player_key(player)
             if key:
@@ -214,7 +223,8 @@ def select_portfolio(
     # rescoring the same shrinking pool (and all prior overlaps) 150 times.
     # The pairwise check keeps the configured uniqueness contract intact.
     unrestricted_full_pool = (
-        len(pool) <= requested
+        not retained
+        and len(pool) <= requested
         and not normalized["groups"]
         and not any(value > 0 for value in min_total.values())
         and not any(value is not None for value in max_total.values())
@@ -241,13 +251,18 @@ def select_portfolio(
                 if warning not in report["warnings"]:
                     report["warnings"].append(warning)
                 report["text"] = _report_text(report)
-            return {"lineups": pool, "report": report, "candidate_count": len(pool)}
+            return {
+                "lineups": pool,
+                "report": report,
+                "candidate_count": len(pool),
+                "retained_count": 0,
+            }
 
     # Cache every immutable candidate property once.  A 150-lineup SIM build
     # scores hundreds of candidates at each selection step; re-reading nine
     # player dictionaries millions of times dominated the v1 selector.
     candidate_meta: Dict[int, Dict[str, Any]] = {}
-    for lineup in pool:
+    for lineup in all_lineups:
         keys, teams, games = _lineup_sets(lineup, kind)
         captain = lineup_captain(lineup, kind)
         candidate_meta[id(lineup)] = {
@@ -265,8 +280,8 @@ def select_portfolio(
             "scenario_values": dict(getattr(lineup, "sim_scenario_values", {}) or {}),
         }
 
-    selected: List[Any] = []
-    selected_candidate_ids: set[int] = set()
+    selected: List[Any] = list(retained)
+    selected_candidate_ids: set[int] = {id(lineup) for lineup in retained}
     total_counts: Counter[str] = Counter()
     cpt_counts: Counter[str] = Counter()
     team_counts: Counter[str] = Counter()
@@ -278,17 +293,29 @@ def select_portfolio(
     sim_win_counts: Counter[int] = Counter()
     sim_value_counts: Counter[int] = Counter()
 
+    for lineup in retained:
+        meta = candidate_meta[id(lineup)]
+        total_counts.update(meta["keys"])
+        team_counts.update(meta["teams"])
+        game_counts.update(meta["games"])
+        if meta["captain_key"]:
+            cpt_counts[meta["captain_key"]] += 1
+        sim_top_counts.update(meta["top_hits"])
+        sim_top_five_counts.update(meta["top_five_hits"])
+        sim_win_counts.update(meta["win_hits"])
+        sim_value_counts.update(meta["scenario_values"].keys())
+
     uniqueness_cache: Dict[int, Dict[int, set[int]]] = {}
 
     def uniqueness_conflicts(min_unique: int) -> Dict[int, set[int]]:
         if min_unique <= 1:
             return {}
         if min_unique not in uniqueness_cache:
-            conflicts: Dict[int, set[int]] = {id(lineup): set() for lineup in pool}
-            for index, lineup in enumerate(pool):
+            conflicts: Dict[int, set[int]] = {id(lineup): set() for lineup in all_lineups}
+            for index, lineup in enumerate(all_lineups):
                 lineup_id = id(lineup)
                 keys = candidate_meta[lineup_id]["keys"]
-                for previous in pool[:index]:
+                for previous in all_lineups[:index]:
                     previous_id = id(previous)
                     if len(keys - candidate_meta[previous_id]["keys"]) < min_unique:
                         conflicts[lineup_id].add(previous_id)
@@ -442,7 +469,12 @@ def select_portfolio(
         if warning not in report["warnings"]:
             report["warnings"].append(warning)
     report["text"] = _report_text(report)
-    return {"lineups": selected, "report": report, "candidate_count": len(pool)}
+    return {
+        "lineups": selected,
+        "report": report,
+        "candidate_count": len(pool),
+        "retained_count": len(retained),
+    }
 
 
 def portfolio_report(

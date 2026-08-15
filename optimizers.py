@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import random
 import math
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from collections import Counter
 
 logger = logging.getLogger("dfs.opt")
@@ -1715,6 +1715,8 @@ class MultiSportClassicOptimizer:
         num_lineups: int = 10,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         cancel_callback: Optional[Callable[[], bool]] = None,
+        excluded_signatures: Optional[Iterable[Tuple[str, ...]]] = None,
+        minimum_unique: Optional[int] = None,
     ) -> List[List[Dict[str, Any]]]:
         # Use the same strategy-aware builder for every Classic sport. NFL used to
         # delegate to the legacy ClassicOptimizer here, silently dropping the UI's
@@ -1736,6 +1738,8 @@ class MultiSportClassicOptimizer:
             num_lineups=num_lineups,
             progress_callback=progress_callback,
             cancel_callback=cancel_callback,
+            excluded_signatures=excluded_signatures,
+            minimum_unique=minimum_unique,
         )
         if lineups:
             logger.info("%s fast strategic build returned %d/%d lineups.", self.sport, len(lineups), num_lineups)
@@ -2068,6 +2072,8 @@ class MultiSportClassicOptimizer:
         num_lineups: int,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         cancel_callback: Optional[Callable[[], bool]] = None,
+        excluded_signatures: Optional[Iterable[Tuple[str, ...]]] = None,
+        minimum_unique: Optional[int] = None,
     ) -> List[List[Dict[str, Any]]]:
         """Fast strategic builder with salary-floor priority.
 
@@ -2077,7 +2083,10 @@ class MultiSportClassicOptimizer:
         $30k MLB lineups could be accepted too early.
         """
         accepted: List[List[Dict[str, Any]]] = []
-        used_sigs: set[Tuple[str, ...]] = set()
+        used_sigs: set[Tuple[str, ...]] = {
+            tuple(sorted(str(key) for key in signature if str(key)))
+            for signature in (excluded_signatures or [])
+        }
         base_pool = [p for p in self.players if not p.get("FadeFlex")]
         key_by_id = {id(p): _pkey(p) for p in base_pool}
         salary_by_id = {id(p): _salary(p) for p in base_pool}
@@ -2102,6 +2111,8 @@ class MultiSportClassicOptimizer:
         cap_total, used_total = self._caps(num_lineups)
         nfl_profile = _nfl_style_profile(self.build_style) if self.sport == "NFL" else {}
         preferred_min_unique = int(nfl_profile.get("min_unique", 1) or 1) if self.sport == "NFL" else 1
+        if minimum_unique is not None:
+            preferred_min_unique = max(preferred_min_unique, min(len(self.slots), int(minimum_unique or 1)))
 
         preferred_floor = _salary_floor_for_strategy(self.salary_cap, self.salary_strategy, self.sport)
         floor_stages = [

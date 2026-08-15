@@ -199,6 +199,37 @@ class PortfolioRulesTests(unittest.TestCase):
         self.assertEqual(len(tight["lineups"]), 2)
         self.assertTrue(any("relaxed" in warning.lower() for warning in tight["report"]["warnings"]))
 
+    def test_retained_lineups_are_preserved_while_open_slots_are_selected(self):
+        players = [
+            _player(name, f"T{index}", f"G{index}", 30 - index)
+            for index, name in enumerate("ABCDEFGHIJKL")
+        ]
+        retained = [players[0], players[1], players[2]]
+        candidates = [
+            list(retained),
+            [players[3], players[4], players[5]],
+            [players[6], players[7], players[8]],
+            [players[9], players[10], players[11]],
+        ]
+
+        result = select_portfolio(
+            candidates,
+            3,
+            rules={"min_unique": 2},
+            kind="classic",
+            retained_lineups=[retained],
+        )
+
+        self.assertEqual(len(result["lineups"]), 3)
+        self.assertIs(result["lineups"][0], retained)
+        self.assertEqual(result["retained_count"], 1)
+        self.assertEqual(result["candidate_count"], 3)
+        signatures = {
+            tuple(sorted(player["Name"] for player in lineup))
+            for lineup in result["lineups"]
+        }
+        self.assertEqual(len(signatures), 3)
+
     def test_impossible_group_returns_neutral_partial_result_with_warning(self):
         players = [_player(name, "T1", "G1", 20) for name in "ABC"]
         result = select_portfolio(

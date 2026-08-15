@@ -390,6 +390,8 @@ class LineupBuildWorker(QtCore.QObject):
         sim_scenarios: int = 750,
         field_preset: str = "150-Max",
         field_calibration: Optional[Dict[str, Any]] = None,
+        retained_lineups: Optional[List[Any]] = None,
+        repair_source: str = "",
     ):
         super().__init__()
         self.players = players
@@ -407,6 +409,8 @@ class LineupBuildWorker(QtCore.QObject):
         self.sim_scenarios = max(100, int(sim_scenarios or 750))
         self.field_preset = field_preset or "150-Max"
         self.field_calibration = dict(field_calibration or {})
+        self.retained_lineups = list(retained_lineups or [])[:self.num_lineups]
+        self.repair_source = str(repair_source or "")
         self._cancel_event = threading.Event()
 
     def request_cancel(self) -> None:
@@ -417,8 +421,40 @@ class LineupBuildWorker(QtCore.QObject):
     def run(self) -> None:
         try:
             build_started = time.perf_counter()
-            self.progress.emit(0, self.num_lineups, "Phase 1 of 3 - starting lineup build")
-            expanded_target = min(450, max(self.num_lineups + 30, int(math.ceil(self.num_lineups * 1.5))))
+            build_request = max(0, self.num_lineups - len(self.retained_lineups))
+            if build_request <= 0:
+                retained_report = portfolio_report(
+                    self.retained_lineups,
+                    self.portfolio_rules,
+                    kind=self.kind,
+                    requested=self.num_lineups,
+                )
+                self.finished.emit({
+                    "kind": self.kind,
+                    "sport": self.sport,
+                    "lineups": list(self.retained_lineups),
+                    "requested": self.num_lineups,
+                    "cancelled": False,
+                    "portfolio_report": retained_report,
+                    "candidate_count": 0,
+                    "sim_report": {},
+                    "timing_report": {
+                        "generation_seconds": 0.0,
+                        "simulation_seconds": 0.0,
+                        "selection_seconds": 0.0,
+                        "total_seconds": 0.0,
+                        "candidate_target": 0,
+                        "candidate_count": 0,
+                        "selected_count": len(self.retained_lineups),
+                        "requested_count": self.num_lineups,
+                        "retained_count": len(self.retained_lineups),
+                        "replacement_requested": 0,
+                    },
+                    "repair_source": self.repair_source,
+                })
+                return
+            self.progress.emit(0, build_request, "Phase 1 of 3 - starting lineup build")
+            expanded_target = min(450, max(build_request + 30, int(math.ceil(build_request * 1.5))))
             constraints = self.portfolio_rules.get("player_constraints") or {}
 
             def number(value: Any, default: float = 0.0) -> float:
@@ -466,7 +502,7 @@ class LineupBuildWorker(QtCore.QObject):
                 # scenario-built lineups cover constructions it may not create.
                 total_candidate_budget = min(
                     750,
-                    max(expanded_target, int(math.ceil(self.num_lineups * 10.0 / 3.0))),
+                    max(expanded_target, int(math.ceil(build_request * 10.0 / 3.0))),
                 )
                 alternate_sources_allowed = not hard_portfolio_rules and not has_locks
                 if alternate_sources_allowed:
@@ -482,12 +518,12 @@ class LineupBuildWorker(QtCore.QObject):
                     # own search so every candidate respects them by construction.
                     candidate_target = min(
                         750,
-                        max(expanded_target, int(math.ceil(self.num_lineups * 8.0 / 3.0))),
+                        max(expanded_target, int(math.ceil(build_request * 8.0 / 3.0))),
                     )
             elif self.kind == "showdown" or hard_portfolio_rules:
                 candidate_target = expanded_target
             else:
-                candidate_target = self.num_lineups
+                candidate_target = build_request
             candidate_budget = candidate_target + ownership_candidate_target + scenario_candidate_target
             if use_nfl_sim:
                 self.progress.emit(0, candidate_budget, "Phase 1 of 3 - starting diversified candidate bank")
@@ -529,9 +565,9 @@ class LineupBuildWorker(QtCore.QObject):
                         (
                             min(candidate_budget, int(done * candidate_target / max(1, total)))
                             if use_nfl_sim
-                            else min(self.num_lineups, int(done * self.num_lineups / max(1, total)))
+                            else min(build_request, int(done * build_request / max(1, total)))
                         ),
-                        candidate_budget if use_nfl_sim else self.num_lineups,
+                        candidate_budget if use_nfl_sim else build_request,
                         "Phase 1 of 3 - generating portfolio candidates",
                     ),
                     cancel_callback=self._cancel_event.is_set,
@@ -553,12 +589,17 @@ class LineupBuildWorker(QtCore.QObject):
                         (
                             min(candidate_budget, int(done * candidate_target / max(1, total)))
                             if use_nfl_sim
-                            else min(self.num_lineups, int(done * self.num_lineups / max(1, total)))
+                            else min(build_request, int(done * build_request / max(1, total)))
                         ),
-                        candidate_budget if use_nfl_sim else self.num_lineups,
+                        candidate_budget if use_nfl_sim else build_request,
                         f"Phase 1 of 3 - {text}",
                     ),
                     cancel_callback=self._cancel_event.is_set,
+                    excluded_signatures=[
+                        tuple(sorted(player_key(player) for player in lineup))
+                        for lineup in self.retained_lineups
+                    ],
+                    minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
                 )
             generation_seconds = time.perf_counter() - build_started
             sim_report: Dict[str, Any] = {}
@@ -639,14 +680,18 @@ class LineupBuildWorker(QtCore.QObject):
                         lineup for lineup in lineups
                         if sum(float(player.get("FlexSalary", 0.0) or 0.0) for player in lineup) >= hard_floor
                     ]
-                    if len(near_cap) >= self.num_lineups:
+                    if len(near_cap) >= build_request:
                         lineups = near_cap
                 generation_seconds = time.perf_counter() - build_started
-                field_count = max(600, min(2400, self.num_lineups * 8))
+                field_count = max(600, min(2400, build_request * 8))
                 self.progress.emit(0, self.sim_scenarios, "Phase 2 of 3 - preparing NFL contest simulation")
                 simulation_started = time.perf_counter()
+                retained_signatures = {
+                    tuple(sorted(player_key(player) for player in retained))
+                    for retained in self.retained_lineups
+                }
                 sim_result = simulate_nfl_contest(
-                    lineups,
+                    list(self.retained_lineups) + list(lineups),
                     build_players,
                     scenarios=self.sim_scenarios,
                     field_lineup_count=field_count,
@@ -655,13 +700,31 @@ class LineupBuildWorker(QtCore.QObject):
                     cancel_callback=self._cancel_event.is_set,
                     field_config=field_config,
                 )
-                lineups = sim_result.get("lineups") or lineups
+                simulated_lineups = list(sim_result.get("lineups") or [])
+                if simulated_lineups:
+                    simulated_by_signature = {
+                        tuple(sorted(player_key(player) for player in lineup)): lineup
+                        for lineup in simulated_lineups
+                    }
+                    self.retained_lineups = [
+                        simulated_by_signature.get(
+                            tuple(sorted(player_key(player) for player in retained)),
+                            retained,
+                        )
+                        for retained in self.retained_lineups
+                    ]
+                    lineups = [
+                        lineup
+                        for lineup in simulated_lineups
+                        if tuple(sorted(player_key(player) for player in lineup))
+                        not in retained_signatures
+                    ]
                 sim_report = dict(sim_result.get("report") or {})
                 simulation_seconds = time.perf_counter() - simulation_started
 
             selection_started = time.perf_counter()
             self.progress.emit(
-                min(self.num_lineups, len(lineups)),
+                min(self.num_lineups, len(lineups) + len(self.retained_lineups)),
                 self.num_lineups,
                 "Phase 3 of 3 - selecting portfolio",
             )
@@ -670,6 +733,7 @@ class LineupBuildWorker(QtCore.QObject):
                 self.num_lineups,
                 rules=self.portfolio_rules,
                 kind=self.kind,
+                retained_lineups=self.retained_lineups,
             )
             lineups = selected["lineups"]
             if sim_report and selected["report"].get("sim_summary"):
@@ -707,6 +771,8 @@ class LineupBuildWorker(QtCore.QObject):
                 "candidate_count": int(selected.get("candidate_count", 0) or 0),
                 "selected_count": len(lineups),
                 "requested_count": self.num_lineups,
+                "retained_count": len(self.retained_lineups),
+                "replacement_requested": build_request,
                 "build_pool_size": len(build_players),
                 "unfiltered_build_pool_size": int(unfiltered_build_pool_size),
                 "role_pool_applied": bool(use_role_pool),
@@ -724,6 +790,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "candidate_count": selected["candidate_count"],
                 "sim_report": sim_report,
                 "timing_report": timing_report,
+                "repair_source": self.repair_source,
             })
         except Exception:
             self.error.emit(traceback.format_exc())
@@ -1762,15 +1829,40 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
 
 class PortfolioInsightsDialog(QtWidgets.QDialog):
-    """Explain the patterns, strengths, and review flags in a lineup set."""
+    """Explain a portfolio and return user-selected repair actions to MainWindow."""
 
-    def __init__(self, insights: Dict[str, Any], parent: Optional[QtWidgets.QWidget] = None):
+    FILTERS = [
+        ("All lineups", "all"),
+        ("Any review signal", "flagged"),
+        ("C/D grades", "weak_grade"),
+        ("High duplication", "high_duplication"),
+        ("More than $2k left", "unused_salary"),
+        ("No QB stack", "unstacked"),
+        ("Concentrated core", "concentrated_core"),
+    ]
+
+    def __init__(
+        self,
+        insights: Dict[str, Any],
+        parent: Optional[QtWidgets.QWidget] = None,
+        *,
+        actions_enabled: bool = True,
+        source_label: str = "generated",
+    ):
         super().__init__(parent)
         self.insights = dict(insights or {})
+        self.source_label = str(source_label or "generated")
+        self.requested_action = ""
+        self.requested_indexes: List[int] = []
+        self._lineup_rows = list(self.insights.get("lineup_rows") or [])
+        self._lineup_by_number = {
+            int(row.get("number", index + 1) or index + 1): row
+            for index, row in enumerate(self._lineup_rows)
+        }
         self.setObjectName("portfolioInsightsDialog")
         self.setWindowTitle("Portfolio Insights")
         self.setModal(True)
-        self.resize(1120, 720)
+        self.resize(1240, 760)
 
         layout = QtWidgets.QVBoxLayout(self)
         header = QtWidgets.QHBoxLayout()
@@ -1781,7 +1873,7 @@ class PortfolioInsightsDialog(QtWidgets.QDialog):
         header.addStretch(1)
         status = QtWidgets.QLabel(str(self.insights.get("status") or "Ready"))
         status.setObjectName("portfolioInsightsStatus")
-        has_flags = bool(self.insights.get("review_flags"))
+        has_flags = bool(self.insights.get("review_flags") or self.insights.get("flagged_count"))
         status.setStyleSheet(
             "padding: 5px 10px; border-radius: 9px; font-weight: 700; "
             + ("background: #4A2B12; color: #FFD28A;" if has_flags else "background: #123B31; color: #8BE0C3;")
@@ -1790,36 +1882,55 @@ class PortfolioInsightsDialog(QtWidgets.QDialog):
         layout.addLayout(header)
 
         intro = QtWidgets.QLabel(
-            "See how the selected portfolio was built, where it creates tournament leverage, and what deserves a final review."
+            "Find the lineups behind each warning, inspect player exposure, and replace only the rows you do not want."
         )
         intro.setWordWrap(True)
         intro.setStyleSheet("color: #AEB7C5;")
         layout.addWidget(intro)
 
-        tabs = QtWidgets.QTabWidget(self)
-        tabs.setObjectName("portfolioInsightsTabs")
+        self.tabs = QtWidgets.QTabWidget(self)
+        self.tabs.setObjectName("portfolioInsightsTabs")
         overview = QtWidgets.QPlainTextEdit(self)
         overview.setObjectName("portfolioInsightsReport")
         overview.setReadOnly(True)
         overview.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
         overview.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
         overview.setPlainText(str(self.insights.get("text") or "No portfolio insights are available."))
-        tabs.addTab(overview, "Overview")
+        self.tabs.addTab(overview, "Overview")
 
-        table = QtWidgets.QTableWidget(self)
-        table.setObjectName("portfolioInsightsLineups")
+        lineup_panel = QtWidgets.QWidget(self)
+        lineup_layout = QtWidgets.QVBoxLayout(lineup_panel)
+        lineup_layout.setContentsMargins(6, 6, 6, 6)
+        filter_row = QtWidgets.QHBoxLayout()
+        filter_row.addWidget(QtWidgets.QLabel("Show:"))
+        self.filter_combo = QtWidgets.QComboBox(self)
+        self.filter_combo.setObjectName("portfolioInsightsFilter")
+        for label, code in self.FILTERS:
+            self.filter_combo.addItem(label, code)
+        self.filter_combo.currentIndexChanged.connect(self._apply_filter)
+        filter_row.addWidget(self.filter_combo)
+        select_flagged = QtWidgets.QPushButton("Select flagged", self)
+        select_flagged.setObjectName("selectFlaggedLineups")
+        select_flagged.clicked.connect(self._select_flagged)
+        filter_row.addWidget(select_flagged)
+        filter_row.addStretch(1)
+        filter_row.addWidget(QtWidgets.QLabel("Select one or more rows to remove or replace."))
+        lineup_layout.addLayout(filter_row)
+
+        self.table = QtWidgets.QTableWidget(self)
+        self.table.setObjectName("portfolioInsightsLineups")
         headers = [
-            "#", "Grade", "Source", "Scenario", "Salary", "Stack", "Bring-back",
+            "#", "Review", "Grade", "Source", "Scenario", "Salary", "Stack", "Bring-back",
             "FLEX", "Own sum", "Edge", "Leverage", "Dup risk", "Top 1%", "Return", "Top paths",
         ]
-        table.setColumnCount(len(headers))
-        table.setHorizontalHeaderLabels(headers)
-        rows = list(self.insights.get("lineup_rows") or [])
-        table.setRowCount(len(rows))
-        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-        table.setAlternatingRowColors(True)
-        table.verticalHeader().setVisible(False)
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(len(self._lineup_rows))
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setVisible(False)
 
         def metric(value: Any, suffix: str = "") -> str:
             if value is None:
@@ -1829,9 +1940,15 @@ class PortfolioInsightsDialog(QtWidgets.QDialog):
             except (TypeError, ValueError):
                 return "—"
 
-        for row_index, row in enumerate(rows):
+        numeric_columns = {
+            0: "number", 5: "salary", 9: "ownership", 10: "edge", 11: "leverage",
+            12: "duplication", 13: "top_one_pct", 14: "return_index", 15: "top_scenarios",
+        }
+        for row_index, row in enumerate(self._lineup_rows):
+            number = int(row.get("number", row_index + 1) or row_index + 1)
             values = [
-                str(row.get("number") or row_index + 1),
+                str(number),
+                str(row.get("review") or "—"),
                 str(row.get("grade") or "—"),
                 str(row.get("source") or "—"),
                 str(row.get("archetype") or "—"),
@@ -1849,21 +1966,71 @@ class PortfolioInsightsDialog(QtWidgets.QDialog):
             ]
             for column, value in enumerate(values):
                 item = SortKeyItem(value)
-                numeric = row.get({
-                    0: "number", 4: "salary", 8: "ownership", 9: "edge", 10: "leverage",
-                    11: "duplication", 12: "top_one_pct", 13: "return_index", 14: "top_scenarios",
-                }.get(column, ""))
+                item.setData(QtCore.Qt.UserRole + 1, number)
+                numeric = row.get(numeric_columns.get(column, ""))
                 if numeric is not None:
                     item.setData(QtCore.Qt.UserRole, float(numeric))
-                table.setItem(row_index, column, item)
-        table.setSortingEnabled(True)
-        table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
-        table.horizontalHeader().setStretchLastSection(True)
-        tabs.addTab(table, "Lineup details")
-        layout.addWidget(tabs, 1)
+                if column == 1 and row.get("review"):
+                    item.setToolTip(str(row.get("review")))
+                    item.setForeground(QtGui.QColor("#FFD28A"))
+                self.table.setItem(row_index, column, item)
+        self.table.setSortingEnabled(True)
+        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.itemSelectionChanged.connect(self._update_action_buttons)
+        lineup_layout.addWidget(self.table, 1)
+        self.tabs.addTab(lineup_panel, "Lineup details")
+
+        exposure_panel = QtWidgets.QWidget(self)
+        exposure_layout = QtWidgets.QVBoxLayout(exposure_panel)
+        exposure_layout.setContentsMargins(6, 6, 6, 6)
+        exposure_help = QtWidgets.QLabel(
+            "Select a player to see exactly which portfolio rows contain that player."
+        )
+        exposure_layout.addWidget(exposure_help)
+        self.exposure_table = QtWidgets.QTableWidget(self)
+        self.exposure_table.setObjectName("portfolioInsightsExposure")
+        exposure_headers = ["Player", "Team", "Pos", "Count", "Exposure", "Lineups"]
+        self.exposure_table.setColumnCount(len(exposure_headers))
+        self.exposure_table.setHorizontalHeaderLabels(exposure_headers)
+        exposure_rows = list(self.insights.get("exposure_rows") or [])
+        self.exposure_table.setRowCount(len(exposure_rows))
+        self.exposure_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.exposure_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.exposure_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.exposure_table.setAlternatingRowColors(True)
+        self.exposure_table.verticalHeader().setVisible(False)
+        for row_index, row in enumerate(exposure_rows):
+            lineup_numbers = [int(value) for value in row.get("lineup_numbers") or []]
+            values = [
+                str(row.get("name") or ""),
+                str(row.get("team") or ""),
+                str(row.get("position") or ""),
+                str(int(row.get("count", 0) or 0)),
+                f"{float(row.get('pct', 0.0) or 0.0):.1f}%",
+                ", ".join(str(value) for value in lineup_numbers),
+            ]
+            for column, value in enumerate(values):
+                item = SortKeyItem(value)
+                item.setData(QtCore.Qt.UserRole + 1, lineup_numbers)
+                numeric = row.get("count") if column == 3 else row.get("pct") if column == 4 else None
+                if numeric is not None:
+                    item.setData(QtCore.Qt.UserRole, float(numeric))
+                self.exposure_table.setItem(row_index, column, item)
+        self.exposure_table.setSortingEnabled(True)
+        self.exposure_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.exposure_table.horizontalHeader().setStretchLastSection(True)
+        self.exposure_table.itemDoubleClicked.connect(lambda _item: self._show_player_lineups())
+        exposure_layout.addWidget(self.exposure_table, 1)
+        show_player = QtWidgets.QPushButton("Show selected player's lineups", self)
+        show_player.setObjectName("showExposureLineups")
+        show_player.clicked.connect(self._show_player_lineups)
+        exposure_layout.addWidget(show_player, 0, QtCore.Qt.AlignRight)
+        self.tabs.addTab(exposure_panel, "Player exposure")
+        layout.addWidget(self.tabs, 1)
 
         note = QtWidgets.QLabel(
-            "Insights are slate-relative decision aids. They do not change the generated lineups or the DraftKings export."
+            "Remove changes only the current in-memory set. Replace keeps every unselected lineup and fills the open slots using the current build settings."
         )
         note.setWordWrap(True)
         note.setStyleSheet("color: #AEB7C5;")
@@ -1875,8 +2042,87 @@ class PortfolioInsightsDialog(QtWidgets.QDialog):
         copy_button.clicked.connect(
             lambda: QtWidgets.QApplication.clipboard().setText(str(self.insights.get("text") or ""))
         )
+        self.remove_button = buttons.addButton("Remove selected", QtWidgets.QDialogButtonBox.ActionRole)
+        self.remove_button.setObjectName("removeInsightLineups")
+        self.remove_button.clicked.connect(lambda: self._request_action("remove"))
+        self.replace_button = buttons.addButton("Replace selected", QtWidgets.QDialogButtonBox.ActionRole)
+        self.replace_button.setObjectName("replaceInsightLineups")
+        self.replace_button.clicked.connect(lambda: self._request_action("replace"))
+        self.remove_button.setVisible(actions_enabled)
+        self.replace_button.setVisible(actions_enabled)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+        self._update_action_buttons()
+
+    def _number_for_table_row(self, row_index: int) -> int:
+        item = self.table.item(row_index, 0)
+        return int(item.data(QtCore.Qt.UserRole + 1) or 0) if item is not None else 0
+
+    def selected_lineup_indexes(self) -> List[int]:
+        numbers = {
+            self._number_for_table_row(index.row())
+            for index in self.table.selectionModel().selectedRows()
+        }
+        return sorted(number - 1 for number in numbers if number > 0)
+
+    def _apply_filter(self) -> None:
+        code = str(self.filter_combo.currentData() or "all")
+        for table_row in range(self.table.rowCount()):
+            number = self._number_for_table_row(table_row)
+            row = self._lineup_by_number.get(number, {})
+            flags = set(row.get("flag_codes") or [])
+            visible = code == "all" or (code == "flagged" and bool(flags)) or code in flags
+            self.table.setRowHidden(table_row, not visible)
+
+    def _select_flagged(self) -> None:
+        self.tabs.setCurrentIndex(1)
+        self.filter_combo.setCurrentIndex(self.filter_combo.findData("flagged"))
+        self.table.clearSelection()
+        selection_model = self.table.selectionModel()
+        for table_row in range(self.table.rowCount()):
+            number = self._number_for_table_row(table_row)
+            if self._lineup_by_number.get(number, {}).get("flag_codes"):
+                selection_model.select(
+                    self.table.model().index(table_row, 0),
+                    QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows,
+                )
+        self._update_action_buttons()
+
+    def _show_player_lineups(self) -> None:
+        selected = self.exposure_table.selectionModel().selectedRows()
+        if not selected:
+            return
+        item = self.exposure_table.item(selected[0].row(), 0)
+        lineup_numbers = set(item.data(QtCore.Qt.UserRole + 1) or []) if item is not None else set()
+        self.tabs.setCurrentIndex(1)
+        self.filter_combo.setCurrentIndex(self.filter_combo.findData("all"))
+        self.table.clearSelection()
+        selection_model = self.table.selectionModel()
+        for table_row in range(self.table.rowCount()):
+            number = self._number_for_table_row(table_row)
+            self.table.setRowHidden(table_row, number not in lineup_numbers)
+            if number in lineup_numbers:
+                selection_model.select(
+                    self.table.model().index(table_row, 0),
+                    QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows,
+                )
+        self._update_action_buttons()
+
+    def _update_action_buttons(self) -> None:
+        enabled = bool(self.selected_lineup_indexes())
+        if hasattr(self, "remove_button"):
+            self.remove_button.setEnabled(enabled)
+        if hasattr(self, "replace_button"):
+            self.replace_button.setEnabled(enabled)
+
+    def _request_action(self, action: str) -> None:
+        indexes = self.selected_lineup_indexes()
+        if not indexes:
+            QtWidgets.QMessageBox.information(self, "Select Lineups", "Select one or more lineup rows first.")
+            return
+        self.requested_action = str(action or "")
+        self.requested_indexes = indexes
+        self.accept()
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -4484,7 +4730,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_readiness_badge()
         self._update_lineup_space_dashboard()
 
-    def _start_lineup_build(self, *, kind: str, sport: str, num: int, cap: float) -> None:
+    def _start_lineup_build(
+        self,
+        *,
+        kind: str,
+        sport: str,
+        num: int,
+        cap: float,
+        retained_lineups: Optional[List[Any]] = None,
+        repair_source: str = "",
+    ) -> None:
         """Run a lineup build in a worker thread and show status-bar progress."""
         if str(sport or "").strip().upper() == "NFL" and not self._ensure_live_nfl_before_build():
             self.status.showMessage("Lineup generation cancelled until the game-day status check is resolved.", 6000)
@@ -4533,6 +4788,9 @@ class MainWindow(QtWidgets.QMainWindow):
         effective_sim_enabled = bool(
             str(sport or "").strip().upper() == "NFL" and kind != "showdown" and sim_enabled
         )
+        retained = list(retained_lineups or [])[:max(0, int(num))]
+        replacement_count = max(0, int(num) - len(retained))
+        repairing = bool(str(repair_source or "").strip())
         self._active_build_context = {
             "sport": str(sport or "NFL").strip().upper(),
             "kind": str(kind or "classic").strip().lower(),
@@ -4549,19 +4807,31 @@ class MainWindow(QtWidgets.QMainWindow):
                 "field_preset": field_preset if effective_sim_enabled else "",
             },
             "portfolio_rules": portfolio_rules,
+            "repair_source": str(repair_source or ""),
+            "retained_count": len(retained),
+            "replacement_count": replacement_count,
         }
 
         label_sport = sport if kind != "showdown" else "Showdown"
-        self._build_progress.setRange(0, num)
+        self._build_progress.setRange(0, max(1, replacement_count if repairing else num))
         self._build_progress.setValue(0)
         self._build_progress.setVisible(True)
-        self._build_eta.setText(f"Building {label_sport} lineups…")
+        self._build_eta.setText(
+            f"Replacing {replacement_count} {label_sport} lineup{'s' if replacement_count != 1 else ''}…"
+            if repairing else f"Building {label_sport} lineups…"
+        )
         self._build_eta.setVisible(True)
         self._build_cancel.setEnabled(True)
         self._build_cancel.setVisible(True)
-        self._lineup_space_phase = f"Generate 0/{num:,}"
+        self._lineup_space_phase = f"Generate 0/{replacement_count if repairing else num:,}"
         self._update_lineup_space_dashboard()
-        self.status.showMessage(f"Building {label_sport} lineups ({num:,}) • {build_style} • {salary_strategy}…")
+        self.status.showMessage(
+            (
+                f"Repairing {replacement_count:,} of {num:,} {label_sport} lineups; "
+                f"preserving {len(retained):,}…"
+            )
+            if repairing else f"Building {label_sport} lineups ({num:,}) • {build_style} • {salary_strategy}…"
+        )
 
         self._build_thread = QtCore.QThread(self)
         self._build_worker = LineupBuildWorker(
@@ -4580,6 +4850,8 @@ class MainWindow(QtWidgets.QMainWindow):
             sim_scenarios=sim_scenarios,
             field_preset=field_preset,
             field_calibration=field_calibration,
+            retained_lineups=retained,
+            repair_source=repair_source,
         )
         self._build_worker.moveToThread(self._build_thread)
 
@@ -4833,6 +5105,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.last_portfolio_report = dict(payload.get("portfolio_report") or {})
             self.last_sim_report = dict(payload.get("sim_report") or {})
             self.last_build_timing_report = dict(payload.get("timing_report") or {})
+            repair_source = str(payload.get("repair_source") or "")
+            retained_count = int(self.last_build_timing_report.get("retained_count", 0) or 0)
+            replacement_count = int(self.last_build_timing_report.get("replacement_requested", 0) or 0)
             warning_count = len(self.last_portfolio_report.get("warnings") or [])
             portfolio_note = f" Portfolio warnings: {warning_count}." if warning_count else " Portfolio rules satisfied."
             comparison_note = ""
@@ -4867,12 +5142,30 @@ class MainWindow(QtWidgets.QMainWindow):
             if kind == "showdown":
                 self._populate_showdown_lineups(lineups)
                 built = len(self.last_showdown)
-                result = f"Cancelled after {built} of {requested}" if cancelled else f"Built {built} of {requested}"
+                if repair_source == "saved":
+                    self.saved_showdown = list(self.last_showdown)
+                    self._refresh_saved_tables()
+                    self._sync_saved_checkboxes(kind)
+                result = (
+                    f"Repaired {replacement_count} slot{'s' if replacement_count != 1 else ''}; preserved {retained_count}"
+                    if repair_source and not cancelled
+                    else f"Cancelled after {built} of {requested}" if cancelled
+                    else f"Built {built} of {requested}"
+                )
                 self.status.showMessage(f"{result} showdown lineups. {self._lineup_quality_summary(self.last_showdown, sport, kind)}{portfolio_note}{timing_note}", 9000)
             else:
                 self._populate_classic_lineups(lineups, sport)
                 built = len(self.last_classic)
-                self.status.showMessage(f"Built {built} of {requested} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}{comparison_note}{timing_note}", 12000)
+                if repair_source == "saved":
+                    self.saved_classic = list(self.last_classic)
+                    self._refresh_saved_tables()
+                    self._sync_saved_checkboxes(kind)
+                result = (
+                    f"Repaired {replacement_count} slot{'s' if replacement_count != 1 else ''}; preserved {retained_count}"
+                    if repair_source and not cancelled
+                    else f"Built {built} of {requested}"
+                )
+                self.status.showMessage(f"{result} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}{comparison_note}{timing_note}", 12000)
             self._record_build_diagnostic(payload, displayed_count=built)
             self._lineup_space_phase = ""
             self._update_readiness_badge()
@@ -5344,6 +5637,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh_saved_tables()
         self.status.showMessage("Cleared all saved lineups.", 3000)
 
+    def _sync_saved_checkboxes(self, kind: str) -> None:
+        kind_l = str(kind or "classic").lower()
+        table = self.tbl_sd if kind_l == "showdown" else self.tbl_cl
+        generated = self.last_showdown if kind_l == "showdown" else self.last_classic
+        saved = self.saved_showdown if kind_l == "showdown" else self.saved_classic
+        saved_ids = {id(lineup) for lineup in saved}
+        for row, lineup in enumerate(generated):
+            widget = table.cellWidget(row, 0)
+            if not isinstance(widget, QtWidgets.QCheckBox):
+                continue
+            widget.blockSignals(True)
+            widget.setChecked(id(lineup) in saved_ids)
+            widget.blockSignals(False)
+
     # ---------------- Exposure ----------------
 
     def _exposure_showdown_rows(self) -> List[Dict[str, Any]]:
@@ -5474,7 +5781,94 @@ class MainWindow(QtWidgets.QMainWindow):
             portfolio_report=report,
             sim_report=self.last_sim_report if sport == "NFL" and kind == "classic" else {},
         )
-        PortfolioInsightsDialog(insights, self).exec_()
+        source_label = "saved" if saved else "generated"
+        dialog = PortfolioInsightsDialog(
+            insights,
+            self,
+            actions_enabled=True,
+            source_label=source_label,
+        )
+        dialog.exec_()
+        if dialog.requested_action:
+            self._handle_portfolio_insights_action(
+                kind=kind,
+                sport=sport,
+                source_label=source_label,
+                lineups=lineups,
+                action=dialog.requested_action,
+                indexes=dialog.requested_indexes,
+                salary_cap=cap,
+            )
+
+    def _handle_portfolio_insights_action(
+        self,
+        *,
+        kind: str,
+        sport: str,
+        source_label: str,
+        lineups: List[Any],
+        action: str,
+        indexes: List[int],
+        salary_cap: float,
+    ) -> None:
+        selected_indexes = sorted({index for index in indexes if 0 <= index < len(lineups)})
+        if not selected_indexes:
+            return
+        selected_set = set(selected_indexes)
+        retained = [lineup for index, lineup in enumerate(lineups) if index not in selected_set]
+        count = len(selected_indexes)
+
+        if action == "remove":
+            answer = QtWidgets.QMessageBox.question(
+                self,
+                "Remove Selected Lineups",
+                f"Remove {count} selected lineup{'s' if count != 1 else ''} from the current {source_label} set?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+                QtWidgets.QMessageBox.Yes,
+            )
+            if answer != QtWidgets.QMessageBox.Yes:
+                return
+            if source_label == "saved":
+                if kind == "showdown":
+                    self.saved_showdown = retained
+                else:
+                    self.saved_classic = retained
+                self._refresh_saved_tables()
+                self._sync_saved_checkboxes(kind)
+            elif kind == "showdown":
+                self._populate_showdown_lineups(retained)
+                self._finish_lineup_build_ui()
+            else:
+                self._populate_classic_lineups(retained, sport)
+                self._finish_lineup_build_ui()
+            self.status.showMessage(
+                f"Removed {count} lineup{'s' if count != 1 else ''}; {len(retained)} remain in the {source_label} set.",
+                6000,
+            )
+            return
+
+        if action != "replace":
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Replace Selected Lineups",
+            (
+                f"Keep {len(retained)} lineup{'s' if len(retained) != 1 else ''} fixed and generate "
+                f"{count} replacement{'s' if count != 1 else ''} using the current settings?"
+            ),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Yes,
+        )
+        if answer != QtWidgets.QMessageBox.Yes:
+            return
+        self._start_lineup_build(
+            kind=kind,
+            sport=sport,
+            num=len(lineups),
+            cap=salary_cap,
+            retained_lineups=retained,
+            repair_source=source_label,
+        )
 
     def _confirm_portfolio_export(self, kind: str, lineups: List[Any]) -> bool:
         report = self._saved_portfolio_report(kind, lineups)

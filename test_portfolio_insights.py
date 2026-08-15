@@ -87,6 +87,13 @@ class PortfolioInsightsTests(unittest.TestCase):
         self.assertIn("Top-1% paths covered: 3/100", report["text"])
         self.assertIn("Preset fit: 86/100", report["text"])
         self.assertTrue(report["review_flags"])
+        self.assertEqual(report["flagged_count"], 2)
+        self.assertIn("concentrated_core", report["lineup_rows"][0]["flag_codes"])
+        self.assertIn("high_duplication", report["lineup_rows"][1]["flag_codes"])
+        quarterback = next(row for row in report["exposure_rows"] if row["name"] == "BUF QB")
+        self.assertEqual(quarterback["lineup_numbers"], [1, 2])
+        self.assertEqual(quarterback["pct"], 100.0)
+        self.assertIn("individual review signals: 2/2", report["text"])
 
     def test_incomplete_optional_sim_values_do_not_break_insights(self):
         lineup = _lineup(source="field_shaped", archetype="", edge=60, duplicate=35, hits=set())

@@ -104,7 +104,9 @@ NFL Classic SIM tooltips include a **Why this SIM Edge** breakdown showing each 
 
 ## Portfolio Insights
 
-After generation, **Portfolio Insights** explains the finished lineup set without changing it. The overview reports grade distribution, salary and ownership shape, QB stacks, bring-backs, FLEX mix, candidate-source selection, scenario archetypes, leverage, duplication risk, preset fit, scenario coverage, concentration, and automatic review flags. A sortable lineup-detail table exposes the same signals one lineup at a time.
+After generation, **Portfolio Insights** explains the finished lineup set and turns its review signals into a repair workflow. The overview reports grade distribution, salary and ownership shape, QB stacks, bring-backs, FLEX mix, candidate-source selection, scenario archetypes, leverage, duplication risk, preset fit, scenario coverage, concentration, and automatic review flags. The lineup table can filter and select C/D grades, high-duplication builds, excessive unused salary, unstacked NFL lineups, and concentrated cores. Selected rows can be removed or replaced while every unselected lineup remains fixed.
+
+The **Player exposure** tab lists each player's portfolio percentage and exact lineup numbers, then jumps directly to those rows for review. Repair uses the current slate and settings, applies the same portfolio constraints, and generates only the open slots.
 
 Candidate provenance survives NFL contest simulation and portfolio selection, so the report can distinguish projection-led optimizer lineups, realistic field-shaped candidates, and correlated Ceiling, Balanced, Leverage, or Low-Dup scenario builds.
 
