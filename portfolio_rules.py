@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from collections import Counter
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -168,6 +169,7 @@ def select_portfolio(
     retained_lineups: Optional[Sequence[Any]] = None,
     refinement_passes: int = 0,
     refinement_stop_callback: Optional[Any] = None,
+    refinement_polish_duplication: bool = False,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
@@ -467,7 +469,11 @@ def select_portfolio(
     # rechecked before a change is accepted, while minimum-exposure shortfalls
     # retain the same strong priority used during greedy selection.
     refinement_swaps = 0
-    refinement_passes = max(0, min(8, int(refinement_passes or 0)))
+    duplication_refinement_swaps = 0
+    refinement_attempts = 0
+    refinement_stop_reason = "disabled" if not refinement_passes else "pass limit"
+    refinement_passes = max(0, min(256, int(refinement_passes or 0)))
+    refinement_started = time.perf_counter()
     retained_ids = {id(lineup) for lineup in retained}
 
     def fixed_quality(lineup: Any) -> float:
@@ -485,6 +491,18 @@ def select_portfolio(
             - 0.12 * duplicate_risk
             - max(0.0, 72.0 - sim_edge) * 1.25
         )
+
+    def tournament_metrics(lineup: Any) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+        sim = candidate_meta[id(lineup)]["sim"]
+        return (
+            _pct(sim.get("sim_edge"), None),
+            _pct(sim.get("sim_return_index"), None),
+            _pct(sim.get("duplicate_risk"), None),
+        )
+
+    def duplication_risk(lineup: Any, default: float = 100.0) -> float:
+        value = tournament_metrics(lineup)[2]
+        return default if value is None else value
 
     def counter_swap_delta(
         counts: Counter[str],
@@ -547,9 +565,37 @@ def select_portfolio(
                 return False
         return True
 
-    def swap_score_delta(outgoing: Any, incoming: Any) -> float:
+    def swap_score_delta(outgoing: Any, incoming: Any, *, duplication_focus: bool = False) -> float:
         out_meta = candidate_meta[id(outgoing)]
         in_meta = candidate_meta[id(incoming)]
+        duplication_bonus = 0.0
+        if duplication_focus:
+            out_edge, out_return, out_duplication = tournament_metrics(outgoing)
+            in_edge, in_return, in_duplication = tournament_metrics(incoming)
+            if None in (
+                out_edge,
+                out_return,
+                out_duplication,
+                in_edge,
+                in_return,
+                in_duplication,
+            ):
+                return float("-inf")
+            assert out_edge is not None and out_return is not None and out_duplication is not None
+            assert in_edge is not None and in_return is not None and in_duplication is not None
+            # The remaining-time phase has one narrow job: lower duplication
+            # without quietly trading away tournament strength.  A replacement
+            # must improve duplicate risk, stay close on both component scores,
+            # and retain the combined Edge/Return signal.
+            if in_duplication >= out_duplication - 0.25:
+                return float("-inf")
+            if in_edge < out_edge - 1.0 or in_return < out_return - 1.5:
+                return float("-inf")
+            out_strength = 0.70 * out_edge + 0.30 * out_return
+            in_strength = 0.70 * in_edge + 0.30 * in_return
+            if in_strength < out_strength - 0.10:
+                return float("-inf")
+            duplication_bonus = (out_duplication - in_duplication) * 0.45
         delta = fixed_quality(incoming) - fixed_quality(outgoing)
         touched_players = out_meta["keys"].union(in_meta["keys"])
         before_shortfall = sum(max(0, min_total.get(key, 0) - total_counts[key]) for key in touched_players)
@@ -583,7 +629,7 @@ def select_portfolio(
             set(in_meta["scenario_values"]),
             14.0,
         )
-        return delta
+        return delta + duplication_bonus
 
     def apply_swap(outgoing: Any, incoming: Any) -> None:
         out_meta = candidate_meta[id(outgoing)]
@@ -610,30 +656,84 @@ def select_portfolio(
         remaining.remove(incoming)
         remaining.append(outgoing)
 
-    for _pass_index in range(refinement_passes):
+    standard_refinement_finished = False
+    for pass_index in range(refinement_passes):
         if refinement_stop_callback and refinement_stop_callback():
+            refinement_stop_reason = "time budget or cancellation"
             break
+        refinement_attempts += 1
         movable = [lineup for lineup in selected if id(lineup) not in retained_ids]
         if not movable or not remaining:
+            refinement_stop_reason = "no movable alternatives"
             break
-        outgoing_pool = sorted(movable, key=fixed_quality)[: min(30, len(movable))]
-        incoming_pool = sorted(remaining, key=fixed_quality, reverse=True)[: min(250, len(remaining))]
+        duplication_focus = bool(
+            refinement_polish_duplication
+            and (standard_refinement_finished or pass_index >= 3)
+        )
+        if duplication_focus:
+            outgoing_pool = sorted(
+                movable,
+                key=lambda lineup: (
+                    duplication_risk(lineup, 0.0),
+                    -fixed_quality(lineup),
+                ),
+                reverse=True,
+            )[: min(45, len(movable))]
+            incoming_pool = sorted(
+                remaining,
+                key=lambda lineup: (
+                    fixed_quality(lineup) - 0.45 * duplication_risk(lineup),
+                    candidate_meta[id(lineup)]["signature"],
+                ),
+                reverse=True,
+            )[: min(350, len(remaining))]
+        else:
+            outgoing_pool = sorted(movable, key=fixed_quality)[: min(30, len(movable))]
+            incoming_pool = sorted(remaining, key=fixed_quality, reverse=True)[: min(250, len(remaining))]
         best_delta = 0.15
         best_pair: Optional[Tuple[Any, Any]] = None
+        stop_requested = False
         for outgoing in outgoing_pool:
             if refinement_stop_callback and refinement_stop_callback():
+                stop_requested = True
                 break
-            for incoming in incoming_pool:
+            for incoming_index, incoming in enumerate(incoming_pool):
+                if (
+                    refinement_stop_callback
+                    and incoming_index % 24 == 0
+                    and refinement_stop_callback()
+                ):
+                    stop_requested = True
+                    break
                 if not swap_is_admissible(outgoing, incoming):
                     continue
-                delta = swap_score_delta(outgoing, incoming)
+                delta = swap_score_delta(
+                    outgoing,
+                    incoming,
+                    duplication_focus=duplication_focus,
+                )
                 if delta > best_delta:
                     best_delta = delta
                     best_pair = (outgoing, incoming)
+            if stop_requested:
+                break
+        if stop_requested:
+            refinement_stop_reason = "time budget or cancellation"
+            break
         if best_pair is None:
+            if refinement_polish_duplication and not duplication_focus:
+                standard_refinement_finished = True
+                continue
+            refinement_stop_reason = (
+                "duplication local optimum" if duplication_focus else "local optimum"
+            )
             break
         apply_swap(*best_pair)
         refinement_swaps += 1
+        if duplication_focus:
+            duplication_refinement_swaps += 1
+    else:
+        refinement_stop_reason = "pass limit"
 
     if len(selected) < requested:
         warnings.append(
@@ -642,6 +742,10 @@ def select_portfolio(
 
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
     report["refinement_swaps"] = refinement_swaps
+    report["duplication_refinement_swaps"] = duplication_refinement_swaps
+    report["refinement_attempts"] = refinement_attempts
+    report["refinement_stop_reason"] = refinement_stop_reason
+    report["refinement_seconds"] = max(0.0, time.perf_counter() - refinement_started)
     for warning in warnings:
         if warning not in report["warnings"]:
             report["warnings"].append(warning)

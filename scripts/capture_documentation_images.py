@@ -230,9 +230,11 @@ def capture(output_dir: Path) -> None:
         save_widget(window, output_dir / "main-workspace.png")
 
         window.combo_nfl_compute_mode.setCurrentText("Deep (up to 5 min)")
+        window.action_show_build_controls.setChecked(True)
         window.tabs_workspace_controls.setCurrentIndex(0)
         app.processEvents()
         save_widget(window.tabs_workspace_controls, output_dir / "deep-build.png")
+        window.action_show_build_controls.setChecked(False)
         window.combo_nfl_compute_mode.setCurrentText("Fast (default)")
 
         # Show the compact lineup-space dashboard under realistic pruning and

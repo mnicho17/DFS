@@ -38,7 +38,7 @@ Choose **Game-Day Check** immediately before generating and again near lock. The
 - Relax very high uniqueness or very low team/game caps.
 - For NFL Classic, Strategic, Balanced, Contrarian, and Chalk use the compact starter/rotation pool. Randomized with SIM Edge off intentionally uses the broader pool and can take longer.
 - NFL SIM Edge does additional field and outcome simulation, so it normally takes longer than a projection-only build.
-- Deep Build intentionally evaluates a much wider bank and can use up to five minutes. Its progress should advance through Explore, Screen, Validate, and Select/Refine. Use Fast when you need an immediate iteration.
+- Deep Build intentionally evaluates a much wider bank and can use up to five minutes. Its progress should advance through Explore, Screen, Validate, and Select/Refine. Select/Refine may spend the remaining budget lowering duplication without sacrificing the combined Edge/return signal, but stops early at a local optimum. Use Fast when you need an immediate iteration.
 - Deep reserves its last compute window for portfolio selection. Reaching the validation budget is normal; the app keeps the best completed shortlist and reports how many screening and validation scenarios finished.
 - Use **Settings > Build History…** to compare the same slate and settings across app releases.
 - Use **Cancel** to keep completed lineups from the current build.

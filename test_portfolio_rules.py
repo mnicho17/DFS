@@ -163,6 +163,54 @@ class PortfolioRulesTests(unittest.TestCase):
         self.assertEqual(stopped["lineups"], baseline["lineups"])
         self.assertEqual(stopped["report"]["refinement_swaps"], 0)
 
+    def test_remaining_time_polish_lowers_duplication_without_losing_sim_strength(self):
+        def candidate(prefix, projection, edge, return_index, duplicate_risk, hits):
+            players = [
+                _player(f"{prefix}-{slot}", f"T{prefix}", f"G{prefix}", projection / 3.0)
+                for slot in range(3)
+            ]
+            return SimLineup(
+                players,
+                metrics={
+                    "sim_edge": edge,
+                    "sim_return_index": return_index,
+                    "duplicate_risk": duplicate_risk,
+                    "sim_top_one_pct": 10.0,
+                    "sim_top_five_pct": 20.0,
+                    "sim_cash_rate": 30.0,
+                    "sim_bust_rate": 20.0,
+                    "sim_scenarios": 10,
+                },
+                top_hits=hits,
+                top_five_hits=hits,
+                scenario_values={scenario: 6.0 for scenario in hits},
+            )
+
+        candidates = [
+            candidate("A", 75.0, 95.0, 95.0, 20.0, {0}),
+            candidate("B", 75.0, 94.0, 94.0, 80.0, {1}),
+            candidate("C", 65.0, 94.0, 94.0, 60.0, {1}),
+        ]
+        baseline = select_portfolio(candidates, 2, rules={"min_unique": 1}, kind="classic")
+        polished = select_portfolio(
+            candidates,
+            2,
+            rules={"min_unique": 1},
+            kind="classic",
+            refinement_passes=8,
+            refinement_polish_duplication=True,
+        )
+
+        baseline_sim = baseline["report"]["sim_summary"]
+        polished_sim = polished["report"]["sim_summary"]
+        self.assertGreater(polished["report"]["duplication_refinement_swaps"], 0)
+        self.assertLess(
+            polished_sim["average_duplicate_risk"],
+            baseline_sim["average_duplicate_risk"],
+        )
+        self.assertGreaterEqual(polished_sim["average_edge"], baseline_sim["average_edge"] - 0.5)
+        self.assertIn("local optimum", polished["report"]["refinement_stop_reason"])
+
     def test_showdown_captain_minimum_and_maximum(self):
         a = _player("A", "T1", "G1", 30, MinCptPct=25, MaxCptPct=25)
         players = [a] + [_player(name, "T2", "G1", 20 - index) for index, name in enumerate("BCDEFGHI", 1)]
