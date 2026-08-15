@@ -243,6 +243,13 @@ def create_build_diagnostic(
             "screening_scenarios": max(0, _integer(timing.get("screening_scenarios"))),
             "validation_scenarios": max(0, _integer(timing.get("validation_scenarios"))),
             "refinement_swaps": max(0, _integer(timing.get("refinement_swaps"))),
+            "duplication_refinement_swaps": max(
+                0, _integer(timing.get("duplication_refinement_swaps"))
+            ),
+            "refinement_attempts": max(0, _integer(timing.get("refinement_attempts"))),
+            "refinement_seconds": max(0.0, _number(timing.get("refinement_seconds"))),
+            "refinement_stop_reason": str(timing.get("refinement_stop_reason") or ""),
+            "time_remaining_seconds": max(0.0, _number(timing.get("time_remaining_seconds"))),
             "deep_time_limit_seconds": max(0.0, _number(timing.get("deep_time_limit_seconds"))),
             "deep_time_limit_reached": bool(timing.get("time_limit_reached")),
             "validation_top_overlap_pct": (
@@ -361,10 +368,24 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     if sim.get("preset_fit") is not None:
         lines.append(f"- Preset fit: {_number(sim.get('preset_fit')):.0f}/100")
     if deep_mode:
-        deep_status = "validation time budget used" if sim.get("deep_time_limit_reached") else "completed before time budget"
+        stop_reason = str(sim.get("refinement_stop_reason") or "").strip()
+        time_remaining = max(0.0, _number(sim.get("time_remaining_seconds")))
+        if sim.get("deep_time_limit_reached"):
+            deep_status = "time budget used"
+        elif "local optimum" in stop_reason:
+            deep_status = f"{stop_reason} with {time_remaining:.0f}s remaining"
+        elif stop_reason:
+            deep_status = stop_reason
+        else:
+            deep_status = "completed before time budget"
         lines.append(
             f"- Deep validation: {_integer(sim.get('validation_scenarios')):,} independent scenarios; "
-            f"{_integer(sim.get('refinement_swaps')):,} portfolio swaps; {deep_status}"
+            f"{_integer(sim.get('refinement_swaps')):,} portfolio swaps "
+            f"({_integer(sim.get('duplication_refinement_swaps')):,} duplication polish); {deep_status}"
+        )
+        lines.append(
+            f"- Deep polish: {_number(sim.get('refinement_seconds')):.2f}s across "
+            f"{_integer(sim.get('refinement_attempts')):,} search passes"
         )
         if sim.get("validation_top_overlap_pct") is not None:
             lines.append(

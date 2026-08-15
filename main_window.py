@@ -826,7 +826,13 @@ class LineupBuildWorker(QtCore.QObject):
                 "candidate_bank_count": 0,
                 "shortlist_count": 0,
                 "refinement_swaps": 0,
+                "duplication_refinement_swaps": 0,
+                "refinement_attempts": 0,
+                "refinement_seconds": 0.0,
+                "refinement_stop_reason": "disabled",
+                "time_remaining_seconds": 0.0,
                 "validation_top_overlap_pct": None,
+                "validation_time_limit_reached": False,
                 "time_limit_reached": False,
             }
             if use_nfl_sim and lineups and not self._cancel_event.is_set():
@@ -1028,7 +1034,7 @@ class LineupBuildWorker(QtCore.QObject):
                                     * 100.0,
                                     1,
                                 )
-                    deep_report["time_limit_reached"] = bool(
+                    deep_report["validation_time_limit_reached"] = bool(
                         time.perf_counter() >= validation_deadline
                     )
                 else:
@@ -1074,7 +1080,7 @@ class LineupBuildWorker(QtCore.QObject):
             self.progress.emit(
                 min(self.num_lineups, len(lineups) + len(self.retained_lineups)),
                 self.num_lineups,
-                "Phase 4 of 4 - selecting and refining the portfolio"
+                "Phase 4 of 4 - selecting, then polishing duplication with remaining time"
                 if deep_build else "Phase 3 of 3 - selecting portfolio",
             )
             selected = select_portfolio(
@@ -1083,16 +1089,31 @@ class LineupBuildWorker(QtCore.QObject):
                 rules=self.portfolio_rules,
                 kind=self.kind,
                 retained_lineups=self.retained_lineups,
-                refinement_passes=3 if deep_build else 0,
+                refinement_passes=256 if deep_build else 0,
                 refinement_stop_callback=refinement_should_stop if deep_build else None,
+                refinement_polish_duplication=deep_build,
             )
             if deep_build:
-                deep_report["refinement_swaps"] = int(
-                    selected.get("report", {}).get("refinement_swaps", 0) or 0
+                selection_report = selected.get("report", {})
+                deep_report["refinement_swaps"] = int(selection_report.get("refinement_swaps", 0) or 0)
+                deep_report["duplication_refinement_swaps"] = int(
+                    selection_report.get("duplication_refinement_swaps", 0) or 0
+                )
+                deep_report["refinement_attempts"] = int(
+                    selection_report.get("refinement_attempts", 0) or 0
+                )
+                deep_report["refinement_seconds"] = float(
+                    selection_report.get("refinement_seconds", 0.0) or 0.0
+                )
+                deep_report["refinement_stop_reason"] = str(
+                    selection_report.get("refinement_stop_reason") or "completed"
+                )
+                deep_report["time_remaining_seconds"] = max(
+                    0.0,
+                    deep_deadline - time.perf_counter(),
                 )
                 deep_report["time_limit_reached"] = bool(
-                    deep_report.get("time_limit_reached")
-                    or time.perf_counter() >= deep_deadline
+                    time.perf_counter() >= deep_deadline
                 )
                 if sim_report:
                     sim_report["deep_build"] = dict(deep_report)
@@ -1151,6 +1172,20 @@ class LineupBuildWorker(QtCore.QObject):
                 "validation_scenarios": int(deep_report.get("validation_scenarios", 0) or 0),
                 "shortlist_count": int(deep_report.get("shortlist_count", 0) or 0),
                 "refinement_swaps": int(deep_report.get("refinement_swaps", 0) or 0),
+                "duplication_refinement_swaps": int(
+                    deep_report.get("duplication_refinement_swaps", 0) or 0
+                ),
+                "refinement_attempts": int(deep_report.get("refinement_attempts", 0) or 0),
+                "refinement_seconds": float(deep_report.get("refinement_seconds", 0.0) or 0.0),
+                "refinement_stop_reason": str(
+                    deep_report.get("refinement_stop_reason") or "disabled"
+                ),
+                "time_remaining_seconds": float(
+                    deep_report.get("time_remaining_seconds", 0.0) or 0.0
+                ),
+                "validation_time_limit_reached": bool(
+                    deep_report.get("validation_time_limit_reached")
+                ),
                 "validation_top_overlap_pct": deep_report.get("validation_top_overlap_pct"),
                 "time_limit_reached": bool(deep_report.get("time_limit_reached")),
             }
@@ -2531,6 +2566,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _build_ui(self) -> None:
         root = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
+        root.setObjectName("workspaceSplitter")
+        self.workspace_splitter = root
         self.setCentralWidget(root)
 
         # Left panel
@@ -2562,7 +2599,7 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_live_settings.clicked.connect(self.on_live_data_settings)
         row1.addWidget(btn_live_settings)
 
-        btn_learning = QtWidgets.QPushButton("Results & Learning")
+        btn_learning = QtWidgets.QPushButton("Results and Learning")
         btn_learning.setObjectName("resultsLearningButton")
         btn_learning.setToolTip("Import DraftKings results and review local lineup performance.")
         btn_learning.clicked.connect(self.on_results_learning)
@@ -2929,6 +2966,13 @@ class MainWindow(QtWidgets.QMainWindow):
         command_layout.addSpacing(8)
         command_layout.addWidget(QtWidgets.QLabel("Sport"))
         command_layout.addWidget(self.combo_sport)
+
+        self.lbl_workspace_summary = QtWidgets.QLabel("")
+        self.lbl_workspace_summary.setObjectName("workspaceSummary")
+        self.lbl_workspace_summary.setToolTip(
+            "Current build recipe. Use Settings > Show Build Controls to change it."
+        )
+        command_layout.addWidget(self.lbl_workspace_summary)
         command_layout.addStretch(1)
 
         settings_button = QtWidgets.QToolButton(self)
@@ -2936,18 +2980,32 @@ class MainWindow(QtWidgets.QMainWindow):
         settings_button.setText("Settings")
         settings_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         settings_menu = QtWidgets.QMenu(settings_button)
+        settings_menu.addSection("Data")
         settings_menu.addAction("Live Data Settings", self.on_live_data_settings)
-        settings_menu.addAction("Results & Learning", self.on_results_learning)
-        settings_menu.addSeparator()
-        portfolio_insights_action = settings_menu.addAction("Portfolio Insightsâ€¦", self.on_portfolio_summary)
+        settings_menu.addAction("Results and Learning", self.on_results_learning)
+        settings_menu.addSection("Review")
+        portfolio_insights_action = settings_menu.addAction("Portfolio Insights...", self.on_portfolio_summary)
         portfolio_insights_action.setObjectName("portfolioInsightsAction")
         self.action_copy_build_report = settings_menu.addAction(
             "Copy Last Build Report", self.copy_last_build_report
         )
         self.action_copy_build_report.setObjectName("copyLastBuildReportAction")
         self.action_copy_build_report.setEnabled(bool(self.last_build_diagnostic))
-        build_history_action = settings_menu.addAction("Build History…", self.on_build_history)
+        build_history_action = settings_menu.addAction("Build History...", self.on_build_history)
         build_history_action.setObjectName("buildHistoryAction")
+
+        settings_menu.addSection("Workspace")
+        self.action_show_build_controls = settings_menu.addAction("Show Build Controls")
+        self.action_show_build_controls.setObjectName("showBuildControlsAction")
+        self.action_show_build_controls.setCheckable(True)
+        self.action_show_build_controls.setChecked(False)
+        self.action_show_build_controls.toggled.connect(self._set_build_controls_visible)
+
+        self.action_show_saved_portfolio = settings_menu.addAction("Show Saved Portfolio")
+        self.action_show_saved_portfolio.setObjectName("showSavedPortfolioAction")
+        self.action_show_saved_portfolio.setCheckable(True)
+        self.action_show_saved_portfolio.setChecked(False)
+        self.action_show_saved_portfolio.toggled.connect(self._set_saved_portfolio_visible)
         settings_button.setMenu(settings_menu)
         command_layout.addWidget(settings_button)
 
@@ -3057,8 +3115,9 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_save_tags.setVisible(True)
         btn_load_tags.setVisible(True)
         self._mlb_data_controls = [btn_load_mlb, btn_clear_mlb, btn_load_order, btn_clear_order]
-        self.tabs_workspace_controls.addTab(data_panel, "Data & Learning")
+        self.tabs_workspace_controls.addTab(data_panel, "Data and Learning")
         left_layout.addWidget(self.tabs_workspace_controls)
+        self.tabs_workspace_controls.setVisible(False)
 
 
         # Player table
@@ -3072,6 +3131,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tbl_players.setSortingEnabled(True)
         # Allow user to drag column widths; we still auto-size on refresh to keep the same initial look.
         self.tbl_players.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        for column in (0, 10, 14):
+            self.tbl_players.horizontalHeader().setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
         self.tbl_players.setAlternatingRowColors(True)
         self.tbl_players.verticalHeader().setDefaultSectionSize(27)
         self.tbl_players.verticalHeader().setVisible(False)
@@ -3123,10 +3184,20 @@ class MainWindow(QtWidgets.QMainWindow):
         exposure_grid.addWidget(btn_copy_own_to_max, 3, 0, 1, 2)
         inspector_layout.addWidget(exposure_group)
 
+        btn_max_exposure.setText("Set Max %")
+        btn_min_exposure.setText("Set Min %")
+        btn_max_cpt.setText("Set CPT Max")
+        btn_min_cpt.setText("Set CPT Min")
+        btn_clear_max.setText("Clear Max %")
+        btn_clear_min.setText("Clear Min %")
+        btn_copy_own_to_max.setText("Use Own% as Max")
+
         team_group = QtWidgets.QGroupBox("Team adjustment", self.player_inspector)
         team_group.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
         team_layout = QtWidgets.QHBoxLayout(team_group)
         team_layout.setContentsMargins(7, 7, 7, 6)
+        btn_team_boost.setText("Boost Team")
+        btn_team_fade.setText("Fade Team")
         team_layout.addWidget(btn_team_boost)
         team_layout.addWidget(btn_team_fade)
         inspector_layout.addWidget(team_group)
@@ -3140,10 +3211,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._captain_action_buttons = [btn_cpt_lock, btn_cpt_fade, btn_max_cpt, btn_min_cpt]
         for button in self._player_action_buttons + [btn_copy_own_to_max]:
             button.setMinimumHeight(22)
-        self.player_inspector.setMinimumWidth(238)
-        self.player_inspector.setMaximumWidth(300)
+        self.player_inspector.setMinimumWidth(270)
+        self.player_inspector.setMaximumWidth(330)
         player_area.addWidget(self.player_inspector)
-        player_area.setSizes([690, 255])
+        player_area.setSizes([690, 290])
         player_area.setStretchFactor(0, 1)
         player_area.setStretchFactor(1, 0)
         self.tbl_players.itemSelectionChanged.connect(self._update_player_inspector)
@@ -3170,10 +3241,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.edit_sd_cap.setFixedWidth(90)
         sd_controls.addWidget(self.edit_sd_cap)
 
-        btn_build_sd = QtWidgets.QPushButton("Generate")
-        btn_build_sd.clicked.connect(self.on_build_showdown)
-        sd_controls.addWidget(btn_build_sd)
-
         btn_sd_save_all = QtWidgets.QPushButton("Save All")
         btn_sd_save_all.clicked.connect(self.on_sd_save_all)
         sd_controls.addWidget(btn_sd_save_all)
@@ -3199,6 +3266,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tbl_sd.verticalHeader().setVisible(False)
         self.tbl_sd.verticalHeader().setDefaultSectionSize(27)
         self.tbl_sd.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self._fit_lineup_table_columns(self.tbl_sd)
         sd_layout.addWidget(self.tbl_sd, 2)
 
         tabs.addTab(tab_sd, "Showdown")
@@ -3219,10 +3287,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.edit_cl_cap = QtWidgets.QLineEdit("50000")
         self.edit_cl_cap.setFixedWidth(90)
         cl_controls.addWidget(self.edit_cl_cap)
-
-        btn_build_cl = QtWidgets.QPushButton("Generate")
-        btn_build_cl.clicked.connect(self.on_build_classic)
-        cl_controls.addWidget(btn_build_cl)
 
         btn_cl_save_all = QtWidgets.QPushButton("Save All")
         btn_cl_save_all.clicked.connect(self.on_cl_save_all)
@@ -3251,6 +3315,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tbl_cl.verticalHeader().setVisible(False)
         self.tbl_cl.verticalHeader().setDefaultSectionSize(27)
         self.tbl_cl.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self._fit_lineup_table_columns(self.tbl_cl)
         cl_layout.addWidget(self.tbl_cl, 2)
 
         tabs.addTab(tab_cl, "Classic")
@@ -3280,6 +3345,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Right panel (Saved)
         right = QtWidgets.QWidget(self)
+        right.setObjectName("savedPortfolioPanel")
+        self.saved_portfolio_panel = right
         right_layout = QtWidgets.QVBoxLayout(right)
 
         self.lbl_saved = QtWidgets.QLabel("Saved: 0 showdown | 0 classic")
@@ -3348,6 +3415,7 @@ class MainWindow(QtWidgets.QMainWindow):
         right_layout.addWidget(self.tabs_saved, 1)
 
         root.addWidget(right)
+        right.setVisible(self.action_show_saved_portfolio.isChecked())
         root.setSizes([900, 400])
 
         # Status bar
@@ -3404,6 +3472,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setStyleSheet(
             "#compactCommandBar { background: #171C25; border: 1px solid #30394A; border-radius: 8px; }"
             "#workspaceBrand { color: #F6F8FA; font-size: 11pt; font-weight: 700; letter-spacing: 1px; }"
+            "#workspaceSummary { color: #AEB7C5; padding: 0 8px; }"
             "#primaryGenerateButton { background: #2F6FED; border-color: #4D83F3; font-weight: 700; padding: 6px 14px; }"
             "#primaryGenerateButton:hover { background: #3B78EE; }"
             "#liveStatusStrip { background: #111722; border-left: 3px solid #2F6FED; border-radius: 3px; }"
@@ -3415,7 +3484,54 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_player_inspector()
         self.chk_nfl_contest_sim.toggled.connect(self._update_lineup_space_dashboard)
         self.combo_build_style.currentTextChanged.connect(self._update_lineup_space_dashboard)
+        self.combo_build_style.currentTextChanged.connect(self._update_workspace_summary)
+        self.combo_salary_strategy.currentTextChanged.connect(self._update_workspace_summary)
+        self.combo_field_preset.currentTextChanged.connect(self._update_workspace_summary)
+        self.combo_nfl_compute_mode.currentTextChanged.connect(self._update_workspace_summary)
+        self.chk_nfl_contest_sim.toggled.connect(self._update_workspace_summary)
+        self._update_workspace_summary()
         self._update_lineup_space_dashboard()
+
+    def _set_build_controls_visible(self, visible: bool) -> None:
+        """Reveal detailed controls only when the user asks for them."""
+        if hasattr(self, "tabs_workspace_controls"):
+            self.tabs_workspace_controls.setVisible(bool(visible))
+
+    @staticmethod
+    def _fit_lineup_table_columns(table: QtWidgets.QTableWidget) -> None:
+        """Use the output width for roster slots instead of leaving a blank gutter."""
+        header = table.horizontalHeader()
+        if table.columnCount() <= 0:
+            return
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Fixed)
+        header.resizeSection(0, 64)
+        for column in range(1, table.columnCount()):
+            header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
+
+    def _set_saved_portfolio_visible(self, visible: bool) -> None:
+        """Let the main player and lineup workspace use the full window."""
+        if hasattr(self, "saved_portfolio_panel"):
+            self.saved_portfolio_panel.setVisible(bool(visible))
+        if visible and hasattr(self, "workspace_splitter"):
+            sizes = self.workspace_splitter.sizes()
+            if len(sizes) == 2 and sizes[1] <= 0:
+                total = max(1, sum(sizes))
+                self.workspace_splitter.setSizes([max(650, total - 360), 360])
+
+    def _update_workspace_summary(self, *_args: Any) -> None:
+        """Keep the engine's active recipe visible while its controls are folded away."""
+        if not hasattr(self, "lbl_workspace_summary"):
+            return
+        style = self.combo_build_style.currentText() if hasattr(self, "combo_build_style") else "Strategic"
+        salary = self.combo_salary_strategy.currentText() if hasattr(self, "combo_salary_strategy") else "Near Cap"
+        parts = [style, salary]
+        if self._current_sport() == "NFL" and self._contest_mode() == "classic":
+            if self.chk_nfl_contest_sim.isChecked():
+                depth = "Deep" if self.combo_nfl_compute_mode.currentText().startswith("Deep") else "Fast"
+                parts.extend([f"SIM {depth}", self.combo_field_preset.currentText()])
+            else:
+                parts.append("SIM Off")
+        self.lbl_workspace_summary.setText(" | ".join(parts))
 
     def _on_primary_build(self) -> None:
         """Run the action represented by the primary command-bar button."""
@@ -3447,6 +3563,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_player_inspector()
         self._update_readiness_badge()
         self._lineup_space_phase = ""
+        self._update_workspace_summary()
         self._update_lineup_space_dashboard()
 
     def _update_sport_controls(self, sport: str) -> None:
@@ -5368,6 +5485,7 @@ class MainWindow(QtWidgets.QMainWindow):
         headers = ["Save"] + slots + ["TotalSal", "SIM Edge" if has_sim_edge else "Grade"]
         self.tbl_cl.setColumnCount(len(headers))
         self.tbl_cl.setHorizontalHeaderLabels(headers)
+        self._fit_lineup_table_columns(self.tbl_cl)
         self.tbl_cl.setRowCount(0)
         self.tbl_cl.setRowCount(len(self.last_classic))
 
@@ -5759,6 +5877,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tbl_players.setHorizontalHeaderLabels(player_headers)
             self.tbl_cl.setColumnCount(len(headers))
             self.tbl_cl.setHorizontalHeaderLabels(headers)
+            self._fit_lineup_table_columns(self.tbl_cl)
             self.tbl_saved_cl.setColumnCount(len(slots))
             self.tbl_saved_cl.setHorizontalHeaderLabels(slots)
             self.saved_classic.clear()
@@ -5773,6 +5892,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.btn_primary_build.setToolTip(f"Generate {sport_u} Classic lineups.")
             self.status.showMessage(f"Sport set to {sport_u}. Classic tab now uses: {', '.join(slots)}", 5000)
             self._update_readiness_badge()
+            self._update_workspace_summary()
         except Exception:
             pass
 
@@ -5998,6 +6118,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if state == QtCore.Qt.Checked:
             if lu not in self.saved_showdown:
                 self.saved_showdown.append(lu)
+            self.action_show_saved_portfolio.setChecked(True)
         else:
             if lu in self.saved_showdown:
                 self.saved_showdown.remove(lu)
@@ -6010,6 +6131,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if state == QtCore.Qt.Checked:
             if lu not in self.saved_classic:
                 self.saved_classic.append(lu)
+            self.action_show_saved_portfolio.setChecked(True)
         else:
             if lu in self.saved_classic:
                 self.saved_classic.remove(lu)

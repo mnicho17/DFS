@@ -104,6 +104,11 @@ class BuildDiagnosticsTests(unittest.TestCase):
             "screening_scenarios": 500,
             "validation_scenarios": 3000,
             "refinement_swaps": 2,
+            "duplication_refinement_swaps": 1,
+            "refinement_attempts": 5,
+            "refinement_seconds": 18.25,
+            "refinement_stop_reason": "duplication local optimum",
+            "time_remaining_seconds": 71.0,
             "deep_time_limit_seconds": 300.0,
             "deep_time_limit_reached": False,
             "validation_top_overlap_pct": 78.4,
@@ -113,8 +118,9 @@ class BuildDiagnosticsTests(unittest.TestCase):
 
         self.assertIn("Compute: Deep", report)
         self.assertIn("Deep shortlist: 900 candidates after 500 screening scenarios", report)
-        self.assertIn("3,000 independent scenarios; 2 portfolio swaps", report)
-        self.assertIn("completed before time budget", report)
+        self.assertIn("3,000 independent scenarios; 2 portfolio swaps (1 duplication polish)", report)
+        self.assertIn("duplication local optimum with 71s remaining", report)
+        self.assertIn("Deep polish: 18.25s across 5 search passes", report)
         self.assertIn("Independent top-candidate agreement: 78.4%", report)
 
     def test_history_keeps_newest_first_and_respects_limit(self):
