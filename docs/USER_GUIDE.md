@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.14.0 | Windows desktop app
+Version 1.14.1 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -54,6 +54,8 @@ Choose **Load Player CSV** and select a DraftKings salary file. The player table
 - Exposure columns hold maximum and minimum portfolio limits.
 
 Sort and inspect the table before generating. A strong optimizer cannot repair a poor or stale player pool.
+
+Player columns use content-aware alignment: descriptive fields stay left-aligned, team and position fields are centered, and numeric values align on the right. The table redistributes spare width among names, injury notes, roles, and tags when the window changes size.
 
 ## 5. NFL Game-Day Check and Vegas
 
@@ -177,6 +179,8 @@ The **Player exposure** tab lists every player's count, percentage, and lineup n
 - open **Portfolio Insights** before export and repair only the rows you do not want; and
 - correct warnings rather than assuming they are harmless.
 
+Generated-lineup columns keep salary and grade/SIM summaries compact so the roster slots receive most of the available width.
+
 Large candidate pools, NFL simulation, and restrictive portfolio rules take more time than a simple projection build.
 
 ![Deep Build control in the NFL Classic Build Strategy tab](images/deep-build.png)
@@ -276,7 +280,7 @@ Exact matching matters. An entry can remain unmatched if it was edited after exp
 
 See the separate Troubleshooting guide for more detail.
 
-## **13.** Local data and privacy
+## Section 13 - Local data and privacy
 
 The optimizer stores exports, imported results, slate snapshots, build diagnostics, and settings on the computer. Choose **Open Local History Folder** in Results & Learning to inspect the history location.
 
