@@ -102,9 +102,17 @@ Findings are separated into Pass, Review, and Block. Missing early-week odds rem
 
 NFL Classic SIM tooltips include a **Why this SIM Edge** breakdown showing each component's slate percentile, direction, and model weight. Build progress identifies candidate generation, field simulation, and portfolio selection as separate phases.
 
+## Portfolio Insights
+
+After generation, **Portfolio Insights** explains the finished lineup set without changing it. The overview reports grade distribution, salary and ownership shape, QB stacks, bring-backs, FLEX mix, candidate-source selection, scenario archetypes, leverage, duplication risk, preset fit, scenario coverage, concentration, and automatic review flags. A sortable lineup-detail table exposes the same signals one lineup at a time.
+
+Candidate provenance survives NFL contest simulation and portfolio selection, so the report can distinguish projection-led optimizer lineups, realistic field-shaped candidates, and correlated Ceiling, Balanced, Leverage, or Low-Dup scenario builds.
+
 ## Build diagnostics
 
-After lineup generation, **Settings > Copy Last Build Report** copies a shareable snapshot of the build-space count, pool size, candidate flow, phase timing, active strategy, portfolio rules, preset fit, and generalized warnings. The NFL SIM Edge candidate budget distinguishes projection-led optimizer candidates, realistic field-shaped candidates, and correlated scenario-built candidates. **Settings > Build History…** keeps the 25 most recent runs available for comparison and lets the user copy an earlier report or clear the history.
+After lineup generation, **Settings > Copy Last Build Report** copies a shareable snapshot of the build-space count, pool size, candidate flow, phase timing, active strategy, portfolio rules, preset fit, selected source mix, SIM quality, scenario coverage, and generalized warnings. The NFL SIM Edge candidate budget distinguishes projection-led optimizer candidates, realistic field-shaped candidates, and correlated scenario-built candidates. **Settings > Build History…** keeps the 25 most recent runs available, compares two selected runs side by side, and lets the user copy or clear the local reports.
+
+Unexpected interface exceptions are caught by an application-level safety handler. The user can copy the technical details and retain any valid on-screen lineups instead of losing the entire session without an explanation.
 
 Build diagnostics stay in the app's local history folder. They contain aggregate settings and counts only—not player names, lineup contents, source-file paths, or API keys.
 

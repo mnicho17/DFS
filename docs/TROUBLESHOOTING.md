@@ -43,11 +43,19 @@ Choose **Game-Day Check** immediately before generating and again near lock. The
 
 ## Fewer lineups were returned than requested
 
-Open **Portfolio Summary** and read the generation warning. The available player pool, locks, fades, exposures, uniqueness, team/game caps, and groups may not allow the requested count. The app returns the feasible portfolio it found rather than hiding the shortfall.
+Open **Portfolio Insights** and read the review flags. The available player pool, locks, fades, exposures, uniqueness, team/game caps, and groups may not allow the requested count. The app returns the feasible portfolio it found rather than hiding the shortfall.
 
 ## A 20-Max build closes after SIM completes
 
 Update to version 1.10.1 or later and run the build again. Earlier versions could close while displaying a completed build when the saved 20-Max field reference did not contain a duplication measurement. The lineup generation and SIM had already finished; the failure was in the final comparison message. Missing historical measurements now display as **n/a** and do not interrupt the results.
+
+## The app says it recovered from an error
+
+- The unexpected interface error was contained so the app could remain open. The action that triggered it may still be incomplete.
+- Choose **Copy Details** in the message and keep the text for troubleshooting.
+- Save or export any valid lineups still visible.
+- If the error followed generation, also choose **Settings > Copy Last Build Report** so the timing and aggregate settings can be reproduced.
+- Restart the app before repeating the failed action. Do not repeatedly submit or export if you are unsure which action completed.
 
 ## DraftKings rejects the export
 

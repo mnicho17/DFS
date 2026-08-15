@@ -773,6 +773,9 @@ class ShowdownOptimizer:
             if key and key not in key_to_player:
                 key_to_player[key] = player
         players = list(key_to_player.values())
+        player_key = {id(player): _pkey(player) for player in players}
+        flex_salary = {id(player): _salary(player) for player in players}
+        captain_salary = {id(player): _cpt_salary(player) for player in players}
 
         cap_cpt, cap_flex = _build_showdown_cap_maps(players, num_lineups)
         used_cpt: Dict[str, int] = {}
@@ -784,6 +787,27 @@ class ShowdownOptimizer:
         w_cpt = self.own_weight * 1.35 * own_s
         w_flex = self.own_weight * own_s
         style = _style_level(self.build_style)
+        captain_scores = {
+            id(player): (
+                _cpt_proj(player)
+                + w_cpt * _own(player)
+                + style * _showdown_player_script_bonus(player, captain=True)
+            )
+            for player in players
+        }
+        flex_scores = {
+            id(player): (
+                _proj(player)
+                + w_flex * _own(player)
+                + style * _showdown_player_script_bonus(player)
+            )
+            for player in players
+        }
+        pair_scores = {
+            tuple(sorted((id(first), id(second)))): _showdown_pair_script_bonus(first, second)
+            for index, first in enumerate(players)
+            for second in players[index + 1:]
+        }
 
         locked_cpt = next((p for p in players if p.get("LockCpt")), None)
         conflicting_locks = [
@@ -804,14 +828,13 @@ class ShowdownOptimizer:
             return []
 
         def cpt_score(player: Dict[str, Any]) -> float:
-            return (
-                _cpt_proj(player)
-                + w_cpt * _own(player)
-                + style * _showdown_player_script_bonus(player, captain=True)
-            )
+            return captain_scores[id(player)]
 
         def flex_score(player: Dict[str, Any]) -> float:
-            return _proj(player) + w_flex * _own(player) + style * _showdown_player_script_bonus(player)
+            return flex_scores[id(player)]
+
+        def pair_score(first: Dict[str, Any], second: Dict[str, Any]) -> float:
+            return pair_scores.get(tuple(sorted((id(first), id(second)))), 0.0)
 
         def under_cap(cap_map: Dict[str, int], used: Dict[str, int], key: str) -> bool:
             maximum = cap_map.get(key)
@@ -834,7 +857,7 @@ class ShowdownOptimizer:
                 p for p in players
                 if not p.get("FadeCpt")
                 and not p.get("LockFlex")
-                and under_cap(cap_cpt, used_cpt, _pkey(p))
+                and under_cap(cap_cpt, used_cpt, player_key[id(p)])
             ]
             if locked_cpt is not None:
                 cpt_pool = [locked_cpt] if locked_cpt in cpt_pool else []
@@ -846,42 +869,42 @@ class ShowdownOptimizer:
                 for p in cpt_pool
             ]
             captain = weighted_pick(cpt_pool, cpt_raw)
-            captain_key = _pkey(captain)
-            cap_left = self.salary_cap - _cpt_salary(captain)
+            captain_key = player_key[id(captain)]
+            cap_left = self.salary_cap - captain_salary[id(captain)]
             if cap_left < 0:
                 return None
 
             flex: List[Dict[str, Any]] = []
             for player in locked_flex:
-                key = _pkey(player)
+                key = player_key[id(player)]
                 if key == captain_key or not under_cap(cap_flex, used_flex, key):
                     return None
                 flex.append(player)
-                cap_left -= _salary(player)
+                cap_left -= flex_salary[id(player)]
             if cap_left < 0:
                 return None
 
             available = [
                 p for p in players
-                if _pkey(p) != captain_key
-                and _pkey(p) not in locked_flex_keys
+                if player_key[id(p)] != captain_key
+                and player_key[id(p)] not in locked_flex_keys
                 and not p.get("FadeFlex")
-                and under_cap(cap_flex, used_flex, _pkey(p))
+                and under_cap(cap_flex, used_flex, player_key[id(p)])
             ]
 
             while len(flex) < 5:
                 slots_after_pick = 4 - len(flex)
                 feasible: List[Dict[str, Any]] = []
                 raw_scores: List[float] = []
-                cheapest_options = sorted((_salary(p), _pkey(p)) for p in available)
+                cheapest_options = sorted((flex_salary[id(p)], player_key[id(p)]) for p in available)
                 for player in available:
-                    salary = _salary(player)
+                    salary = flex_salary[id(player)]
                     if salary > cap_left:
                         continue
-                    player_key = _pkey(player)
+                    candidate_key = player_key[id(player)]
                     cheapest_others = [
                         other_salary for other_salary, other_key in cheapest_options
-                        if other_key != player_key
+                        if other_key != candidate_key
                     ][:slots_after_pick]
                     if slots_after_pick and (
                         len(cheapest_others) < slots_after_pick
@@ -891,7 +914,7 @@ class ShowdownOptimizer:
                     raw = flex_score(player)
                     raw += 0.10 * (flex_score(player) / max(salary, 1.0)) * 1000.0
                     raw += style * sum(
-                        _showdown_pair_script_bonus(player, chosen)
+                        pair_score(player, chosen)
                         for chosen in [captain] + flex
                     )
                     feasible.append(player)
@@ -901,11 +924,11 @@ class ShowdownOptimizer:
 
                 chosen = weighted_pick(feasible, raw_scores)
                 flex.append(chosen)
-                cap_left -= _salary(chosen)
-                chosen_key = _pkey(chosen)
-                available = [p for p in available if _pkey(p) != chosen_key]
+                cap_left -= flex_salary[id(chosen)]
+                chosen_key = player_key[id(chosen)]
+                available = [p for p in available if player_key[id(p)] != chosen_key]
 
-            flex_keys = tuple(sorted(_pkey(p) for p in flex))
+            flex_keys = tuple(sorted(player_key[id(p)] for p in flex))
             signature = (captain_key, flex_keys)
             if signature in used_signatures:
                 return None
@@ -943,10 +966,10 @@ class ShowdownOptimizer:
             candidates.sort(key=lambda item: item[0], reverse=True)
             _, captain, flex, signature = candidates[0]
             used_signatures.add(signature)
-            captain_key = _pkey(captain)
+            captain_key = player_key[id(captain)]
             used_cpt[captain_key] = used_cpt.get(captain_key, 0) + 1
             for player in flex:
-                key = _pkey(player)
+                key = player_key[id(player)]
                 used_flex[key] = used_flex.get(key, 0) + 1
             out.append({"Captain": captain, "Flex": flex})
             failures = 0

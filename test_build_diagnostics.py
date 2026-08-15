@@ -9,6 +9,7 @@ from unittest import mock
 from build_diagnostics import (
     clear_build_history,
     create_build_diagnostic,
+    format_build_comparison,
     format_build_report,
     load_build_history,
     save_build_diagnostic,
@@ -115,6 +116,28 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertEqual(len(load_build_history()), 1)
         clear_build_history()
         self.assertEqual(load_build_history(), [])
+
+    def test_two_build_comparison_shows_speed_preset_and_sim_deltas(self):
+        earlier = self._diagnostic(total=20.0)
+        later = self._diagnostic(total=12.0)
+        earlier["created_at"] = "2026-08-14T10:00:00-04:00"
+        later["created_at"] = "2026-08-14T11:00:00-04:00"
+        earlier["settings"]["field_preset"] = "20-Max"
+        later["settings"]["field_preset"] = "150-Max"
+        earlier["sim"].update({"average_edge": 70, "average_duplicate_risk": 45})
+        later["sim"].update({
+            "average_edge": 78,
+            "average_duplicate_risk": 35,
+            "selected_sources": {"optimizer": 90, "scenario_built": 60},
+        })
+
+        comparison = format_build_comparison(earlier, later)
+
+        self.assertIn("Build Comparison", comparison)
+        self.assertIn("Preset: 20-Max -> 150-Max", comparison)
+        self.assertIn("Total: 20.00s -> 12.00s (-8.00s", comparison)
+        self.assertIn("Average Edge: 70.0 -> 78.0 (+8.0)", comparison)
+        self.assertIn("90 optimizer + 60 scenario-built", comparison)
 
 
 if __name__ == "__main__":

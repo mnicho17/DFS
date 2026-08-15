@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.10.1 | Windows desktop app
+Version 1.11.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -23,7 +23,7 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 4. Review **Build Strategy** and **Portfolio Rules**.
 5. For NFL Classic, turn on **NFL SIM Edge** when you want field-based tournament scoring.
 6. Choose **Generate** and wait for the progress message to finish.
-7. Save the lineups you want and inspect **Portfolio Summary**.
+7. Open **Portfolio Insights**, then save the lineups you want.
 8. Choose **Export CSV**, upload to DraftKings, and do a final pre-lock review.
 9. After the contest, import DraftKings results through **Results & Learning**.
 
@@ -117,7 +117,7 @@ Portfolio rules shape the whole set rather than one lineup at a time.
 - **Group: At Least 1** requires one or more selected players.
 - **Group: Never Together** blocks selected players from sharing a lineup.
 
-Locks, fades, salary, roster eligibility, and hard maximums remain hard rules. Some minimums and uniqueness targets may be relaxed when the requested portfolio is impossible. The completion message and **Portfolio Summary** disclose those shortfalls.
+Locks, fades, salary, roster eligibility, and hard maximums remain hard rules. Some minimums and uniqueness targets may be relaxed when the requested portfolio is impossible. The completion message and **Portfolio Insights** disclose those shortfalls.
 
 ![Portfolio Rules tab with uniqueness, concentration, and group controls](images/portfolio-rules.png)
 
@@ -131,9 +131,27 @@ During generation, the Space display follows the Generate, SIM, and Select stage
 
 To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate budget, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. For NFL SIM Edge, the budget separates optimizer candidates from additional field-shaped candidates. It also identifies the slowest phase so a performance problem can be isolated without guessing.
 
-Choose **Settings > Build History…** to compare the 25 most recent runs and copy any earlier report. History is saved automatically after a completed or cancelled build and stays on this computer. Choose **Clear History** in that window when you no longer need it.
+Choose **Settings > Build History…** to review the 25 most recent runs and copy any earlier report. Select exactly two rows and choose **Compare Two Builds** for a side-by-side view of candidate counts, timing, contest preset, SIM quality, duplication risk, scenario coverage, and selected candidate sources. Compare similar slates and inputs; a score change is not meaningful when the underlying assumptions changed. History is saved automatically after a completed or cancelled build and stays on this computer. Choose **Clear History** in that window when you no longer need it.
 
-![Build History comparing a completed NFL Classic performance report](images/build-history.png)
+![Build History comparing two aggregate NFL Classic runs](images/build-history.png)
+
+### Portfolio Insights
+
+Choose **Insights** beside the saved-lineup tables or **Settings > Portfolio Insights…** after generation. If lineups are saved, the report analyzes that saved set; otherwise it analyzes the currently generated lineups.
+
+The Overview explains:
+
+- A/B/C/D grade distribution and salary bands;
+- the selected mix of optimizer, field-shaped, and scenario-built lineups;
+- selected Ceiling, Balanced, Leverage, and Low-Dup scenario archetypes;
+- QB stacks, bring-backs, FLEX usage, and combined ownership shape;
+- average SIM Edge, leverage, duplication risk, and preset fit;
+- top-one-percent scenario coverage and portfolio concentration; and
+- automatic review flags for weak grades, high duplication, excessive unused salary, unstacked NFL lineups, or concentrated player cores.
+
+The sortable **Lineup details** tab shows the same signals for every lineup. Insights do not modify lineups, portfolio rules, or DraftKings exports.
+
+![Portfolio Insights explaining candidate sources, quality, construction, and review flags](images/portfolio-insights.png)
 
 ![Compact Lineup Space dashboard during NFL Classic generation](images/lineup-space.png)
 
@@ -143,7 +161,7 @@ Choose **Settings > Build History…** to compare the 25 most recent runs and co
 - inspect the grade or NFL SIM Edge details;
 - look for repeated cores and unexpected exposure;
 - save only lineups you might enter;
-- open **Portfolio Summary** before export; and
+- open **Portfolio Insights** before export; and
 - correct warnings rather than assuming they are harmless.
 
 Large candidate pools, NFL simulation, and restrictive portfolio rules take more time than a simple projection build.
@@ -173,7 +191,7 @@ Portfolio selection rewards coverage of different strong scenarios, but applies 
 
 ## 10. Save and export
 
-Use **Save All**, individual save choices, or **Unsave** to control the portfolio. Saved-lineup tools include player exposure, stack and team exposure, and a portfolio summary.
+Use **Save All**, individual save choices, or **Unsave** to control the portfolio. Saved-lineup tools include player exposure, stack and team exposure, and Portfolio Insights.
 
 Choose **Export CSV** from the correct contest tab. The export uses DraftKings roster IDs and does not add analysis columns that could break upload format. Every completed export is also recorded locally for Results & Learning.
 
@@ -227,7 +245,7 @@ Exact matching matters. An entry can remain unmatched if it was edited after exp
 
 **Slow generation:** reduce the lineup count while testing, remove conflicting minimum exposures or groups, and relax extreme uniqueness or concentration limits.
 
-**Too few lineups:** read the generation message and Portfolio Summary. The player pool and combined rules may not support the requested count.
+**Too few lineups:** read the generation message and Portfolio Insights. The player pool and combined rules may not support the requested count.
 
 **Rejected upload:** use a fresh DraftKings salary file from the exact slate and export again without modifying the upload columns.
 
@@ -235,9 +253,11 @@ Exact matching matters. An entry can remain unmatched if it was edited after exp
 
 **Incomplete learning comparison:** a preset with partial historical field data may show the real-field duplication value as **n/a**. Generation and results remain available; importing a complete matching field can fill the missing measurement.
 
+**Recovered error message:** the app contains unexpected interface errors instead of closing immediately. Copy the displayed technical details, keep or export any valid lineups still visible, and include the details with the last build report when reporting the problem.
+
 See the separate Troubleshooting guide for more detail.
 
-## Section 13: Local data and privacy
+## 13. Local data and privacy
 
 The optimizer stores exports, imported results, slate snapshots, build diagnostics, and settings on the computer. Choose **Open Local History Folder** in Results & Learning to inspect the history location.
 
