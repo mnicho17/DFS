@@ -109,6 +109,12 @@ Actionable findings can filter the player table directly. The adjacent **Space**
 
 Findings are separated into Pass, Review, and Block. Missing early-week odds remain a review item; hard problems such as missing positions, poor projection coverage, or a locked unavailable player are blockers. The audit never changes player settings or lineups.
 
+## Entry Safety and build recipes
+
+Every saved-lineup export now passes through **Entry Safety**. It audits the exact portfolio for roster and DraftKings-ID completeness, position validity, salary-cap compliance, repeated players, duplicate entries, unavailable players, and current portfolio-rule violations. Hard failures block export; questionable players, stale slate data, and intentional salary leverage remain review items that can be acknowledged. The check is report-only and never edits a lineup.
+
+Named build recipes are available under **Settings**. They preserve reusable contest and strategy choices—including lineup count, NFL preset, SIM depth, ownership behavior, salary strategy, uniqueness, and concentration caps—without carrying slate-specific player locks, fades, exposure limits, or groups into a future slate.
+
 NFL Classic SIM tooltips include a **Why this SIM Edge** breakdown showing each component's slate percentile, direction, and model weight. Build progress identifies candidate generation, field simulation, and portfolio selection as separate phases.
 
 ## Portfolio Insights

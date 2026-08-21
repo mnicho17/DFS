@@ -22,7 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 from PyQt5 import QtCore, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
-from main_window import BuildDiagnosticsDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog, StackExposureDialog  # noqa: E402
+from main_window import BuildDiagnosticsDialog, BuildRecipesDialog, EntrySafetyDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog, StackExposureDialog  # noqa: E402
 from build_diagnostics import create_build_diagnostic, save_build_diagnostic  # noqa: E402
 from nfl_simulation import SimLineup  # noqa: E402
 from optimizers import MultiSportClassicOptimizer  # noqa: E402
@@ -388,6 +388,44 @@ def capture(output_dir: Path) -> None:
         save_widget(readiness_dialog, output_dir / "slate-readiness.png")
         readiness_dialog.close()
         window._lineup_space_phase = ""
+
+        for player in players:
+            player["MaxPct"] = None
+            player["MinPct"] = None
+        export_rows = [window._classic_export_cells(lineup, "NFL") for lineup in lineups]
+        safety = window._entry_safety_report("classic", list(lineups), export_rows, 50000.0)
+        safety_dialog = EntrySafetyDialog(safety, window)
+        safety_dialog.resize(1040, 720)
+        safety_dialog.show()
+        app.processEvents()
+        save_widget(safety_dialog, output_dir / "entry-safety.png")
+        safety_dialog.close()
+
+        recipes_dialog = BuildRecipesDialog({
+            "NFL 20-Max Fast": {
+                "sport": "NFL", "contest_kind": "classic", "requested_lineups": 20,
+                "build_style": "Strategic", "salary_strategy": "Near Cap",
+                "nfl_sim_enabled": True, "nfl_field_preset": "20-Max",
+                "nfl_compute_mode": "Fast (default)", "min_unique": 2,
+            },
+            "NFL 150-Max Deep": {
+                "sport": "NFL", "contest_kind": "classic", "requested_lineups": 150,
+                "build_style": "Strategic", "salary_strategy": "Near Cap",
+                "nfl_sim_enabled": True, "nfl_field_preset": "150-Max",
+                "nfl_compute_mode": "Deep (up to 5 min)", "min_unique": 2,
+            },
+            "NFL Single Entry": {
+                "sport": "NFL", "contest_kind": "classic", "requested_lineups": 1,
+                "build_style": "Balanced", "salary_strategy": "Maximize Salary",
+                "nfl_sim_enabled": True, "nfl_field_preset": "Single Entry",
+                "nfl_compute_mode": "Fast (default)", "min_unique": 1,
+            },
+        }, window)
+        recipes_dialog.resize(720, 300)
+        recipes_dialog.show()
+        app.processEvents()
+        save_widget(recipes_dialog, output_dir / "build-recipes.png")
+        recipes_dialog.close()
 
         window.spin_portfolio_unique.setValue(2)
         window.spin_team_exposure.setValue(70.0)

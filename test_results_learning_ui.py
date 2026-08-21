@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtCore, QtWidgets
 
-from main_window import BuildDiagnosticsDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
+from main_window import BuildDiagnosticsDialog, EntrySafetyDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
 from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
 from learning_db import generate_learning_report
 from nfl_simulation import SimLineup
@@ -73,6 +73,8 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIn("Readiness", window.findChild(QtWidgets.QLabel, "slateReadinessStatus").text())
         self.assertIn("Lineup space", window.findChild(QtWidgets.QLabel, "lineupSpaceStatus").text())
         self.assertIsNotNone(window.findChild(QtWidgets.QToolButton, "clearReadinessFilterButton"))
+        self.assertIsNotNone(window.findChild(QtWidgets.QAction, "saveBuildRecipeAction"))
+        self.assertIsNotNone(window.findChild(QtWidgets.QAction, "manageBuildRecipesAction"))
         copy_action = window.findChild(QtWidgets.QAction, "copyLastBuildReportAction")
         self.assertIsNotNone(copy_action)
         self.assertFalse(copy_action.isEnabled())
@@ -836,6 +838,8 @@ class ResultsLearningUITests(unittest.TestCase):
             QtWidgets.QFileDialog, "getSaveFileName", return_value=(export_path, "CSV Files (*.csv)")
         ), mock.patch.object(
             QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.Yes
+        ), mock.patch.object(
+            EntrySafetyDialog, "exec_", return_value=QtWidgets.QDialog.Accepted
         ), mock.patch.object(QtWidgets.QMessageBox, "information"):
             window.on_export_saved("showdown")
         self.assertTrue(os.path.isfile(export_path))
