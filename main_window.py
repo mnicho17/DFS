@@ -1509,7 +1509,7 @@ class ExposureDialog(QtWidgets.QDialog):
 
 
 class StackExposureDialog(QtWidgets.QDialog):
-    """Saved lineup exposure dashboard focused on teams, stacks, salary, and pitchers."""
+    """Saved-lineup exposure dashboard with sport-specific views."""
 
     def __init__(
         self,
@@ -1535,6 +1535,7 @@ class StackExposureDialog(QtWidgets.QDialog):
         layout.addWidget(summary)
 
         tabs = QtWidgets.QTabWidget(self)
+        tabs.setObjectName("stackExposureTabs")
         layout.addWidget(tabs, 1)
 
         self.tbl_team = self._make_table(["Team", "Lineups", "Exposure %", "Avg Players", "Max Players", "Avg Salary", "Avg Proj"])
@@ -1546,13 +1547,17 @@ class StackExposureDialog(QtWidgets.QDialog):
         self.tbl_salary = self._make_table(["Salary Band", "Count", "Exposure %", "Avg Salary", "Avg Grade"])
         self._add_tab(tabs, "Salary Bands", self.tbl_salary)
 
-        self.tbl_pitcher = self._make_table(["Pitcher", "Team", "Count", "Exposure %", "Avg Salary", "Avg Proj"])
-        self._add_tab(tabs, "Pitchers", self.tbl_pitcher)
+        self.tbl_pitcher = None
+        if self.sport == "MLB":
+            self.tbl_pitcher = self._make_table(["Pitcher", "Team", "Count", "Exposure %", "Avg Salary", "Avg Proj"])
+            self.tbl_pitcher.setObjectName("stackExposurePitchers")
+            self._add_tab(tabs, "Pitchers", self.tbl_pitcher)
 
         self._load_team(team_rows)
         self._load_stack(stack_rows)
         self._load_salary(salary_rows)
-        self._load_pitcher(pitcher_rows)
+        if self.tbl_pitcher is not None:
+            self._load_pitcher(pitcher_rows)
 
         btn_close = QtWidgets.QPushButton("Close")
         btn_close.clicked.connect(self.close)

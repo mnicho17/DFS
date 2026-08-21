@@ -16,6 +16,7 @@ from reportlab.platypus import (
     HRFlowable,
     Image as RLImage,
     KeepTogether,
+    CondPageBreak,
     ListFlowable,
     ListItem,
     PageBreak,
@@ -147,7 +148,8 @@ def cover_story(version: str, styles):
         Spacer(1, 0.36 * inch),
         Paragraph(
             "Use this guide alongside a fresh DraftKings salary file and a final pre-lock review. "
-            "Simulation and live-data outputs are decision aids, not guarantees.",
+            "Simulation and live-data outputs are decision aids, not guarantees. Daily fantasy sports "
+            "involve financial risk, so use contest limits you can afford and follow applicable rules.",
             styles["callout"],
         ),
         PageBreak(),
@@ -205,7 +207,8 @@ def markdown_story(markdown: str, styles, source_dir: Path):
             flush_paragraph()
             flush_list()
             if seen_h2:
-                story.append(PageBreak())
+                story.append(CondPageBreak(1.35 * inch))
+                story.append(Spacer(1, 12))
             seen_h2 = True
             story.append(Paragraph(inline_markup(line[3:]), styles["h2"]))
             story.append(HRFlowable(width="100%", thickness=1.2, color=BLUE, spaceAfter=11))
@@ -229,18 +232,30 @@ def markdown_story(markdown: str, styles, source_dir: Path):
             ]))
             story.extend([box, Spacer(1, 8)])
             continue
-        image_match = re.fullmatch(r"!\[([^]]*)\]\(([^)]+)\)", line)
+        image_match = re.fullmatch(r"!\[([^]]*)\]\(([^)]+)\)(?:\{(medium|compact|thumb)\})?", line)
         if image_match:
             flush_paragraph()
             flush_list()
-            alt_text, relative_path = image_match.groups()
+            alt_text, relative_path, display_mode = image_match.groups()
             image_path = (source_dir / relative_path).resolve()
             if not image_path.exists():
                 raise FileNotFoundError(f"Guide image not found: {image_path}")
             figure = RLImage(str(image_path))
+            max_width = (
+                3.6 * inch if display_mode == "thumb"
+                else 4.75 * inch if display_mode == "compact"
+                else 5.6 * inch if display_mode == "medium"
+                else 6.25 * inch
+            )
+            max_height = (
+                0.95 * inch if display_mode == "thumb"
+                else 1.65 * inch if display_mode == "compact"
+                else 3.0 * inch if display_mode == "medium"
+                else 4.35 * inch
+            )
             scale = min(
-                (6.25 * inch) / figure.imageWidth,
-                (4.35 * inch) / figure.imageHeight,
+                max_width / figure.imageWidth,
+                max_height / figure.imageHeight,
                 1.0,
             )
             figure.drawWidth *= scale
@@ -286,7 +301,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", default="docs/USER_GUIDE.md")
     parser.add_argument("--output", default="dist/DFS-Optimizer-User-Guide.pdf")
-    parser.add_argument("--version", default="1.14.1")
+    parser.add_argument("--version", default="1.14.2")
     args = parser.parse_args()
     build_pdf(Path(args.source), Path(args.output), args.version)
     print(Path(args.output).resolve())

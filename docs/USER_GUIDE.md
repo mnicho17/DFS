@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.14.1 | Windows desktop app
+Version 1.14.2 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -14,6 +14,8 @@ DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It com
 4. Double-click the executable. Python is not required.
 
 The app is currently unsigned. Windows may identify it as coming from an unknown publisher. Only use the executable from this repository's Releases page.
+
+![The main workspace that opens after installation](images/main-workspace.png){compact}
 
 ## 2. Five-minute workflow
 
@@ -57,6 +59,8 @@ Sort and inspect the table before generating. A strong optimizer cannot repair a
 
 Player columns use content-aware alignment: descriptive fields stay left-aligned, team and position fields are centered, and numeric values align on the right. The table redistributes spare width among names, injury notes, roles, and tags when the window changes size.
 
+![The player table as the central slate workspace](images/main-workspace.png){compact}
+
 ## 5. NFL Game-Day Check and Vegas
 
 For NFL slates, **Game-Day Check** refreshes structured availability, injuries, practice participation, roster status, news notes, and depth-chart roles. The app automatically excludes confirmed inactive, out, injured-reserve, suspended, and practice-squad players unless they were manually locked.
@@ -74,6 +78,8 @@ The key remains in the current Windows user's local settings. If lines are unava
 Run the check again near lock. No automated data source is a substitute for late-news review.
 
 ### Slate Readiness
+
+![Slate Readiness before the final pre-lock review](images/slate-readiness.png){compact}
 
 Choose **Slate Readiness** for a report-only preflight before generation and again before export. It gives the loaded slate a 0-100 score and separates findings into **Pass**, **Review**, and **Block**.
 
@@ -138,9 +144,9 @@ Deep Build shows four stages: Explore, Screen, Validate, and Select/Refine. Its 
 
 To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate budget, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. For NFL SIM Edge, the budget separates optimizer candidates from additional field-shaped and scenario-built candidates. Deep reports also show the coarse shortlist, independent validation count, top-candidate agreement between the two SIM passes, portfolio swaps, and time-budget status. The report identifies the slowest phase so a performance problem can be isolated without guessing.
 
-Choose **Settings > Build History…** to review the 25 most recent runs and copy any earlier report. Select exactly two rows and choose **Compare Two Builds** for a side-by-side view of candidate counts, timing, contest preset, SIM quality, duplication risk, scenario coverage, and selected candidate sources. Compare similar slates and inputs; a score change is not meaningful when the underlying assumptions changed. History is saved automatically after a completed or cancelled build and stays on this computer. Choose **Clear History** in that window when you no longer need it.
+![Build History comparing two aggregate NFL Classic runs](images/build-history.png){compact}
 
-![Build History comparing two aggregate NFL Classic runs](images/build-history.png)
+Choose **Settings > Build History…** to review the 25 most recent runs and copy any earlier report. Select exactly two rows and choose **Compare Two Builds** for a side-by-side view of candidate counts, timing, contest preset, SIM quality, duplication risk, scenario coverage, and selected candidate sources. Compare similar slates and inputs; a score change is not meaningful when the underlying assumptions changed. History is saved automatically after a completed or cancelled build and stays on this computer. Choose **Clear History** in that window when you no longer need it.
 
 ### Portfolio Insights
 
@@ -166,9 +172,7 @@ The **Player exposure** tab lists every player's count, percentage, and lineup n
 
 ![Portfolio Insights filtering review signals and selecting rows for removal or replacement](images/portfolio-insights.png)
 
-![Player exposure drill-down showing the exact lineups that contain each player](images/portfolio-exposure.png)
-
-![Compact Lineup Space dashboard during NFL Classic generation](images/lineup-space.png)
+![Compact Lineup Space dashboard during NFL Classic generation](images/lineup-space.png){compact}
 
 ### After generation
 
@@ -189,6 +193,8 @@ Large candidate pools, NFL simulation, and restrictive portfolio rules take more
 
 NFL SIM Edge is for NFL Classic tournament decisions. It combines projection-led optimizer lineups, realistic field-shaped lineups, and lineups built from correlated ceiling, balanced, leverage, and low-duplication scenarios. The app evaluates them against a representative opponent field with a separate set of simulated outcomes, then selects a portfolio that covers different strong scenarios. Separating candidate creation from evaluation reduces overfitting.
 
+![NFL Classic results with slate-relative SIM scoring](images/nfl-sim-results.png){compact}
+
 Deep Build strengthens that separation. A coarse random stream screens the expanded bank, while a different random stream validates only the strongest source-diverse shortlist. The final pass uses at least 2,500 scenarios even when the Fast scenario control is lower. A local search first improves the overall portfolio, then uses spare time for duplication polish. A polish replacement must lower duplication risk, preserve the combined Edge/return signal within a narrow guardrail, and satisfy every hard group, uniqueness, player, team, and game limit. The build report records total swaps, duplication-polish swaps, search passes, stop reason, and unused time.
 
 Choose the preset that matches the contest's maximum entries per person. Presets are conservative starting assumptions, not promises. After at least three complete fields, 1,000 entries, and 70% player metadata coverage have been imported for that preset, the app can blend measured salary, construction, and winning-ownership patterns into its baseline. Until then, measurements remain report-only.
@@ -208,11 +214,13 @@ The Classic results show Edge and top-one-percent rate. The **Why this SIM Edge*
 
 Portfolio selection rewards coverage of different strong scenarios, but applies a soft quality guardrail below the B-grade boundary so novelty alone does not rescue a weak candidate. Do not choose by one number alone. Compare ceiling, top-five rate, leverage, duplication, construction, news risk, preset fit, and portfolio coverage.
 
-![NFL Classic results ranked with slate-relative SIM Edge and top-one-percent rates](images/nfl-sim-results.png)
-
 ## 10. Save and export
 
 Use **Save All**, individual save choices, or **Unsave** to control the portfolio. Saved-lineup tools include player exposure, stack and team exposure, and Portfolio Insights.
+
+Open **Settings > Stack / Team / Salary Exposure** to review saved-lineup concentration and construction. The dashboard is sport-aware: NFL and other non-baseball sports show team, stack-shape, and salary-band views, while the **Pitchers** tab appears only for MLB.
+
+![NFL saved-lineup exposure views without the MLB-only Pitchers tab](images/stack-exposure-nfl.png){medium}
 
 Choose **Export CSV** from the correct contest tab. The export uses DraftKings roster IDs and does not add analysis columns that could break upload format. Every completed export is also recorded locally for Results & Learning.
 
@@ -226,6 +234,8 @@ Before submitting:
 ## 11. Results & Learning
 
 The app can compare exact exported rosters with DraftKings standings or contest-history CSV files. It can also measure the whole opponent field when the selected file contains complete standings.
+
+![Results and Learning controls used after a contest](images/results-learning.png){compact}
 
 1. Export the lineups you actually plan to use.
 2. After the contest, download the DraftKings result CSV.
@@ -282,14 +292,8 @@ See the separate Troubleshooting guide for more detail.
 
 ## Section 13 - Local data and privacy
 
-The optimizer stores exports, imported results, slate snapshots, build diagnostics, and settings on the computer. Choose **Open Local History Folder** in Results & Learning to inspect the history location.
+The optimizer stores exports, imported results, slate snapshots, build diagnostics, and settings on the computer. Choose **Open Local History Folder** in Results & Learning to inspect the history location, and back it up if the accumulated learning record matters to you.
+
+![Local history controls in Results and Learning](images/results-learning.png){thumb}
 
 Build diagnostics contain aggregate settings, timing, counts, and generalized warning categories. They do not store player names, lineup contents, salary-file paths, or API keys.
-
-The Odds API key is stored in the current Windows user's local settings. It is not placed in lineup exports, logs, or this repository.
-
-Back up the local history folder if the accumulated learning record matters to you.
-
-## 14. Responsible use
-
-Daily fantasy sports involve financial risk. Simulations describe modeled possibilities, not certainty. Use contest limits you can afford, follow applicable laws and platform rules, and perform your own final review before lock.
