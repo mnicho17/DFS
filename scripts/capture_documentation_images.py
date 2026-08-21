@@ -22,7 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 from PyQt5 import QtCore, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
-from main_window import BuildDiagnosticsDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog  # noqa: E402
+from main_window import BuildDiagnosticsDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog, StackExposureDialog  # noqa: E402
 from build_diagnostics import create_build_diagnostic, save_build_diagnostic  # noqa: E402
 from nfl_simulation import SimLineup  # noqa: E402
 from optimizers import MultiSportClassicOptimizer  # noqa: E402
@@ -278,6 +278,23 @@ def capture(output_dir: Path) -> None:
         app.processEvents()
         save_widget(insights_dialog, output_dir / "portfolio-exposure.png")
         insights_dialog.close()
+
+        window.saved_classic = list(lineups)
+        stack_payload = window._stack_exposure_payload()
+        stack_dialog = StackExposureDialog(
+            window,
+            sport=str(stack_payload.get("sport", "NFL")),
+            total_lineups=int(stack_payload.get("total", 0) or 0),
+            team_rows=stack_payload.get("team_rows", []),
+            stack_rows=stack_payload.get("stack_rows", []),
+            salary_rows=stack_payload.get("salary_rows", []),
+            pitcher_rows=stack_payload.get("pitcher_rows", []),
+        )
+        stack_dialog.resize(1040, 740)
+        stack_dialog.show()
+        app.processEvents()
+        save_widget(stack_dialog, output_dir / "stack-exposure-nfl.png")
+        stack_dialog.close()
 
         diagnostic = create_build_diagnostic(
             context={

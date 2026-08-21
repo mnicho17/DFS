@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtCore, QtWidgets
 
-from main_window import BuildDiagnosticsDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, _deep_shortlist
+from main_window import BuildDiagnosticsDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
 from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
 from learning_db import generate_learning_report
 from nfl_simulation import SimLineup
@@ -215,6 +215,33 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIsNotNone(window.findChild(QtWidgets.QGroupBox, "playerInspector"))
         self.assertEqual(window.tabs_saved.count(), 2)
         window.close()
+
+    def test_stack_exposure_only_shows_pitchers_for_mlb(self):
+        common = {
+            "total_lineups": 2,
+            "team_rows": [],
+            "stack_rows": [],
+            "salary_rows": [],
+            "pitcher_rows": [{
+                "Pitcher": "Example Pitcher", "Team": "SEA", "Count": 1,
+                "Pct": 50.0, "AvgSalary": 9000, "AvgProj": 22.5,
+            }],
+        }
+
+        nfl = StackExposureDialog(None, sport="NFL", **common)
+        nfl_tabs = nfl.findChild(QtWidgets.QTabWidget, "stackExposureTabs")
+        self.assertEqual(
+            [nfl_tabs.tabText(i) for i in range(nfl_tabs.count())],
+            ["Team Exposure", "Stack Shapes", "Salary Bands"],
+        )
+        self.assertIsNone(nfl.tbl_pitcher)
+        nfl.close()
+
+        mlb = StackExposureDialog(None, sport="MLB", **common)
+        mlb_tabs = mlb.findChild(QtWidgets.QTabWidget, "stackExposureTabs")
+        self.assertEqual(mlb_tabs.tabText(mlb_tabs.count() - 1), "Pitchers")
+        self.assertEqual(mlb.tbl_pitcher.rowCount(), 1)
+        mlb.close()
 
     def test_player_columns_follow_the_selected_sport(self):
         window = MainWindow()
