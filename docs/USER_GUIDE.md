@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.14.2 | Windows desktop app
+Version 1.15.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -21,19 +21,19 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 
 1. Choose the sport and load the DraftKings salary CSV.
 2. Choose **Slate Readiness**. For NFL, it refreshes a stale game-day check before auditing the slate.
-3. Choose **Showdown** or **Classic** and set the lineup count.
+3. Choose **Showdown** or **Classic** and set the lineup count. If you saved a setup earlier, choose **Settings > Apply or Delete Recipes** first.
 4. Review **Build Strategy** and **Portfolio Rules**.
 5. For NFL Classic, turn on **NFL SIM Edge** when you want field-based tournament scoring.
 6. Choose **Generate** and wait for the progress message to finish.
 7. Open **Portfolio Insights**. Filter review signals, inspect player exposure, and remove or replace weak rows before saving.
-8. Choose **Export CSV**, upload to DraftKings, and do a final pre-lock review.
+8. Choose **Export CSV**, resolve any Entry Safety blockers, review the remaining cautions, then upload to DraftKings.
 9. After the contest, import DraftKings results through **Results & Learning**.
 
 ![Simplified NFL workspace with the active recipe, player pool, and Classic lineup results](images/main-workspace.png)
 
 The pictured examples use representative NFL data. Player names, projections, ownership, live context, odds, and SIM results will differ by slate.
 
-The detailed Build Strategy, Portfolio Rules, and Data and Learning controls are folded away at startup so the player pool and generated lineups get most of the window. The quiet recipe summary beside the sport shows the active build style, salary approach, and—when applicable—SIM depth and contest preset. Choose **Settings > Show Build Controls** to change the detailed recipe. Choose **Settings > Show Saved Portfolio** to hide or restore the saved-lineup panel.
+The detailed Build Strategy, Portfolio Rules, and Data and Learning controls are folded away at startup so the player pool and generated lineups get most of the window. The quiet recipe summary beside the sport shows the active build style, salary approach, and, when applicable, SIM depth and contest preset. Choose **Settings > Show Build Controls** to change the detailed recipe. Choose **Settings > Show Saved Portfolio** to hide or restore the saved-lineup panel.
 
 ## 3. Classic and Showdown
 
@@ -83,7 +83,7 @@ Run the check again near lock. No automated data source is a substitute for late
 
 Choose **Slate Readiness** for a report-only preflight before generation and again before export. It gives the loaded slate a 0-100 score and separates findings into **Pass**, **Review**, and **Block**.
 
-Select a finding and choose **Show Players**—or double-click it—to filter the player table to the affected players. Choose **Clear player filter** in the status strip to restore the full table. This is a visual filter only; it never changes lineup eligibility by itself.
+Select a finding and choose **Show Players**, or double-click it, to filter the player table to the affected players. Choose **Clear player filter** in the status strip to restore the full table. This is a visual filter only; it never changes lineup eligibility by itself.
 
 The audit checks:
 
@@ -112,9 +112,15 @@ The **Build Strategy** tab controls how candidates are created and ranked. Avail
 - Use salary strategy to discourage obviously under-cap builds without forcing every lineup to spend the full cap.
 - For NFL Classic, enable **NFL SIM Edge** for correlated scenario and field evaluation.
 - For NFL Classic, choose the contest entry-limit preset: **Single Entry**, **3-Max**, **20-Max**, or **150-Max**. This changes the opponent field size, salary floor, ownership emphasis, stack mix, bring-back rate, and FLEX mix used by the SIM.
-- Choose **Build depth: Fast (default)** for normal generation. Choose **Deep (up to 5 min)** when you want the app to spend substantially more compute exploring, screening, and independently validating candidates. Deep applies only to NFL Classic with SIM Edge on.
+- Choose **Build depth: Fast (default)** for normal builds. Choose **Deep (up to 5 min)** for broader NFL Classic SIM exploration and independent validation.
 
-Start with moderate settings. Combine only rules you can explain and review.
+### Saved build recipes
+
+Choose **Settings > Save Current Recipe** to give the current build configuration a reusable name. A recipe remembers the sport, contest type, lineup count, salary cap, ownership settings, build style, salary strategy, NFL SIM settings, contest preset, build depth, uniqueness, team and game caps, and ownership balancing.
+
+Recipes intentionally do **not** save player locks, fades, exposure limits, or groups. Those choices belong to one slate and could be dangerous if silently carried into another. Choose **Settings > Apply or Delete Recipes** to inspect, apply, or remove a saved recipe. When a recipe changes sports, the app warns before clearing the current Classic results.
+
+![Saved build recipes for common NFL contest types](images/build-recipes.png){medium}
 
 ## 7. Portfolio Rules
 
@@ -170,7 +176,7 @@ The sortable **Lineup details** tab identifies the exact rows behind those signa
 
 The **Player exposure** tab lists every player's count, percentage, and lineup numbers. Select a player and choose **Show selected player's lineups** to jump back to the exact affected rows. This is useful for reviewing a concentrated core before deciding whether individual lineups need replacement.
 
-![Portfolio Insights filtering review signals and selecting rows for removal or replacement](images/portfolio-insights.png)
+![Portfolio Insights filtering review signals and selecting rows for removal or replacement](images/portfolio-insights.png){compact}
 
 ![Compact Lineup Space dashboard during NFL Classic generation](images/lineup-space.png){compact}
 
@@ -224,6 +230,12 @@ Open **Settings > Stack / Team / Salary Exposure** to review saved-lineup concen
 
 Choose **Export CSV** from the correct contest tab. The export uses DraftKings roster IDs and does not add analysis columns that could break upload format. Every completed export is also recorded locally for Results & Learning.
 
+Before the save dialog opens, **Entry Safety** checks the exact saved portfolio, not merely the last generated set. It blocks export when it finds a missing or position-invalid roster, missing DraftKings ID, a player repeated within one lineup, an over-cap lineup, duplicate entries, an unavailable player, or a violation of the current exposure, group, concentration, or uniqueness rules.
+
+Questionable players, stale or incomplete slate data, and unusually low salary use appear as **Review** items. Those may be intentional, so Entry Safety allows **Export Anyway** after you inspect them. A blocker disables export until the saved portfolio is repaired. Choose **Copy Report** when you want to preserve the full check. Entry Safety never changes a lineup or setting.
+
+![Entry Safety reviewing the exact saved portfolio before export](images/entry-safety.png){medium}
+
 Before submitting:
 
 1. Confirm the slate and contest type.
@@ -243,6 +255,8 @@ The app can compare exact exported rosters with DraftKings standings or contest-
 4. Choose **Import DraftKings Results** and select the file.
 5. For complete NFL standings, choose **Attach Matching Salaries** and select the DraftKings salary CSV from that exact historical slate.
 6. Review the match rate, ROI, cash rate, finish percentile, projection error, and guarded breakdowns.
+
+![Results and Learning summary after matched entries are imported](images/results-learning.png){compact}
 
 The app reports general outcomes and projection calibration. Starting with v1.6.1, NFL SIM exports also retain their original Edge, top-finish, cash, return, leverage, and duplication estimates. When the Results & Learning summary shows matched SIM results, the report compares predicted and actual top-one-percent, top-five-percent, and cash rates. It also checks whether Edge tracks finish percentile and whether the return index tracks net results.
 
@@ -266,19 +280,17 @@ After generating and exporting an NFL Classic SIM build for the same preset, reo
 
 SIM validation is labeled directional until at least 50 matched entries. Complete-field learning has separate, stricter guardrails. When those guardrails are met, only a small part of the measured winning-ownership profile affects candidate scoring, while salary and construction patterns are blended conservatively into the preset.
 
-![Results and Learning report comparing predicted SIM rates with actual outcomes](images/results-learning.png)
-
 Exact matching matters. An entry can remain unmatched if it was edited after export or if its result row lacks a parseable lineup.
 
 ## 12. Troubleshooting
 
 **No Vegas values:** save a valid Odds API key, refresh Game-Day Check, and read the status message. Lines may not be posted yet.
 
-**Slow generation:** reduce the lineup count while testing, remove conflicting minimum exposures or groups, and relax extreme uniqueness or concentration limits.
+**Slow generation:** test fewer lineups and relax conflicting minimums, groups, uniqueness, or concentration limits.
 
-**Too few lineups:** read the generation message and Portfolio Insights. The player pool and combined rules may not support the requested count.
+**Too few lineups:** read the generation message and Portfolio Insights; the pool may not support all current rules.
 
-**Replacement could not fill every selected row:** retained lineups stay fixed, so the remaining pool and current uniqueness, exposure, group, team, or game rules may leave no legal alternative. Replace fewer rows together or relax the rule named in the warning.
+**Replacement could not fill every selected row:** replace fewer rows together or relax the rule named in the warning.
 
 **Rejected upload:** use a fresh DraftKings salary file from the exact slate and export again without modifying the upload columns.
 
@@ -286,7 +298,7 @@ Exact matching matters. An entry can remain unmatched if it was edited after exp
 
 **Incomplete learning comparison:** a preset with partial historical field data may show the real-field duplication value as **n/a**. Generation and results remain available; importing a complete matching field can fill the missing measurement.
 
-**Recovered error message:** the app contains unexpected interface errors instead of closing immediately. Copy the displayed technical details, keep or export any valid lineups still visible, and include the details with the last build report when reporting the problem.
+**Recovered error message:** copy the technical details, keep any valid visible lineups, and include the last build report.
 
 See the separate Troubleshooting guide for more detail.
 

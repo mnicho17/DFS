@@ -1227,6 +1227,8 @@ from nfl_simulation import SimLineup, build_nfl_role_pool, compare_nfl_lineups_t
 from lineup_space import calculate_lineup_space
 from portfolio_insights import build_portfolio_insights
 from slate_readiness import audit_slate
+from entry_safety import build_entry_safety_report
+from build_recipes import dump_recipes_json, load_recipes_json, normalize_recipe
 from build_diagnostics import (
     build_history_label,
     clear_build_history,
@@ -2117,6 +2119,196 @@ class SlateReadinessDialog(QtWidgets.QDialog):
             parent.focus_readiness_players(check)
 
 
+class EntrySafetyDialog(QtWidgets.QDialog):
+    """Final report for the exact saved portfolio about to be exported."""
+
+    def __init__(self, report: Dict[str, Any], parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.report = dict(report or {})
+        self.setWindowTitle("Entry Safety")
+        self.setModal(True)
+        self.resize(920, 520)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        status = str(self.report.get("status") or "review")
+        color = {"ready": "#8FE3A1", "review": "#FFD180", "blocked": "#FF8A80"}.get(status, "#FFD180")
+        title = QtWidgets.QLabel(str(self.report.get("title") or "Review Before Export"))
+        title.setObjectName("entrySafetyTitle")
+        title.setStyleSheet(f"color: {color}; font-size: 18pt; font-weight: 700;")
+        layout.addWidget(title)
+
+        context = QtWidgets.QLabel(
+            f"{self.report.get('sport', '')} {str(self.report.get('kind', '')).title()} | "
+            f"{int(self.report.get('lineup_count', 0) or 0)} saved lineups | "
+            f"{int(self.report.get('blockers', 0) or 0)} blockers | "
+            f"{int(self.report.get('reviews', 0) or 0)} items to review"
+        )
+        context.setWordWrap(True)
+        layout.addWidget(context)
+
+        checks = sorted(
+            list(self.report.get("checks") or []),
+            key=lambda item: {"block": 0, "review": 1, "pass": 2}.get(str(item.get("status") or "review"), 1),
+        )
+        table = QtWidgets.QTableWidget(len(checks), 4, self)
+        table.setObjectName("entrySafetyChecks")
+        table.setHorizontalHeaderLabels(["State", "Check", "Finding", "Next step"])
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setVisible(False)
+        for row, check in enumerate(checks):
+            check_status = str(check.get("status") or "review")
+            state = QtWidgets.QTableWidgetItem(check_status.upper())
+            state.setForeground(QtGui.QColor(
+                {"pass": "#8FE3A1", "review": "#FFD180", "block": "#FF8A80"}.get(check_status, "#FFD180")
+            ))
+            state.setTextAlignment(QtCore.Qt.AlignCenter)
+            table.setItem(row, 0, state)
+            table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(check.get("label") or "")))
+            table.setItem(row, 2, QtWidgets.QTableWidgetItem(str(check.get("summary") or "")))
+            table.setItem(row, 3, QtWidgets.QTableWidgetItem(str(check.get("action") or "")))
+        table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        table.resizeRowsToContents()
+        layout.addWidget(table, 1)
+
+        note_text = (
+            "Resolve every blocker before export. Review items may be intentional, but should be checked before lock. "
+            "Entry Safety never changes a lineup or setting."
+        )
+        note = QtWidgets.QLabel(note_text)
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Cancel)
+        copy_button = buttons.addButton("Copy Report", QtWidgets.QDialogButtonBox.ActionRole)
+        copy_button.setObjectName("copyEntrySafetyReport")
+        copy_button.clicked.connect(
+            lambda: QtWidgets.QApplication.clipboard().setText(str(self.report.get("text") or ""))
+        )
+        export_button = buttons.addButton(
+            "Export CSV" if status == "ready" else "Export Anyway",
+            QtWidgets.QDialogButtonBox.AcceptRole,
+        )
+        export_button.setObjectName("confirmSafeExport")
+        export_button.setEnabled(status != "blocked")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+
+class BuildRecipesDialog(QtWidgets.QDialog):
+    """Apply or remove named, slate-independent build configurations."""
+
+    def __init__(
+        self,
+        recipes: Dict[str, Dict[str, Any]],
+        parent: Optional[QtWidgets.QWidget] = None,
+    ):
+        super().__init__(parent)
+        self.recipes = dict(recipes or {})
+        self.applied_name = ""
+        self.changed = False
+        self.setWindowTitle("Build Recipes")
+        self.setModal(True)
+        self.resize(660, 300)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        intro = QtWidgets.QLabel(
+            "Apply a saved build setup without bringing old player locks, fades, exposure limits, or groups into the new slate."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        self.recipe_list = QtWidgets.QListWidget(self)
+        self.recipe_list.setObjectName("buildRecipeList")
+        self.recipe_list.itemSelectionChanged.connect(self._update_details)
+        self.recipe_list.itemDoubleClicked.connect(lambda *_args: self._apply_selected())
+        layout.addWidget(self.recipe_list, 1)
+
+        self.details = QtWidgets.QLabel("")
+        self.details.setObjectName("buildRecipeDetails")
+        self.details.setWordWrap(True)
+        self.details.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(self.details)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        delete_button = buttons.addButton("Delete", QtWidgets.QDialogButtonBox.DestructiveRole)
+        delete_button.setObjectName("deleteBuildRecipe")
+        delete_button.clicked.connect(self._delete_selected)
+        apply_button = buttons.addButton("Apply Recipe", QtWidgets.QDialogButtonBox.AcceptRole)
+        apply_button.setObjectName("applyBuildRecipe")
+        apply_button.clicked.connect(self._apply_selected)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.delete_button = delete_button
+        self.apply_button = apply_button
+        self._refresh()
+
+    def _selected_name(self) -> str:
+        item = self.recipe_list.currentItem()
+        return str(item.data(QtCore.Qt.UserRole) or "") if item is not None else ""
+
+    def _refresh(self, selected_name: str = "") -> None:
+        self.recipe_list.clear()
+        for name, recipe in sorted(self.recipes.items(), key=lambda item: item[0].casefold()):
+            label = f"{name}  —  {recipe.get('sport', 'NFL')} {str(recipe.get('contest_kind', 'classic')).title()}"
+            item = QtWidgets.QListWidgetItem(label)
+            item.setData(QtCore.Qt.UserRole, name)
+            self.recipe_list.addItem(item)
+            if name == selected_name:
+                self.recipe_list.setCurrentItem(item)
+        if self.recipe_list.count() and self.recipe_list.currentRow() < 0:
+            self.recipe_list.setCurrentRow(0)
+        self._update_details()
+
+    def _update_details(self) -> None:
+        name = self._selected_name()
+        recipe = dict(self.recipes.get(name) or {})
+        enabled = bool(recipe)
+        self.apply_button.setEnabled(enabled)
+        self.delete_button.setEnabled(enabled)
+        if not recipe:
+            self.details.setText("No saved recipes yet. Close this window and choose Save Current Recipe from Settings.")
+            return
+        sim_text = "SIM Off"
+        if recipe.get("nfl_sim_enabled"):
+            depth = "Deep" if str(recipe.get("nfl_compute_mode") or "").startswith("Deep") else "Fast"
+            sim_text = f"SIM {depth} • {recipe.get('nfl_field_preset', '150-Max')}"
+        self.details.setText(
+            f"{recipe.get('build_style', 'Strategic')} • {recipe.get('salary_strategy', 'Near Cap')} • "
+            f"{int(recipe.get('requested_lineups', 1) or 1)} lineups • {sim_text} • "
+            f"minimum unique {int(recipe.get('min_unique', 1) or 1)}"
+        )
+
+    def _apply_selected(self) -> None:
+        name = self._selected_name()
+        if not name:
+            return
+        self.applied_name = name
+        self.accept()
+
+    def _delete_selected(self) -> None:
+        name = self._selected_name()
+        if not name:
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Delete Build Recipe",
+            f"Delete the saved recipe '{name}'?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Cancel,
+        )
+        if answer != QtWidgets.QMessageBox.Yes:
+            return
+        self.recipes.pop(name, None)
+        self.changed = True
+        self._refresh()
+
+
 class BuildDiagnosticsDialog(QtWidgets.QDialog):
     """Review and copy recent aggregate build diagnostics."""
 
@@ -2556,6 +2748,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.last_sim_report: Dict[str, Any] = {}
         self.last_live_check_summary: Dict[str, Any] = {}
         self.last_readiness_report: Dict[str, Any] = {}
+        self.last_entry_safety_report: Dict[str, Any] = {}
         self.last_build_timing_report: Dict[str, Any] = {}
         history = load_build_history(limit=1)
         self.last_build_diagnostic: Dict[str, Any] = dict(history[0]) if history else {}
@@ -2563,6 +2756,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._readiness_filter_names: set[str] = set()
         self._lineup_space_phase = ""
         self._last_live_check_epoch = 0.0
+        self._active_recipe_name = ""
         self.app_settings = QtCore.QSettings("DFS Optimizer", "DFS Optimizer")
 
         self._build_ui()
@@ -2988,6 +3182,11 @@ class MainWindow(QtWidgets.QMainWindow):
         settings_menu.addSection("Data")
         settings_menu.addAction("Live Data Settings", self.on_live_data_settings)
         settings_menu.addAction("Results and Learning", self.on_results_learning)
+        settings_menu.addSection("Build Recipes")
+        save_recipe_action = settings_menu.addAction("Save Current Recipe...", self.on_save_build_recipe)
+        save_recipe_action.setObjectName("saveBuildRecipeAction")
+        manage_recipes_action = settings_menu.addAction("Apply or Delete Recipes...", self.on_manage_build_recipes)
+        manage_recipes_action.setObjectName("manageBuildRecipesAction")
         settings_menu.addSection("Review")
         portfolio_insights_action = settings_menu.addAction("Portfolio Insights...", self.on_portfolio_summary)
         portfolio_insights_action.setObjectName("portfolioInsightsAction")
@@ -3608,7 +3807,155 @@ class MainWindow(QtWidgets.QMainWindow):
                 parts.extend([f"SIM {depth}", self.combo_field_preset.currentText()])
             else:
                 parts.append("SIM Off")
+        if self._active_recipe_name:
+            parts.insert(0, self._active_recipe_name)
         self.lbl_workspace_summary.setText(" | ".join(parts))
+
+    def _load_build_recipes(self) -> Dict[str, Dict[str, Any]]:
+        try:
+            return load_recipes_json(self.app_settings.value("build/recipes_json", "{}"))
+        except Exception:
+            logger.exception("Saved build recipes could not be loaded")
+            return {}
+
+    def _store_build_recipes(self, recipes: Dict[str, Dict[str, Any]]) -> None:
+        self.app_settings.setValue("build/recipes_json", dump_recipes_json(recipes))
+        self.app_settings.sync()
+
+    def _current_build_recipe(self) -> Dict[str, Any]:
+        kind = self._contest_mode()
+        requested = self.spin_sd.value() if kind == "showdown" else self.spin_cl.value()
+        cap_text = self.edit_sd_cap.text() if kind == "showdown" else self.edit_cl_cap.text()
+        return normalize_recipe({
+            "sport": self._current_sport(),
+            "contest_kind": kind,
+            "requested_lineups": requested,
+            "salary_cap": self._safe_float(cap_text, 50000.0),
+            "ownership_sims": self.spin_own_sims.value(),
+            "showdown_field_templates": self.chk_sd_template_sim.isChecked(),
+            "ownership_mode": self.combo_build_own_mode.currentText(),
+            "ownership_weight": self.spin_build_own_weight.value(),
+            "build_style": self.combo_build_style.currentText(),
+            "mlb_stack_preference": self.combo_mlb_stack_pref.currentText(),
+            "salary_strategy": self.combo_salary_strategy.currentText(),
+            "nfl_sim_enabled": self.chk_nfl_contest_sim.isChecked(),
+            "nfl_sim_scenarios": self.spin_nfl_sim_scenarios.value(),
+            "nfl_field_preset": self.combo_field_preset.currentText(),
+            "nfl_compute_mode": self.combo_nfl_compute_mode.currentText(),
+            "min_unique": self.spin_portfolio_unique.value(),
+            "team_max_pct": self.spin_team_exposure.value(),
+            "game_max_pct": self.spin_game_exposure.value(),
+            "balance_ownership": self.chk_portfolio_balance.isChecked(),
+        })
+
+    @staticmethod
+    def _set_recipe_combo(combo: QtWidgets.QComboBox, value: Any) -> None:
+        text = str(value or "").strip()
+        index = combo.findText(text)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+
+    def _apply_build_recipe(self, name: str, recipe: Dict[str, Any]) -> None:
+        value = normalize_recipe(recipe)
+        self._set_recipe_combo(self.combo_sport, value.get("sport"))
+        kind = str(value.get("contest_kind") or "classic")
+        self.tabs_lineups.setCurrentIndex(0 if kind == "showdown" else 1)
+        requested = int(value.get("requested_lineups", 1) or 1)
+        salary_cap = float(value.get("salary_cap", 50000.0) or 50000.0)
+        if kind == "showdown":
+            self.spin_sd.setValue(requested)
+            self.edit_sd_cap.setText(f"{salary_cap:.0f}")
+        else:
+            self.spin_cl.setValue(requested)
+            self.edit_cl_cap.setText(f"{salary_cap:.0f}")
+
+        if "ownership_sims" in value:
+            self.spin_own_sims.setValue(int(value["ownership_sims"]))
+        if "showdown_field_templates" in value:
+            self.chk_sd_template_sim.setChecked(bool(value["showdown_field_templates"]))
+        self._set_recipe_combo(self.combo_build_own_mode, value.get("ownership_mode"))
+        if "ownership_weight" in value:
+            self.spin_build_own_weight.setValue(float(value["ownership_weight"]))
+        self._set_recipe_combo(self.combo_build_style, value.get("build_style"))
+        self._set_recipe_combo(self.combo_mlb_stack_pref, value.get("mlb_stack_preference"))
+        self._set_recipe_combo(self.combo_salary_strategy, value.get("salary_strategy"))
+        if "nfl_sim_enabled" in value:
+            self.chk_nfl_contest_sim.setChecked(bool(value["nfl_sim_enabled"]))
+        if "nfl_sim_scenarios" in value:
+            self.spin_nfl_sim_scenarios.setValue(int(value["nfl_sim_scenarios"]))
+        self._set_recipe_combo(self.combo_field_preset, value.get("nfl_field_preset"))
+        self._set_recipe_combo(self.combo_nfl_compute_mode, value.get("nfl_compute_mode"))
+        if "min_unique" in value:
+            self.spin_portfolio_unique.setValue(int(value["min_unique"]))
+        if "team_max_pct" in value:
+            self.spin_team_exposure.setValue(float(value["team_max_pct"]))
+        if "game_max_pct" in value:
+            self.spin_game_exposure.setValue(float(value["game_max_pct"]))
+        if "balance_ownership" in value:
+            self.chk_portfolio_balance.setChecked(bool(value["balance_ownership"]))
+        self._active_recipe_name = str(name or "").strip()
+        self._update_workspace_summary()
+        self._update_lineup_space_dashboard()
+        self.status.showMessage(f"Applied build recipe: {self._active_recipe_name}.", 5000)
+
+    def on_save_build_recipe(self) -> None:
+        recipe = self._current_build_recipe()
+        default_name = self._active_recipe_name or (
+            f"{recipe.get('sport', 'NFL')} {recipe.get('nfl_field_preset', 'Classic')}"
+            if recipe.get("contest_kind") == "classic"
+            else f"{recipe.get('sport', 'NFL')} Showdown"
+        )
+        name, ok = QtWidgets.QInputDialog.getText(
+            self,
+            "Save Build Recipe",
+            "Recipe name:",
+            QtWidgets.QLineEdit.Normal,
+            default_name,
+        )
+        name = str(name or "").strip()
+        if not ok or not name:
+            return
+        recipes = self._load_build_recipes()
+        if name in recipes:
+            answer = QtWidgets.QMessageBox.question(
+                self,
+                "Replace Build Recipe",
+                f"Replace the existing recipe '{name}' with the current build settings?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+                QtWidgets.QMessageBox.Cancel,
+            )
+            if answer != QtWidgets.QMessageBox.Yes:
+                return
+        recipes[name] = recipe
+        self._store_build_recipes(recipes)
+        self._active_recipe_name = name
+        self._update_workspace_summary()
+        self.status.showMessage(f"Saved build recipe: {name}.", 5000)
+
+    def on_manage_build_recipes(self) -> None:
+        recipes = self._load_build_recipes()
+        dialog = BuildRecipesDialog(recipes, self)
+        result = dialog.exec_()
+        if dialog.changed:
+            self._store_build_recipes(dialog.recipes)
+            if self._active_recipe_name not in dialog.recipes:
+                self._active_recipe_name = ""
+                self._update_workspace_summary()
+        if result != QtWidgets.QDialog.Accepted or not dialog.applied_name:
+            return
+        recipe = dict(dialog.recipes.get(dialog.applied_name) or {})
+        requested_sport = str(recipe.get("sport") or "NFL").upper()
+        if requested_sport != self._current_sport() and (self.last_classic or self.saved_classic):
+            answer = QtWidgets.QMessageBox.question(
+                self,
+                "Change Sport and Apply Recipe",
+                "Changing sport clears the current Classic generated and saved lineups. Apply this recipe?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+                QtWidgets.QMessageBox.Cancel,
+            )
+            if answer != QtWidgets.QMessageBox.Yes:
+                return
+        self._apply_build_recipe(dialog.applied_name, recipe)
 
     def _on_primary_build(self) -> None:
         """Run the action represented by the primary command-bar button."""
@@ -6118,15 +6465,6 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         expected = len(headers)
-        incomplete = sum(1 for row in rows if len(row) != expected or any(not str(cell).strip() for cell in row))
-        if incomplete:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Incomplete Lineups",
-                f"{incomplete} saved lineup(s) are missing a DraftKings player ID. Reload the salary CSV and rebuild them.",
-            )
-            return
-
         if not self._confirm_portfolio_export(kind_l, lineups):
             return
 
@@ -6172,6 +6510,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 "valid": True,
                 "complete_lineups": len(rows),
                 "expected_slots": expected,
+                "entry_safety_status": str(self.last_entry_safety_report.get("status") or "ready"),
+                "entry_safety_reviews": int(self.last_entry_safety_report.get("reviews", 0) or 0),
             }
             if kind_l == "classic" and sport == "NFL" and self.last_sim_report:
                 validation["sim_report"] = self.last_sim_report
@@ -6185,7 +6525,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 validation=validation,
                 settings=settings,
                 grade_func=lineup_grade_for_sport,
-                app_version="results-learning-v4",
+                app_version="entry-safety-v1",
             )
             archive_export_file(path, sport=sport, kind=kind_l)
             learning_note = f" Recorded {int(saved.get('lineups_recorded', 0))} lineup(s) for Results & Learning."
@@ -6496,17 +6836,74 @@ class MainWindow(QtWidgets.QMainWindow):
             repair_source=source_label,
         )
 
-    def _confirm_portfolio_export(self, kind: str, lineups: List[Any]) -> bool:
-        report = self._saved_portfolio_report(kind, lineups)
-        text = str(report.get("text") or "") + "\n\nContinue with DraftKings export?"
-        answer = QtWidgets.QMessageBox.question(
-            self,
-            "Review Portfolio Before Export",
-            text,
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
-            QtWidgets.QMessageBox.Yes,
+    def _entry_safety_report(
+        self,
+        kind: str,
+        lineups: List[Any],
+        rows: List[List[str]],
+        salary_cap: float,
+    ) -> Dict[str, Any]:
+        sport = self._current_sport()
+        preset_name = self.combo_field_preset.currentText() if sport == "NFL" and kind == "classic" else ""
+        calibration: Dict[str, Any] = {}
+        if preset_name:
+            try:
+                calibration = load_nfl_field_calibration(preset_name)
+            except Exception:
+                logger.exception("Entry Safety could not load NFL field calibration")
+        field_preset = (
+            nfl_field_preset(preset_name, calibration)
+            if preset_name
+            else {"name": "", "min_salary_pct": 0.90 if kind == "showdown" else 0.94}
         )
-        return answer == QtWidgets.QMessageBox.Yes
+        readiness = audit_slate(
+            self.players,
+            sport=sport,
+            mode=kind,
+            salary_cap=salary_cap,
+            field_preset=field_preset,
+            live_summary=self.last_live_check_summary,
+            generated_lineups=lineups,
+            sim_report=self.last_sim_report if kind == "classic" else {},
+        )
+        portfolio = self._saved_portfolio_report(kind, lineups)
+        report = build_entry_safety_report(
+            lineups,
+            kind=kind,
+            sport=sport,
+            salary_cap=salary_cap,
+            export_rows=rows,
+            portfolio_report=portfolio,
+            readiness_report=readiness,
+            min_salary_pct=float(field_preset.get("min_salary_pct", 0.94) or 0.94),
+        )
+        self.last_entry_safety_report = report
+        return report
+
+    def _confirm_entry_safety_export(
+        self,
+        kind: str,
+        lineups: List[Any],
+        rows: List[List[str]],
+        salary_cap: float,
+    ) -> bool:
+        report = self._entry_safety_report(kind, lineups, rows, salary_cap)
+        return EntrySafetyDialog(report, self).exec_() == QtWidgets.QDialog.Accepted
+
+    def _confirm_portfolio_export(self, kind: str, lineups: List[Any]) -> bool:
+        """Compatibility wrapper for integrations that used the former export confirmation."""
+        sport = self._current_sport()
+        if kind == "showdown":
+            rows = [
+                [self._display_id(lineup.get("Captain") or {}, slot="CPT")]
+                + [self._display_id(player, slot="FLEX") for player in list(lineup.get("Flex") or [])]
+                for lineup in lineups
+            ]
+            cap = self._safe_float(self.edit_sd_cap.text(), 50000.0)
+        else:
+            rows = [self._classic_export_cells(lineup, sport) for lineup in lineups]
+            cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
+        return self._confirm_entry_safety_export(kind, lineups, rows, cap)
 
     # ---------------- Stack / Team / Salary Exposure Dashboard ----------------
 

@@ -216,6 +216,7 @@ def markdown_story(markdown: str, styles, source_dir: Path):
         if line.startswith("### "):
             flush_paragraph()
             flush_list()
+            story.append(CondPageBreak(1.15 * inch))
             story.append(Paragraph(inline_markup(line[4:]), styles["h3"]))
             continue
         if line.startswith("> "):
@@ -288,7 +289,7 @@ def build_pdf(source: Path, output: Path, version: str) -> None:
     styles = styles_for_guide()
     doc = SimpleDocTemplate(
         str(output), pagesize=letter, rightMargin=0.68 * inch, leftMargin=0.68 * inch,
-        topMargin=0.62 * inch, bottomMargin=0.66 * inch,
+        topMargin=0.62 * inch, bottomMargin=0.80 * inch,
         title="DFS Optimizer User Guide", author="DFS Optimizer",
         subject=f"DFS Optimizer user documentation, version {version}",
     )
@@ -301,7 +302,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", default="docs/USER_GUIDE.md")
     parser.add_argument("--output", default="dist/DFS-Optimizer-User-Guide.pdf")
-    parser.add_argument("--version", default="1.14.2")
+    parser.add_argument("--version", default="1.15.0")
     args = parser.parse_args()
     build_pdf(Path(args.source), Path(args.output), args.version)
     print(Path(args.output).resolve())
