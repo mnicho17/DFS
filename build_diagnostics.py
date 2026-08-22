@@ -171,6 +171,7 @@ def create_build_diagnostic(
                 warnings.append(warning)
 
     preset = dict(sim.get("preset_comparison") or {})
+    contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
     diagnostic = {
         "schema_version": 1,
         "created_at": _now_iso(),
@@ -213,6 +214,10 @@ def create_build_diagnostic(
             "sim_enabled": bool(settings.get("sim_enabled")),
             "sim_scenarios": max(0, _integer(settings.get("sim_scenarios"))),
             "field_preset": str(settings.get("field_preset") or ""),
+            "contest_profile_name": str(contest_profile.get("name") or ""),
+            "contest_field_size": max(0, _integer(contest_profile.get("field_size"))),
+            "contest_entry_fee": max(0.0, _number(contest_profile.get("entry_fee"))),
+            "contest_user_entries": max(0, _integer(contest_profile.get("user_entries"))),
             "compute_mode": str(
                 timing.get("compute_mode") or settings.get("compute_mode") or "Fast"
             ),
@@ -235,6 +240,18 @@ def create_build_diagnostic(
             "field_lineups": max(0, _integer(sim.get("field_lineup_count"))),
             "average_edge": _number(sim_summary.get("average_edge")) if sim_summary else None,
             "average_return_index": _number(sim_summary.get("average_return_index")) if sim_summary else None,
+            "average_expected_roi_pct": (
+                _number(sim_summary.get("average_expected_roi_pct"))
+                if sim_summary.get("contest_aware") else None
+            ),
+            "average_expected_payout": (
+                _number(sim_summary.get("average_expected_payout"))
+                if sim_summary.get("contest_aware") else None
+            ),
+            "average_expected_profit": (
+                _number(sim_summary.get("average_expected_profit"))
+                if sim_summary.get("contest_aware") else None
+            ),
             "average_duplicate_risk": _number(sim_summary.get("average_duplicate_risk")) if sim_summary else None,
             "scenario_count": max(0, _integer(sim_summary.get("scenario_count"))),
             "top_one_scenarios_covered": max(0, _integer(sim_summary.get("top_one_scenarios_covered"))),
@@ -365,8 +382,24 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Balance ownership/dup risk: {'On' if rules.get('balance_ownership') else 'Off'}",
         f"- Player groups: {_integer(rules.get('group_count'))} | Player limits: {_integer(rules.get('constrained_player_count'))}",
     ])
+    if settings.get("contest_profile_name"):
+        lines.insert(
+            lines.index(f"- Compute: {compute_mode}"),
+            (
+                f"- Contest-Aware SIM: {settings.get('contest_profile_name')} • "
+                f"{_integer(settings.get('contest_field_size')):,} entries • "
+                f"${_number(settings.get('contest_entry_fee')):,.2f} entry • "
+                f"{_integer(settings.get('contest_user_entries')):,} user entries"
+            ),
+        )
     if sim.get("preset_fit") is not None:
         lines.append(f"- Preset fit: {_number(sim.get('preset_fit')):.0f}/100")
+    if sim.get("average_expected_roi_pct") is not None:
+        lines.append(
+            f"- Contest portfolio: ROI {_number(sim.get('average_expected_roi_pct')):+.1f}% • "
+            f"expected payout ${_number(sim.get('average_expected_payout')):,.2f} • "
+            f"expected profit ${_number(sim.get('average_expected_profit')):+,.2f} per entry"
+        )
     if deep_mode:
         stop_reason = str(sim.get("refinement_stop_reason") or "").strip()
         time_remaining = max(0.0, _number(sim.get("time_remaining_seconds")))

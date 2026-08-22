@@ -22,7 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 from PyQt5 import QtCore, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
-from main_window import BuildDiagnosticsDialog, BuildRecipesDialog, EntrySafetyDialog, FinalLockCheckDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog, StackExposureDialog  # noqa: E402
+from main_window import BuildDiagnosticsDialog, BuildRecipesDialog, ContestProfileDialog, EntrySafetyDialog, FinalLockCheckDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog, StackExposureDialog  # noqa: E402
 from build_diagnostics import create_build_diagnostic, save_build_diagnostic  # noqa: E402
 from nfl_simulation import SimLineup  # noqa: E402
 from optimizers import MultiSportClassicOptimizer  # noqa: E402
@@ -167,6 +167,34 @@ def save_widget(widget: QtWidgets.QWidget, path: Path) -> None:
     if pixmap.isNull() or not pixmap.save(str(path), "PNG"):
         raise RuntimeError(f"Could not capture {path}")
     print(path.resolve())
+
+
+def capture_contest_profile(
+    output_dir: Path,
+    parent: QtWidgets.QWidget | None = None,
+) -> None:
+    contest_dialog = ContestProfileDialog({
+        "Sunday Main $20": {
+            "name": "Sunday Main $20",
+            "field_size": 177_258,
+            "entry_fee": 20.0,
+            "user_entries": 150,
+            "payouts": [
+                {"start": 1, "end": 1, "amount": 1_000_000.0},
+                {"start": 2, "end": 2, "amount": 250_000.0},
+                {"start": 3, "end": 5, "amount": 100_000.0},
+                {"start": 6, "end": 10, "amount": 25_000.0},
+                {"start": 11, "end": 100, "amount": 1_000.0},
+                {"start": 101, "end": 1_000, "amount": 100.0},
+                {"start": 1_001, "end": 35_000, "amount": 40.0},
+            ],
+        },
+    }, "Sunday Main $20", parent)
+    contest_dialog.resize(760, 680)
+    contest_dialog.show()
+    QtWidgets.QApplication.processEvents()
+    save_widget(contest_dialog, output_dir / "contest-aware-sim.png")
+    contest_dialog.close()
 
 
 def capture(output_dir: Path) -> None:
@@ -463,6 +491,8 @@ def capture(output_dir: Path) -> None:
         save_widget(recipes_dialog, output_dir / "build-recipes.png")
         recipes_dialog.close()
 
+        capture_contest_profile(output_dir, window)
+
         window.spin_portfolio_unique.setValue(2)
         window.spin_team_exposure.setValue(70.0)
         window.spin_game_exposure.setValue(65.0)
@@ -527,8 +557,18 @@ def capture(output_dir: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim"), default="all")
     args = parser.parse_args()
-    capture(Path(args.output_dir))
+    output_dir = Path(args.output_dir)
+    if args.only == "contest-aware-sim":
+        output_dir.mkdir(parents=True, exist_ok=True)
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+        app.setStyle("Fusion")
+        app.setStyleSheet(DARK_QSS)
+        capture_contest_profile(output_dir)
+        app.processEvents()
+    else:
+        capture(output_dir)
 
 
 if __name__ == "__main__":

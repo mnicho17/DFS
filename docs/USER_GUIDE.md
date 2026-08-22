@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.16.0 | Windows desktop app
+Version 1.17.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -205,6 +205,12 @@ Deep Build strengthens that separation. A coarse random stream screens the expan
 
 Choose the preset that matches the contest's maximum entries per person. Presets are conservative starting assumptions, not promises. After at least three complete fields, 1,000 entries, and 70% player metadata coverage have been imported for that preset, the app can blend measured salary, construction, and winning-ownership patterns into its baseline. Until then, measurements remain report-only.
 
+When the contest lobby provides the actual economics, open **Settings > Contest-Aware SIM**. Enter the contest name, total field size, entry fee, how many entries you plan to submit, and the payout table. Use one rank or range per line, such as `1 = $100,000` or `2-10 = $5,000`. **Save and Use** keeps the profile for later slates and turns on NFL SIM Edge. **Use Preset Only** removes the contest profile from the build without deleting it.
+
+![Attaching an exact field, entry fee, and payout table to NFL SIM Edge](images/contest-aware-sim.png){medium}
+
+With a profile active, each scenario converts the simulated finish into the listed prize. Equal scores and duplicated constructions split every prize covered by their tied rank range. Results show **Edge | ROI**, the tooltip adds expected payout and profit, Portfolio Insights and the copied build report summarize portfolio ROI, and the quiet workspace summary names the active profile. The contest preset still controls how opponents are constructed; the saved profile controls the payout economics. These are model estimates, not guaranteed returns.
+
 - **SIM Edge** is a slate-relative 0-100 summary. It is useful for comparing candidates from the same build, not as a universal score across slates.
 - **Top 1%** and **Top 5%** estimate how often the lineup reached those field thresholds.
 - **Win rate** is the representative-field first-place frequency, not an exact contest promise.
@@ -216,7 +222,7 @@ Choose the preset that matches the contest's maximum entries per person. Presets
 - **Leverage** rewards useful paths that differ from expected field behavior.
 - **Duplication risk** estimates how likely the construction is to be shared. Lower is generally better when other qualities are similar.
 
-The Classic results show Edge and top-one-percent rate. The **Why this SIM Edge** detail explains slate percentile, direction, and model weight for top finishes, ceiling, tournament return, and duplication safety. Generation and Slate Readiness show preset fit; the copied build report separates optimizer, field-shaped, and scenario-built candidates.
+The Classic results show Edge and top-one-percent rate, or Edge and expected ROI when Contest-Aware SIM is active. The **Why this SIM Edge** detail explains slate percentile, direction, and model weight for top finishes, ceiling, tournament return or contest ROI, and duplication safety. Generation and Slate Readiness show preset fit; the copied build report separates optimizer, field-shaped, and scenario-built candidates.
 
 Portfolio selection rewards coverage of different strong scenarios, but applies a soft quality guardrail below the B-grade boundary so novelty alone does not rescue a weak candidate. Do not choose by one number alone. Compare ceiling, top-five rate, leverage, duplication, construction, news risk, preset fit, and portfolio coverage.
 
@@ -262,7 +268,7 @@ The app can compare exact exported rosters with DraftKings standings or contest-
 
 ![Results and Learning summary after matched entries are imported](images/results-learning.png){compact}
 
-The app reports general outcomes and projection calibration. Starting with v1.6.1, NFL SIM exports also retain their original Edge, top-finish, cash, return, leverage, and duplication estimates. When the Results & Learning summary shows matched SIM results, the report compares predicted and actual top-one-percent, top-five-percent, and cash rates. It also checks whether Edge tracks finish percentile and whether the return index tracks net results.
+The app reports general outcomes and projection calibration. Starting with v1.6.1, NFL SIM exports also retain their original Edge, top-finish, cash, return, leverage, and duplication estimates. Contest-Aware SIM exports additionally retain the contest name, field, fee, expected payout, profit, and ROI. When the Results & Learning summary shows matched SIM results, the report compares predicted and actual top-one-percent, top-five-percent, cash, and contest ROI rates. It also checks whether Edge tracks finish percentile and whether the return index tracks net results.
 
 For a complete standings file, the report also measures:
 

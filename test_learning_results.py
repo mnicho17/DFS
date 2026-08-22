@@ -72,6 +72,12 @@ def _classic_sim_lineup():
             "duplicate_risk": 24.0,
             "sim_scenarios": 500,
             "sim_field_lineups": 1200,
+            "sim_expected_payout": 24.0,
+            "sim_expected_profit": 4.0,
+            "sim_expected_roi_pct": 20.0,
+            "sim_contest_name": "Sunday Main",
+            "sim_entry_fee": 20.0,
+            "sim_contest_field_size": 100000,
         },
     )
 
@@ -150,11 +156,17 @@ class ResultsLearningTests(unittest.TestCase):
                 """
                 SELECT sim_edge, sim_top_one_pct, sim_top_five_pct, sim_cash_rate,
                        sim_return_index, sim_leverage, sim_duplicate_risk,
-                       sim_scenarios, sim_field_lineups
+                       sim_scenarios, sim_field_lineups, sim_expected_payout,
+                       sim_expected_profit, sim_expected_roi_pct, sim_contest_name,
+                       sim_entry_fee, sim_contest_field_size
                 FROM lineups
                 """
             ).fetchone()
-            self.assertEqual(row, (82.0, 3.2, 11.5, 27.0, 76.0, 71.0, 24.0, 500, 1200))
+            self.assertEqual(
+                row,
+                (82.0, 3.2, 11.5, 27.0, 76.0, 71.0, 24.0, 500, 1200,
+                 24.0, 4.0, 20.0, "Sunday Main", 20.0, 100000),
+            )
         finally:
             conn.close()
 
@@ -283,6 +295,10 @@ class ResultsLearningTests(unittest.TestCase):
         self.assertIn("Predicted top 1%", report["text"])
         self.assertIn("Predicted top 5%", report["text"])
         self.assertIn("Predicted cash rate", report["text"])
+        self.assertIn("Contest-Aware ROI: predicted +20.0% | actual -25.0%", report["text"])
+        self.assertEqual(report["contest_roi_matched_rows"], 10)
+        self.assertAlmostEqual(report["predicted_contest_roi_pct"], 20.0)
+        self.assertAlmostEqual(report["actual_contest_roi_pct"], -25.0)
         self.assertIn("Performance by SIM Edge", report["text"])
         self.assertIn("directional until 50 matched entries", report["text"])
 

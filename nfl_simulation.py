@@ -14,6 +14,8 @@ import random
 from collections import Counter, defaultdict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from contest_profiles import normalize_contest_profile, payout_for_tied_ranks
+
 
 INACTIVE_STATUSES = {"OUT", "IR", "PUP", "NFI", "SUSP", "SUSPENDED"}
 ROLE_LIMITS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
@@ -1069,8 +1071,18 @@ def simulate_nfl_contest(
     ]
 
     config = dict(field_config or {})
+    raw_contest_profile = config.get("contest_profile")
+    contest_profile = (
+        normalize_contest_profile(raw_contest_profile)
+        if isinstance(raw_contest_profile, dict) and raw_contest_profile
+        else None
+    )
+    if contest_profile:
+        config["contest_profile"] = contest_profile
     effective_field_size = int(
-        field_size
+        contest_profile["field_size"]
+        if contest_profile
+        else field_size
         if field_size is not None
         else _number(config.get("field_size"), 100000.0)
     )
@@ -1116,6 +1128,7 @@ def simulate_nfl_contest(
     cashes = [0 for _ in candidate_lists]
     busts = [0 for _ in candidate_lists]
     return_scores = [0.0 for _ in candidate_lists]
+    payout_scores = [0.0 for _ in candidate_lists]
     percentile_sums = [0.0 for _ in candidate_lists]
     completed = 0
     batch = max(10, scenario_count // 25)
@@ -1138,32 +1151,58 @@ def simulate_nfl_contest(
         for index, signature in enumerate(candidate_keys):
             score = sum(outcomes.get(key, 0.0) for key in signature)
             scores_by_candidate[index].append(score)
-            percentile = bisect.bisect_right(field_scores, score) / float(len(field_scores))
+            left_index = bisect.bisect_left(field_scores, score)
+            right_index = bisect.bisect_right(field_scores, score)
+            percentile = right_index / float(len(field_scores))
             percentile_sums[index] += percentile
             if score >= top_one_threshold:
                 top_hits[index].add(scenario_index)
             if score >= top_five_threshold:
                 top_five_hits[index].add(scenario_index)
-            if score >= cash_threshold:
-                cashes[index] += 1
             if score < bust_threshold:
                 busts[index] += 1
             if score >= winning_score:
                 wins[index] += 1
                 win_hits[index].add(scenario_index)
+            if not contest_profile and score >= cash_threshold:
+                cashes[index] += 1
 
-            # A compact payout-shape proxy.  The values are not dollars and
-            # deliberately emphasize tournament tails over median outcomes.
-            if score >= winning_score:
-                scenario_value = 16.0
-            elif score >= top_one_threshold:
-                scenario_value = 6.0 + max(0.0, percentile - 0.99) * 200.0
-            elif score >= top_five_threshold:
-                scenario_value = 1.5 + max(0.0, percentile - 0.95) * 75.0
-            elif score >= cash_threshold:
-                scenario_value = 0.20
+            if contest_profile:
+                # Scale the representative field to the actual opponent count,
+                # then apply the exact payout table.  Equal scores share every
+                # prize covered by their rank range, including duplicate lineups.
+                field_scale = max(0.0, float(effective_field_size - 1)) / max(1.0, float(len(field_scores)))
+                above_count = min(
+                    effective_field_size - 1,
+                    max(0, int(round((len(field_scores) - right_index) * field_scale))),
+                )
+                tied_opponents = min(
+                    max(0, effective_field_size - 1 - above_count),
+                    max(0, int(round((right_index - left_index) * field_scale))),
+                )
+                first_rank = above_count + 1
+                last_rank = min(effective_field_size, first_rank + tied_opponents)
+                payout = payout_for_tied_ranks(
+                    contest_profile["payouts"], first_rank, last_rank
+                )
+                entry_fee = float(contest_profile["entry_fee"])
+                scenario_value = (payout - entry_fee) / entry_fee
+                payout_scores[index] += payout
+                if payout > 0:
+                    cashes[index] += 1
             else:
-                scenario_value = -1.0
+                # Fallback for users who have not attached a contest.  The
+                # compact proxy deliberately emphasizes tournament tails.
+                if score >= winning_score:
+                    scenario_value = 16.0
+                elif score >= top_one_threshold:
+                    scenario_value = 6.0 + max(0.0, percentile - 0.99) * 200.0
+                elif score >= top_five_threshold:
+                    scenario_value = 1.5 + max(0.0, percentile - 0.95) * 75.0
+                elif score >= cash_threshold:
+                    scenario_value = 0.20
+                else:
+                    scenario_value = -1.0
             return_scores[index] += scenario_value
             if scenario_value >= 1.5:
                 scenario_values[index][scenario_index] = scenario_value
@@ -1182,7 +1221,7 @@ def simulate_nfl_contest(
         duplication_raw = log_product + max(0.0, salary - field_floor) / 2500.0
         exact_matches = field_signatures.get(signature, 0)
         learned_profile_fit = _learned_ownership_profile_fit(lineup, winning_ownership_target)
-        preliminary.append({
+        row = {
             "sim_win_rate": wins[index] / denominator * 100.0,
             "sim_top_one_pct": len(top_hits[index]) / denominator * 100.0,
             "sim_top_five_pct": len(top_five_hits[index]) / denominator * 100.0,
@@ -1196,7 +1235,19 @@ def simulate_nfl_contest(
             "field_exact_matches": exact_matches,
             "field_duplicate_estimate": exact_matches * (float(effective_field_size) / max(1.0, float(len(field_lineups)))),
             "learned_profile_fit": learned_profile_fit,
-        })
+        }
+        if contest_profile:
+            expected_payout = payout_scores[index] / denominator
+            expected_profit = expected_payout - float(contest_profile["entry_fee"])
+            row.update({
+                "sim_expected_payout": expected_payout,
+                "sim_expected_profit": expected_profit,
+                "sim_expected_roi_pct": expected_profit / float(contest_profile["entry_fee"]) * 100.0,
+                "sim_contest_name": str(contest_profile["name"]),
+                "sim_entry_fee": float(contest_profile["entry_fee"]),
+                "sim_contest_field_size": int(contest_profile["field_size"]),
+            })
+        preliminary.append(row)
 
     top_values = [item["sim_top_one_pct"] for item in preliminary]
     top_five_values = [item["sim_top_five_pct"] for item in preliminary]
@@ -1231,12 +1282,13 @@ def simulate_nfl_contest(
         metrics["sim_return_index"] = return_rank * 100.0
         metrics["sim_leverage"] = 100.0 * (0.58 * top_rank + 0.42 * (1.0 - duplicate_rank))
         metrics["sim_edge"] = max(0.0, min(100.0, edge))
+        return_label = "Contest ROI" if contest_profile else "Tournament return"
         metrics["sim_edge_components"] = {
             "Top-1% outcomes": round(top_rank * 100.0, 1),
             "Representative wins": round(win_rank * 100.0, 1),
             "Top-5% outcomes": round(top_five_rank * 100.0, 1),
             "Ceiling": round(ceiling_rank * 100.0, 1),
-            "Tournament return": round(return_rank * 100.0, 1),
+            return_label: round(return_rank * 100.0, 1),
             "Duplication safety": round((1.0 - duplicate_rank) * 100.0, 1),
         }
         component_weights = {
@@ -1244,7 +1296,7 @@ def simulate_nfl_contest(
             "Representative wins": 0.12,
             "Top-5% outcomes": 0.16,
             "Ceiling": 0.15,
-            "Tournament return": 0.15,
+            return_label: 0.15,
             "Duplication safety": 0.10,
         }
         ranked_drivers = sorted(
@@ -1323,6 +1375,9 @@ def simulate_nfl_contest(
             "learned_entries": int(config.get("learned_entries", 0) or 0),
             "field_comparison": field_comparison,
             "field_model_preset_comparison": field_model_preset_comparison,
-            "model": "scenario-portfolio-v4",
+            "contest_aware": bool(contest_profile),
+            "contest_profile": dict(contest_profile or {}),
+            "payout_model": "exact-rank-tie-split-v1" if contest_profile else "payout-shape-proxy-v1",
+            "model": "contest-payout-portfolio-v1" if contest_profile else "scenario-portfolio-v4",
         },
     }

@@ -145,6 +145,12 @@ def init_db(conn: sqlite3.Connection) -> None:
             sim_duplicate_risk REAL,
             sim_scenarios INTEGER,
             sim_field_lineups INTEGER,
+            sim_expected_payout REAL,
+            sim_expected_profit REAL,
+            sim_expected_roi_pct REAL,
+            sim_contest_name TEXT,
+            sim_entry_fee REAL,
+            sim_contest_field_size INTEGER,
             actual_points REAL,
             roi REAL,
             cashed INTEGER,
@@ -197,6 +203,12 @@ def init_db(conn: sqlite3.Connection) -> None:
         ("sim_duplicate_risk", "REAL"),
         ("sim_scenarios", "INTEGER"),
         ("sim_field_lineups", "INTEGER"),
+        ("sim_expected_payout", "REAL"),
+        ("sim_expected_profit", "REAL"),
+        ("sim_expected_roi_pct", "REAL"),
+        ("sim_contest_name", "TEXT"),
+        ("sim_entry_fee", "REAL"),
+        ("sim_contest_field_size", "INTEGER"),
     ):
         _ensure_column(conn, "lineups", column, definition)
     _ensure_column(conn, "lineup_players", "base_projection", "REAL")
@@ -428,7 +440,9 @@ def record_export(
                             sim_edge=?, sim_win_rate=?, sim_top_one_pct=?, sim_top_five_pct=?,
                             sim_cash_rate=?, sim_bust_rate=?, sim_average_percentile=?, sim_ceiling=?,
                             sim_return_index=?, sim_leverage=?, sim_duplicate_risk=?, sim_scenarios=?,
-                            sim_field_lineups=?
+                            sim_field_lineups=?, sim_expected_payout=?, sim_expected_profit=?,
+                            sim_expected_roi_pct=?, sim_contest_name=?, sim_entry_fee=?,
+                            sim_contest_field_size=?
                         WHERE lineup_id=?
                         """,
                         (
@@ -445,6 +459,12 @@ def record_export(
                             _safe_float(feature.get("duplicate_risk")),
                             _safe_int(feature.get("sim_scenarios")),
                             _safe_int(feature.get("sim_field_lineups")),
+                            None if feature.get("sim_expected_payout") is None else _safe_float(feature.get("sim_expected_payout")),
+                            None if feature.get("sim_expected_profit") is None else _safe_float(feature.get("sim_expected_profit")),
+                            None if feature.get("sim_expected_roi_pct") is None else _safe_float(feature.get("sim_expected_roi_pct")),
+                            str(feature.get("sim_contest_name", "") or ""),
+                            None if feature.get("sim_entry_fee") is None else _safe_float(feature.get("sim_entry_fee")),
+                            None if feature.get("sim_contest_field_size") is None else _safe_int(feature.get("sim_contest_field_size")),
                             lineup_id,
                         ),
                     )
@@ -666,7 +686,9 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
                    l.sim_edge, l.sim_win_rate, l.sim_top_one_pct, l.sim_top_five_pct,
                    l.sim_cash_rate, l.sim_bust_rate, l.sim_average_percentile,
                    l.sim_ceiling, l.sim_return_index, l.sim_leverage,
-                   l.sim_duplicate_risk, l.sim_scenarios, l.sim_field_lineups
+                   l.sim_duplicate_risk, l.sim_scenarios, l.sim_field_lineups,
+                   l.sim_expected_payout, l.sim_expected_profit, l.sim_expected_roi_pct,
+                   l.sim_contest_name, l.sim_entry_fee, l.sim_contest_field_size
             FROM historical_results hr
             JOIN lineups l ON l.lineup_id=hr.matched_lineup_id
             JOIN exports e ON e.export_id=l.export_id
@@ -686,6 +708,9 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
                 "sim_return_index": row[21], "sim_leverage": row[22],
                 "sim_duplicate_risk": row[23], "sim_scenarios": row[24],
                 "sim_field_lineups": row[25],
+                "sim_expected_payout": row[26], "sim_expected_profit": row[27],
+                "sim_expected_roi_pct": row[28], "sim_contest_name": row[29],
+                "sim_entry_fee": row[30], "sim_contest_field_size": row[31],
             })
 
         calibration_rows = cur.execute(
@@ -766,6 +791,23 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
         return_roi_corr = _correlation(
             [pair[0] for pair in return_roi_pairs], [pair[1] for pair in return_roi_pairs]
         )
+        contest_roi_rows = [
+            row for row in sim_rows
+            if row.get("sim_expected_roi_pct") is not None
+            and row.get("roi") is not None
+            and float(row.get("entry_fee") or 0.0) > 0
+        ]
+        predicted_contest_roi = (
+            statistics.mean(float(row["sim_expected_roi_pct"]) for row in contest_roi_rows)
+            if contest_roi_rows else None
+        )
+        actual_contest_roi = (
+            statistics.mean(
+                float(row["roi"]) / float(row["entry_fee"]) * 100.0
+                for row in contest_roi_rows
+            )
+            if contest_roi_rows else None
+        )
 
         match_rate = (matched_rows / imported_rows * 100.0) if imported_rows else 0.0
         confidence = _confidence_label(exported_lineups + imported_rows)
@@ -835,6 +877,11 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
                 lines.append(
                     f"- Predicted cash rate: {statistics.mean(sim_cash_pred):.1f}% | "
                     f"actual: {statistics.mean(sim_cash_actual):.1f}%"
+                )
+            if predicted_contest_roi is not None and actual_contest_roi is not None:
+                lines.append(
+                    f"- Contest-Aware ROI: predicted {predicted_contest_roi:+.1f}% | "
+                    f"actual {actual_contest_roi:+.1f}% ({len(contest_roi_rows)} entries)"
                 )
             lines.append(
                 f"- SIM Edge / finish correlation: {edge_finish_corr:.3f}"
@@ -1024,6 +1071,9 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
             "sim_matched_rows": len(sim_rows),
             "sim_edge_finish_correlation": edge_finish_corr,
             "sim_return_roi_correlation": return_roi_corr,
+            "contest_roi_matched_rows": len(contest_roi_rows),
+            "predicted_contest_roi_pct": predicted_contest_roi,
+            "actual_contest_roi_pct": actual_contest_roi,
             "field_contests": field_contests,
             "field_entries": field_entries,
             "field_duplicate_pct": field_dup_pct,

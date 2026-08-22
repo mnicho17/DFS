@@ -489,6 +489,7 @@ class LineupBuildWorker(QtCore.QObject):
         sim_scenarios: int = 750,
         field_preset: str = "150-Max",
         field_calibration: Optional[Dict[str, Any]] = None,
+        contest_profile: Optional[Dict[str, Any]] = None,
         compute_mode: str = "Fast",
         deep_time_limit_seconds: float = 300.0,
         retained_lineups: Optional[List[Any]] = None,
@@ -510,6 +511,11 @@ class LineupBuildWorker(QtCore.QObject):
         self.sim_scenarios = max(100, int(sim_scenarios or 750))
         self.field_preset = field_preset or "150-Max"
         self.field_calibration = dict(field_calibration or {})
+        self.contest_profile = (
+            normalize_contest_profile(contest_profile)
+            if isinstance(contest_profile, dict) and contest_profile
+            else None
+        )
         self.compute_mode = str(compute_mode or "Fast").strip()
         self.deep_time_limit_seconds = max(1.0, float(deep_time_limit_seconds or 300.0))
         self.retained_lineups = list(retained_lineups or [])[:self.num_lineups]
@@ -837,6 +843,9 @@ class LineupBuildWorker(QtCore.QObject):
             }
             if use_nfl_sim and lineups and not self._cancel_event.is_set():
                 field_config = nfl_field_preset(self.field_preset, self.field_calibration)
+                if self.contest_profile:
+                    field_config["contest_profile"] = dict(self.contest_profile)
+                    field_config["field_size"] = int(self.contest_profile["field_size"])
                 strategy_l = self.salary_strategy.strip().lower()
                 generation_cancel_callback = generation_should_stop if deep_build else self._cancel_event.is_set
                 if ownership_candidate_target > 0 or scenario_candidate_target > 0:
@@ -1230,6 +1239,13 @@ from slate_readiness import audit_slate
 from entry_safety import build_entry_safety_report
 from game_day_safety import build_final_lock_report
 from build_recipes import dump_recipes_json, load_recipes_json, normalize_recipe
+from contest_profiles import (
+    dump_profiles_json,
+    format_payout_text,
+    load_profiles_json,
+    normalize_contest_profile,
+    parse_payout_text,
+)
 from build_diagnostics import (
     build_history_label,
     clear_build_history,
@@ -2417,6 +2433,216 @@ class BuildRecipesDialog(QtWidgets.QDialog):
         self._refresh()
 
 
+class ContestProfileDialog(QtWidgets.QDialog):
+    """Create, reuse, or disable an exact contest payout profile."""
+
+    def __init__(
+        self,
+        profiles: Dict[str, Dict[str, Any]],
+        active_name: str = "",
+        parent: Optional[QtWidgets.QWidget] = None,
+    ):
+        super().__init__(parent)
+        self.profiles = dict(profiles or {})
+        self.active_name = str(active_name or "").strip()
+        self.selected_profile: Optional[Dict[str, Any]] = None
+        self.changed = False
+        self.setWindowTitle("Contest-Aware SIM")
+        self.setModal(True)
+        self.resize(720, 620)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        intro = QtWidgets.QLabel(
+            "Attach the real field size, entry fee, and payout table to NFL SIM Edge. "
+            "The selected entry-limit preset still shapes the opponent field; this profile replaces only the payout economics."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        saved_row = QtWidgets.QHBoxLayout()
+        saved_row.addWidget(QtWidgets.QLabel("Saved profile"))
+        self.profile_combo = QtWidgets.QComboBox(self)
+        self.profile_combo.setObjectName("contestProfileSelector")
+        self.profile_combo.currentIndexChanged.connect(self._load_selected)
+        saved_row.addWidget(self.profile_combo, 1)
+        layout.addLayout(saved_row)
+
+        form = QtWidgets.QFormLayout()
+        self.name_edit = QtWidgets.QLineEdit(self)
+        self.name_edit.setObjectName("contestProfileName")
+        self.name_edit.setPlaceholderText("Example: NFL Sunday Million")
+        form.addRow("Contest name", self.name_edit)
+
+        self.field_size = QtWidgets.QSpinBox(self)
+        self.field_size.setObjectName("contestFieldSize")
+        self.field_size.setRange(2, 5_000_000)
+        self.field_size.setSingleStep(100)
+        self.field_size.setValue(100_000)
+        self.field_size.setGroupSeparatorShown(True)
+        form.addRow("Field size", self.field_size)
+
+        self.entry_fee = QtWidgets.QDoubleSpinBox(self)
+        self.entry_fee.setObjectName("contestEntryFee")
+        self.entry_fee.setRange(0.01, 1_000_000.0)
+        self.entry_fee.setDecimals(2)
+        self.entry_fee.setPrefix("$")
+        self.entry_fee.setValue(20.0)
+        form.addRow("Entry fee", self.entry_fee)
+
+        self.user_entries = QtWidgets.QSpinBox(self)
+        self.user_entries.setObjectName("contestUserEntries")
+        self.user_entries.setRange(1, 5_000_000)
+        self.user_entries.setValue(150)
+        form.addRow("Your entries", self.user_entries)
+        layout.addLayout(form)
+
+        payout_label = QtWidgets.QLabel(
+            "Payouts — one rank or range per line. Examples: 1 = $100,000 or 2-10 = $5,000"
+        )
+        payout_label.setWordWrap(True)
+        layout.addWidget(payout_label)
+        self.payouts_edit = QtWidgets.QPlainTextEdit(self)
+        self.payouts_edit.setObjectName("contestPayoutTable")
+        self.payouts_edit.setPlaceholderText(
+            "1 = $100,000\n2 = $50,000\n3-5 = $20,000\n6-10 = $10,000"
+        )
+        self.payouts_edit.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+        layout.addWidget(self.payouts_edit, 1)
+
+        self.preview = QtWidgets.QLabel("")
+        self.preview.setObjectName("contestProfilePreview")
+        self.preview.setWordWrap(True)
+        self.preview.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(self.preview)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        self.delete_button = buttons.addButton("Delete Saved", QtWidgets.QDialogButtonBox.DestructiveRole)
+        self.delete_button.setObjectName("deleteContestProfile")
+        self.delete_button.clicked.connect(self._delete_selected)
+        preset_button = buttons.addButton("Use Preset Only", QtWidgets.QDialogButtonBox.ActionRole)
+        preset_button.setObjectName("disableContestProfile")
+        preset_button.setToolTip("Keep NFL SIM Edge on, but return to the preset's payout-shape proxy.")
+        preset_button.clicked.connect(self._use_preset_only)
+        save_button = buttons.addButton("Save and Use", QtWidgets.QDialogButtonBox.AcceptRole)
+        save_button.setObjectName("saveContestProfile")
+        save_button.clicked.connect(self._save_and_use)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        for widget in (self.name_edit, self.payouts_edit):
+            if isinstance(widget, QtWidgets.QLineEdit):
+                widget.textChanged.connect(self._update_preview)
+            else:
+                widget.textChanged.connect(self._update_preview)
+        self.field_size.valueChanged.connect(self._update_preview)
+        self.entry_fee.valueChanged.connect(self._update_preview)
+        self.user_entries.valueChanged.connect(self._update_preview)
+        self._refresh_profiles(self.active_name)
+
+    def _selected_name(self) -> str:
+        return str(self.profile_combo.currentData() or "")
+
+    def _refresh_profiles(self, selected_name: str = "") -> None:
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        self.profile_combo.addItem("New profile", "")
+        selected_index = 0
+        for name in sorted(self.profiles, key=str.casefold):
+            self.profile_combo.addItem(name, name)
+            if name == selected_name:
+                selected_index = self.profile_combo.count() - 1
+        self.profile_combo.setCurrentIndex(selected_index)
+        self.profile_combo.blockSignals(False)
+        self._load_selected()
+
+    def _load_selected(self, *_args: Any) -> None:
+        name = self._selected_name()
+        profile = dict(self.profiles.get(name) or {})
+        self.delete_button.setEnabled(bool(profile))
+        if profile:
+            self.name_edit.setText(name)
+            self.field_size.setValue(int(profile.get("field_size", 100_000) or 100_000))
+            self.entry_fee.setValue(float(profile.get("entry_fee", 20.0) or 20.0))
+            self.user_entries.setValue(int(profile.get("user_entries", 1) or 1))
+            self.payouts_edit.setPlainText(format_payout_text(profile.get("payouts") or []))
+        else:
+            self.name_edit.clear()
+            self.field_size.setValue(100_000)
+            self.entry_fee.setValue(20.0)
+            self.user_entries.setValue(150)
+            self.payouts_edit.clear()
+        self._update_preview()
+
+    def _profile_from_fields(self) -> Dict[str, Any]:
+        return normalize_contest_profile({
+            "name": self.name_edit.text(),
+            "field_size": self.field_size.value(),
+            "entry_fee": self.entry_fee.value(),
+            "user_entries": self.user_entries.value(),
+            "payouts": parse_payout_text(self.payouts_edit.toPlainText()),
+        })
+
+    def _update_preview(self, *_args: Any) -> None:
+        try:
+            profile = self._profile_from_fields()
+        except ValueError as exc:
+            self.preview.setText(str(exc))
+            return
+        paid_pct = profile["cash_places"] / max(1, profile["field_size"]) * 100.0
+        self.preview.setText(
+            f"Prize pool entered: ${profile['prize_pool']:,.2f} • pays through {profile['cash_places']:,} "
+            f"({paid_pct:.1f}% of field) • top prize ${profile['top_prize']:,.2f}. "
+            "Ties and duplicate lineups split all prizes covered by their finishing range."
+        )
+
+    def _save_and_use(self) -> None:
+        try:
+            profile = self._profile_from_fields()
+        except ValueError as exc:
+            QtWidgets.QMessageBox.warning(self, "Contest Profile", str(exc))
+            return
+        name = str(profile["name"])
+        self.profiles[name] = profile
+        self.active_name = name
+        self.selected_profile = profile
+        self.changed = True
+        self.accept()
+
+    def _use_preset_only(self) -> None:
+        self.active_name = ""
+        self.selected_profile = None
+        self.changed = True
+        self.accept()
+
+    def reject(self) -> None:
+        # Deleting a saved profile is an intentional edit even if the user then
+        # closes the dialog instead of choosing another profile.
+        if self.changed:
+            self.accept()
+            return
+        super().reject()
+
+    def _delete_selected(self) -> None:
+        name = self._selected_name()
+        if not name:
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Delete Contest Profile",
+            f"Delete the saved contest profile '{name}'?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Cancel,
+        )
+        if answer != QtWidgets.QMessageBox.Yes:
+            return
+        self.profiles.pop(name, None)
+        if self.active_name == name:
+            self.active_name = ""
+            self.selected_profile = None
+        self.changed = True
+        self._refresh_profiles()
+
+
 class BuildDiagnosticsDialog(QtWidgets.QDialog):
     """Review and copy recent aggregate build diagnostics."""
 
@@ -2867,6 +3093,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._last_live_check_epoch = 0.0
         self._active_recipe_name = ""
         self.app_settings = QtCore.QSettings("DFS Optimizer", "DFS Optimizer")
+        self._active_contest_profile_name = str(
+            self.app_settings.value("contest/active_profile_name", "") or ""
+        ).strip()
 
         self._build_ui()
 
@@ -3296,6 +3525,9 @@ class MainWindow(QtWidgets.QMainWindow):
         save_recipe_action.setObjectName("saveBuildRecipeAction")
         manage_recipes_action = settings_menu.addAction("Apply or Delete Recipes...", self.on_manage_build_recipes)
         manage_recipes_action.setObjectName("manageBuildRecipesAction")
+        settings_menu.addSection("Contest")
+        contest_profile_action = settings_menu.addAction("Contest-Aware SIM...", self.on_contest_profiles)
+        contest_profile_action.setObjectName("contestAwareSimAction")
         settings_menu.addSection("Review")
         portfolio_insights_action = settings_menu.addAction("Portfolio Insights...", self.on_portfolio_summary)
         portfolio_insights_action.setObjectName("portfolioInsightsAction")
@@ -3914,6 +4146,9 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.chk_nfl_contest_sim.isChecked():
                 depth = "Deep" if self.combo_nfl_compute_mode.currentText().startswith("Deep") else "Fast"
                 parts.extend([f"SIM {depth}", self.combo_field_preset.currentText()])
+                contest_profile = self._active_contest_profile()
+                if contest_profile:
+                    parts.append(f"ROI {contest_profile['name']}")
             else:
                 parts.append("SIM Off")
         if self._active_recipe_name:
@@ -3930,6 +4165,57 @@ class MainWindow(QtWidgets.QMainWindow):
     def _store_build_recipes(self, recipes: Dict[str, Dict[str, Any]]) -> None:
         self.app_settings.setValue("build/recipes_json", dump_recipes_json(recipes))
         self.app_settings.sync()
+
+    def _load_contest_profiles(self) -> Dict[str, Dict[str, Any]]:
+        try:
+            return load_profiles_json(self.app_settings.value("contest/profiles_json", "{}"))
+        except Exception:
+            logger.exception("Saved contest profiles could not be loaded")
+            return {}
+
+    def _store_contest_profiles(
+        self,
+        profiles: Dict[str, Dict[str, Any]],
+        active_name: str,
+    ) -> None:
+        cleaned = load_profiles_json(dump_profiles_json(profiles))
+        selected = str(active_name or "").strip()
+        if selected not in cleaned:
+            selected = ""
+        self.app_settings.setValue("contest/profiles_json", dump_profiles_json(cleaned))
+        self.app_settings.setValue("contest/active_profile_name", selected)
+        self.app_settings.sync()
+        self._active_contest_profile_name = selected
+
+    def _active_contest_profile(self) -> Optional[Dict[str, Any]]:
+        name = str(getattr(self, "_active_contest_profile_name", "") or "").strip()
+        if not name:
+            return None
+        profile = self._load_contest_profiles().get(name)
+        return dict(profile) if profile else None
+
+    def on_contest_profiles(self) -> None:
+        profiles = self._load_contest_profiles()
+        dialog = ContestProfileDialog(
+            profiles,
+            str(getattr(self, "_active_contest_profile_name", "") or ""),
+            self,
+        )
+        if dialog.exec_() != QtWidgets.QDialog.Accepted:
+            return
+        if dialog.changed:
+            self._store_contest_profiles(dialog.profiles, dialog.active_name)
+        if dialog.active_name:
+            self.chk_nfl_contest_sim.setChecked(True)
+            profile = dict(dialog.profiles.get(dialog.active_name) or {})
+            self.status.showMessage(
+                f"Contest-Aware SIM active: {dialog.active_name} • {int(profile.get('field_size', 0) or 0):,} entries • "
+                f"${float(profile.get('entry_fee', 0.0) or 0.0):,.2f} entry.",
+                7000,
+            )
+        else:
+            self.status.showMessage("Contest profile disabled; NFL SIM Edge will use the preset payout proxy.", 6000)
+        self._update_workspace_summary()
 
     def _current_build_recipe(self) -> Dict[str, Any]:
         kind = self._contest_mode()
@@ -5838,6 +6124,7 @@ class MainWindow(QtWidgets.QMainWindow):
         effective_sim_enabled = bool(
             str(sport or "").strip().upper() == "NFL" and kind != "showdown" and sim_enabled
         )
+        contest_profile = self._active_contest_profile() if effective_sim_enabled else None
         retained = list(retained_lineups or [])[:max(0, int(num))]
         replacement_count = max(0, int(num) - len(retained))
         repairing = bool(str(repair_source or "").strip())
@@ -5855,6 +6142,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "sim_enabled": effective_sim_enabled,
                 "sim_scenarios": sim_scenarios if effective_sim_enabled else 0,
                 "field_preset": field_preset if effective_sim_enabled else "",
+                "contest_profile": dict(contest_profile or {}),
                 "compute_mode": (
                     "Deep" if effective_sim_enabled and compute_mode.casefold().startswith("deep") else "Fast"
                 ),
@@ -5903,6 +6191,7 @@ class MainWindow(QtWidgets.QMainWindow):
             sim_scenarios=sim_scenarios,
             field_preset=field_preset,
             field_calibration=field_calibration,
+            contest_profile=contest_profile,
             compute_mode=compute_mode,
             retained_lineups=retained,
             repair_source=repair_source,
@@ -6053,10 +6342,16 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 grade_info = lineup_grade_for_sport(lu, sport, self._safe_float(self.edit_cl_cap.text(), 50000.0))
                 if grade_info.get("sim_scenarios"):
-                    grade_txt = (
-                        f"{float(grade_info.get('sim_edge', 0.0)):.0f} | "
-                        f"T1 {float(grade_info.get('sim_top_one_pct', 0.0)):.1f}%"
-                    )
+                    if grade_info.get("sim_expected_roi_pct") is not None:
+                        grade_txt = (
+                            f"{float(grade_info.get('sim_edge', 0.0)):.0f} | "
+                            f"ROI {float(grade_info.get('sim_expected_roi_pct', 0.0)):+.1f}%"
+                        )
+                    else:
+                        grade_txt = (
+                            f"{float(grade_info.get('sim_edge', 0.0)):.0f} | "
+                            f"T1 {float(grade_info.get('sim_top_one_pct', 0.0)):.1f}%"
+                        )
                 else:
                     grade_txt = f"{grade_info.get('grade', '')} ({float(grade_info.get('score', 0.0)):.0f})"
                 grade_item = QtWidgets.QTableWidgetItem(grade_txt)
@@ -6082,6 +6377,15 @@ class MainWindow(QtWidgets.QMainWindow):
                         f"Simulation: {int(grade_info.get('sim_scenarios', 0)):,} scenarios vs "
                         f"{int(grade_info.get('sim_field_lineups', 0)):,} field lineups\n"
                     )
+                    if grade_info.get("sim_expected_roi_pct") is not None:
+                        detail += (
+                            f"Contest: {grade_info.get('sim_contest_name') or 'Attached contest'}\n"
+                            f"Contest Field: {int(grade_info.get('sim_contest_field_size', 0) or 0):,}\n"
+                            f"Entry Fee: ${float(grade_info.get('sim_entry_fee', 0.0) or 0.0):,.2f}\n"
+                            f"Expected Payout: ${float(grade_info.get('sim_expected_payout', 0.0) or 0.0):,.2f}\n"
+                            f"Expected Profit: ${float(grade_info.get('sim_expected_profit', 0.0) or 0.0):+,.2f}\n"
+                            f"Expected ROI: {float(grade_info.get('sim_expected_roi_pct', 0.0) or 0.0):+.2f}%\n"
+                        )
                     drivers = list(grade_info.get("sim_edge_drivers") or [])
                     if drivers:
                         detail += "Why this SIM Edge:\n"
@@ -6146,14 +6450,20 @@ class MainWindow(QtWidgets.QMainWindow):
                     avg_edge = sum(float(row.get("sim_edge", 0.0) or 0.0) for row in sim_rows) / len(sim_rows)
                     avg_top = sum(float(row.get("sim_top_one_pct", 0.0) or 0.0) for row in sim_rows) / len(sim_rows)
                     avg_return = sum(float(row.get("sim_return_index", 0.0) or 0.0) for row in sim_rows) / len(sim_rows)
+                    roi_rows = [
+                        float(row.get("sim_expected_roi_pct"))
+                        for row in sim_rows
+                        if row.get("sim_expected_roi_pct") is not None
+                    ]
                     scenarios = max(int(row.get("sim_scenarios", 0) or 0) for row in sim_rows)
                     covered = set()
                     for lineup in lineups:
                         covered.update(set(getattr(lineup, "sim_top_hits", set()) or set()))
+                    roi_text = f" | avg contest ROI {sum(roi_rows) / len(roi_rows):+.1f}%" if roi_rows else ""
                     return (
                         f"Quality: {len(lineups)} NFL lineups | avg salary left ${avg_left:,.0f} | "
                         f"avg SIM Edge {avg_edge:.0f} | avg top-1% {avg_top:.2f}% | "
-                        f"return index {avg_return:.0f} | top-1% paths {len(covered)}/{scenarios}."
+                        f"return index {avg_return:.0f}{roi_text} | top-1% paths {len(covered)}/{scenarios}."
                     )
             return f"Quality: {len(lineups)} {sport_u} lineups | avg salary left ${avg_left:,.0f}."
         except Exception as e:

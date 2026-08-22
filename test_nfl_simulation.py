@@ -192,6 +192,52 @@ class NFLSimulationTests(unittest.TestCase):
         self.assertEqual(result["report"]["field_size"], 5000)
         self.assertFalse(result["report"]["learned_field_model"])
 
+    def test_contest_profile_applies_exact_payout_roi_and_tie_model(self):
+        players = _fixture_players()
+        candidates = MultiSportClassicOptimizer(
+            players,
+            sport="NFL",
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+        ).build_lineups(8)
+        config = nfl_field_preset("20-Max")
+        config["contest_profile"] = {
+            "name": "Week 1 Twenty",
+            "field_size": 500,
+            "entry_fee": 10,
+            "user_entries": 20,
+            "payouts": "1 = 1000\n2-10 = 100\n11-100 = 20",
+        }
+        result = simulate_nfl_contest(
+            candidates,
+            players,
+            scenarios=40,
+            field_lineup_count=80,
+            field_config=config,
+            seed=2026,
+        )
+
+        self.assertTrue(result["report"]["contest_aware"])
+        self.assertEqual(result["report"]["field_size"], 500)
+        self.assertEqual(result["report"]["model"], "contest-payout-portfolio-v1")
+        self.assertEqual(result["report"]["payout_model"], "exact-rank-tie-split-v1")
+        for lineup in result["lineups"]:
+            metrics = lineup.sim_metrics
+            self.assertEqual(metrics["sim_contest_name"], "Week 1 Twenty")
+            self.assertAlmostEqual(
+                metrics["sim_expected_profit"],
+                metrics["sim_expected_payout"] - 10.0,
+            )
+            self.assertAlmostEqual(
+                metrics["sim_expected_roi_pct"],
+                metrics["sim_expected_profit"] / 10.0 * 100.0,
+            )
+            self.assertIn("Contest ROI", metrics["sim_edge_components"])
+            self.assertNotIn("Tournament return", metrics["sim_edge_components"])
+
+        grade = lineup_grade_for_sport(result["lineups"][0], "NFL", 50000)
+        self.assertIn("sim_expected_roi_pct", grade)
+
     def test_real_field_reference_is_compared_without_enabling_learning(self):
         players = _fixture_players()
         candidates = MultiSportClassicOptimizer(players, sport="NFL").build_lineups(8)
