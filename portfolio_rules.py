@@ -883,6 +883,21 @@ def portfolio_report(
             "top_one_coverage_pct": len(top_counts) / max(1, scenario_count) * 100.0,
             "top_five_coverage_pct": len(top_five_counts) / max(1, scenario_count) * 100.0,
         }
+        contest_rows = [row for row in sim_rows if row.get("sim_expected_roi_pct") is not None]
+        if contest_rows:
+            sim_summary.update({
+                "contest_aware": True,
+                "contest_name": str(contest_rows[0].get("sim_contest_name") or "Attached contest"),
+                "average_expected_roi_pct": sum(
+                    float(row.get("sim_expected_roi_pct", 0.0) or 0.0) for row in contest_rows
+                ) / len(contest_rows),
+                "average_expected_payout": sum(
+                    float(row.get("sim_expected_payout", 0.0) or 0.0) for row in contest_rows
+                ) / len(contest_rows),
+                "average_expected_profit": sum(
+                    float(row.get("sim_expected_profit", 0.0) or 0.0) for row in contest_rows
+                ) / len(contest_rows),
+            })
 
     report = {
         "lineup_count": total,
@@ -915,6 +930,15 @@ def _report_text(report: Dict[str, Any]) -> str:
     ]
     sim = report.get("sim_summary") or {}
     if sim:
+        contest_line = []
+        if sim.get("contest_aware"):
+            contest_line = [
+                (
+                    f"Contest ROI: {float(sim.get('average_expected_roi_pct', 0.0)):+.1f}% | "
+                    f"expected payout ${float(sim.get('average_expected_payout', 0.0)):,.2f} | "
+                    f"expected profit ${float(sim.get('average_expected_profit', 0.0)):+,.2f}"
+                )
+            ]
         lines[3:3] = [
             "",
             (
@@ -927,7 +951,7 @@ def _report_text(report: Dict[str, Any]) -> str:
                 f"{int(sim.get('scenario_count', 0))} | representative wins in "
                 f"{int(sim.get('win_scenarios_covered', 0))}"
             ),
-        ]
+        ] + contest_line
     for row in (report.get("players") or [])[:12]:
         captain = f" | CPT {float(row.get('cpt_pct', 0.0)):.1f}%" if float(row.get("cpt_pct", 0.0)) > 0 else ""
         lines.append(f"- {row.get('name')}: {float(row.get('pct', 0.0)):.1f}%{captain}")

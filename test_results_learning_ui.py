@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtCore, QtWidgets
 
-from main_window import BuildDiagnosticsDialog, EntrySafetyDialog, FinalLockCheckDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
+from main_window import BuildDiagnosticsDialog, ContestProfileDialog, EntrySafetyDialog, FinalLockCheckDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
 from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
 from learning_db import generate_learning_report
 from nfl_simulation import SimLineup
@@ -81,7 +81,29 @@ class ResultsLearningUITests(unittest.TestCase):
         build_history_action = window.findChild(QtWidgets.QAction, "buildHistoryAction")
         self.assertIsNotNone(build_history_action)
         self.assertEqual(build_history_action.text(), "Build History...")
+        contest_action = window.findChild(QtWidgets.QAction, "contestAwareSimAction")
+        self.assertIsNotNone(contest_action)
+        self.assertEqual(contest_action.text(), "Contest-Aware SIM...")
         window.close()
+
+    def test_contest_profile_dialog_loads_saved_payouts_and_previews_ties(self):
+        profile = {
+            "name": "Sunday Twenty", "field_size": 500, "entry_fee": 10,
+            "user_entries": 20,
+            "payouts": [
+                {"start": 1, "end": 1, "amount": 1000},
+                {"start": 2, "end": 100, "amount": 20},
+            ],
+        }
+        dialog = ContestProfileDialog({"Sunday Twenty": profile}, "Sunday Twenty")
+        self.assertEqual(dialog.profile_combo.currentData(), "Sunday Twenty")
+        self.assertEqual(dialog.field_size.value(), 500)
+        self.assertIn("Ties and duplicate lineups split", dialog.preview.text())
+        self.assertEqual(dialog._profile_from_fields()["user_entries"], 20)
+        dialog.changed = True
+        dialog.reject()
+        self.assertEqual(dialog.result(), QtWidgets.QDialog.Accepted)
+        dialog.close()
 
     def test_deep_shortlist_preserves_retained_and_candidate_source_diversity(self):
         lineups = []

@@ -53,6 +53,10 @@ class BuildDiagnosticsTests(unittest.TestCase):
                     "sim_enabled": True,
                     "sim_scenarios": 750,
                     "field_preset": "150-Max",
+                    "contest_profile": {
+                        "name": "Sunday Main", "field_size": 100000,
+                        "entry_fee": 20, "user_entries": 150,
+                    },
                 },
                 "portfolio_rules": {
                     "min_unique": 2,
@@ -76,7 +80,16 @@ class BuildDiagnosticsTests(unittest.TestCase):
                 "selected_count": 150,
                 "requested_count": 150,
             },
-            portfolio_report={"compliant": False, "warnings": ["Secret Player total exposure is 4/150; minimum is 10."]},
+            portfolio_report={
+                "compliant": False,
+                "warnings": ["Secret Player total exposure is 4/150; minimum is 10."],
+                "sim_summary": {
+                    "contest_aware": True,
+                    "average_expected_roi_pct": 12.5,
+                    "average_expected_payout": 22.5,
+                    "average_expected_profit": 2.5,
+                },
+            },
             sim_report={"preset_comparison": {"available": True, "fit_score": 88}},
             displayed_count=150,
         )
@@ -89,6 +102,8 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertIn("400 optimizer + 80 field-shaped + 120 scenario-built", report)
         self.assertIn("Slowest phase: SIM", report)
         self.assertIn("750 scenarios, 150-Max", report)
+        self.assertIn("Contest-Aware SIM: Sunday Main", report)
+        self.assertIn("Contest portfolio: ROI +12.5%", report)
         self.assertIn("A player exposure constraint was not met", report)
         self.assertIn("no players, lineups, file paths, or API keys", report)
         serialized = json.dumps(diagnostic)
