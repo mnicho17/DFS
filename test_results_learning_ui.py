@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtCore, QtWidgets
 
-from main_window import BuildDiagnosticsDialog, EntrySafetyDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
+from main_window import BuildDiagnosticsDialog, EntrySafetyDialog, FinalLockCheckDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
 from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
 from learning_db import generate_learning_report
 from nfl_simulation import SimLineup
@@ -157,6 +157,72 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(dialog.requested_action, "remove")
         self.assertEqual(dialog.requested_indexes, [0])
         dialog.close()
+
+    def test_final_lock_dialog_can_replace_exact_affected_lineups(self):
+        dialog = FinalLockCheckDialog({
+            "status": "attention",
+            "title": "2 Saved Lineups Need Review",
+            "player_count": 192,
+            "sleeper_matches": 190,
+            "lineup_count": 20,
+            "affected_lineups": 2,
+            "affected_indexes": [3, 11],
+            "changes": [{
+                "name": "Late Scratch",
+                "team": "BUF",
+                "availability": "OUT",
+                "change": "Active → Out",
+                "lineup_numbers": [4, 12],
+            }],
+            "text": "FINAL LOCK CHECK",
+        })
+        repair = dialog.findChild(QtWidgets.QPushButton, "repairFinalLockLineups")
+        self.assertIsNotNone(repair)
+        self.assertEqual(
+            dialog.findChild(QtWidgets.QTableWidget, "finalLockChanges").item(0, 4).text(),
+            "4, 12",
+        )
+        repair.click()
+        self.assertTrue(dialog.repair_requested)
+        dialog.close()
+
+    def test_entry_safety_dialog_can_replace_blocked_lineups(self):
+        dialog = EntrySafetyDialog({
+            "status": "blocked",
+            "title": "Blocked",
+            "sport": "NFL",
+            "kind": "classic",
+            "lineup_count": 20,
+            "blockers": 1,
+            "reviews": 0,
+            "blocked_lineup_indexes": [2],
+            "checks": [{
+                "status": "block",
+                "label": "Roster validity",
+                "summary": "One player is repeated.",
+                "action": "Replace the affected lineup.",
+            }],
+            "text": "ENTRY SAFETY — BLOCKED",
+        })
+        repair = dialog.findChild(QtWidgets.QPushButton, "repairBlockedEntrySafetyLineups")
+        export = dialog.findChild(QtWidgets.QPushButton, "confirmSafeExport")
+        self.assertIsNotNone(repair)
+        self.assertFalse(export.isEnabled())
+        repair.click()
+        self.assertTrue(dialog.repair_requested)
+        dialog.close()
+
+    def test_saved_lineup_repair_keeps_unaffected_indexes_fixed(self):
+        window = MainWindow()
+        lineups = [[{"FlexID": str(index)}] for index in range(4)]
+        with mock.patch.object(window, "_handle_portfolio_insights_action") as handle:
+            window._repair_saved_lineups("classic", lineups, [1, 3], 50000)
+        handle.assert_called_once()
+        call = handle.call_args.kwargs
+        self.assertEqual(call["indexes"], [1, 3])
+        self.assertEqual(call["action"], "replace")
+        self.assertEqual(call["source_label"], "saved")
+        window.close()
 
     def test_build_history_dialog_and_copy_report_use_local_diagnostics(self):
         diagnostic = create_build_diagnostic(

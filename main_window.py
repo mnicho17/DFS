@@ -1228,6 +1228,7 @@ from lineup_space import calculate_lineup_space
 from portfolio_insights import build_portfolio_insights
 from slate_readiness import audit_slate
 from entry_safety import build_entry_safety_report
+from game_day_safety import build_final_lock_report
 from build_recipes import dump_recipes_json, load_recipes_json, normalize_recipe
 from build_diagnostics import (
     build_history_label,
@@ -2119,12 +2120,111 @@ class SlateReadinessDialog(QtWidgets.QDialog):
             parent.focus_readiness_players(check)
 
 
+class FinalLockCheckDialog(QtWidgets.QDialog):
+    """Show the last live refresh and map changes to exact saved lineups."""
+
+    def __init__(self, report: Dict[str, Any], parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.report = dict(report or {})
+        self.repair_requested = False
+        self.setWindowTitle("Final Lock Check")
+        self.setModal(True)
+        self.resize(920, 500)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        status = str(self.report.get("status") or "attention")
+        color = {"ready": "#8FE3A1", "attention": "#FFD180", "unavailable": "#FFB071"}.get(status, "#FFD180")
+        title = QtWidgets.QLabel(str(self.report.get("title") or "Saved Lineups Need Review"))
+        title.setObjectName("finalLockTitle")
+        title.setStyleSheet(f"color: {color}; font-size: 18pt; font-weight: 700;")
+        layout.addWidget(title)
+
+        source_text = "cached check" if self.report.get("used_cached_check") else "fresh refresh"
+        context = QtWidgets.QLabel(
+            f"{source_text.title()} | Players {int(self.report.get('sleeper_matches', 0) or 0)}/"
+            f"{int(self.report.get('player_count', 0) or 0)} matched | "
+            f"{int(self.report.get('affected_lineups', 0) or 0)}/"
+            f"{int(self.report.get('lineup_count', 0) or 0)} saved lineups affected"
+        )
+        context.setWordWrap(True)
+        layout.addWidget(context)
+
+        changes = list(self.report.get("changes") or [])
+        table = QtWidgets.QTableWidget(max(1, len(changes)), 5, self)
+        table.setObjectName("finalLockChanges")
+        table.setHorizontalHeaderLabels(["Player", "Team", "Availability", "Change", "Saved lineups"])
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setVisible(False)
+        if changes:
+            for row, change in enumerate(changes):
+                values = [
+                    str(change.get("name") or "Unknown"),
+                    str(change.get("team") or ""),
+                    str(change.get("availability") or "Updated"),
+                    str(change.get("change") or "Updated"),
+                    ", ".join(str(value) for value in change.get("lineup_numbers") or []) or "None",
+                ]
+                for column, value in enumerate(values):
+                    table.setItem(row, column, QtWidgets.QTableWidgetItem(value))
+        else:
+            item = QtWidgets.QTableWidgetItem("No player-status changes were returned by the final check.")
+            table.setItem(0, 0, item)
+            table.setSpan(0, 0, 1, 5)
+        table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
+        table.resizeRowsToContents()
+        layout.addWidget(table, 1)
+
+        notes: List[str] = []
+        if self.report.get("unavailable_players"):
+            notes.append(
+                "Unavailable players still rostered: "
+                + ", ".join(str(value) for value in self.report.get("unavailable_players") or [])
+            )
+        if status == "unavailable":
+            notes.append("The live source could not be confirmed. Continuing uses cached player data and Entry Safety will keep the uncertainty visible.")
+        if not notes:
+            notes.append("Continue to Entry Safety for the complete roster, salary, team, slate, and portfolio-rule audit.")
+        note = QtWidgets.QLabel("\n".join(notes))
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Cancel)
+        copy_button = buttons.addButton("Copy Report", QtWidgets.QDialogButtonBox.ActionRole)
+        copy_button.setObjectName("copyFinalLockReport")
+        copy_button.clicked.connect(
+            lambda: QtWidgets.QApplication.clipboard().setText(str(self.report.get("text") or ""))
+        )
+        if self.report.get("affected_indexes"):
+            repair_button = buttons.addButton("Replace Affected Lineups", QtWidgets.QDialogButtonBox.ActionRole)
+            repair_button.setObjectName("repairFinalLockLineups")
+            repair_button.clicked.connect(self._request_repair)
+        continue_button = buttons.addButton(
+            "Continue with Cached Data" if status == "unavailable" else "Continue to Entry Safety",
+            QtWidgets.QDialogButtonBox.AcceptRole,
+        )
+        continue_button.setObjectName("continueFinalLockCheck")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _request_repair(self) -> None:
+        self.repair_requested = True
+        self.done(2)
+
+
 class EntrySafetyDialog(QtWidgets.QDialog):
     """Final report for the exact saved portfolio about to be exported."""
 
     def __init__(self, report: Dict[str, Any], parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
         self.report = dict(report or {})
+        self.repair_requested = False
         self.setWindowTitle("Entry Safety")
         self.setModal(True)
         self.resize(920, 520)
@@ -2177,7 +2277,7 @@ class EntrySafetyDialog(QtWidgets.QDialog):
 
         note_text = (
             "Resolve every blocker before export. Review items may be intentional, but should be checked before lock. "
-            "Entry Safety never changes a lineup or setting."
+            "Nothing changes unless you explicitly choose and confirm replacement."
         )
         note = QtWidgets.QLabel(note_text)
         note.setWordWrap(True)
@@ -2189,6 +2289,10 @@ class EntrySafetyDialog(QtWidgets.QDialog):
         copy_button.clicked.connect(
             lambda: QtWidgets.QApplication.clipboard().setText(str(self.report.get("text") or ""))
         )
+        if status == "blocked" and self.report.get("blocked_lineup_indexes"):
+            repair_button = buttons.addButton("Replace Blocked Lineups", QtWidgets.QDialogButtonBox.ActionRole)
+            repair_button.setObjectName("repairBlockedEntrySafetyLineups")
+            repair_button.clicked.connect(self._request_repair)
         export_button = buttons.addButton(
             "Export CSV" if status == "ready" else "Export Anyway",
             QtWidgets.QDialogButtonBox.AcceptRole,
@@ -2198,6 +2302,10 @@ class EntrySafetyDialog(QtWidgets.QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+    def _request_repair(self) -> None:
+        self.repair_requested = True
+        self.done(2)
 
 
 class BuildRecipesDialog(QtWidgets.QDialog):
@@ -2748,6 +2856,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.last_sim_report: Dict[str, Any] = {}
         self.last_live_check_summary: Dict[str, Any] = {}
         self.last_readiness_report: Dict[str, Any] = {}
+        self.last_final_lock_report: Dict[str, Any] = {}
         self.last_entry_safety_report: Dict[str, Any] = {}
         self.last_build_timing_report: Dict[str, Any] = {}
         history = load_build_history(limit=1)
@@ -4672,17 +4781,13 @@ class MainWindow(QtWidgets.QMainWindow):
         return f"{p.get('Name','')} ({p.get('Team','')})"
 
     def _display_id(self, p: Optional[Dict[str, Any]], *, slot: str = "FLEX") -> str:
-            """Return DraftKings player IDs for easy CSV upload.
-    
-            - Showdown CPT uses CptID when available.
-            - All other slots use FlexID.
-            """
-            if not p:
-                return ""
-            slot_u = (slot or "").upper()
-            if slot_u in ("CPT", "CAPTAIN"):
-                return str(p.get("CptID") or p.get("FlexID") or "").strip()
-            return str(p.get("FlexID") or "").strip()
+        """Return the exact DraftKings ID for the requested roster slot."""
+        if not p:
+            return ""
+        slot_u = (slot or "").upper()
+        if slot_u in ("CPT", "CAPTAIN"):
+            return str(p.get("CptID") or "").strip()
+        return str(p.get("FlexID") or "").strip()
 
 
     def _load_step(self, progress: Optional[QtWidgets.QProgressDialog], pct: int, msg: str) -> None:
@@ -4740,6 +4845,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.last_portfolio_report = {}
             self.last_sim_report = {}
             self.last_readiness_report = {}
+            self.last_final_lock_report = {}
             self.last_build_timing_report = {}
             self._active_build_context = {}
             self._readiness_filter_names.clear()
@@ -6836,6 +6942,82 @@ class MainWindow(QtWidgets.QMainWindow):
             repair_source=source_label,
         )
 
+    def _final_lock_report(self, kind: str, lineups: List[Any]) -> Dict[str, Any]:
+        used_cached_check = bool(
+            self.last_live_check_summary
+            and self._last_live_check_epoch
+            and (time.time() - self._last_live_check_epoch) <= 60.0
+        )
+        if used_cached_check:
+            summary = dict(self.last_live_check_summary)
+        else:
+            try:
+                summary = self._run_live_nfl_check(show_dialog=False, full_context=False)
+            except Exception as exc:
+                logger.exception("Final Lock Check live refresh failed; cached player data retained")
+                summary = dict(self.last_live_check_summary or {})
+                summary.update({
+                    "total": len(self.players),
+                    "sleeper_state": "unavailable",
+                    "status_changes": 0,
+                    "changes": [],
+                    "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "message": str(exc),
+                })
+                self._record_live_check(summary)
+        report = build_final_lock_report(
+            lineups,
+            kind=kind,
+            player_pool=self.players,
+            live_summary=summary,
+            used_cached_check=used_cached_check,
+        )
+        self.last_final_lock_report = report
+        return report
+
+    def _repair_saved_lineups(
+        self,
+        kind: str,
+        lineups: List[Any],
+        indexes: Sequence[int],
+        salary_cap: float,
+    ) -> None:
+        selected_indexes = sorted({
+            int(index) for index in indexes if 0 <= int(index) < len(lineups)
+        })
+        if not selected_indexes:
+            return
+        self._handle_portfolio_insights_action(
+            kind=kind,
+            sport=self._current_sport(),
+            source_label="saved",
+            lineups=list(lineups),
+            action="replace",
+            indexes=selected_indexes,
+            salary_cap=salary_cap,
+        )
+
+    def _confirm_final_lock_export(
+        self,
+        kind: str,
+        lineups: List[Any],
+        salary_cap: float,
+    ) -> bool:
+        if self._current_sport() != "NFL" or not self.players:
+            return True
+        report = self._final_lock_report(kind, lineups)
+        dialog = FinalLockCheckDialog(report, self)
+        result = dialog.exec_()
+        if dialog.repair_requested:
+            self._repair_saved_lineups(
+                kind,
+                lineups,
+                report.get("affected_indexes") or [],
+                salary_cap,
+            )
+            return False
+        return result == QtWidgets.QDialog.Accepted
+
     def _entry_safety_report(
         self,
         kind: str,
@@ -6875,6 +7057,7 @@ class MainWindow(QtWidgets.QMainWindow):
             export_rows=rows,
             portfolio_report=portfolio,
             readiness_report=readiness,
+            player_pool=self.players,
             min_salary_pct=float(field_preset.get("min_salary_pct", 0.94) or 0.94),
         )
         self.last_entry_safety_report = report
@@ -6888,7 +7071,17 @@ class MainWindow(QtWidgets.QMainWindow):
         salary_cap: float,
     ) -> bool:
         report = self._entry_safety_report(kind, lineups, rows, salary_cap)
-        return EntrySafetyDialog(report, self).exec_() == QtWidgets.QDialog.Accepted
+        dialog = EntrySafetyDialog(report, self)
+        result = dialog.exec_()
+        if dialog.repair_requested:
+            self._repair_saved_lineups(
+                kind,
+                lineups,
+                report.get("blocked_lineup_indexes") or [],
+                salary_cap,
+            )
+            return False
+        return result == QtWidgets.QDialog.Accepted
 
     def _confirm_portfolio_export(self, kind: str, lineups: List[Any]) -> bool:
         """Compatibility wrapper for integrations that used the former export confirmation."""
@@ -6903,6 +7096,8 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             rows = [self._classic_export_cells(lineup, sport) for lineup in lineups]
             cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
+        if not self._confirm_final_lock_export(kind, lineups, cap):
+            return False
         return self._confirm_entry_safety_export(kind, lineups, rows, cap)
 
     # ---------------- Stack / Team / Salary Exposure Dashboard ----------------

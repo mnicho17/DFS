@@ -33,6 +33,56 @@ def _identity(player: Mapping[str, Any]) -> str:
     ).strip()
 
 
+def _ordered_match_keys(player: Mapping[str, Any]) -> List[str]:
+    keys = [
+        str(player.get(field) or "").strip().casefold()
+        for field in ("FlexID", "CptID", "FlexNamePlusID", "CptNamePlusID")
+        if str(player.get(field) or "").strip()
+    ]
+    name = str(player.get("Name") or "").strip().casefold()
+    team = str(player.get("Team") or "").strip().casefold()
+    if name:
+        if team:
+            keys.append(f"name-team:{name}|{team}")
+        keys.append(f"name:{name}")
+    return list(dict.fromkeys(keys))
+
+
+def _match_keys(player: Mapping[str, Any]) -> set[str]:
+    return set(_ordered_match_keys(player))
+
+
+def _belongs_to_current_pool(
+    player: Mapping[str, Any],
+    lookup: Mapping[str, Mapping[str, Any]],
+) -> bool:
+    id_keys = [
+        str(player.get(field) or "").strip().casefold()
+        for field in ("FlexID", "CptID", "FlexNamePlusID", "CptNamePlusID")
+        if str(player.get(field) or "").strip()
+    ]
+    keys = id_keys or _ordered_match_keys(player)
+    return any(key in lookup for key in keys)
+
+
+def _player_lookup(players: Sequence[Mapping[str, Any]]) -> Dict[str, Mapping[str, Any]]:
+    lookup: Dict[str, Mapping[str, Any]] = {}
+    for player in players or []:
+        for key in _ordered_match_keys(player):
+            lookup.setdefault(key, player)
+    return lookup
+
+
+def _current_player(
+    player: Mapping[str, Any],
+    lookup: Mapping[str, Mapping[str, Any]],
+) -> Mapping[str, Any]:
+    for key in _ordered_match_keys(player):
+        if key in lookup:
+            return lookup[key]
+    return player
+
+
 def _status(player: Mapping[str, Any]) -> str:
     return str(
         player.get("NFLAvailability")
@@ -80,13 +130,49 @@ def _signature(lineup: Any, kind: str) -> tuple[str, ...]:
     return tuple(sorted(_identity(player) for player in _players(lineup, kind)))
 
 
-def _check(key: str, label: str, status: str, summary: str, action: str = "") -> Dict[str, str]:
+def _expected_export_row(lineup: Any, kind: str, sport: str) -> List[str]:
+    """Return the exact DraftKings IDs required by each exported roster slot."""
+    if kind == "showdown" and isinstance(lineup, Mapping):
+        captain = lineup.get("Captain")
+        captain_id = (
+            str(captain.get("CptID") or "").strip()
+            if isinstance(captain, Mapping)
+            else ""
+        )
+        flex_ids = [
+            str(player.get("FlexID") or "").strip()
+            for player in lineup.get("Flex") or []
+            if isinstance(player, Mapping)
+        ]
+        return [captain_id] + flex_ids
+
+    if isinstance(lineup, Sequence) and not isinstance(lineup, (str, bytes)):
+        assignment = lineup_slots_for_sport(list(lineup), sport)
+        return [
+            str(player.get("FlexID") or "").strip()
+            if isinstance(player, Mapping)
+            else ""
+            for _, player in assignment
+        ]
+    return []
+
+
+def _check(
+    key: str,
+    label: str,
+    status: str,
+    summary: str,
+    action: str = "",
+    *,
+    lineup_indexes: Optional[Sequence[int]] = None,
+) -> Dict[str, Any]:
     return {
         "key": key,
         "label": label,
         "status": status,
         "summary": summary,
         "action": action,
+        "lineup_indexes": sorted(set(int(value) for value in (lineup_indexes or []) if int(value) >= 0)),
     }
 
 
@@ -99,6 +185,7 @@ def build_entry_safety_report(
     export_rows: Optional[Sequence[Sequence[Any]]] = None,
     portfolio_report: Optional[Mapping[str, Any]] = None,
     readiness_report: Optional[Mapping[str, Any]] = None,
+    player_pool: Optional[Sequence[Mapping[str, Any]]] = None,
     min_salary_pct: float = 0.94,
 ) -> Dict[str, Any]:
     """Audit the exact saved portfolio without changing any lineup or setting."""
@@ -107,7 +194,8 @@ def build_entry_safety_report(
     selected = list(lineups or [])
     expected = 6 if kind_l == "showdown" else len(get_roster_slots_for_sport(sport_u))
     cap = max(0.0, _number(salary_cap, 50000.0))
-    checks: List[Dict[str, str]] = []
+    checks: List[Dict[str, Any]] = []
+    current_lookup = _player_lookup(list(player_pool or []))
 
     if not selected:
         checks.append(_check(
@@ -121,6 +209,11 @@ def build_entry_safety_report(
 
     invalid_indexes: List[int] = []
     duplicate_player_indexes: List[int] = []
+    missing_pool_indexes: List[int] = []
+    team_diversity_indexes: List[int] = []
+    showdown_game_indexes: List[int] = []
+    missing_salary_indexes: List[int] = []
+    export_id_indexes: List[int] = []
     for index, lineup in enumerate(selected, 1):
         lineup_players = _players(lineup, kind_l)
         identities = [_identity(player) for player in lineup_players]
@@ -132,11 +225,74 @@ def build_entry_safety_report(
             assignment = lineup_slots_for_sport(list(lineup_players), sport_u)
             if not assignment or any(player is None for _, player in assignment):
                 invalid_indexes.append(index)
+        if current_lookup and any(
+            not _belongs_to_current_pool(player, current_lookup)
+            for player in lineup_players
+        ):
+            missing_pool_indexes.append(index)
+
+        current_players = [_current_player(player, current_lookup) for player in lineup_players]
+        if kind_l == "showdown" and isinstance(lineup, Mapping):
+            captain = lineup.get("Captain")
+            current_captain = (
+                _current_player(captain, current_lookup)
+                if isinstance(captain, Mapping)
+                else {}
+            )
+            flex_players = [
+                _current_player(player, current_lookup)
+                for player in lineup.get("Flex") or []
+                if isinstance(player, Mapping)
+            ]
+            if (
+                _number(current_captain.get("CptSalary"), 0.0) <= 0.0
+                or any(_number(player.get("FlexSalary"), 0.0) <= 0.0 for player in flex_players)
+            ):
+                missing_salary_indexes.append(index)
+        elif any(_number(player.get("FlexSalary"), 0.0) <= 0.0 for player in current_players):
+            missing_salary_indexes.append(index)
+
+        expected_export = _expected_export_row(lineup, kind_l, sport_u)
+        if (
+            len(expected_export) != expected
+            or any(not value for value in expected_export)
+            or len(set(expected_export)) != len(expected_export)
+        ):
+            export_id_indexes.append(index)
+
+        teams = {
+            str(player.get("Team") or "").strip().upper()
+            for player in current_players
+            if str(player.get("Team") or "").strip()
+        }
+        missing_team = any(not str(player.get("Team") or "").strip() for player in current_players)
+        invalid_team_count = len(teams) != 2 if kind_l == "showdown" else len(teams) < 2
+        if len(lineup_players) == expected and (missing_team or invalid_team_count):
+            team_diversity_indexes.append(index)
+
+        if kind_l == "showdown" and len(lineup_players) == expected:
+            games = {
+                str(player.get("GameKey") or player.get("GameInfo") or "").strip().upper()
+                for player in current_players
+                if str(player.get("GameKey") or player.get("GameInfo") or "").strip()
+            }
+            if len(games) > 1:
+                showdown_game_indexes.append(index)
 
     if export_rows is not None:
         for index, row in enumerate(export_rows, 1):
             if len(row) != expected or any(not str(cell).strip() for cell in row):
                 invalid_indexes.append(index)
+            cells = [str(cell).strip() for cell in row if str(cell).strip()]
+            if len(set(cells)) != len(cells):
+                duplicate_player_indexes.append(index)
+            expected_row = (
+                _expected_export_row(selected[index - 1], kind_l, sport_u)
+                if index <= len(selected)
+                else []
+            )
+            if [str(cell).strip() for cell in row] != expected_row:
+                export_id_indexes.append(index)
     invalid_indexes = sorted(set(invalid_indexes))
     duplicate_player_indexes = sorted(set(duplicate_player_indexes))
     roster_blocked = bool(invalid_indexes or duplicate_player_indexes)
@@ -149,6 +305,42 @@ def build_entry_safety_report(
         "rosters", "Roster validity", "block" if roster_blocked else "pass",
         "; ".join(roster_bits) + "." if roster_bits else f"All {len(selected)} roster(s) have {expected} unique, valid players and export IDs.",
         "Reload the salary file and rebuild the affected saved lineups." if roster_blocked else "",
+        lineup_indexes=[value - 1 for value in invalid_indexes + duplicate_player_indexes],
+    ))
+    checks.append(_check(
+        "export_ids", "DraftKings slot IDs", "block" if export_id_indexes else "pass",
+        (f"{len(set(export_id_indexes))} lineup(s) have a missing, repeated, or wrong slot-specific DraftKings ID."
+         if export_id_indexes else "Every roster slot uses the correct DraftKings ID, including the Captain ID in Showdown."),
+        "Reload the exact salary file and replace the affected lineup before export." if export_id_indexes else "",
+        lineup_indexes=[value - 1 for value in export_id_indexes],
+    ))
+    checks.append(_check(
+        "salary_data", "Salary data", "block" if missing_salary_indexes else "pass",
+        (f"{len(set(missing_salary_indexes))} lineup(s) contain a roster slot without a valid salary."
+         if missing_salary_indexes else "Every roster slot has a valid salary from the current slate."),
+        "Reload the exact DraftKings salary file and replace the affected lineup." if missing_salary_indexes else "",
+        lineup_indexes=[value - 1 for value in missing_salary_indexes],
+    ))
+    checks.append(_check(
+        "slate_membership", "Current slate membership", "block" if missing_pool_indexes else "pass",
+        (f"{len(set(missing_pool_indexes))} lineup(s) contain a player who is not in the currently loaded slate."
+         if missing_pool_indexes else "Every rostered player belongs to the currently loaded slate."),
+        "Reload the exact DraftKings slate file and replace the affected lineups." if missing_pool_indexes else "",
+        lineup_indexes=[value - 1 for value in missing_pool_indexes],
+    ))
+    checks.append(_check(
+        "team_diversity", "Team diversity", "block" if team_diversity_indexes else "pass",
+        (f"{len(set(team_diversity_indexes))} lineup(s) fail the requirement to roster athletes from both or multiple teams."
+         if team_diversity_indexes else "Every lineup includes valid team diversity for its contest type."),
+        "Replace the affected lineup; Classic and Showdown cannot use athletes from only one team." if team_diversity_indexes else "",
+        lineup_indexes=[value - 1 for value in team_diversity_indexes],
+    ))
+    checks.append(_check(
+        "showdown_game", "Showdown game", "block" if showdown_game_indexes else "pass",
+        (f"{len(set(showdown_game_indexes))} Showdown lineup(s) combine athletes from more than one game."
+         if showdown_game_indexes else "Every Showdown lineup is confined to one game."),
+        "Reload the exact Showdown slate and replace the affected lineup." if showdown_game_indexes else "",
+        lineup_indexes=[value - 1 for value in showdown_game_indexes],
     ))
 
     salaries = [_salary(lineup, kind_l) for lineup in selected]
@@ -159,32 +351,47 @@ def build_entry_safety_report(
         "salary_cap", "Salary cap", "block" if over_cap else "pass",
         f"{len(over_cap)} lineup(s) exceed the ${cap:,.0f} cap." if over_cap else f"Every lineup is at or below the ${cap:,.0f} cap.",
         "Remove or rebuild every over-cap lineup." if over_cap else "",
+        lineup_indexes=[value - 1 for value in over_cap],
     ))
     checks.append(_check(
         "salary_use", "Salary use", "review" if low_salary else "pass",
         f"{len(low_salary)} lineup(s) use less than ${low_floor:,.0f}." if low_salary else f"Every lineup uses at least ${low_floor:,.0f}.",
         "Confirm the unused salary is intentional and creates enough leverage." if low_salary else "",
+        lineup_indexes=[value - 1 for value in low_salary],
     ))
 
     signatures = [_signature(lineup, kind_l) for lineup in selected]
     signature_counts = Counter(signatures)
     duplicate_entries = sum(count - 1 for count in signature_counts.values() if count > 1)
+    first_signature_index: Dict[tuple[str, ...], int] = {}
+    duplicate_entry_indexes: List[int] = []
+    for index, signature in enumerate(signatures):
+        if signature in first_signature_index:
+            duplicate_entry_indexes.append(index)
+        else:
+            first_signature_index[signature] = index
     checks.append(_check(
         "duplicates", "Duplicate entries", "block" if duplicate_entries else "pass",
         f"{duplicate_entries} duplicate lineup(s) detected." if duplicate_entries else "No duplicate lineups detected.",
         "Remove duplicate saved lineups before export." if duplicate_entries else "",
+        lineup_indexes=duplicate_entry_indexes,
     ))
 
     unavailable_names: List[str] = []
     uncertain_names: List[str] = []
-    for lineup in selected:
+    unavailable_indexes: List[int] = []
+    uncertain_indexes: List[int] = []
+    for index, lineup in enumerate(selected):
         for player in _players(lineup, kind_l):
-            name = str(player.get("Name") or _identity(player) or "Unknown")
-            player_status = _status(player)
-            if player_status in UNAVAILABLE_STATUSES or bool(player.get("LiveStatusConflict")):
+            current = _current_player(player, current_lookup)
+            name = str(current.get("Name") or player.get("Name") or _identity(player) or "Unknown")
+            player_status = _status(current)
+            if player_status in UNAVAILABLE_STATUSES or bool(current.get("LiveStatusConflict")):
                 unavailable_names.append(name)
+                unavailable_indexes.append(index)
             elif player_status in REVIEW_STATUSES:
                 uncertain_names.append(name)
+                uncertain_indexes.append(index)
     unavailable_names = list(dict.fromkeys(unavailable_names))
     uncertain_names = list(dict.fromkeys(uncertain_names))
     checks.append(_check(
@@ -192,12 +399,14 @@ def build_entry_safety_report(
         (f"Unavailable player(s) appear in saved lineups: {', '.join(unavailable_names[:8])}."
          if unavailable_names else "No saved lineup contains a player marked unavailable."),
         "Remove the affected lineup or replace the unavailable player." if unavailable_names else "",
+        lineup_indexes=unavailable_indexes,
     ))
     checks.append(_check(
         "uncertain", "Questionable players", "review" if uncertain_names else "pass",
         (f"Questionable or doubtful player(s) are still used: {', '.join(uncertain_names[:8])}."
          if uncertain_names else "No saved lineup contains a questionable or doubtful player."),
         "Check the latest news and confirm each risk is intentional." if uncertain_names else "",
+        lineup_indexes=uncertain_indexes,
     ))
 
     portfolio_warnings = list((portfolio_report or {}).get("warnings") or [])
@@ -223,6 +432,18 @@ def build_entry_safety_report(
 
     blockers = sum(check["status"] == "block" for check in checks)
     reviews = sum(check["status"] == "review" for check in checks)
+    blocked_lineup_indexes = sorted({
+        int(index)
+        for check in checks
+        if check.get("status") == "block"
+        for index in check.get("lineup_indexes") or []
+    })
+    review_lineup_indexes = sorted({
+        int(index)
+        for check in checks
+        if check.get("status") == "review"
+        for index in check.get("lineup_indexes") or []
+    })
     status = "blocked" if blockers else ("review" if reviews else "ready")
     title = {"blocked": "Blocked", "review": "Review Before Export", "ready": "Ready to Export"}[status]
     report: Dict[str, Any] = {
@@ -233,6 +454,8 @@ def build_entry_safety_report(
         "lineup_count": len(selected),
         "blockers": blockers,
         "reviews": reviews,
+        "blocked_lineup_indexes": blocked_lineup_indexes,
+        "review_lineup_indexes": review_lineup_indexes,
         "checks": checks,
     }
     report["text"] = format_entry_safety_report(report)

@@ -3,6 +3,7 @@
 - [Five-minute quick start](QUICK_START.md)
 - [Complete user guide](USER_GUIDE.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
+- [Version 1.16.0 release notes](releases/v1.16.0.md)
 - [Version 1.15.0 release notes](releases/v1.15.0.md)
 - [Version 1.14.2 release notes](releases/v1.14.2.md)
 - [Version 1.14.1 release notes](releases/v1.14.1.md)

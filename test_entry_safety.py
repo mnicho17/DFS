@@ -4,6 +4,7 @@ import copy
 import unittest
 
 from entry_safety import build_entry_safety_report
+from optimizers import lineup_slots_for_sport
 
 
 def _player(name: str, position: str, salary: int) -> dict:
@@ -13,6 +14,8 @@ def _player(name: str, position: str, salary: int) -> dict:
         "Position": position,
         "FlexSalary": salary,
         "FlexID": player_id,
+        "CptID": f"CPT-{player_id}",
+        "CptSalary": salary * 1.5,
         "FlexNamePlusID": f"{name} ({player_id})",
         "NFLAvailability": "ACTIVE",
         "Team": "T1" if len(name) % 2 else "T2",
@@ -35,7 +38,10 @@ def _nfl_lineup() -> list[dict]:
 
 
 def _rows(lineups: list[list[dict]]) -> list[list[str]]:
-    return [[str(player["FlexID"]) for player in lineup] for lineup in lineups]
+    return [
+        [str(player["FlexID"]) for _, player in lineup_slots_for_sport(lineup, "NFL")]
+        for lineup in lineups
+    ]
 
 
 class EntrySafetyTests(unittest.TestCase):
@@ -115,7 +121,7 @@ class EntrySafetyTests(unittest.TestCase):
             kind="showdown",
             sport="NFL",
             salary_cap=50000,
-            export_rows=[[player["FlexID"] for player in players]],
+            export_rows=[[players[0]["CptID"]] + [player["FlexID"] for player in players[1:]]],
             portfolio_report={"warnings": []},
             readiness_report={"checks": []},
             min_salary_pct=0.90,
@@ -123,6 +129,94 @@ class EntrySafetyTests(unittest.TestCase):
         salary_check = next(check for check in report["checks"] if check["key"] == "salary_cap")
         self.assertEqual(salary_check["status"], "pass")
         self.assertEqual(report["status"], "ready")
+
+    def test_same_player_in_captain_and_flex_is_blocked(self):
+        captain = _player("Duplicated Star", "WR", 9000)
+        captain["Team"] = "T1"
+        others = [
+            captain,
+            {**_player("Other One", "QB", 8000), "Team": "T2"},
+            {**_player("Other Two", "RB", 7000), "Team": "T1"},
+            {**_player("Other Three", "WR", 6000), "Team": "T2"},
+            {**_player("Other Four", "TE", 5000), "Team": "T1"},
+        ]
+        lineup = {"Captain": captain, "Flex": others}
+        report = build_entry_safety_report(
+            [lineup],
+            kind="showdown",
+            sport="NFL",
+            salary_cap=50000,
+            export_rows=[[captain["CptID"]] + [player["FlexID"] for player in others]],
+            portfolio_report={"warnings": []},
+            readiness_report={"checks": []},
+        )
+        roster = next(check for check in report["checks"] if check["key"] == "rosters")
+        self.assertEqual(roster["status"], "block")
+        self.assertEqual(report["blocked_lineup_indexes"], [0])
+
+    def test_classic_lineup_from_only_one_team_is_blocked(self):
+        lineup = _nfl_lineup()
+        for player in lineup:
+            player["Team"] = "T1"
+        report = self._report([lineup])
+        diversity = next(check for check in report["checks"] if check["key"] == "team_diversity")
+        self.assertEqual(diversity["status"], "block")
+        self.assertEqual(diversity["lineup_indexes"], [0])
+
+    def test_current_player_pool_overrides_stale_saved_availability(self):
+        lineup = _nfl_lineup()
+        current_pool = copy.deepcopy(lineup)
+        current_pool[2]["NFLAvailability"] = "OUT"
+        report = self._report([lineup], player_pool=current_pool)
+        availability = next(check for check in report["checks"] if check["key"] == "availability")
+        self.assertEqual(availability["status"], "block")
+        self.assertIn("Running Back Two", availability["summary"])
+
+    def test_player_missing_from_current_slate_is_blocked(self):
+        lineup = _nfl_lineup()
+        report = self._report([lineup], player_pool=copy.deepcopy(lineup[:-1]))
+        membership = next(check for check in report["checks"] if check["key"] == "slate_membership")
+        self.assertEqual(membership["status"], "block")
+        self.assertEqual(membership["lineup_indexes"], [0])
+
+    def test_same_name_with_a_different_slate_id_does_not_mask_missing_player(self):
+        lineup = _nfl_lineup()
+        current_pool = copy.deepcopy(lineup)
+        current_pool[0]["FlexID"] = "different-slate-id"
+        current_pool[0]["CptID"] = "different-captain-id"
+        current_pool[0]["FlexNamePlusID"] = "Quarterback (different-slate-id)"
+        report = self._report([lineup], player_pool=current_pool)
+        membership = next(check for check in report["checks"] if check["key"] == "slate_membership")
+        self.assertEqual(membership["status"], "block")
+        self.assertEqual(membership["lineup_indexes"], [0])
+
+    def test_showdown_requires_captain_specific_export_id(self):
+        players = [
+            {**_player(f"Player {index}", "WR", 5000 + index * 200), "Team": "T1" if index < 3 else "T2"}
+            for index in range(6)
+        ]
+        lineup = {"Captain": players[0], "Flex": players[1:]}
+        wrong_row = [[players[0]["FlexID"]] + [player["FlexID"] for player in players[1:]]]
+        report = build_entry_safety_report(
+            [lineup],
+            kind="showdown",
+            sport="NFL",
+            salary_cap=50000,
+            export_rows=wrong_row,
+            portfolio_report={"warnings": []},
+            readiness_report={"checks": []},
+        )
+        export_ids = next(check for check in report["checks"] if check["key"] == "export_ids")
+        self.assertEqual(export_ids["status"], "block")
+        self.assertEqual(export_ids["lineup_indexes"], [0])
+
+    def test_missing_salary_data_blocks_export(self):
+        lineup = _nfl_lineup()
+        lineup[5]["FlexSalary"] = 0
+        report = self._report([lineup])
+        salary_data = next(check for check in report["checks"] if check["key"] == "salary_data")
+        self.assertEqual(salary_data["status"], "block")
+        self.assertEqual(salary_data["lineup_indexes"], [0])
 
 
 if __name__ == "__main__":

@@ -109,9 +109,11 @@ Actionable findings can filter the player table directly. The adjacent **Space**
 
 Findings are separated into Pass, Review, and Block. Missing early-week odds remain a review item; hard problems such as missing positions, poor projection coverage, or a locked unavailable player are blockers. The audit never changes player settings or lineups.
 
-## Entry Safety and build recipes
+## Final Lock Check, Entry Safety, and build recipes
 
-Every saved-lineup export now passes through **Entry Safety**. It audits the exact portfolio for roster and DraftKings-ID completeness, position validity, salary-cap compliance, repeated players, duplicate entries, unavailable players, and current portfolio-rule violations. Hard failures block export; questionable players, stale slate data, and intentional salary leverage remain review items that can be acknowledged. The check is report-only and never edits a lineup.
+Immediately before an NFL export, **Final Lock Check** refreshes the live source and maps late changes or unavailable players to exact saved lineup numbers. The user can preserve the unaffected portfolio and replace only the affected rows.
+
+Every saved-lineup export then passes through **Entry Safety**. It audits the exact portfolio for roster and position validity, unique athletes, slot-specific DraftKings IDs, salary data and cap compliance, current-slate membership, Classic and Showdown team diversity, one-game Showdown construction, duplicate entries, unavailable players, and current portfolio-rule violations. Hard failures block export and can be repaired by replacing only the blocked rows; questionable players, stale slate data, and intentional salary leverage remain review items that can be acknowledged. The app never changes a lineup unless the user explicitly chooses and confirms replacement.
 
 Named build recipes are available under **Settings**. They preserve reusable contest and strategy choices—including lineup count, NFL preset, SIM depth, ownership behavior, salary strategy, uniqueness, and concentration caps—without carrying slate-specific player locks, fades, exposure limits, or groups into a future slate.
 
