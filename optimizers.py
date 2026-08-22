@@ -526,6 +526,21 @@ class ShowdownOptimizer:
 
         num_lineups = max(1, int(num_lineups or 1))
 
+        showdown_teams = sorted({_team(player) for player in self.players if _team(player)})
+        showdown_games = sorted({_game_key(player) for player in self.players if _game_key(player)})
+        if len(showdown_teams) != 2:
+            logger.info(
+                "Showdown build requires exactly two teams; the loaded pool has %d.",
+                len(showdown_teams),
+            )
+            return []
+        if len(showdown_games) > 1:
+            logger.info(
+                "Showdown build requires one game; the loaded pool has %d game keys.",
+                len(showdown_games),
+            )
+            return []
+
         locked = [p for p in self.players if p.get("LockCpt")]
         if len(locked) > 1:
             names = ", ".join(str(p.get("Name")) for p in locked[:10])
@@ -692,6 +707,12 @@ class ShowdownOptimizer:
 
             for pk in keys:
                 prob += cpt[pk] + flx[pk] <= 1
+
+            # DraftKings Showdown lineups must include both teams. Keep this a
+            # hard platform-validity rule even when the build style is Randomized.
+            for team_name in sorted({_team(player) for player in self.players if _team(player)}):
+                team_keys = [pk for pk in keys if _team(key_to_player[pk]) == team_name]
+                prob += pulp.lpSum([cpt[pk] + flx[pk] for pk in team_keys]) >= 1
 
             prob += (
                 pulp.lpSum(
@@ -932,6 +953,11 @@ class ShowdownOptimizer:
             signature = (captain_key, flex_keys)
             if signature in used_signatures:
                 return None
+            if len({_team(player) for player in [captain] + flex if _team(player)}) != 2:
+                return None
+            games = {_game_key(player) for player in [captain] + flex if _game_key(player)}
+            if len(games) > 1:
+                return None
             return lineup_score(captain, flex), captain, flex, signature
 
         self._report_progress(progress_callback, 0, num_lineups, "Generating fast showdown portfolio")
@@ -1063,6 +1089,12 @@ class ShowdownOptimizer:
                     break
 
             if len(flex) < 5:
+                continue
+
+            if len({_team(player) for player in [cpt] + flex if _team(player)}) != 2:
+                continue
+            games = {_game_key(player) for player in [cpt] + flex if _game_key(player)}
+            if len(games) > 1:
                 continue
 
             sig = (_pkey(cpt), tuple(sorted(_pkey(p) for p in flex)))
@@ -1975,6 +2007,16 @@ class MultiSportClassicOptimizer:
             prob += pulp.lpSum([x[pk] for pk in keys]) == len(self.slots)
             prob += pulp.lpSum([x[pk] * _salary(key_to_player[pk]) for pk in keys]) <= self.salary_cap
 
+            # DraftKings Classic requires athletes from at least two teams.
+            # Capping every individual team below the roster size expresses that
+            # platform rule without imposing a strategy-specific concentration cap.
+            platform_teams = sorted({_team(key_to_player[pk]) for pk in keys if _team(key_to_player[pk])})
+            if len(platform_teams) < 2:
+                return out
+            for team_name in platform_teams:
+                team_keys = [pk for pk in keys if _team(key_to_player[pk]) == team_name]
+                prob += pulp.lpSum([x[pk] for pk in team_keys]) <= len(self.slots) - 1
+
             for i, slot in enumerate(self.slots):
                 elig = [pk for pk in keys if _eligible_for_slot(key_to_player[pk], slot, self.sport)]
                 prob += pulp.lpSum([y[(i, pk)] for pk in elig]) == 1
@@ -2200,6 +2242,8 @@ class MultiSportClassicOptimizer:
             if sum(salary_by_id[id(p)] for p in chosen) < floor:
                 return None
             if not lineup_is_complete_for_sport(chosen, self.sport):
+                return None
+            if len({_team(player) for player in chosen if _team(player)}) < 2:
                 return None
             if self.sport == "NFL" and not _nfl_lineup_is_acceptable(chosen, self.build_style):
                 return None

@@ -1127,6 +1127,13 @@ def refresh_live_nfl_data(
             if before != after:
                 changes.append({
                     "name": str(player.get("Name") or ""),
+                    "team": str(player.get("Team") or ""),
+                    "player_key": str(
+                        player.get("FlexID")
+                        or player.get("FlexNamePlusID")
+                        or player.get("Name")
+                        or ""
+                    ),
                     "before": before,
                     "after": after,
                     "availability": str(player.get("NFLAvailability") or ""),

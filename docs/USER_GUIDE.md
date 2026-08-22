@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.15.0 | Windows desktop app
+Version 1.16.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -26,7 +26,7 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 5. For NFL Classic, turn on **NFL SIM Edge** when you want field-based tournament scoring.
 6. Choose **Generate** and wait for the progress message to finish.
 7. Open **Portfolio Insights**. Filter review signals, inspect player exposure, and remove or replace weak rows before saving.
-8. Choose **Export CSV**, resolve any Entry Safety blockers, review the remaining cautions, then upload to DraftKings.
+8. Choose **Export CSV**. For NFL, review the fresh **Final Lock Check**, replace any affected rows, then resolve every **Entry Safety** blocker before uploading to DraftKings.
 9. After the contest, import DraftKings results through **Results & Learning**.
 
 ![Simplified NFL workspace with the active recipe, player pool, and Classic lineup results](images/main-workspace.png)
@@ -230,17 +230,21 @@ Open **Settings > Stack / Team / Salary Exposure** to review saved-lineup concen
 
 Choose **Export CSV** from the correct contest tab. The export uses DraftKings roster IDs and does not add analysis columns that could break upload format. Every completed export is also recorded locally for Results & Learning.
 
-Before the save dialog opens, **Entry Safety** checks the exact saved portfolio, not merely the last generated set. It blocks export when it finds a missing or position-invalid roster, missing DraftKings ID, a player repeated within one lineup, an over-cap lineup, duplicate entries, an unavailable player, or a violation of the current exposure, group, concentration, or uniqueness rules.
+For NFL, **Final Lock Check** first refreshes the live player source immediately before export. It maps every returned status change and every currently unavailable player to the exact saved lineup numbers. Choose **Replace Affected Lineups** to keep all unaffected saved rows fixed and rebuild only those rows. If the live source is unavailable, the dialog says so plainly and lets you continue with cached data for the remaining safety review.
 
-Questionable players, stale or incomplete slate data, and unusually low salary use appear as **Review** items. Those may be intentional, so Entry Safety allows **Export Anyway** after you inspect them. A blocker disables export until the saved portfolio is repaired. Choose **Copy Report** when you want to preserve the full check. Entry Safety never changes a lineup or setting.
+![Final Lock Check mapping late player news to exact saved lineup numbers](images/final-lock-check.png){medium}
+
+Next, **Entry Safety** checks the exact saved portfolio, not merely the last generated set. It blocks export when it finds an incomplete or position-invalid roster, a player repeated at their position and FLEX or at Captain and FLEX, the wrong or missing DraftKings slot ID, missing salary data, an over-cap lineup, a player absent from the current slate, a one-team Classic lineup, a Showdown lineup that does not use both teams or mixes games, duplicate entries, an unavailable player, or a violation of the current exposure, group, concentration, or uniqueness rules.
+
+Questionable players, stale or incomplete slate data, and unusually low salary use appear as **Review** items. Those may be intentional, so Entry Safety allows **Export Anyway** after you inspect them. A blocker disables export. Choose **Replace Blocked Lineups** to preserve every unaffected row and rebuild only the blocked rows, or return to the workspace to make a different decision. Choose **Copy Report** when you want to preserve the full check. Neither safety step changes a lineup unless you explicitly choose replacement and confirm it.
 
 ![Entry Safety reviewing the exact saved portfolio before export](images/entry-safety.png){medium}
 
 Before submitting:
 
 1. Confirm the slate and contest type.
-2. Confirm late scratches and start times.
-3. Review salary, slots, duplicates, and exposure.
+2. Confirm late scratches and start times; for NFL, require a fresh Final Lock Check whenever possible.
+3. Review salary, slot-specific IDs, duplicate athletes, team diversity, slate membership, and exposure.
 4. Upload to DraftKings and review the entries there.
 
 ## 11. Results & Learning
@@ -277,6 +281,8 @@ Large complete standings are summarized in the background while they are read. T
 The matching salary file is optional, but it unlocks accurate salary, QB-stack, bring-back, and FLEX analysis when the standings file only contains names and roster slots. The app checks the player overlap first and refuses to attach a mismatched slate; at least 70% of the historical field players must match.
 
 After generating and exporting an NFL Classic SIM build for the same preset, reopen **Results & Learning** to compare the latest simulated field with the measured real field. The comparison includes duplication, salary, construction, and ownership profile differences. It is a diagnostic comparison, not proof that the real contest will repeat.
+
+![Results and Learning keeps validation and real-field comparisons on this computer](images/results-learning.png){thumb}
 
 SIM validation is labeled directional until at least 50 matched entries. Complete-field learning has separate, stricter guardrails. When those guardrails are met, only a small part of the measured winning-ownership profile affects candidate scoring, while salary and construction patterns are blended conservatively into the preset.
 

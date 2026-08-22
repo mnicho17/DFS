@@ -124,10 +124,15 @@ class ShowdownPerformanceTests(unittest.TestCase):
             self.assertEqual(len(flex), 5)
             keys = [_pkey(captain)] + [_pkey(player) for player in flex]
             self.assertEqual(len(set(keys)), 6)
+            self.assertEqual({player["Team"] for player in [captain] + flex}, {"ARI", "CAR"})
             salary = float(captain["CptSalary"]) + sum(float(player["FlexSalary"]) for player in flex)
             self.assertLessEqual(salary, 50000)
             signatures.add((_pkey(captain), tuple(sorted(_pkey(player) for player in flex))))
         self.assertEqual(len(signatures), 150)
+
+    def test_showdown_rejects_a_single_team_player_pool(self):
+        players = [player for player in _showdown_players() if player["Team"] == "ARI"]
+        self.assertEqual(ShowdownOptimizer(players).build_lineups(5), [])
 
     def test_high_volume_build_honors_locks_fades_and_exposure_caps(self):
         players = _showdown_players()

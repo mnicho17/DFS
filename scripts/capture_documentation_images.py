@@ -22,7 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 from PyQt5 import QtCore, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
-from main_window import BuildDiagnosticsDialog, BuildRecipesDialog, EntrySafetyDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog, StackExposureDialog  # noqa: E402
+from main_window import BuildDiagnosticsDialog, BuildRecipesDialog, EntrySafetyDialog, FinalLockCheckDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog, StackExposureDialog  # noqa: E402
 from build_diagnostics import create_build_diagnostic, save_build_diagnostic  # noqa: E402
 from nfl_simulation import SimLineup  # noqa: E402
 from optimizers import MultiSportClassicOptimizer  # noqa: E402
@@ -389,9 +389,42 @@ def capture(output_dir: Path) -> None:
         readiness_dialog.close()
         window._lineup_space_phase = ""
 
+        final_lock_dialog = FinalLockCheckDialog({
+            "status": "attention",
+            "title": "3 Saved Lineups Need Review",
+            "used_cached_check": False,
+            "sleeper_matches": len(players),
+            "player_count": len(players),
+            "affected_lineups": 3,
+            "lineup_count": len(lineups),
+            "affected_indexes": [0, 3, 6],
+            "unavailable_players": ["MIA RB2"],
+            "changes": [{
+                "name": "MIA RB2",
+                "team": "MIA",
+                "availability": "OUT",
+                "change": "Questionable -> Out",
+                "lineup_numbers": [1, 4, 7],
+            }, {
+                "name": "BUF RB2",
+                "team": "BUF",
+                "availability": "QUESTIONABLE",
+                "change": "Full practice -> Limited",
+                "lineup_numbers": [4],
+            }],
+            "text": "FINAL LOCK CHECK - 3 saved lineups need review",
+        }, window)
+        final_lock_dialog.resize(1040, 620)
+        final_lock_dialog.show()
+        app.processEvents()
+        save_widget(final_lock_dialog, output_dir / "final-lock-check.png")
+        final_lock_dialog.close()
+
         for player in players:
             player["MaxPct"] = None
             player["MinPct"] = None
+            if player["Name"] == "MIA RB2":
+                player["NFLAvailability"] = "OUT"
         export_rows = [window._classic_export_cells(lineup, "NFL") for lineup in lineups]
         safety = window._entry_safety_report("classic", list(lineups), export_rows, 50000.0)
         safety_dialog = EntrySafetyDialog(safety, window)
@@ -400,6 +433,9 @@ def capture(output_dir: Path) -> None:
         app.processEvents()
         save_widget(safety_dialog, output_dir / "entry-safety.png")
         safety_dialog.close()
+        for player in players:
+            if player["Name"] == "MIA RB2":
+                player["NFLAvailability"] = "STARTER"
 
         recipes_dialog = BuildRecipesDialog({
             "NFL 20-Max Fast": {

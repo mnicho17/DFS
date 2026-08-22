@@ -32,6 +32,7 @@ class ClassicPerformanceTests(unittest.TestCase):
         signatures = set()
         for lineup in lineups:
             self.assertTrue(lineup_is_complete_for_sport(lineup, "NFL"))
+            self.assertGreaterEqual(len({player["Team"] for player in lineup}), 2)
             self.assertLessEqual(sum(float(player["FlexSalary"]) for player in lineup), 50000)
             signatures.add(tuple(sorted(_pkey(player) for player in lineup)))
         self.assertEqual(len(signatures), 150)
