@@ -537,6 +537,13 @@ class LineupBuildWorker(QtCore.QObject):
                 and self.sport == "NFL"
                 and self.sim_enabled
             )
+            joint_validation_requested = bool(
+                self.kind != "showdown"
+                and self.sport == "NFL"
+                and self.sim_enabled
+                and self.contest_profile
+            )
+            total_phases = 5 if deep_build and joint_validation_requested else 4 if deep_build or joint_validation_requested else 3
             deep_deadline = (
                 build_started + self.deep_time_limit_seconds
                 if deep_build else float("inf")
@@ -550,10 +557,15 @@ class LineupBuildWorker(QtCore.QObject):
                 if deep_build else float("inf")
             )
             selection_reserve = (
-                min(20.0, max(2.0, self.deep_time_limit_seconds * 0.08))
+                min(60.0, max(1.0, self.deep_time_limit_seconds * 0.20), self.deep_time_limit_seconds * 0.35)
                 if deep_build else 0.0
             )
             validation_deadline = deep_deadline - selection_reserve
+            joint_validation_reserve = (
+                min(25.0, max(0.5, self.deep_time_limit_seconds * 0.08), self.deep_time_limit_seconds * 0.20)
+                if deep_build and self.contest_profile else 0.0
+            )
+            refinement_deadline = deep_deadline - joint_validation_reserve
 
             def generation_should_stop() -> bool:
                 return self._cancel_event.is_set() or time.perf_counter() >= generation_deadline
@@ -565,7 +577,7 @@ class LineupBuildWorker(QtCore.QObject):
                 return self._cancel_event.is_set() or time.perf_counter() >= validation_deadline
 
             def refinement_should_stop() -> bool:
-                return self._cancel_event.is_set() or time.perf_counter() >= deep_deadline
+                return self._cancel_event.is_set() or time.perf_counter() >= refinement_deadline
 
             build_request = max(0, self.num_lineups - len(self.retained_lineups))
             if build_request <= 0:
@@ -604,8 +616,8 @@ class LineupBuildWorker(QtCore.QObject):
             self.progress.emit(
                 0,
                 build_request,
-                "Phase 1 of 4 - starting Deep explore"
-                if deep_build else "Phase 1 of 3 - starting lineup build",
+                f"Phase 1 of {total_phases} - starting Deep explore"
+                if deep_build else f"Phase 1 of {total_phases} - starting lineup build",
             )
             expanded_target = min(450, max(build_request + 30, int(math.ceil(build_request * 1.5))))
             constraints = self.portfolio_rules.get("player_constraints") or {}
@@ -639,6 +651,7 @@ class LineupBuildWorker(QtCore.QObject):
                 or int(self.portfolio_rules.get("min_unique", 1) or 1) > built_in_unique
             )
             use_nfl_sim = self.kind != "showdown" and self.sport == "NFL" and self.sim_enabled
+            joint_validation_enabled = bool(use_nfl_sim and self.contest_profile)
             has_locks = any(bool(player.get("LockFlex")) for player in self.players)
             use_role_pool = should_use_nfl_role_pool(
                 sport=self.sport,
@@ -698,7 +711,7 @@ class LineupBuildWorker(QtCore.QObject):
                 candidate_target = build_request
             candidate_budget = candidate_target + ownership_candidate_target + scenario_candidate_target
             if use_nfl_sim:
-                phase_total = 4 if deep_build else 3
+                phase_total = total_phases
                 phase_label = "Deep explore" if deep_build else "starting diversified candidate bank"
                 self.progress.emit(0, candidate_budget, f"Phase 1 of {phase_total} - {phase_label}")
             build_players = [dict(player) for player in self.players]
@@ -742,7 +755,7 @@ class LineupBuildWorker(QtCore.QObject):
                             else min(build_request, int(done * build_request / max(1, total)))
                         ),
                         candidate_budget if use_nfl_sim else build_request,
-                        "Phase 1 of 3 - generating portfolio candidates",
+                        f"Phase 1 of {total_phases} - generating portfolio candidates",
                     ),
                     cancel_callback=self._cancel_event.is_set,
                 )
@@ -780,7 +793,7 @@ class LineupBuildWorker(QtCore.QObject):
                             progress_callback=lambda done, total, text, offset=completed_optimizer: self.progress.emit(
                                 min(candidate_budget, offset + int(done)),
                                 candidate_budget,
-                                f"Phase 1 of 4 - Deep explore (seed {batch_index + 1}/{len(seeds)})",
+                                f"Phase 1 of {total_phases} - Deep explore (seed {batch_index + 1}/{len(seeds)})",
                             ),
                             cancel_callback=generation_should_stop,
                             excluded_signatures=retained_signatures_for_build,
@@ -809,7 +822,7 @@ class LineupBuildWorker(QtCore.QObject):
                                 else min(build_request, int(done * build_request / max(1, total)))
                             ),
                             candidate_budget if use_nfl_sim else build_request,
-                            f"Phase 1 of 3 - {text}",
+                            f"Phase 1 of {total_phases} - {text}",
                         ),
                         cancel_callback=self._cancel_event.is_set,
                         excluded_signatures=retained_signatures_for_build,
@@ -869,7 +882,7 @@ class LineupBuildWorker(QtCore.QObject):
                         self.progress.emit(
                             min(candidate_budget, optimizer_generated_count + len(extras)),
                             candidate_budget,
-                            f"Phase 1 of {4 if deep_build else 3} - adding field-shaped candidates",
+                            f"Phase 1 of {total_phases} - adding field-shaped candidates",
                         )
                     scenario_progress_offset = optimizer_generated_count + len(extras)
                     scenario_extras, scenario_candidate_report = generate_nfl_scenario_lineups(
@@ -885,7 +898,7 @@ class LineupBuildWorker(QtCore.QObject):
                                 + int(done * scenario_candidate_target / max(1, total)),
                             ),
                             candidate_budget,
-                            f"Phase 1 of {4 if deep_build else 3} - {text}",
+                            f"Phase 1 of {total_phases} - {text}",
                         ),
                         cancel_callback=generation_cancel_callback,
                         field_config=field_config,
@@ -939,7 +952,7 @@ class LineupBuildWorker(QtCore.QObject):
                     self.progress.emit(
                         0,
                         screening_scenarios,
-                        "Phase 2 of 4 - screening the expanded candidate bank",
+                        f"Phase 2 of {total_phases} - screening the expanded candidate bank",
                     )
                     coarse_result = simulate_nfl_contest(
                         list(self.retained_lineups) + list(lineups),
@@ -949,7 +962,7 @@ class LineupBuildWorker(QtCore.QObject):
                         salary_cap=self.salary_cap,
                         seed=73129,
                         progress_callback=lambda done, total, text: self.progress.emit(
-                            done, total, f"Phase 2 of 4 - {text}"
+                            done, total, f"Phase 2 of {total_phases} - {text}"
                         ),
                         cancel_callback=screening_should_stop,
                         field_config=field_config,
@@ -1009,7 +1022,7 @@ class LineupBuildWorker(QtCore.QObject):
                         self.progress.emit(
                             0,
                             validation_scenarios,
-                            "Phase 3 of 4 - validating the shortlist with independent scenarios",
+                            f"Phase 3 of {total_phases} - validating the shortlist with independent scenarios",
                         )
                         validation_result = simulate_nfl_contest(
                             list(self.retained_lineups) + list(lineups),
@@ -1019,7 +1032,7 @@ class LineupBuildWorker(QtCore.QObject):
                             salary_cap=self.salary_cap,
                             seed=90210,
                             progress_callback=lambda done, total, text: self.progress.emit(
-                                done, total, f"Phase 3 of 4 - {text}"
+                                done, total, f"Phase 3 of {total_phases} - {text}"
                             ),
                             cancel_callback=validation_should_stop,
                             field_config=field_config,
@@ -1048,7 +1061,7 @@ class LineupBuildWorker(QtCore.QObject):
                     )
                 else:
                     field_count = max(600, min(2400, build_request * 8))
-                    self.progress.emit(0, self.sim_scenarios, "Phase 2 of 3 - preparing NFL contest simulation")
+                    self.progress.emit(0, self.sim_scenarios, f"Phase 2 of {total_phases} - preparing NFL contest simulation")
                     sim_result = simulate_nfl_contest(
                         list(self.retained_lineups) + list(lineups),
                         build_players,
@@ -1056,7 +1069,7 @@ class LineupBuildWorker(QtCore.QObject):
                         field_lineup_count=field_count,
                         salary_cap=self.salary_cap,
                         progress_callback=lambda done, total, text: self.progress.emit(
-                            done, total, f"Phase 2 of 3 - {text}"
+                            done, total, f"Phase 2 of {total_phases} - {text}"
                         ),
                         cancel_callback=self._cancel_event.is_set,
                         field_config=field_config,
@@ -1089,8 +1102,8 @@ class LineupBuildWorker(QtCore.QObject):
             self.progress.emit(
                 min(self.num_lineups, len(lineups) + len(self.retained_lineups)),
                 self.num_lineups,
-                "Phase 4 of 4 - selecting, then polishing duplication with remaining time"
-                if deep_build else "Phase 3 of 3 - selecting portfolio",
+                f"Phase 4 of {total_phases} - selecting, then polishing duplication with remaining time"
+                if deep_build else f"Phase 3 of {total_phases} - selecting portfolio",
             )
             selected = select_portfolio(
                 lineups,
@@ -1127,6 +1140,73 @@ class LineupBuildWorker(QtCore.QObject):
                 if sim_report:
                     sim_report["deep_build"] = dict(deep_report)
             lineups = selected["lineups"]
+            selection_core_seconds = time.perf_counter() - selection_started
+            joint_report: Dict[str, Any] = {}
+            if joint_validation_enabled and lineups and not self._cancel_event.is_set():
+                joint_scenarios = max(750, min(1200, self.sim_scenarios)) if deep_build else self.sim_scenarios
+                joint_field_count = max(600, min(1800, len(lineups) * 8))
+                joint_phase = 5 if deep_build else 4
+                self.progress.emit(
+                    0,
+                    joint_scenarios,
+                    f"Phase {joint_phase} of {total_phases} - validating all selected entries together",
+                )
+                joint_started = time.perf_counter()
+                joint_result = simulate_nfl_portfolio_contest(
+                    lineups,
+                    build_players,
+                    contest_profile=dict(self.contest_profile or {}),
+                    scenarios=joint_scenarios,
+                    field_lineup_count=joint_field_count,
+                    salary_cap=self.salary_cap,
+                    field_config=field_config,
+                    seed=271828,
+                    progress_callback=lambda done, total, text: self.progress.emit(
+                        done, total, f"Phase {joint_phase} of {total_phases} - {text}"
+                    ),
+                    cancel_callback=(
+                        (lambda: self._cancel_event.is_set() or time.perf_counter() >= deep_deadline)
+                        if deep_build else self._cancel_event.is_set
+                    ),
+                    adaptive=True,
+                )
+                joint_report = dict(joint_result.get("report") or {})
+                if int(joint_report.get("scenarios", 0) or 0) > 0:
+                    lineups = list(joint_result.get("lineups") or lineups)
+                simulation_seconds += max(0.0, time.perf_counter() - joint_started)
+
+                previous_report = dict(selected.get("report") or {})
+                refreshed_report = portfolio_report(
+                    lineups,
+                    self.portfolio_rules,
+                    kind=self.kind,
+                    requested=self.num_lineups,
+                )
+                for key in (
+                    "refinement_swaps", "duplication_refinement_swaps", "refinement_attempts",
+                    "refinement_stop_reason", "refinement_seconds",
+                ):
+                    if key in previous_report:
+                        refreshed_report[key] = previous_report[key]
+                for warning in previous_report.get("warnings") or []:
+                    if warning not in refreshed_report["warnings"]:
+                        refreshed_report["warnings"].append(warning)
+                if not joint_report.get("entry_count_match", True):
+                    mismatch_warning = (
+                        f"Contest profile plans {int(joint_report.get('planned_entries', 0) or 0):,} entries; "
+                        f"this build jointly simulated {int(joint_report.get('entries_simulated', 0) or 0):,}."
+                    )
+                    if mismatch_warning not in refreshed_report["warnings"]:
+                        refreshed_report["warnings"].append(mismatch_warning)
+                refreshed_report["joint_contest"] = dict(joint_report)
+                refreshed_report["compliant"] = bool(
+                    not refreshed_report.get("warnings")
+                    and len(lineups) >= self.num_lineups
+                )
+                refreshed_report["text"] = format_portfolio_report_text(refreshed_report)
+                selected["report"] = refreshed_report
+                if sim_report:
+                    sim_report["joint_portfolio"] = dict(joint_report)
             if sim_report and selected["report"].get("sim_summary"):
                 sim_report["portfolio"] = dict(selected["report"]["sim_summary"])
             if sim_report:
@@ -1149,7 +1229,7 @@ class LineupBuildWorker(QtCore.QObject):
                     nfl_field_preset(self.field_preset, self.field_calibration),
                     salary_cap=self.salary_cap,
                 )
-            selection_seconds = time.perf_counter() - selection_started
+            selection_seconds = selection_core_seconds
             reported_candidate_count = (
                 int(deep_report.get("candidate_bank_count", 0) or 0)
                 if deep_build
@@ -1174,6 +1254,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "role_pool_applied": bool(use_role_pool),
                 "role_pool_omitted": max(0, int(unfiltered_build_pool_size - len(build_players))),
                 "sim_scenarios": self.sim_scenarios if use_nfl_sim else 0,
+                "portfolio_simulation_scenarios": int(joint_report.get("scenarios", 0) or 0),
                 "scenario_candidate_report": scenario_candidate_report,
                 "compute_mode": "Deep" if deep_build else "Fast",
                 "deep_time_limit_seconds": self.deep_time_limit_seconds if deep_build else 0.0,
@@ -1231,8 +1312,8 @@ from learning_db import (
     load_nfl_field_calibration,
     record_export,
 )
-from portfolio_rules import player_key, portfolio_report, select_portfolio
-from nfl_simulation import SimLineup, build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, generate_nfl_scenario_lineups, nfl_field_preset, should_use_nfl_role_pool, simulate_nfl_contest, simulate_nfl_field_ownership
+from portfolio_rules import format_portfolio_report_text, player_key, portfolio_report, select_portfolio
+from nfl_simulation import SimLineup, build_nfl_role_pool, compare_nfl_lineups_to_preset, generate_nfl_field_lineups, generate_nfl_scenario_lineups, nfl_field_preset, should_use_nfl_role_pool, simulate_nfl_contest, simulate_nfl_field_ownership, simulate_nfl_portfolio_contest
 from lineup_space import calculate_lineup_space
 from portfolio_insights import build_portfolio_insights
 from slate_readiness import audit_slate
@@ -6064,6 +6145,45 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_readiness_badge()
         self._update_lineup_space_dashboard()
 
+    def _confirm_contest_entry_count(
+        self,
+        requested: int,
+        profile: Optional[Dict[str, Any]],
+    ) -> Optional[int]:
+        """Resolve an attached contest's planned-entry mismatch before a build."""
+        planned = int((profile or {}).get("user_entries", 0) or 0)
+        requested = max(1, int(requested or 1))
+        if not profile or planned <= 0 or planned == requested:
+            return requested
+
+        box = QtWidgets.QMessageBox(self)
+        box.setIcon(QtWidgets.QMessageBox.Warning)
+        box.setWindowTitle("Contest entry count differs")
+        box.setText(
+            f"The attached contest profile plans {planned:,} entries, but this build requests {requested:,}."
+        )
+        box.setInformativeText(
+            "Joint portfolio results are most useful when the generated lineup count matches the entries you will submit."
+        )
+        keep_button = box.addButton(f"Keep {requested:,}", QtWidgets.QMessageBox.ActionRole)
+        use_button = None
+        maximum = self.spin_cl.maximum() if hasattr(self, "spin_cl") else requested
+        if planned <= maximum:
+            use_button = box.addButton(f"Use {planned:,}", QtWidgets.QMessageBox.AcceptRole)
+            box.setDefaultButton(use_button)
+        else:
+            box.setDefaultButton(keep_button)
+        cancel_button = box.addButton(QtWidgets.QMessageBox.Cancel)
+        box.exec_()
+        clicked = box.clickedButton()
+        if clicked is cancel_button:
+            return None
+        if use_button is not None and clicked is use_button:
+            if hasattr(self, "spin_cl"):
+                self.spin_cl.setValue(planned)
+            return planned
+        return requested
+
     def _start_lineup_build(
         self,
         *,
@@ -6125,6 +6245,12 @@ class MainWindow(QtWidgets.QMainWindow):
             str(sport or "").strip().upper() == "NFL" and kind != "showdown" and sim_enabled
         )
         contest_profile = self._active_contest_profile() if effective_sim_enabled else None
+        if contest_profile and not str(repair_source or "").strip():
+            resolved_num = self._confirm_contest_entry_count(num, contest_profile)
+            if resolved_num is None:
+                self.status.showMessage("Lineup generation cancelled; contest entry counts were not confirmed.", 5000)
+                return
+            num = resolved_num
         retained = list(retained_lineups or [])[:max(0, int(num))]
         replacement_count = max(0, int(num) - len(retained))
         repairing = bool(str(repair_source or "").strip())
@@ -6378,14 +6504,25 @@ class MainWindow(QtWidgets.QMainWindow):
                         f"{int(grade_info.get('sim_field_lineups', 0)):,} field lineups\n"
                     )
                     if grade_info.get("sim_expected_roi_pct") is not None:
+                        joint_label = "Portfolio-adjusted " if grade_info.get("sim_joint_portfolio") else ""
                         detail += (
                             f"Contest: {grade_info.get('sim_contest_name') or 'Attached contest'}\n"
                             f"Contest Field: {int(grade_info.get('sim_contest_field_size', 0) or 0):,}\n"
                             f"Entry Fee: ${float(grade_info.get('sim_entry_fee', 0.0) or 0.0):,.2f}\n"
-                            f"Expected Payout: ${float(grade_info.get('sim_expected_payout', 0.0) or 0.0):,.2f}\n"
-                            f"Expected Profit: ${float(grade_info.get('sim_expected_profit', 0.0) or 0.0):+,.2f}\n"
-                            f"Expected ROI: {float(grade_info.get('sim_expected_roi_pct', 0.0) or 0.0):+.2f}%\n"
+                            f"{joint_label}Expected Payout: ${float(grade_info.get('sim_expected_payout', 0.0) or 0.0):,.2f}\n"
+                            f"{joint_label}Expected Profit: ${float(grade_info.get('sim_expected_profit', 0.0) or 0.0):+,.2f}\n"
+                            f"{joint_label}Expected ROI: {float(grade_info.get('sim_expected_roi_pct', 0.0) or 0.0):+.2f}%\n"
                         )
+                        if grade_info.get("sim_joint_portfolio"):
+                            detail += (
+                                f"Joint Portfolio: {int(grade_info.get('sim_portfolio_entry_count', 0) or 0):,} entries across "
+                                f"{int(grade_info.get('sim_portfolio_scenarios', 0) or 0):,} scenarios\n"
+                                f"Portfolio Total Payout: ${float(grade_info.get('sim_portfolio_expected_total_payout', 0.0) or 0.0):,.2f}\n"
+                                f"Portfolio Total Profit: ${float(grade_info.get('sim_portfolio_expected_total_profit', 0.0) or 0.0):+,.2f}\n"
+                                f"Portfolio Profit Chance: {float(grade_info.get('sim_portfolio_profit_probability_pct', 0.0) or 0.0):.1f}%\n"
+                                f"Portfolio 95% ROI Range: {float(grade_info.get('sim_portfolio_roi_ci_low', 0.0) or 0.0):+.1f}% to "
+                                f"{float(grade_info.get('sim_portfolio_roi_ci_high', 0.0) or 0.0):+.1f}%\n"
+                            )
                     drivers = list(grade_info.get("sim_edge_drivers") or [])
                     if drivers:
                         detail += "Why this SIM Edge:\n"
@@ -6459,7 +6596,18 @@ class MainWindow(QtWidgets.QMainWindow):
                     covered = set()
                     for lineup in lineups:
                         covered.update(set(getattr(lineup, "sim_top_hits", set()) or set()))
-                    roi_text = f" | avg contest ROI {sum(roi_rows) / len(roi_rows):+.1f}%" if roi_rows else ""
+                    joint_row = next(
+                        (row for row in sim_rows if row.get("sim_joint_portfolio")),
+                        None,
+                    )
+                    if joint_row:
+                        roi_text = (
+                            f" | joint ROI {float(joint_row.get('sim_portfolio_expected_roi_pct', 0.0) or 0.0):+.1f}% "
+                            f"(${float(joint_row.get('sim_portfolio_expected_total_profit', 0.0) or 0.0):+,.0f}; "
+                            f"{float(joint_row.get('sim_portfolio_profit_probability_pct', 0.0) or 0.0):.0f}% profit chance)"
+                        )
+                    else:
+                        roi_text = f" | avg contest ROI {sum(roi_rows) / len(roi_rows):+.1f}%" if roi_rows else ""
                     return (
                         f"Quality: {len(lineups)} NFL lineups | avg salary left ${avg_left:,.0f} | "
                         f"avg SIM Edge {avg_edge:.0f} | avg top-1% {avg_top:.2f}% | "

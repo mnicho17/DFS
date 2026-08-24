@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from nfl_simulation import (
+    _player_volatility_cv,
     lineup_signature,
     build_nfl_role_pool,
     generate_nfl_field_lineups,
@@ -11,6 +12,7 @@ from nfl_simulation import (
     should_use_nfl_role_pool,
     simulate_nfl_contest,
     simulate_nfl_field_ownership,
+    simulate_nfl_portfolio_contest,
 )
 from optimizers import MultiSportClassicOptimizer, lineup_grade_for_sport
 from test_nfl_logic import _fixture_players
@@ -136,7 +138,10 @@ class NFLSimulationTests(unittest.TestCase):
         self.assertTrue(all(len(lineup.sim_metrics["sim_edge_drivers"]) == 6 for lineup in lineups))
         self.assertTrue(all("Duplication safety" in lineup.sim_metrics["sim_edge_components"] for lineup in lineups))
         self.assertTrue(all(lineup.sim_top_hits.issubset(lineup.sim_top_five_hits) for lineup in lineups))
-        self.assertEqual(result["report"]["model"], "scenario-portfolio-v4")
+        self.assertEqual(result["report"]["model"], "scenario-portfolio-v5")
+        self.assertEqual(result["report"]["opponent_field_samples"], 3)
+        self.assertEqual(result["report"]["volatility_model"], "role-aware-player-volatility-v1")
+        self.assertAlmostEqual(sum(result["report"]["game_script_mix"].values()), 100.0, places=5)
         self.assertTrue(result["report"]["field_model_preset_comparison"]["available"])
 
         grade = lineup_grade_for_sport(lineups[0], "NFL", 50000)
@@ -219,7 +224,7 @@ class NFLSimulationTests(unittest.TestCase):
 
         self.assertTrue(result["report"]["contest_aware"])
         self.assertEqual(result["report"]["field_size"], 500)
-        self.assertEqual(result["report"]["model"], "contest-payout-portfolio-v1")
+        self.assertEqual(result["report"]["model"], "contest-payout-portfolio-v2")
         self.assertEqual(result["report"]["payout_model"], "exact-rank-tie-split-v1")
         for lineup in result["lineups"]:
             metrics = lineup.sim_metrics
@@ -237,6 +242,73 @@ class NFLSimulationTests(unittest.TestCase):
 
         grade = lineup_grade_for_sport(result["lineups"][0], "NFL", 50000)
         self.assertIn("sim_expected_roi_pct", grade)
+
+    def test_joint_portfolio_sim_accounts_for_all_user_entries_and_reports_ranges(self):
+        players = _fixture_players()
+        candidates = MultiSportClassicOptimizer(
+            players,
+            sport="NFL",
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+        ).build_lineups(12)
+        config = nfl_field_preset("20-Max")
+        profile = {
+            "name": "Joint Test",
+            "field_size": 500,
+            "entry_fee": 10,
+            "user_entries": 6,
+            "payouts": "1 = 1000\n2-10 = 100\n11-100 = 20",
+        }
+        config["contest_profile"] = profile
+        graded = simulate_nfl_contest(
+            candidates,
+            players,
+            scenarios=60,
+            field_lineup_count=100,
+            field_config=config,
+            seed=2027,
+        )["lineups"][:6]
+        result = simulate_nfl_portfolio_contest(
+            graded,
+            players,
+            contest_profile=profile,
+            scenarios=120,
+            field_lineup_count=120,
+            field_config=config,
+            seed=2028,
+        )
+        report = result["report"]
+
+        self.assertTrue(report["joint_portfolio"])
+        self.assertTrue(report["entry_count_match"])
+        self.assertEqual(report["entries_simulated"], 6)
+        self.assertEqual(report["opponent_entries"], 494)
+        self.assertEqual(report["opponent_field_samples"], 3)
+        self.assertEqual(report["scenarios"], 120)
+        self.assertAlmostEqual(report["total_entry_cost"], 60.0)
+        self.assertLessEqual(report["roi_ci_low"], report["expected_roi_pct"])
+        self.assertGreaterEqual(report["roi_ci_high"], report["expected_roi_pct"])
+        self.assertTrue(0.0 <= report["profit_probability_pct"] <= 100.0)
+        self.assertLessEqual(report["payout_p10"], report["payout_p50"])
+        self.assertLessEqual(report["payout_p50"], report["payout_p90"])
+        self.assertAlmostEqual(
+            sum(lineup.sim_metrics["sim_expected_payout"] for lineup in result["lineups"]),
+            report["expected_total_payout"],
+            places=6,
+        )
+        self.assertTrue(all(lineup.sim_metrics["sim_joint_portfolio"] for lineup in result["lineups"]))
+        self.assertTrue(all("sim_standalone_expected_roi_pct" in lineup.sim_metrics for lineup in result["lineups"]))
+
+    def test_role_aware_volatility_is_wider_for_uncertain_backup(self):
+        starter = {
+            "Position": "WR", "NFLDepthOrder": 1, "NFLRoleScore": 0.8,
+            "NFLUsageScore": 0.8, "ProjOwnPct": 25.0,
+        }
+        backup = {
+            "Position": "WR", "NFLDepthOrder": 3, "NFLRoleScore": -0.5,
+            "NFLUsageScore": -0.5, "ProjOwnPct": 2.0, "InjuryStatus": "QUESTIONABLE",
+        }
+        self.assertGreater(_player_volatility_cv(backup), _player_volatility_cv(starter))
 
     def test_real_field_reference_is_compared_without_enabling_learning(self):
         players = _fixture_players()

@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.17.0 | Windows desktop app
+Version 1.18.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -146,7 +146,7 @@ The compact **Space** display shows the current eligible build pool, structural 
 
 During generation, the Space display follows the Generate, SIM, and Select stages. After completion, hover it for the last build's phase timing and the number of candidates evaluated versus lineups selected.
 
-Deep Build shows four stages: Explore, Screen, Validate, and Select/Refine. Its five-minute value is a ceiling, not a required wait. After the normal coverage refinements, Select/Refine uses remaining compute to search for lower-duplication replacements that retain combined Edge and return strength. Every replacement must still satisfy uniqueness, exposure, group, team, and game rules. The search stops at the deadline or at a constrained local optimum, so it does not run longer merely to consume the full budget. The app keeps the strongest completed stage if you cancel or the compute budget is reached.
+Deep Build shows Explore, Screen, Validate, and Select/Refine. When a contest profile is active, a final **Joint Contest** stage evaluates the selected entries together. Its five-minute value is a ceiling, not a required wait. After the normal coverage refinements, Select/Refine uses remaining compute to search for lower-duplication replacements that retain combined Edge and return strength. Every replacement must still satisfy uniqueness, exposure, group, team, and game rules. The search stops at the deadline or at a constrained local optimum, and time is reserved for the final joint check. The app keeps the strongest completed stage if you cancel or the compute budget is reached.
 
 To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate budget, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. For NFL SIM Edge, the budget separates optimizer candidates from additional field-shaped and scenario-built candidates. Deep reports also show the coarse shortlist, independent validation count, top-candidate agreement between the two SIM passes, portfolio swaps, and time-budget status. The report identifies the slowest phase so a performance problem can be isolated without guessing.
 
@@ -165,7 +165,8 @@ The Overview explains:
 - selected Ceiling, Balanced, Leverage, and Low-Dup scenario archetypes;
 - QB stacks, bring-backs, FLEX usage, and combined ownership shape;
 - average SIM Edge, leverage, duplication risk, and preset fit;
-- top-one-percent scenario coverage and portfolio concentration; and
+- top-one-percent scenario coverage and portfolio concentration;
+- when a contest profile is active, joint total cost, payout, profit chance, payout range, and estimate stability; and
 - automatic review flags for weak grades, high duplication, excessive unused salary, unstacked NFL lineups, or concentrated player cores.
 
 The sortable **Lineup details** tab identifies the exact rows behind those signals. Use **Show** to filter all flagged rows or one signal type, then choose **Select flagged**. You can also select rows manually.
@@ -205,11 +206,17 @@ Deep Build strengthens that separation. A coarse random stream screens the expan
 
 Choose the preset that matches the contest's maximum entries per person. Presets are conservative starting assumptions, not promises. After at least three complete fields, 1,000 entries, and 70% player metadata coverage have been imported for that preset, the app can blend measured salary, construction, and winning-ownership patterns into its baseline. Until then, measurements remain report-only.
 
-When the contest lobby provides the actual economics, open **Settings > Contest-Aware SIM**. Enter the contest name, total field size, entry fee, how many entries you plan to submit, and the payout table. Use one rank or range per line, such as `1 = $100,000` or `2-10 = $5,000`. **Save and Use** keeps the profile for later slates and turns on NFL SIM Edge. **Use Preset Only** removes the contest profile from the build without deleting it.
+When the contest lobby provides the actual economics, open **Settings > Contest-Aware SIM**. Enter the contest name, total field size, entry fee, how many entries you plan to submit, and the payout table. Use one rank or range per line, such as `1 = $100,000` or `2-10 = $5,000`. **Save and Use** keeps the profile for later slates and turns on NFL SIM Edge. **Use Preset Only** removes the contest profile from the build without deleting it. If the requested build count differs from the profile's planned entries, the app stops before generation and lets you use the profile count, keep the requested count with a visible warning, or cancel.
 
 ![Attaching an exact field, entry fee, and payout table to NFL SIM Edge](images/contest-aware-sim.png){medium}
 
-With a profile active, each scenario converts the simulated finish into the listed prize. Equal scores and duplicated constructions split every prize covered by their tied rank range. Results show **Edge | ROI**, the tooltip adds expected payout and profit, Portfolio Insights and the copied build report summarize portfolio ROI, and the quiet workspace summary names the active profile. The contest preset still controls how opponents are constructed; the saved profile controls the payout economics. These are model estimates, not guaranteed returns.
+With a profile active, candidate grading first converts each simulated finish into the listed prize. After portfolio selection, the app runs all selected entries in the same contests. Your entries occupy ranks together, can take prizes from one another, and split ties with your other entries and sampled opponents. Results show **Edge | ROI** using this portfolio-adjusted pass. The tooltip adds each lineup's expected payout and profit plus the portfolio's total cost, payout, profit chance, and 95% ROI range.
+
+The final outlook uses three sampled opponent fields instead of treating one generated field as exact. Game outcomes rotate through balanced, shootout, defensive, and blowout scripts informed by available totals and spreads. Established starters receive narrower scoring ranges than uncertain backups, while guarded rare ceiling outcomes preserve tournament tails. Adaptive stopping can finish early only after the portfolio estimate is both sufficiently precise and stable; top-heavy results normally use the full scenario budget.
+
+![Joint portfolio payout, range, and stability summary in Portfolio Insights](images/contest-portfolio-outlook.png){medium}
+
+Portfolio Insights and the copied build report show expected total payout and profit, chance of finishing profitable or doubling the entry cost, any top-10 probability, 10th/median/90th-percentile payout, number of opponent-field samples, and estimate stability. The contest preset still controls how opponents are constructed; the saved profile controls the payout economics. These are model estimates, not guaranteed returns.
 
 - **SIM Edge** is a slate-relative 0-100 summary. It is useful for comparing candidates from the same build, not as a universal score across slates.
 - **Top 1%** and **Top 5%** estimate how often the lineup reached those field thresholds.
@@ -221,6 +228,8 @@ With a profile active, each scenario converts the simulated finish into the list
 - **Tournament return index** combines upside, top finishes, and other tournament signals on a 0-100 scale.
 - **Leverage** rewards useful paths that differ from expected field behavior.
 - **Duplication risk** estimates how likely the construction is to be shared. Lower is generally better when other qualities are similar.
+- **Joint contest ROI** is the selected portfolio's expected total profit divided by its total entry cost after your own entries occupy ranks together.
+- **95% ROI range** is uncertainty around the estimated average, not the range of possible single-contest results. A wide range is normal for top-heavy tournaments.
 
 The Classic results show Edge and top-one-percent rate, or Edge and expected ROI when Contest-Aware SIM is active. The **Why this SIM Edge** detail explains slate percentile, direction, and model weight for top finishes, ceiling, tournament return or contest ROI, and duplication safety. Generation and Slate Readiness show preset fit; the copied build report separates optimizer, field-shaped, and scenario-built candidates.
 
@@ -244,7 +253,7 @@ Next, **Entry Safety** checks the exact saved portfolio, not merely the last gen
 
 Questionable players, stale or incomplete slate data, and unusually low salary use appear as **Review** items. Those may be intentional, so Entry Safety allows **Export Anyway** after you inspect them. A blocker disables export. Choose **Replace Blocked Lineups** to preserve every unaffected row and rebuild only the blocked rows, or return to the workspace to make a different decision. Choose **Copy Report** when you want to preserve the full check. Neither safety step changes a lineup unless you explicitly choose replacement and confirm it.
 
-![Entry Safety reviewing the exact saved portfolio before export](images/entry-safety.png){medium}
+![Entry Safety reviewing the exact saved portfolio before export](images/entry-safety.png){compact}
 
 Before submitting:
 
@@ -318,6 +327,6 @@ See the separate Troubleshooting guide for more detail.
 
 The optimizer stores exports, imported results, slate snapshots, build diagnostics, and settings on the computer. Choose **Open Local History Folder** in Results & Learning to inspect the history location, and back it up if the accumulated learning record matters to you.
 
-![Local history controls in Results and Learning](images/results-learning.png){thumb}
+![Local history controls in Results and Learning](images/results-learning.png){medium}
 
 Build diagnostics contain aggregate settings, timing, counts, and generalized warning categories. They do not store player names, lineup contents, salary-file paths, or API keys.

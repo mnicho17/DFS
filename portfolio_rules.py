@@ -898,6 +898,34 @@ def portfolio_report(
                     float(row.get("sim_expected_profit", 0.0) or 0.0) for row in contest_rows
                 ) / len(contest_rows),
             })
+            joint_row = next(
+                (row for row in contest_rows if row.get("sim_joint_portfolio")),
+                None,
+            )
+            if joint_row:
+                sim_summary.update({
+                    "joint_portfolio": True,
+                    "portfolio_scenario_count": int(joint_row.get("sim_portfolio_scenarios", 0) or 0),
+                    "portfolio_entry_count": int(joint_row.get("sim_portfolio_entry_count", total) or total),
+                    "portfolio_expected_total_payout": float(
+                        joint_row.get("sim_portfolio_expected_total_payout", 0.0) or 0.0
+                    ),
+                    "portfolio_expected_total_profit": float(
+                        joint_row.get("sim_portfolio_expected_total_profit", 0.0) or 0.0
+                    ),
+                    "portfolio_expected_roi_pct": float(
+                        joint_row.get("sim_portfolio_expected_roi_pct", 0.0) or 0.0
+                    ),
+                    "portfolio_profit_probability_pct": float(
+                        joint_row.get("sim_portfolio_profit_probability_pct", 0.0) or 0.0
+                    ),
+                    "portfolio_roi_ci_low": float(
+                        joint_row.get("sim_portfolio_roi_ci_low", 0.0) or 0.0
+                    ),
+                    "portfolio_roi_ci_high": float(
+                        joint_row.get("sim_portfolio_roi_ci_high", 0.0) or 0.0
+                    ),
+                })
 
     report = {
         "lineup_count": total,
@@ -932,13 +960,27 @@ def _report_text(report: Dict[str, Any]) -> str:
     if sim:
         contest_line = []
         if sim.get("contest_aware"):
-            contest_line = [
-                (
-                    f"Contest ROI: {float(sim.get('average_expected_roi_pct', 0.0)):+.1f}% | "
-                    f"expected payout ${float(sim.get('average_expected_payout', 0.0)):,.2f} | "
-                    f"expected profit ${float(sim.get('average_expected_profit', 0.0)):+,.2f}"
-                )
-            ]
+            if sim.get("joint_portfolio"):
+                contest_line = [
+                    (
+                        f"Joint contest ROI: {float(sim.get('portfolio_expected_roi_pct', 0.0)):+.1f}% | "
+                        f"total payout ${float(sim.get('portfolio_expected_total_payout', 0.0)):,.2f} | "
+                        f"total profit ${float(sim.get('portfolio_expected_total_profit', 0.0)):+,.2f}"
+                    ),
+                    (
+                        f"Portfolio profit chance: {float(sim.get('portfolio_profit_probability_pct', 0.0)):.1f}% | "
+                        f"95% ROI range {float(sim.get('portfolio_roi_ci_low', 0.0)):+.1f}% to "
+                        f"{float(sim.get('portfolio_roi_ci_high', 0.0)):+.1f}%"
+                    ),
+                ]
+            else:
+                contest_line = [
+                    (
+                        f"Contest ROI: {float(sim.get('average_expected_roi_pct', 0.0)):+.1f}% | "
+                        f"expected payout ${float(sim.get('average_expected_payout', 0.0)):,.2f} | "
+                        f"expected profit ${float(sim.get('average_expected_profit', 0.0)):+,.2f}"
+                    )
+                ]
         lines[3:3] = [
             "",
             (
@@ -963,3 +1005,8 @@ def _report_text(report: Dict[str, Any]) -> str:
     else:
         lines.append("All configured portfolio rules are satisfied.")
     return "\n".join(lines)
+
+
+def format_portfolio_report_text(report: Dict[str, Any]) -> str:
+    """Refresh the readable summary after callers add aggregate warnings."""
+    return _report_text(report)

@@ -144,6 +144,10 @@ def _number(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, float(value)))
+
+
 def _position(player: Dict[str, Any]) -> str:
     raw = str(player.get("Position") or "").strip().upper().replace("D/ST", "DST")
     return raw.split("/")[0].split(",")[0]
@@ -177,6 +181,42 @@ def _projection(player: Dict[str, Any]) -> float:
 
 def _status(player: Dict[str, Any]) -> str:
     return str(player.get("InjuryStatus") or player.get("Status") or "").strip().upper()
+
+
+def _player_volatility_cv(player: Dict[str, Any]) -> float:
+    """Return a conservative, role-aware scoring range around the position baseline."""
+    position = _position(player)
+    cv = POSITION_CV.get(position, 0.60)
+    depth = int(_number(player.get("NFLDepthOrder"), 0.0))
+    role_score = _clamp(_number(player.get("NFLRoleScore"), 0.0), -1.0, 1.0)
+    usage_score = _clamp(_number(player.get("NFLUsageScore"), 0.0), -1.0, 1.0)
+    ownership = max(0.0, _number(player.get("ProjOwnPct"), 0.0))
+    status = _status(player)
+
+    if depth > 1:
+        cv += min(0.18, 0.07 + 0.035 * (depth - 1))
+    elif depth == 1:
+        cv -= 0.025
+    cv -= 0.055 * max(0.0, role_score)
+    cv += 0.055 * max(0.0, -role_score)
+    cv -= 0.045 * max(0.0, usage_score)
+    cv += 0.045 * max(0.0, -usage_score)
+    if ownership >= 20.0:
+        cv -= 0.025
+    elif 0.0 < ownership < 5.0:
+        cv += 0.035
+    if any(token in status for token in ("QUESTIONABLE", "DOUBTFUL", "LIMITED")) or status in {"Q", "D"}:
+        cv += 0.07
+
+    bounds = {
+        "QB": (0.24, 0.58),
+        "RB": (0.36, 0.92),
+        "WR": (0.40, 1.02),
+        "TE": (0.42, 1.08),
+        "DST": (0.55, 1.10),
+    }
+    minimum, maximum = bounds.get(position, (0.35, 1.05))
+    return _clamp(cv, minimum, maximum)
 
 
 def _is_active(player: Dict[str, Any]) -> bool:
@@ -754,14 +794,94 @@ def simulate_nfl_field_ownership(
 def _scenario_outcomes(
     rng: random.Random,
     players: Sequence[Dict[str, Any]],
+    *,
+    script_counter: Optional[Counter[str]] = None,
 ) -> Dict[str, float]:
     # Sorted inputs make seeded builds reproducible across separate app runs;
     # set iteration order varies with Python's per-process hash seed.
     games = sorted({_game(player) for player in players if _game(player)})
     teams = sorted({_team(player) for player in players if _team(player)})
-    game_factor = {game: rng.gauss(0.0, 1.0) for game in games}
+    players_by_game: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for player in players:
+        if _game(player):
+            players_by_game[_game(player)].append(player)
+
+    game_scripts: Dict[str, str] = {}
+    game_factor: Dict[str, float] = {}
+    favorite_by_game: Dict[str, str] = {}
+    for game in games:
+        game_players = players_by_game.get(game, [])
+        totals = [
+            _number(player.get("NFLVegasGameTotal"), 0.0)
+            for player in game_players
+            if _number(player.get("NFLVegasGameTotal"), 0.0) > 0.0
+        ]
+        game_total = sum(totals) / len(totals) if totals else 44.0
+        spreads_by_team: Dict[str, List[float]] = defaultdict(list)
+        for player in game_players:
+            if _team(player):
+                spreads_by_team[_team(player)].append(_number(player.get("NFLVegasSpread"), 0.0))
+        team_spreads = {
+            team: sum(values) / len(values)
+            for team, values in spreads_by_team.items()
+            if values
+        }
+        largest_spread = max((abs(value) for value in team_spreads.values()), default=0.0)
+
+        shootout_weight = _clamp(0.10 + (game_total - 43.0) * 0.015, 0.06, 0.30)
+        defensive_weight = _clamp(0.12 + (43.0 - game_total) * 0.015, 0.06, 0.28)
+        blowout_weight = _clamp(0.08 + max(0.0, largest_spread - 3.0) * 0.020, 0.07, 0.27)
+        roll = rng.random()
+        if roll < shootout_weight:
+            script = "Shootout"
+        elif roll < shootout_weight + defensive_weight:
+            script = "Defensive"
+        elif roll < shootout_weight + defensive_weight + blowout_weight:
+            script = "Blowout"
+        else:
+            script = "Balanced"
+        game_scripts[game] = script
+        if script_counter is not None:
+            script_counter[script] += 1
+
+        raw_game = rng.gauss(0.0, 1.0)
+        if script == "Shootout":
+            game_factor[game] = 0.65 + abs(raw_game)
+        elif script == "Defensive":
+            game_factor[game] = -0.45 - abs(raw_game)
+        elif script == "Blowout":
+            game_factor[game] = 0.20 + 0.75 * raw_game
+        else:
+            game_factor[game] = raw_game
+
+        game_teams = sorted({_team(player) for player in game_players if _team(player)})
+        if game_teams:
+            favorite_by_game[game] = (
+                min(game_teams, key=lambda team: (team_spreads.get(team, 0.0), team))
+                if largest_spread > 0.0
+                else game_teams[rng.randrange(len(game_teams))]
+            )
+
     team_environment = {team: rng.gauss(0.0, 1.0) for team in teams}
     team_style = {team: rng.gauss(0.0, 1.0) for team in teams}
+    for game, script in game_scripts.items():
+        game_teams = sorted({_team(player) for player in players_by_game.get(game, []) if _team(player)})
+        if script == "Shootout":
+            for team in game_teams:
+                team_environment[team] += 0.45
+                team_style[team] += 0.20
+        elif script == "Defensive":
+            for team in game_teams:
+                team_environment[team] -= 0.40
+        elif script == "Blowout":
+            favorite = favorite_by_game.get(game, "")
+            for team in game_teams:
+                if team == favorite:
+                    team_environment[team] += 0.35
+                    team_style[team] -= 0.70
+                else:
+                    team_environment[team] -= 0.10
+                    team_style[team] += 0.70
     team_pass = {
         team: (team_environment[team] + team_style[team]) / math.sqrt(2.0)
         for team in teams
@@ -793,15 +913,40 @@ def _scenario_outcomes(
             z = -0.20 * game_z + 0.18 * rush_z - 0.38 * opp_env + math.sqrt(0.783) * idio
 
         mean = max(0.10, _projection(player))
-        cv = POSITION_CV.get(pos, 0.60)
+        cv = _player_volatility_cv(player)
         if pos == "DST":
             score = max(-4.0, mean + max(3.0, mean * cv) * z)
         else:
             sigma_log = math.sqrt(math.log1p(cv * cv))
             score = mean * math.exp(sigma_log * z - 0.5 * sigma_log * sigma_log)
-            score = min(score, mean * 5.0 + 15.0)
+            rare_probability = 0.012
+            if int(_number(player.get("NFLDepthOrder"), 0.0)) > 1:
+                rare_probability += 0.010
+            if 0.0 < _number(player.get("ProjOwnPct"), 0.0) < 5.0:
+                rare_probability += 0.006
+            if rng.random() < rare_probability:
+                score *= 1.35 + 0.55 * rng.random()
+            score = min(score, mean * 6.0 + 20.0)
         outcomes[player_key(player)] = score
     return outcomes
+
+
+def _opponent_field_banks(
+    field_keys: Sequence[Tuple[str, ...]],
+    *,
+    count: int = 3,
+    seed: int = 0,
+) -> List[List[Tuple[str, ...]]]:
+    """Bootstrap several opponent fields from one generated field bank."""
+    base = list(field_keys)
+    if not base:
+        return []
+    bank_count = max(1, int(count or 1))
+    banks = [base]
+    for index in range(1, bank_count):
+        bank_rng = random.Random(seed + index * 100_003)
+        banks.append([base[bank_rng.randrange(len(base))] for _ in range(len(base))])
+    return banks
 
 
 def _percentile_rank(values: Sequence[float], value: float) -> float:
@@ -1109,6 +1254,7 @@ def simulate_nfl_contest(
     candidate_keys = [lineup_signature(lineup) for lineup in candidate_lists]
     field_keys = [lineup_signature(lineup) for lineup in field_lineups]
 
+    opponent_field_banks = _opponent_field_banks(field_keys, count=3, seed=seed + 37)
     field_signatures = Counter(field_keys)
     field_appearances: Counter[str] = Counter(key for signature in field_keys for key in signature)
     field_ownership = {
@@ -1132,14 +1278,16 @@ def simulate_nfl_contest(
     percentile_sums = [0.0 for _ in candidate_lists]
     completed = 0
     batch = max(10, scenario_count // 25)
+    script_counts: Counter[str] = Counter()
 
     for scenario_index in range(scenario_count):
         if cancel_callback and cancel_callback():
             break
-        outcomes = _scenario_outcomes(rng, sim_players)
+        outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
+        active_field_keys = opponent_field_banks[scenario_index % len(opponent_field_banks)]
         field_scores = sorted(
             sum(outcomes.get(key, 0.0) for key in signature)
-            for signature in field_keys
+            for signature in active_field_keys
         )
         if not field_scores:
             continue
@@ -1377,7 +1525,256 @@ def simulate_nfl_contest(
             "field_model_preset_comparison": field_model_preset_comparison,
             "contest_aware": bool(contest_profile),
             "contest_profile": dict(contest_profile or {}),
+            "opponent_field_samples": len(opponent_field_banks),
+            "game_script_mix": {
+                label: count / max(1, sum(script_counts.values())) * 100.0
+                for label, count in sorted(script_counts.items())
+            },
+            "volatility_model": "role-aware-player-volatility-v1",
+            "rare_event_model": "guardrailed-breakout-tails-v1",
             "payout_model": "exact-rank-tie-split-v1" if contest_profile else "payout-shape-proxy-v1",
-            "model": "contest-payout-portfolio-v1" if contest_profile else "scenario-portfolio-v4",
+            "model": "contest-payout-portfolio-v2" if contest_profile else "scenario-portfolio-v5",
         },
     }
+
+
+def simulate_nfl_portfolio_contest(
+    lineups: Sequence[Sequence[Dict[str, Any]]],
+    players: Sequence[Dict[str, Any]],
+    *,
+    contest_profile: Dict[str, Any],
+    scenarios: int = 750,
+    field_lineup_count: int = 1200,
+    salary_cap: float = 50000.0,
+    field_config: Optional[Dict[str, Any]] = None,
+    seed: int = 314159,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    cancel_callback: Optional[Callable[[], bool]] = None,
+    adaptive: bool = True,
+) -> Dict[str, Any]:
+    """Evaluate all selected entries together in one exact-payout contest."""
+    profile = normalize_contest_profile(contest_profile)
+    selected_objects = [lineup for lineup in lineups if lineup]
+    if not selected_objects:
+        return {"lineups": [], "report": {"scenarios": 0, "joint_portfolio": True}}
+
+    entry_count = len(selected_objects)
+    field_size = int(profile["field_size"])
+    if entry_count > field_size:
+        raise ValueError(
+            f"The selected portfolio has {entry_count:,} entries but the contest field has only {field_size:,}."
+        )
+    opponent_entries = max(0, field_size - entry_count)
+    entry_fee = float(profile["entry_fee"])
+    total_entry_cost = entry_fee * entry_count
+    config = dict(field_config or {})
+    config["contest_profile"] = dict(profile)
+    config["field_size"] = field_size
+
+    field_lineups, role_pool = generate_nfl_field_lineups(
+        players,
+        max(1, int(field_lineup_count or 1)),
+        salary_cap=salary_cap,
+        seed=seed + 1,
+        cancel_callback=cancel_callback,
+        field_config=config,
+    )
+    if not field_lineups:
+        field_lineups = [list(lineup) for lineup in selected_objects]
+
+    wrapped: List[SimLineup] = []
+    for lineup in selected_objects:
+        if isinstance(lineup, SimLineup):
+            wrapped.append(lineup)
+        else:
+            wrapped.append(SimLineup(
+                lineup,
+                candidate_source=str(getattr(lineup, "candidate_source", "") or "optimizer"),
+                candidate_archetype=str(getattr(lineup, "candidate_archetype", "") or ""),
+            ))
+
+    selected_keys = [lineup_signature(lineup) for lineup in wrapped]
+    field_keys = [lineup_signature(lineup) for lineup in field_lineups]
+    opponent_banks = _opponent_field_banks(field_keys, count=3, seed=seed + 71)
+    player_by_key: Dict[str, Dict[str, Any]] = {}
+    for player in list(role_pool) + [player for lineup in wrapped for player in lineup]:
+        player_by_key[player_key(player)] = player
+    sim_players = list(player_by_key.values())
+
+    target = max(1, int(scenarios or 1))
+    rng = random.Random(seed)
+    payout_by_lineup: List[List[float]] = [[] for _ in wrapped]
+    cashes = [0 for _ in wrapped]
+    total_payout_samples: List[float] = []
+    portfolio_roi_samples: List[float] = []
+    profitable = 0
+    doubled = 0
+    any_first = 0
+    any_top_ten = 0
+    completed = 0
+    adaptive_stopped = False
+    checkpoint_means: List[float] = []
+    script_counts: Counter[str] = Counter()
+    batch = max(20, target // 25)
+    minimum_adaptive_samples = min(target, max(400, int(math.ceil(target * 0.65))))
+
+    for scenario_index in range(target):
+        if cancel_callback and cancel_callback():
+            break
+        outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
+        active_field = opponent_banks[scenario_index % len(opponent_banks)]
+        field_scores = sorted(
+            sum(outcomes.get(key, 0.0) for key in signature)
+            for signature in active_field
+        )
+        if not field_scores:
+            continue
+        user_scores = [
+            sum(outcomes.get(key, 0.0) for key in signature)
+            for signature in selected_keys
+        ]
+        ranks: List[int] = []
+        scenario_payouts: List[float] = []
+        field_scale = float(opponent_entries) / max(1.0, float(len(field_scores)))
+        for index, score in enumerate(user_scores):
+            left_index = bisect.bisect_left(field_scores, score)
+            right_index = bisect.bisect_right(field_scores, score)
+            opponent_above = min(
+                opponent_entries,
+                max(0, int(round((len(field_scores) - right_index) * field_scale))),
+            )
+            opponent_ties = min(
+                max(0, opponent_entries - opponent_above),
+                max(0, int(round((right_index - left_index) * field_scale))),
+            )
+            user_above = sum(other > score for other in user_scores)
+            user_ties = sum(abs(other - score) <= 1e-9 for other in user_scores)
+            first_rank = opponent_above + user_above + 1
+            last_rank = min(field_size, first_rank + opponent_ties + max(1, user_ties) - 1)
+            payout = payout_for_tied_ranks(profile["payouts"], first_rank, last_rank)
+            ranks.append(first_rank)
+            scenario_payouts.append(payout)
+            payout_by_lineup[index].append(payout)
+            if payout > 0.0:
+                cashes[index] += 1
+
+        total_payout = sum(scenario_payouts)
+        total_payout_samples.append(total_payout)
+        roi = (total_payout - total_entry_cost) / total_entry_cost * 100.0
+        portfolio_roi_samples.append(roi)
+        profitable += int(total_payout > total_entry_cost)
+        doubled += int(total_payout >= total_entry_cost * 2.0)
+        any_first += int(bool(ranks) and min(ranks) == 1)
+        any_top_ten += int(bool(ranks) and min(ranks) <= 10)
+        completed += 1
+
+        if progress_callback and (completed % batch == 0 or completed == target):
+            progress_callback(completed, target, "Validating the selected portfolio in one contest")
+
+        if adaptive and completed >= minimum_adaptive_samples and completed % 100 == 0:
+            mean_roi = sum(portfolio_roi_samples) / completed
+            checkpoint_means.append(mean_roi)
+            if completed > 1:
+                variance = sum((value - mean_roi) ** 2 for value in portfolio_roi_samples) / (completed - 1)
+                ci_half_width = 1.96 * math.sqrt(variance / completed)
+            else:
+                ci_half_width = float("inf")
+            stable_checkpoints = (
+                len(checkpoint_means) >= 2
+                and abs(checkpoint_means[-1] - checkpoint_means[-2]) <= 1.5
+            )
+            if stable_checkpoints and ci_half_width <= 6.0:
+                adaptive_stopped = True
+                break
+
+    if completed <= 0:
+        return {
+            "lineups": wrapped,
+            "report": {
+                "model": "joint-contest-portfolio-v2",
+                "joint_portfolio": True,
+                "contest_name": str(profile["name"]),
+                "entries_simulated": entry_count,
+                "planned_entries": int(profile.get("user_entries", entry_count) or entry_count),
+                "entry_count_match": int(profile.get("user_entries", entry_count) or entry_count) == entry_count,
+                "scenarios": 0,
+                "scenario_target": target,
+                "cancelled": True,
+            },
+        }
+
+    denominator = float(completed)
+    expected_total_payout = sum(total_payout_samples) / denominator
+    expected_total_profit = expected_total_payout - total_entry_cost
+    expected_roi_pct = expected_total_profit / total_entry_cost * 100.0
+    if completed > 1:
+        roi_variance = sum(
+            (value - expected_roi_pct) ** 2 for value in portfolio_roi_samples
+        ) / (completed - 1)
+        roi_ci_half_width = 1.96 * math.sqrt(roi_variance / completed)
+    else:
+        roi_ci_half_width = 0.0
+    stability = "High" if roi_ci_half_width <= 10.0 else "Moderate" if roi_ci_half_width <= 25.0 else "Low"
+
+    for index, lineup in enumerate(wrapped):
+        metrics = lineup.sim_metrics
+        for field in ("sim_expected_payout", "sim_expected_profit", "sim_expected_roi_pct"):
+            standalone_field = f"sim_standalone_{field[4:]}"
+            if field in metrics and standalone_field not in metrics:
+                metrics[standalone_field] = metrics[field]
+        expected_payout = sum(payout_by_lineup[index]) / denominator
+        expected_profit = expected_payout - entry_fee
+        metrics.update({
+            "sim_expected_payout": expected_payout,
+            "sim_expected_profit": expected_profit,
+            "sim_expected_roi_pct": expected_profit / entry_fee * 100.0,
+            "sim_portfolio_cash_rate": cashes[index] / denominator * 100.0,
+            "sim_joint_portfolio": True,
+            "sim_portfolio_scenarios": completed,
+            "sim_portfolio_entry_count": entry_count,
+            "sim_portfolio_expected_total_payout": expected_total_payout,
+            "sim_portfolio_expected_total_profit": expected_total_profit,
+            "sim_portfolio_expected_roi_pct": expected_roi_pct,
+            "sim_portfolio_profit_probability_pct": profitable / denominator * 100.0,
+            "sim_portfolio_roi_ci_low": expected_roi_pct - roi_ci_half_width,
+            "sim_portfolio_roi_ci_high": expected_roi_pct + roi_ci_half_width,
+        })
+
+    script_total = max(1, sum(script_counts.values()))
+    planned_entries = int(profile.get("user_entries", entry_count) or entry_count)
+    report = {
+        "model": "joint-contest-portfolio-v2",
+        "joint_portfolio": True,
+        "contest_name": str(profile["name"]),
+        "field_size": field_size,
+        "entries_simulated": entry_count,
+        "planned_entries": planned_entries,
+        "entry_count_match": planned_entries == entry_count,
+        "opponent_entries": opponent_entries,
+        "field_lineups": len(field_lineups),
+        "opponent_field_samples": len(opponent_banks),
+        "scenarios": completed,
+        "scenario_target": target,
+        "adaptive_stopped": adaptive_stopped,
+        "stability": stability,
+        "total_entry_cost": total_entry_cost,
+        "expected_total_payout": expected_total_payout,
+        "expected_total_profit": expected_total_profit,
+        "expected_roi_pct": expected_roi_pct,
+        "roi_ci_low": expected_roi_pct - roi_ci_half_width,
+        "roi_ci_high": expected_roi_pct + roi_ci_half_width,
+        "profit_probability_pct": profitable / denominator * 100.0,
+        "double_probability_pct": doubled / denominator * 100.0,
+        "any_first_probability_pct": any_first / denominator * 100.0,
+        "any_top_ten_probability_pct": any_top_ten / denominator * 100.0,
+        "payout_p10": _quantile(total_payout_samples, 0.10),
+        "payout_p50": _quantile(total_payout_samples, 0.50),
+        "payout_p90": _quantile(total_payout_samples, 0.90),
+        "game_script_mix": {
+            label: count / script_total * 100.0
+            for label, count in sorted(script_counts.items())
+        },
+        "volatility_model": "role-aware-player-volatility-v1",
+        "rare_event_model": "guardrailed-breakout-tails-v1",
+    }
+    return {"lineups": wrapped, "report": report}

@@ -103,6 +103,31 @@ class PortfolioInsightsTests(unittest.TestCase):
         self.assertEqual(report["lineup_count"], 1)
         self.assertIn("Field-shaped", report["text"])
 
+    def test_joint_contest_outlook_is_compact_and_actionable(self):
+        lineup = _lineup(source="optimizer", archetype="", edge=72, duplicate=40, hits={1})
+        report = build_portfolio_insights(
+            [lineup],
+            sport="NFL",
+            kind="classic",
+            sim_report={
+                "joint_portfolio": {
+                    "joint_portfolio": True, "entries_simulated": 1,
+                    "planned_entries": 1, "entry_count_match": True,
+                    "total_entry_cost": 20, "expected_total_payout": 25,
+                    "expected_total_profit": 5, "expected_roi_pct": 25,
+                    "profit_probability_pct": 18, "double_probability_pct": 8,
+                    "any_top_ten_probability_pct": 2, "payout_p10": 0,
+                    "payout_p50": 0, "payout_p90": 40, "stability": "Moderate",
+                    "scenarios": 750, "opponent_field_samples": 3,
+                    "roi_ci_low": -10, "roi_ci_high": 60,
+                }
+            },
+        )
+        self.assertIn("Joint contest outlook", report["text"])
+        self.assertIn("Profit chance: 18.0%", report["text"])
+        self.assertIn("10th $0 | median $0 | 90th $40", report["text"])
+        self.assertEqual(report["joint_contest"]["entries_simulated"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

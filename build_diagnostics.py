@@ -153,6 +153,7 @@ def create_build_diagnostic(
     sim = dict(sim_report or {})
     sim_summary = dict(portfolio.get("sim_summary") or sim.get("portfolio") or {})
     candidate_sources = dict(sim.get("candidate_sources") or {})
+    joint = dict(sim.get("joint_portfolio") or portfolio.get("joint_contest") or {})
 
     def aggregate_counts(value: Any) -> Dict[str, int]:
         allowed = {"optimizer", "field_shaped", "scenario_built"}
@@ -173,7 +174,7 @@ def create_build_diagnostic(
     preset = dict(sim.get("preset_comparison") or {})
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
     diagnostic = {
-        "schema_version": 1,
+        "schema_version": 2,
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
         "sport": str(context.get("sport") or "NFL").strip().upper(),
@@ -237,7 +238,13 @@ def create_build_diagnostic(
         },
         "sim": {
             "preset_fit": _number(preset.get("fit_score")) if preset.get("available") else None,
-            "field_lineups": max(0, _integer(sim.get("field_lineup_count"))),
+            "field_lineups": max(0, _integer(sim.get("field_lineups"), _integer(sim.get("field_lineup_count")))),
+            "opponent_field_samples": max(
+                0, _integer(joint.get("opponent_field_samples"), _integer(sim.get("opponent_field_samples")))
+            ),
+            "game_script_mix": dict(joint.get("game_script_mix") or sim.get("game_script_mix") or {}),
+            "volatility_model": str(joint.get("volatility_model") or sim.get("volatility_model") or ""),
+            "rare_event_model": str(joint.get("rare_event_model") or sim.get("rare_event_model") or ""),
             "average_edge": _number(sim_summary.get("average_edge")) if sim_summary else None,
             "average_return_index": _number(sim_summary.get("average_return_index")) if sim_summary else None,
             "average_expected_roi_pct": (
@@ -259,6 +266,27 @@ def create_build_diagnostic(
             "selected_sources": aggregate_counts(candidate_sources.get("selected")),
             "screening_scenarios": max(0, _integer(timing.get("screening_scenarios"))),
             "validation_scenarios": max(0, _integer(timing.get("validation_scenarios"))),
+            "portfolio_simulation_scenarios": max(
+                0, _integer(joint.get("scenarios"), _integer(timing.get("portfolio_simulation_scenarios")))
+            ),
+            "joint_portfolio": bool(joint.get("joint_portfolio")),
+            "joint_entries": max(0, _integer(joint.get("entries_simulated"))),
+            "joint_planned_entries": max(0, _integer(joint.get("planned_entries"))),
+            "joint_entry_count_match": bool(joint.get("entry_count_match", True)),
+            "joint_total_entry_cost": max(0.0, _number(joint.get("total_entry_cost"))),
+            "joint_expected_total_payout": _number(joint.get("expected_total_payout")),
+            "joint_expected_total_profit": _number(joint.get("expected_total_profit")),
+            "joint_expected_roi_pct": _number(joint.get("expected_roi_pct")),
+            "joint_roi_ci_low": _number(joint.get("roi_ci_low")),
+            "joint_roi_ci_high": _number(joint.get("roi_ci_high")),
+            "joint_profit_probability_pct": _number(joint.get("profit_probability_pct")),
+            "joint_double_probability_pct": _number(joint.get("double_probability_pct")),
+            "joint_any_top_ten_probability_pct": _number(joint.get("any_top_ten_probability_pct")),
+            "joint_payout_p10": _number(joint.get("payout_p10")),
+            "joint_payout_p50": _number(joint.get("payout_p50")),
+            "joint_payout_p90": _number(joint.get("payout_p90")),
+            "joint_stability": str(joint.get("stability") or ""),
+            "joint_adaptive_stopped": bool(joint.get("adaptive_stopped")),
             "refinement_swaps": max(0, _integer(timing.get("refinement_swaps"))),
             "duplication_refinement_swaps": max(
                 0, _integer(timing.get("duplication_refinement_swaps"))
@@ -394,12 +422,34 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         )
     if sim.get("preset_fit") is not None:
         lines.append(f"- Preset fit: {_number(sim.get('preset_fit')):.0f}/100")
-    if sim.get("average_expected_roi_pct") is not None:
+    if sim.get("joint_portfolio"):
+        lines.append(
+            f"- Joint contest: {_integer(sim.get('joint_entries')):,} entries cost "
+            f"${_number(sim.get('joint_total_entry_cost')):,.2f}; expected payout "
+            f"${_number(sim.get('joint_expected_total_payout')):,.2f}; profit "
+            f"${_number(sim.get('joint_expected_total_profit')):+,.2f}; ROI "
+            f"{_number(sim.get('joint_expected_roi_pct')):+.1f}%"
+        )
+        lines.append(
+            f"- Joint range: profit chance {_number(sim.get('joint_profit_probability_pct')):.1f}%; "
+            f"95% ROI {_number(sim.get('joint_roi_ci_low')):+.1f}% to "
+            f"{_number(sim.get('joint_roi_ci_high')):+.1f}%; total payout P10/P50/P90 "
+            f"${_number(sim.get('joint_payout_p10')):,.0f}/${_number(sim.get('joint_payout_p50')):,.0f}/"
+            f"${_number(sim.get('joint_payout_p90')):,.0f}"
+        )
+        lines.append(
+            f"- Joint validation: {_integer(sim.get('portfolio_simulation_scenarios')):,} scenarios; "
+            f"{_integer(sim.get('opponent_field_samples'))} opponent-field samples; "
+            f"{sim.get('joint_stability') or 'n/a'} stability"
+        )
+    elif sim.get("average_expected_roi_pct") is not None:
         lines.append(
             f"- Contest portfolio: ROI {_number(sim.get('average_expected_roi_pct')):+.1f}% • "
             f"expected payout ${_number(sim.get('average_expected_payout')):,.2f} • "
             f"expected profit ${_number(sim.get('average_expected_profit')):+,.2f} per entry"
         )
+    if sim.get("volatility_model"):
+        lines.append("- Scenario model: game scripts, role-aware player ranges, and guarded rare ceiling outcomes")
     if deep_mode:
         stop_reason = str(sim.get("refinement_stop_reason") or "").strip()
         time_remaining = max(0.0, _number(sim.get("time_remaining_seconds")))
