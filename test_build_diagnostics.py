@@ -138,6 +138,47 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertIn("Deep polish: 18.25s across 5 search passes", report)
         self.assertIn("Independent top-candidate agreement: 78.4%", report)
 
+    def test_joint_contest_report_shows_total_cost_range_and_stability(self):
+        diagnostic = create_build_diagnostic(
+            context={
+                "sport": "NFL", "kind": "classic", "salary_cap": 50000,
+                "requested_count": 20, "lineup_space": {},
+                "settings": {
+                    "sim_enabled": True, "sim_scenarios": 750, "field_preset": "20-Max",
+                    "contest_profile": {
+                        "name": "Sunday Twenty", "field_size": 5000,
+                        "entry_fee": 10, "user_entries": 20,
+                    },
+                },
+                "portfolio_rules": {},
+            },
+            timing_report={"requested_count": 20, "selected_count": 20},
+            portfolio_report={"warnings": [], "sim_summary": {}},
+            sim_report={
+                "joint_portfolio": {
+                    "joint_portfolio": True, "entries_simulated": 20,
+                    "planned_entries": 20, "entry_count_match": True,
+                    "total_entry_cost": 200, "expected_total_payout": 238,
+                    "expected_total_profit": 38, "expected_roi_pct": 19,
+                    "roi_ci_low": -8, "roi_ci_high": 46,
+                    "profit_probability_pct": 31, "payout_p10": 0,
+                    "payout_p50": 140, "payout_p90": 600,
+                    "scenarios": 750, "opponent_field_samples": 3,
+                    "stability": "Moderate",
+                    "volatility_model": "role-aware-player-volatility-v1",
+                }
+            },
+            displayed_count=20,
+        )
+
+        report = format_build_report(diagnostic)
+
+        self.assertIn("Joint contest: 20 entries cost $200.00", report)
+        self.assertIn("profit chance 31.0%", report)
+        self.assertIn("$0/$140/$600", report)
+        self.assertIn("750 scenarios; 3 opponent-field samples; Moderate stability", report)
+        self.assertIn("role-aware player ranges", report)
+
     def test_history_keeps_newest_first_and_respects_limit(self):
         first = save_build_diagnostic(self._diagnostic(total=10.0), limit=2)
         second = save_build_diagnostic(self._diagnostic(total=20.0), limit=2)

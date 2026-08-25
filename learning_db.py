@@ -148,6 +148,8 @@ def init_db(conn: sqlite3.Connection) -> None:
             sim_expected_payout REAL,
             sim_expected_profit REAL,
             sim_expected_roi_pct REAL,
+            sim_joint_portfolio INTEGER,
+            sim_standalone_expected_roi_pct REAL,
             sim_contest_name TEXT,
             sim_entry_fee REAL,
             sim_contest_field_size INTEGER,
@@ -206,6 +208,8 @@ def init_db(conn: sqlite3.Connection) -> None:
         ("sim_expected_payout", "REAL"),
         ("sim_expected_profit", "REAL"),
         ("sim_expected_roi_pct", "REAL"),
+        ("sim_joint_portfolio", "INTEGER"),
+        ("sim_standalone_expected_roi_pct", "REAL"),
         ("sim_contest_name", "TEXT"),
         ("sim_entry_fee", "REAL"),
         ("sim_contest_field_size", "INTEGER"),
@@ -441,7 +445,8 @@ def record_export(
                             sim_cash_rate=?, sim_bust_rate=?, sim_average_percentile=?, sim_ceiling=?,
                             sim_return_index=?, sim_leverage=?, sim_duplicate_risk=?, sim_scenarios=?,
                             sim_field_lineups=?, sim_expected_payout=?, sim_expected_profit=?,
-                            sim_expected_roi_pct=?, sim_contest_name=?, sim_entry_fee=?,
+                            sim_expected_roi_pct=?, sim_joint_portfolio=?,
+                            sim_standalone_expected_roi_pct=?, sim_contest_name=?, sim_entry_fee=?,
                             sim_contest_field_size=?
                         WHERE lineup_id=?
                         """,
@@ -462,6 +467,8 @@ def record_export(
                             None if feature.get("sim_expected_payout") is None else _safe_float(feature.get("sim_expected_payout")),
                             None if feature.get("sim_expected_profit") is None else _safe_float(feature.get("sim_expected_profit")),
                             None if feature.get("sim_expected_roi_pct") is None else _safe_float(feature.get("sim_expected_roi_pct")),
+                            1 if feature.get("sim_joint_portfolio") else 0,
+                            None if feature.get("sim_standalone_expected_roi_pct") is None else _safe_float(feature.get("sim_standalone_expected_roi_pct")),
                             str(feature.get("sim_contest_name", "") or ""),
                             None if feature.get("sim_entry_fee") is None else _safe_float(feature.get("sim_entry_fee")),
                             None if feature.get("sim_contest_field_size") is None else _safe_int(feature.get("sim_contest_field_size")),
@@ -688,7 +695,8 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
                    l.sim_ceiling, l.sim_return_index, l.sim_leverage,
                    l.sim_duplicate_risk, l.sim_scenarios, l.sim_field_lineups,
                    l.sim_expected_payout, l.sim_expected_profit, l.sim_expected_roi_pct,
-                   l.sim_contest_name, l.sim_entry_fee, l.sim_contest_field_size
+                    l.sim_contest_name, l.sim_entry_fee, l.sim_contest_field_size,
+                    l.sim_joint_portfolio, l.sim_standalone_expected_roi_pct
             FROM historical_results hr
             JOIN lineups l ON l.lineup_id=hr.matched_lineup_id
             JOIN exports e ON e.export_id=l.export_id
@@ -711,6 +719,8 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
                 "sim_expected_payout": row[26], "sim_expected_profit": row[27],
                 "sim_expected_roi_pct": row[28], "sim_contest_name": row[29],
                 "sim_entry_fee": row[30], "sim_contest_field_size": row[31],
+                "sim_joint_portfolio": bool(row[32]),
+                "sim_standalone_expected_roi_pct": row[33],
             })
 
         calibration_rows = cur.execute(

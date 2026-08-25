@@ -151,6 +151,7 @@ def build_portfolio_insights(
     cap = max(1.0, _number(salary_cap, 50000.0))
     portfolio = dict(portfolio_report or {})
     sim = dict(sim_report or {})
+    joint = dict(sim.get("joint_portfolio") or portfolio.get("joint_contest") or {})
 
     grade_counts: Counter[str] = Counter()
     source_counts: Counter[str] = Counter()
@@ -298,6 +299,11 @@ def build_portfolio_insights(
         text = str(warning or "").strip()
         if text and text not in review_flags:
             review_flags.append(text)
+    if joint and not joint.get("entry_count_match", True):
+        review_flags.append(
+            f"Contest profile plans {int(joint.get('planned_entries', 0) or 0):,} entries, but this portfolio contains "
+            f"{int(joint.get('entries_simulated', total) or total):,}."
+        )
     weak_grades = grade_counts["C"] + grade_counts["D"]
     if total and weak_grades / total >= 0.40:
         review_flags.append(
@@ -364,6 +370,35 @@ def build_portfolio_insights(
         ])
     if fit.get("available"):
         lines.append(f"- Preset fit: {_number(fit.get('fit_score')):.0f}/100 — {fit.get('summary') or ''}")
+    if joint:
+        lines.extend([
+            "",
+            "Joint contest outlook",
+            (
+                f"- {int(joint.get('entries_simulated', total) or total):,} entries cost "
+                f"${_number(joint.get('total_entry_cost')):,.2f}; expected total payout "
+                f"${_number(joint.get('expected_total_payout')):,.2f} and profit "
+                f"${_number(joint.get('expected_total_profit')):+,.2f} "
+                f"({_number(joint.get('expected_roi_pct')):+.1f}% ROI)"
+            ),
+            (
+                f"- Profit chance: {_number(joint.get('profit_probability_pct')):.1f}% | "
+                f"double-up chance: {_number(joint.get('double_probability_pct')):.1f}% | "
+                f"any top-10: {_number(joint.get('any_top_ten_probability_pct')):.1f}%"
+            ),
+            (
+                f"- Total payout range: 10th ${_number(joint.get('payout_p10')):,.0f} | "
+                f"median ${_number(joint.get('payout_p50')):,.0f} | "
+                f"90th ${_number(joint.get('payout_p90')):,.0f}"
+            ),
+            (
+                f"- Estimate stability: {joint.get('stability') or 'n/a'} across "
+                f"{int(joint.get('scenarios', 0) or 0):,} scenarios and "
+                f"{int(joint.get('opponent_field_samples', 1) or 1)} opponent-field samples; "
+                f"95% ROI range {_number(joint.get('roi_ci_low')):+.1f}% to "
+                f"{_number(joint.get('roi_ci_high')):+.1f}%"
+            ),
+        ])
 
     lines.extend([
         "",
@@ -427,6 +462,7 @@ def build_portfolio_insights(
         "archetype_counts": dict(archetype_counts),
         "scenario_count": scenario_total,
         "scenario_coverage": len(scenario_hits),
+        "joint_contest": joint,
         "review_flags": review_flags,
         "flagged_count": flagged_count,
         "lineup_rows": rows,

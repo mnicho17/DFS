@@ -156,6 +156,22 @@ def representative_lineups(players: List[Dict[str, Any]]) -> List[SimLineup]:
             "field_duplicate_estimate": round(0.8 + index * 0.18, 2),
             "sim_scenarios": 750,
             "sim_field_lineups": 1500,
+            "sim_expected_payout": 24.0 - index * 0.6,
+            "sim_expected_profit": 4.0 - index * 0.6,
+            "sim_expected_roi_pct": 20.0 - index * 3.0,
+            "sim_contest_name": "Sunday Main $20",
+            "sim_entry_fee": 20.0,
+            "sim_contest_field_size": 177_258,
+            "sim_joint_portfolio": True,
+            "sim_portfolio_cash_rate": 27.0 - index * 0.8,
+            "sim_portfolio_scenarios": 750,
+            "sim_portfolio_entry_count": 8,
+            "sim_portfolio_expected_total_payout": 183.60,
+            "sim_portfolio_expected_total_profit": 23.60,
+            "sim_portfolio_expected_roi_pct": 14.75,
+            "sim_portfolio_profit_probability_pct": 29.3,
+            "sim_portfolio_roi_ci_low": -7.8,
+            "sim_portfolio_roi_ci_high": 37.3,
         }, top_hits={index * 3 + 1, index * 3 + 2, index * 3 + 5},
             candidate_source=source, candidate_archetype=archetype))
     return lineups
@@ -246,6 +262,39 @@ def capture(output_dir: Path) -> None:
                 "fit_score": 91,
                 "summary": "Portfolio closely matches the 150-Max preset (91/100); largest gap is bring-back mix.",
             },
+            "joint_portfolio": {
+                "model": "joint-contest-portfolio-v2",
+                "joint_portfolio": True,
+                "contest_name": "Sunday Main $20",
+                "field_size": 177_258,
+                "entries_simulated": 8,
+                "planned_entries": 8,
+                "entry_count_match": True,
+                "total_entry_cost": 160.0,
+                "expected_total_payout": 183.60,
+                "expected_total_profit": 23.60,
+                "expected_roi_pct": 14.75,
+                "roi_ci_low": -7.8,
+                "roi_ci_high": 37.3,
+                "profit_probability_pct": 29.3,
+                "double_probability_pct": 11.1,
+                "any_first_probability_pct": 0.4,
+                "any_top_ten_probability_pct": 3.2,
+                "payout_p10": 0.0,
+                "payout_p50": 120.0,
+                "payout_p90": 420.0,
+                "scenarios": 750,
+                "scenario_target": 750,
+                "opponent_field_samples": 3,
+                "stability": "Moderate",
+                "adaptive_stopped": False,
+                "volatility_model": "role-aware-player-volatility-v1",
+                "rare_event_model": "guardrailed-breakout-tails-v1",
+                "game_script_mix": {
+                    "Balanced": 56.0, "Blowout": 14.0,
+                    "Defensive": 13.0, "Shootout": 17.0,
+                },
+            },
         }
         window.tabs_lineups.setCurrentIndex(1)
         window.tabs_workspace_controls.setCurrentIndex(0)
@@ -291,6 +340,10 @@ def capture(output_dir: Path) -> None:
         )
         insights_dialog = PortfolioInsightsDialog(insights, window)
         insights_dialog.resize(1240, 760)
+        insights_dialog.tabs.setCurrentIndex(0)
+        insights_dialog.show()
+        app.processEvents()
+        save_widget(insights_dialog, output_dir / "contest-portfolio-outlook.png")
         insights_dialog.tabs.setCurrentIndex(1)
         flagged_index = insights_dialog.filter_combo.findData("flagged")
         if flagged_index >= 0:
@@ -339,6 +392,10 @@ def capture(output_dir: Path) -> None:
                     "sim_enabled": True,
                     "sim_scenarios": 750,
                     "field_preset": "150-Max",
+                    "contest_profile": {
+                        "name": "Sunday Main $20", "field_size": 177_258,
+                        "entry_fee": 20.0, "user_entries": 8,
+                    },
                 },
                 "portfolio_rules": {
                     "min_unique": 2,

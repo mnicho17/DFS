@@ -790,7 +790,7 @@ class ResultsLearningUITests(unittest.TestCase):
             timing["scenario_candidate_report"]["unique_source_additions"]["scenario_built"],
             0,
         )
-        self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v4")
+        self.assertEqual(payload["sim_report"]["model"], "scenario-portfolio-v5")
         self.assertEqual(payload["sim_report"]["field_preset"], "150-Max")
         selected_sources = payload["sim_report"]["candidate_sources"]["selected"]
         self.assertEqual(sum(selected_sources.values()), len(payload["lineups"]))
@@ -802,6 +802,42 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIn("largest gap", payload["sim_report"]["preset_comparison"]["summary"])
         self.assertGreater(payload["portfolio_report"]["sim_summary"]["top_one_scenarios_covered"], 0)
         self.assertTrue(all(hasattr(lineup, "sim_scenario_values") for lineup in payload["lineups"]))
+
+    def test_contest_aware_worker_validates_selected_entries_jointly(self):
+        finished = []
+        worker = LineupBuildWorker(
+            _fixture_players(),
+            kind="classic",
+            sport="NFL",
+            num_lineups=8,
+            salary_cap=50000,
+            build_style="Strategic",
+            salary_strategy="Near Cap",
+            portfolio_rules={
+                "min_unique": 2, "max_team_pct": 100.0, "max_game_pct": 100.0,
+                "balance_ownership": True, "groups": [], "player_constraints": {},
+            },
+            sim_enabled=True,
+            sim_scenarios=100,
+            contest_profile={
+                "name": "Eight Entry Test", "field_size": 500, "entry_fee": 10,
+                "user_entries": 8,
+                "payouts": "1 = 1000\n2-10 = 100\n11-100 = 20",
+            },
+        )
+        worker.finished.connect(finished.append)
+
+        worker.run()
+
+        self.assertTrue(finished)
+        payload = finished[0]
+        joint = payload["sim_report"]["joint_portfolio"]
+        self.assertTrue(joint["joint_portfolio"])
+        self.assertTrue(joint["entry_count_match"])
+        self.assertEqual(joint["entries_simulated"], 8)
+        self.assertEqual(payload["timing_report"]["portfolio_simulation_scenarios"], 100)
+        self.assertTrue(payload["portfolio_report"]["sim_summary"]["joint_portfolio"])
+        self.assertTrue(all(lineup.sim_metrics["sim_joint_portfolio"] for lineup in payload["lineups"]))
 
     def test_deep_worker_keeps_best_completed_stage_under_a_short_time_budget(self):
         progress = []
