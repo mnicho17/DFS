@@ -68,6 +68,8 @@ def normalize_rules(rules: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             "MaxPct": item.get("MaxPct"),
             "MinCptPct": item.get("MinCptPct"),
             "MaxCptPct": item.get("MaxCptPct"),
+            "LockFlex": bool(item.get("LockFlex")),
+            "LockCpt": bool(item.get("LockCpt")),
         }
     return {
         "min_unique": max(1, min(8, int(raw.get("min_unique", 1) or 1))),
@@ -219,6 +221,31 @@ def select_portfolio(
     max_total = {key: _max_count(player.get("MaxPct"), requested) for key, player in player_lookup.items()}
     min_cpt = {key: _min_count(player.get("MinCptPct"), requested) for key, player in player_lookup.items()}
     max_cpt = {key: _max_count(player.get("MaxCptPct"), requested) for key, player in player_lookup.items()}
+    auto_guardrails = kind == "showdown" and normalized["balance_ownership"]
+    if requested <= 20:
+        auto_total_pct, auto_cpt_pct = 80.0, 35.0
+    elif requested < 100:
+        auto_total_pct, auto_cpt_pct = 78.0, 32.0
+    else:
+        auto_total_pct, auto_cpt_pct = 75.0, 30.0
+    if auto_guardrails:
+        auto_total_keys: set[str] = set()
+        auto_cpt_keys: set[str] = set()
+        for key, player in player_lookup.items():
+            locked = bool(player.get("LockFlex") or player.get("LockCpt"))
+            if not locked and player.get("MaxPct") in (None, ""):
+                max_total[key] = _max_count(auto_total_pct, requested)
+                auto_total_keys.add(key)
+            if not locked and player.get("MaxCptPct") in (None, ""):
+                max_cpt[key] = _max_count(auto_cpt_pct, requested)
+                auto_cpt_keys.add(key)
+    else:
+        auto_total_keys = set()
+        auto_cpt_keys = set()
+    specialist_cpt_limit = (
+        max(1, int(math.floor(requested * 0.15 + 1e-9)))
+        if auto_guardrails else None
+    )
     max_team = _max_count(normalized["max_team_pct"], requested)
     max_game = _max_count(normalized["max_game_pct"], requested)
 
@@ -277,6 +304,9 @@ def select_portfolio(
             "ownership": _ownership(lineup, kind),
             "signature": _candidate_signature(lineup, kind),
             "captain_key": player_key(captain) if captain else "",
+            "specialist_captain": bool(
+                captain and str(captain.get("Position") or "").strip().upper() in {"K", "DST", "D/ST", "DEF"}
+            ),
             "sim": _sim_metrics(lineup),
             "archetype": str(
                 getattr(lineup, "candidate_archetype", "")
@@ -302,6 +332,7 @@ def select_portfolio(
     sim_win_counts: Counter[int] = Counter()
     sim_value_counts: Counter[int] = Counter()
     archetype_counts: Counter[str] = Counter()
+    specialist_cpt_count = 0
 
     for lineup in retained:
         meta = candidate_meta[id(lineup)]
@@ -310,6 +341,8 @@ def select_portfolio(
         game_counts.update(meta["games"])
         if meta["captain_key"]:
             cpt_counts[meta["captain_key"]] += 1
+        if meta["specialist_captain"]:
+            specialist_cpt_count += 1
         sim_top_counts.update(meta["top_hits"])
         sim_top_five_counts.update(meta["top_five_hits"])
         sim_win_counts.update(meta["win_hits"])
@@ -360,6 +393,8 @@ def select_portfolio(
             limit = max_cpt.get(captain_key)
             if limit is not None and cpt_counts[captain_key] >= limit:
                 return False
+        if meta["specialist_captain"] and specialist_cpt_limit is not None and specialist_cpt_count >= specialist_cpt_limit:
+            return False
         if max_team is not None and any(team_counts[team] >= max_team for team in teams):
             return False
         if max_game is not None and any(game_counts[game] >= max_game for game in games):
@@ -451,6 +486,7 @@ def select_portfolio(
         )
 
     remaining = list(pool)
+    auto_relaxations = 0
     while len(selected) < requested and remaining:
         eligible = [lineup for lineup in remaining if admissible(lineup, current_min_unique)]
         if not eligible:
@@ -459,6 +495,22 @@ def select_portfolio(
                 current_uniqueness_conflicts = uniqueness_conflicts(current_min_unique)
                 warnings.append(f"Minimum unique players relaxed to {current_min_unique} to finish the portfolio.")
                 continue
+            if auto_guardrails:
+                changed = False
+                for key in auto_total_keys:
+                    if max_total.get(key) is not None and max_total[key] < requested:
+                        max_total[key] += 1
+                        changed = True
+                for key in auto_cpt_keys:
+                    if max_cpt.get(key) is not None and max_cpt[key] < requested:
+                        max_cpt[key] += 1
+                        changed = True
+                if specialist_cpt_limit is not None and specialist_cpt_limit < requested:
+                    specialist_cpt_limit += 1
+                    changed = True
+                if changed:
+                    auto_relaxations += 1
+                    continue
             break
         chosen = max(eligible, key=lambda lineup: (score(lineup), candidate_meta[id(lineup)]["signature"]))
         remaining.remove(chosen)
@@ -473,6 +525,8 @@ def select_portfolio(
         game_counts.update(games)
         if chosen_meta["captain_key"]:
             cpt_counts[chosen_meta["captain_key"]] += 1
+        if chosen_meta["specialist_captain"]:
+            specialist_cpt_count += 1
         chosen_top_hits = chosen_meta["top_hits"]
         chosen_top_five_hits = chosen_meta["top_five_hits"]
         chosen_win_hits = chosen_meta["win_hits"]
@@ -576,6 +630,13 @@ def select_portfolio(
             after = cpt_counts[key] - int(key == out_captain) + int(key == in_captain)
             if limit is not None and after > limit:
                 return False
+        specialist_after = (
+            specialist_cpt_count
+            - int(out_meta["specialist_captain"])
+            + int(in_meta["specialist_captain"])
+        )
+        if specialist_cpt_limit is not None and specialist_after > specialist_cpt_limit:
+            return False
         for team in out_meta["teams"].union(in_meta["teams"]):
             after = team_counts[team] - int(team in out_meta["teams"]) + int(team in in_meta["teams"])
             if max_team is not None and after > max_team:
@@ -653,6 +714,7 @@ def select_portfolio(
         return delta + duplication_bonus
 
     def apply_swap(outgoing: Any, incoming: Any) -> None:
+        nonlocal specialist_cpt_count
         out_meta = candidate_meta[id(outgoing)]
         in_meta = candidate_meta[id(incoming)]
         index = selected.index(outgoing)
@@ -674,6 +736,7 @@ def select_portfolio(
             cpt_counts[out_meta["captain_key"]] -= 1
         if in_meta["captain_key"]:
             cpt_counts[in_meta["captain_key"]] += 1
+        specialist_cpt_count += int(in_meta["specialist_captain"]) - int(out_meta["specialist_captain"])
         remaining.remove(incoming)
         remaining.append(outgoing)
 
@@ -767,6 +830,15 @@ def select_portfolio(
     report["refinement_attempts"] = refinement_attempts
     report["refinement_stop_reason"] = refinement_stop_reason
     report["refinement_seconds"] = max(0.0, time.perf_counter() - refinement_started)
+    report["automatic_showdown_guardrails"] = (
+        {
+            "total_player_pct": auto_total_pct,
+            "captain_pct": auto_cpt_pct,
+            "specialist_captain_pct": 15.0,
+            "relaxations": auto_relaxations,
+        }
+        if auto_guardrails else {}
+    )
     for warning in warnings:
         if warning not in report["warnings"]:
             report["warnings"].append(warning)
