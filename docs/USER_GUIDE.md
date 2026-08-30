@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.18.0 | Windows desktop app
+Version 1.19.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
