@@ -2,7 +2,7 @@
 
 1. Download `DFS-Optimizer.exe` from the [latest release](https://github.com/mnicho17/DFS/releases/latest) and open it.
 2. Choose the sport at the top of the app, then select **Load Player CSV** and open the DraftKings salary file for your slate.
-3. Choose **Slate Readiness**. For NFL it refreshes stale player news automatically; add a personal Odds API key under **Live Data Settings** if you want Vegas totals and spreads.
+3. Choose **Slate Readiness**. For NFL it refreshes stale player news automatically using key-free sources.
 4. Choose **Showdown** or **Classic**, set the number of lineups, and review **Build Strategy**. To reuse a proven setup, choose **Settings > Apply or Delete Recipes**; recipes never carry player-specific locks, fades, exposure limits, or groups into a new slate. Normal NFL Classic styles automatically omit deep backups; use Randomized with SIM Edge off only when you want the broad player pool. NFL Classic users can turn on **NFL SIM Edge**, choose **Single Entry**, **3-Max**, **20-Max**, or **150-Max**, and leave **Build depth** on Fast or choose Deep for an up-to-five-minute search. If you have the actual contest payouts, choose **Settings > Contest-Aware SIM**, enter the field, fee, entry count, and payout tiers, then choose **Save and Use**. Match the profile's entry count when prompted so the final joint pass represents the entries you will submit.
 5. Use **Portfolio Rules** for minimum uniqueness, exposure caps, team or game limits, and player groups.
 6. Review the compact **Space** display, then choose **Generate**. It shows the usable player pool, structural lineup possibilities, requested total, current build phase, and—after completion—phase timing in its tooltip.
@@ -11,4 +11,5 @@
 9. After the contest, open **Results & Learning** and import the DraftKings standings or contest-history CSV. Complete standings also measure the real opponent field; personal entry history remains results-only. For a complete NFL field, choose **Attach Matching Salaries** and select the salary CSV from that exact slate for salary and construction analysis.
 10. Generate and export another NFL Classic SIM build for the same preset, then return to **Results & Learning** to review **Real Field vs latest NFL SIM**. Large imports run in the background with progress and cancellation.
 
-> The optimizer is a decision tool. Projections, simulations, ownership, news, and Vegas data can be incomplete or wrong. Always review entries before lock.
+> The optimizer is a decision tool. Projections, simulations, ownership, and news can be incomplete or wrong. Always review entries before lock.
+
