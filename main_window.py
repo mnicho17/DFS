@@ -709,8 +709,8 @@ class LineupBuildWorker(QtCore.QObject):
                 # Showdown needs a materially wider bank so the portfolio
                 # selector can diversify Captain and game-script outcomes.
                 candidate_target = min(
-                    2500,
-                    max(expanded_target, 300, build_request * 10),
+                    4000,
+                    max(expanded_target, 320, build_request * 16),
                 )
             elif hard_portfolio_rules:
                 candidate_target = expanded_target
