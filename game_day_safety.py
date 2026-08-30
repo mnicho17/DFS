@@ -154,8 +154,6 @@ def build_final_lock_report(
         "used_cached_check": bool(used_cached_check),
         "sleeper_matches": int(live_summary.get("sleeper", 0) or 0),
         "player_count": int(live_summary.get("total", len(player_pool)) or 0),
-        "odds_state": str(live_summary.get("odds_state") or "not_configured"),
-        "odds_games": int(live_summary.get("odds_matched_games", 0) or 0),
         "changes": change_rows,
         "affected_indexes": affected_indexes,
         "affected_lineups": len(affected_indexes),
@@ -187,3 +185,4 @@ def format_final_lock_report(report: Mapping[str, Any]) -> str:
         lines.append("Current player status could not be confirmed; cached lineup data remains available for manual review.")
     lines.extend(["", "The final lock check never changes a saved lineup automatically."])
     return "\n".join(lines)
+
