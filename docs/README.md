@@ -3,6 +3,7 @@
 - [Five-minute quick start](QUICK_START.md)
 - [Complete user guide](USER_GUIDE.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
+- [Version 1.19.0 release notes](releases/v1.19.0.md)
 - [Version 1.18.0 release notes](releases/v1.18.0.md)
 - [Version 1.17.0 release notes](releases/v1.17.0.md)
 - [Version 1.16.0 release notes](releases/v1.16.0.md)
@@ -24,3 +25,4 @@
 - [Version 1.6.0 release notes](releases/v1.6.0.md)
 
 Each tagged Windows release also includes `DFS-Optimizer-User-Guide.pdf` as a downloadable asset.
+
