@@ -4,7 +4,7 @@ Version 1.18.0 | Windows desktop app
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
-> Use the app to organize decisions, not to replace a final review. Player news, projections, ownership, odds, and simulations can be incomplete or wrong.
+> Use the app to organize decisions, not to replace a final review. Player news, projections, ownership, and simulations can be incomplete or wrong.
 
 ## 1. Install the app
 
@@ -31,7 +31,7 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 
 ![Simplified NFL workspace with the active recipe, player pool, and Classic lineup results](images/main-workspace.png)
 
-The pictured examples use representative NFL data. Player names, projections, ownership, live context, odds, and SIM results will differ by slate.
+The pictured examples use representative NFL data. Player names, projections, ownership, live context, and SIM results will differ by slate.
 
 The detailed Build Strategy, Portfolio Rules, and Data and Learning controls are folded away at startup so the player pool and generated lineups get most of the window. The quiet recipe summary beside the sport shows the active build style, salary approach, and, when applicable, SIM depth and contest preset. Choose **Settings > Show Build Controls** to change the detailed recipe. Choose **Settings > Show Saved Portfolio** to hide or restore the saved-lineup panel.
 
@@ -39,7 +39,7 @@ The detailed Build Strategy, Portfolio Rules, and Data and Learning controls are
 
 **Classic** uses each sport's normal multi-game DraftKings roster. The selected sport controls slots, eligibility, grading, and sport-specific columns.
 
-**Showdown** uses one Captain and five FLEX players. Captain salary and projection are multiplied according to DraftKings rules. Showdown keeps its own Captain exposure controls and uses the same NFL availability, roles, news, weather, and Vegas context when available.
+**Showdown** uses one Captain and five FLEX players. Captain salary and projection are multiplied according to DraftKings rules. Showdown keeps its own Captain exposure controls and uses the same NFL availability, roles, news, usage, matchup, and weather context.
 
 Always confirm that the loaded salary file matches the contest type you intend to enter.
 
@@ -50,7 +50,6 @@ Choose **Load Player CSV** and select a DraftKings salary file. The player table
 - **BaseProj** is the original projection.
 - **AdjProj** includes supported context adjustments.
 - **Status** and **Role** show NFL availability and depth information.
-- **Vegas ITT** is the team's implied point total when odds are available.
 - **Own%** is the projected field ownership used by build and SIM logic.
 - **Tags** show locks, fades, and related choices.
 - Exposure columns hold maximum and minimum portfolio limits.
@@ -61,19 +60,11 @@ Player columns use content-aware alignment: descriptive fields stay left-aligned
 
 ![The player table as the central slate workspace](images/main-workspace.png){compact}
 
-## 5. NFL Game-Day Check and Vegas
+## 5. NFL Game-Day Check
 
 For NFL slates, **Game-Day Check** refreshes structured availability, injuries, practice participation, roster status, news notes, and depth-chart roles. The app automatically excludes confirmed inactive, out, injured-reserve, suspended, and practice-squad players unless they were manually locked.
 
 A locked unavailable player is never removed silently. Generation stops and names the conflict so you can decide what to do.
-
-To add Vegas spreads and totals:
-
-1. Create a personal key at The Odds API.
-2. Open **Live Data Settings**.
-3. Save the key and choose **Game-Day Check**.
-
-The key remains in the current Windows user's local settings. If lines are unavailable, the status message says whether the key is missing, rejected, or the provider returned no games.
 
 Run the check again near lock. No automated data source is a substitute for late-news review.
 
@@ -92,10 +83,9 @@ The audit checks:
 - locked players whose latest status is unavailable;
 - freshness and coverage of NFL player news and depth roles;
 - questionable players and active depth-order 3+ backups that deserve review;
-- availability of optional Vegas context; and
 - after generation, complete rosters, salary use, and the NFL portfolio's fit with the selected contest preset.
 
-Only hard preparation problems are blockers, such as a missing roster position, poor projection coverage, or a locked-out player. Missing early-week Vegas lines remain a review item because odds are useful but optional. The audit never changes a player, projection, ownership value, lock, fade, or lineup. Choose **Copy Report** when you want to keep or share the findings.
+Only hard preparation problems are blockers, such as a missing roster position, poor projection coverage, or a locked-out player. The audit never changes a player, projection, ownership value, lock, fade, or lineup. Choose **Copy Report** when you want to keep or share the findings.
 
 Reopen Slate Readiness after generation. The portfolio check then compares salary use, QB-stack mix, bring-backs, FLEX mix, and ownership coverage with the selected NFL field preset.
 
@@ -305,8 +295,6 @@ Exact matching matters. An entry can remain unmatched if it was edited after exp
 
 ## 12. Troubleshooting
 
-**No Vegas values:** save a valid Odds API key, refresh Game-Day Check, and read the status message. Lines may not be posted yet.
-
 **Slow generation:** test fewer lineups and relax conflicting minimums, groups, uniqueness, or concentration limits.
 
 **Too few lineups:** read the generation message and Portfolio Insights; the pool may not support all current rules.
@@ -330,3 +318,4 @@ The optimizer stores exports, imported results, slate snapshots, build diagnosti
 ![Local history controls in Results and Learning](images/results-learning.png){medium}
 
 Build diagnostics contain aggregate settings, timing, counts, and generalized warning categories. They do not store player names, lineup contents, salary-file paths, or API keys.
+
