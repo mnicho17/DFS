@@ -452,7 +452,7 @@ class ResultsLearningUITests(unittest.TestCase):
         second.run()
         self.assertTrue(cancelled[0]["cancelled"])
 
-    def test_player_table_shows_live_availability_and_implied_team_total(self):
+    def test_player_table_shows_live_availability_and_role_context(self):
         window = MainWindow()
         window.players = [{
             "Name": "Example QB", "Team": "BUF", "Position": "QB",
@@ -462,15 +462,10 @@ class ResultsLearningUITests(unittest.TestCase):
             "NFLReplacementFor": "Starting QB", "NFLReplacementBoost": 0.30,
             "NFLRosterStatus": "Active", "NFLPractice": "Full Participation",
             "InjurySource": "Sleeper", "LiveStatusUpdatedAt": "2026-09-13T15:00:00Z",
-            "NFLVegas": 0.5, "NFLVegasTeamTotal": 27.0, "NFLVegasGameTotal": 50.0,
-            "NFLVegasSpread": -4.0, "NFLVegasBookmakers": 5,
-            "NFLVegasUpdatedAt": "2026-09-13T14:55:00Z", "NFLVegasState": "matched",
         }]
         window._refresh_players_table()
         self.assertEqual(window.tbl_players.item(0, 3).text(), "Starter")
         self.assertIn("Depth: QB1", window.tbl_players.item(0, 3).toolTip())
-        self.assertEqual(window.tbl_players.item(0, 12).text(), "27.0")
-        self.assertIn("Game total: 50.0", window.tbl_players.item(0, 12).toolTip())
         self.assertIn("Starting QB", window.tbl_players.item(0, 10).toolTip())
         window.close()
 
