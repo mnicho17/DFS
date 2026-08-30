@@ -103,6 +103,28 @@ def _own(p: Dict[str, Any]) -> float:
         return 0.0
 
 
+def _showdown_cpt_own(p: Dict[str, Any]) -> float:
+    """Captain ownership when available, with total ownership as a safe fallback."""
+    try:
+        value = p.get("ProjCptOwnPct", None)
+        if value not in (None, ""):
+            return float(value)
+    except Exception:
+        pass
+    return _own(p)
+
+
+def _showdown_flex_own(p: Dict[str, Any]) -> float:
+    """FLEX-specific ownership when available, with total ownership as fallback."""
+    try:
+        value = p.get("ProjFlexOwnPct", None)
+        if value not in (None, ""):
+            return float(value)
+    except Exception:
+        pass
+    return _own(p)
+
+
 def _own_sign(mode: str) -> float:
     """Return sign for ownership term: + for chalk, - for leverage."""
     m = (mode or "").strip().lower()
@@ -388,6 +410,16 @@ def _showdown_pair_script_bonus(a: Dict[str, Any], b: Dict[str, Any]) -> float:
 
     a_qb, b_qb = "QB" in pa, "QB" in pb
     a_receiver, b_receiver = bool(pa & {"WR", "TE"}), bool(pb & {"WR", "TE"})
+    # Key-free correlation baseline. Live totals can refine these preferences,
+    # but ordinary salary files should still create coherent Showdown stories.
+    if ta == tb and ((a_qb and b_receiver) or (b_qb and a_receiver)):
+        bonus += 0.22
+    elif ta != tb and ((a_qb and b_receiver) or (b_qb and a_receiver)):
+        bonus += 0.07
+    if ta == tb and (("RB" in pa and "DST" in pb) or ("RB" in pb and "DST" in pa)):
+        bonus += 0.12
+    if ta != tb and (("RB" in pa and "DST" in pb) or ("RB" in pb and "DST" in pa)):
+        bonus -= 0.14
     if total >= 47.0:
         scale = min(1.0, (total - 45.0) / 9.0)
         if ta == tb and ((a_qb and b_receiver) or (b_qb and a_receiver)):
@@ -479,6 +511,100 @@ def _showdown_lineup_script_bonus(captain: Dict[str, Any], flex: List[Dict[str, 
         for other in players[index + 1:]:
             pair_bonus += _showdown_pair_script_bonus(player, other)
     return split_bonus + pair_bonus
+
+
+class ShowdownLineup(dict):
+    """Dict-compatible lineup carrying tournament-selection metadata."""
+
+    def __init__(self, captain: Dict[str, Any], flex: List[Dict[str, Any]]):
+        super().__init__(Captain=captain, Flex=list(flex))
+        self.sim_metrics: Dict[str, Any] = {}
+        self.candidate_source = "showdown_optimizer"
+        self.candidate_archetype = ""
+        self.sim_top_hits: set[int] = set()
+
+
+def showdown_lineup_archetype(captain: Dict[str, Any], flex: List[Dict[str, Any]]) -> str:
+    """Describe the lineup's primary construction without requiring betting data."""
+    players = [captain] + list(flex or [])
+    positions = Counter(
+        next(iter(_position_tokens(player)), "") for player in players
+    )
+    team_counts = Counter(_team(player) for player in players if _team(player))
+    split = tuple(sorted(team_counts.values(), reverse=True))
+    captain_pos = next(iter(_position_tokens(captain)), "")
+    captain_team = _team(captain)
+    same_team_receivers = sum(
+        1 for player in flex
+        if _team(player) == captain_team and _position_tokens(player) & {"WR", "TE"}
+    )
+    same_team_qb = any(
+        _team(player) == captain_team and "QB" in _position_tokens(player)
+        for player in flex
+    )
+    if captain_pos in {"DST", "K"} or positions["DST"] + positions["K"] >= 3:
+        return "Defensive"
+    if split == (5, 1):
+        return "Onslaught"
+    if captain_pos == "QB" and same_team_receivers >= 1:
+        return "Passing Stack"
+    if captain_pos in {"WR", "TE"} and same_team_qb:
+        return "Receiver Captain"
+    if captain_pos == "RB":
+        return "Rushing Control"
+    return "Balanced"
+
+
+def attach_showdown_metrics(lineups: List[Dict[str, Any]], salary_cap: float = 50000.0) -> List[Dict[str, Any]]:
+    """Attach relative quality, leverage, construction, and duplication estimates."""
+    prepared: List[ShowdownLineup] = []
+    raw_quality: List[float] = []
+    for raw in lineups or []:
+        captain = raw.get("Captain") or {}
+        flex = list(raw.get("Flex") or [])
+        lineup = raw if isinstance(raw, ShowdownLineup) else ShowdownLineup(captain, flex)
+        archetype = showdown_lineup_archetype(captain, flex)
+        salary = _cpt_salary(captain) + sum(_salary(player) for player in flex)
+        salary_left = max(0.0, float(salary_cap) - salary)
+        cpt_own = max(0.0, _showdown_cpt_own(captain))
+        flex_owns = [max(0.0, _showdown_flex_own(player)) for player in flex]
+        total_own = cpt_own + sum(flex_owns)
+        projection = _cpt_proj(captain) + sum(_proj(player) for player in flex)
+        correlation = _showdown_lineup_script_bonus(captain, flex)
+        # Chalk Captain + full salary + high cumulative ownership are the main
+        # practical duplication signals available without a historical field.
+        duplication = (
+            0.75 * cpt_own
+            + 0.16 * total_own
+            + max(0.0, 18.0 - salary_left / 125.0)
+            + (7.0 if archetype in {"Balanced", "Passing Stack"} else 2.0)
+        )
+        duplication = max(0.0, min(100.0, duplication))
+        leverage = max(0.0, min(100.0, 70.0 - 0.65 * cpt_own - 0.10 * total_own + salary_left / 180.0))
+        quality = projection + 0.9 * correlation + 0.05 * leverage - 0.045 * duplication
+        lineup.candidate_archetype = archetype
+        lineup.sim_metrics = {
+            "candidate_source": "showdown_optimizer",
+            "candidate_archetype": archetype,
+            "showdown_projection": projection,
+            "showdown_cpt_ownership": cpt_own,
+            "showdown_total_ownership": total_own,
+            "showdown_salary_left": salary_left,
+            "showdown_correlation": correlation,
+            "sim_leverage": leverage,
+            "duplicate_risk": duplication,
+        }
+        prepared.append(lineup)
+        raw_quality.append(quality)
+
+    ordered = sorted(raw_quality)
+    for lineup, quality in zip(prepared, raw_quality):
+        rank = sum(value <= quality for value in ordered) / max(1, len(ordered)) * 100.0
+        lineup.sim_metrics["sim_edge"] = round(rank, 3)
+        lineup.sim_metrics["sim_return_index"] = round(
+            max(0.0, min(100.0, 0.70 * rank + 0.30 * lineup.sim_metrics["sim_leverage"])), 3
+        )
+    return list(prepared)
 
 
 class ShowdownOptimizer:
@@ -649,8 +775,8 @@ class ShowdownOptimizer:
             if self.own_weight and abs(self.own_weight) > 1e-9:
                 obj += pulp.lpSum(
                     [
-                        cpt[pk] * (w_cpt * _own(key_to_player[pk]))
-                        + flx[pk] * (w_flex * _own(key_to_player[pk]))
+                        cpt[pk] * (w_cpt * _showdown_cpt_own(key_to_player[pk]))
+                        + flx[pk] * (w_flex * _showdown_flex_own(key_to_player[pk]))
                         for pk in keys
                     ]
                 )
@@ -770,7 +896,7 @@ class ShowdownOptimizer:
                 used_flex[pk] = used_flex.get(pk, 0) + 1
 
             prev.append((cpt_key, flex_keys))
-            out.append({"Captain": key_to_player[cpt_key], "Flex": [key_to_player[pk] for pk in flex_keys]})
+            out.append(ShowdownLineup(key_to_player[cpt_key], [key_to_player[pk] for pk in flex_keys]))
             self._report_progress(progress_callback, len(out), num_lineups, "Optimizing showdown portfolio")
 
         return out
@@ -811,7 +937,7 @@ class ShowdownOptimizer:
         captain_scores = {
             id(player): (
                 _cpt_proj(player)
-                + w_cpt * _own(player)
+                + w_cpt * _showdown_cpt_own(player)
                 + style * _showdown_player_script_bonus(player, captain=True)
             )
             for player in players
@@ -819,7 +945,7 @@ class ShowdownOptimizer:
         flex_scores = {
             id(player): (
                 _proj(player)
-                + w_flex * _own(player)
+                + w_flex * _showdown_flex_own(player)
                 + style * _showdown_player_script_bonus(player)
             )
             for player in players
@@ -997,7 +1123,7 @@ class ShowdownOptimizer:
             for player in flex:
                 key = player_key[id(player)]
                 used_flex[key] = used_flex.get(key, 0) + 1
-            out.append({"Captain": captain, "Flex": flex})
+            out.append(ShowdownLineup(captain, flex))
             failures = 0
             self._report_progress(progress_callback, len(out), num_lineups, "Generating fast showdown portfolio")
 
@@ -1022,10 +1148,10 @@ class ShowdownOptimizer:
         w_flex = self.own_weight * 1.00 * own_s
 
         def score_cpt(p: Dict[str, Any]) -> float:
-            return _cpt_proj(p) + w_cpt * _own(p)
+            return _cpt_proj(p) + w_cpt * _showdown_cpt_own(p)
 
         def score_flex(p: Dict[str, Any]) -> float:
-            return _proj(p) + w_flex * _own(p)
+            return _proj(p) + w_flex * _showdown_flex_own(p)
 
         locked_cpt = next((p for p in self.players if p.get("LockCpt")), None)
 
@@ -1102,7 +1228,7 @@ class ShowdownOptimizer:
                 continue
 
             used_sets.add(sig)
-            out.append({"Captain": cpt, "Flex": flex})
+            out.append(ShowdownLineup(cpt, flex))
 
             used_cpt[_pkey(cpt)] = used_cpt.get(_pkey(cpt), 0) + 1
             for pp in flex:
@@ -2420,3 +2546,4 @@ def lineup_slots_for_sport(lineup: List[Dict[str, Any]], sport: str) -> List[Tup
 def lineup_is_complete_for_sport(lineup: List[Dict[str, Any]], sport: str) -> bool:
     assigned = lineup_slots_for_sport(lineup, sport)
     return bool(assigned) and all(player is not None for _, player in assigned)
+
