@@ -91,7 +91,7 @@ Deep Build reserves time for final selection and, when a payout profile is activ
 
 When an NFL SIM lineup is exported, Results & Learning retains those original estimates, including contest-specific expected ROI when a payout profile was active. Imported DraftKings results can then compare predicted and actual top-one-percent, top-five-percent, cash, and contest ROI rates, plus the relationship between SIM Edge and finish percentile. Complete fields can also be compared directly with the latest representative NFL SIM field for the same preset. After three complete fields, 1,000 entries, and 70% metadata coverage for a named preset, a guarded blend can refine its salary, construction, and winning-ownership assumptions. Small samples remain report-only.
 
-## NFL Game-Day Check and Vegas lines
+## NFL Game-Day Check
 
 NFL salary files automatically receive current player availability, injury status, practice participation, roster status, news notes, and depth-chart roles from Sleeper. The status strip reports how many salary-file players matched, when the check ran, and whether anything changed. **Game-Day Check** refreshes the data on demand, and a stale check is refreshed before lineup generation.
 
@@ -100,17 +100,15 @@ NFL salary files automatically receive current player availability, injury statu
 - Questionable and doubtful players remain available, with their uncertainty reflected in the NFL role adjustment.
 - The Status and Role columns expose starter/backup depth, practice participation, the source, and freshness details.
 
-The **Vegas ITT** column displays each team's implied point total rather than an opaque score. Open **Live Data Settings** to save a personal [The Odds API](https://the-odds-api.com/) key. The app requests consensus US spreads and totals, matches them to the DraftKings games, and uses a small capped projection adjustment. The key stays in the current Windows user's local settings and is not placed in exports, logs, or the repository. If no key is configured—or no NFL lines have been posted—the status strip explains that instead of displaying a misleading zero.
-
-NFL Showdown generation uses those same live inputs without applying the Classic low-depth pool filter. Strategic Showdown builds softly favor favorite-heavy 4-2 and plausible 5-1 constructions, passing correlations in higher-total or trailing-team scripts, and RB/K/DST combinations in lower-total favorite scripts. When a confirmed starter is unavailable, the next active depth-chart player receives a small, reversible opportunity adjustment; manual locks and exposure limits remain hard rules.
+NFL Showdown generation uses the same key-free player, role, usage, matchup, and weather inputs without applying the Classic low-depth pool filter. When a confirmed starter is unavailable, the next active depth-chart player receives a small, reversible opportunity adjustment; manual locks and exposure limits remain hard rules.
 
 ## Slate Readiness
 
-**Slate Readiness** is a one-click, report-only preflight. For NFL it refreshes stale player status first, then audits roster viability, projections, ownership, locks, role certainty, news freshness, and optional Vegas context. After generation it also checks complete lineups, salary use, and how the portfolio's QB stacks, bring-backs, FLEX mix, and ownership coverage compare with the selected contest preset.
+**Slate Readiness** is a one-click, report-only preflight. For NFL it refreshes stale player status first, then audits roster viability, projections, ownership, locks, role certainty, and news freshness. After generation it also checks complete lineups, salary use, and how the portfolio's QB stacks, bring-backs, FLEX mix, and ownership coverage compare with the selected contest preset.
 
 Actionable findings can filter the player table directly. The adjacent **Space** dashboard shows the current eligible pool, structural lineup possibilities, requested entries, and live generation phase. It updates after fades and locks. Normal NFL Classic styles use a compact starter/rotation pool with or without SIM Edge; locks, minimum exposures, and required player groups remain eligible. **Randomized** with SIM Edge off is the deliberate broad-pool option. The tooltip clearly distinguishes exact NFL roster-shape counts from upper bounds and reports generation, simulation, and selection timing after a build.
 
-Findings are separated into Pass, Review, and Block. Missing early-week odds remain a review item; hard problems such as missing positions, poor projection coverage, or a locked unavailable player are blockers. The audit never changes player settings or lineups.
+Findings are separated into Pass, Review, and Block. Hard problems such as missing positions, poor projection coverage, or a locked unavailable player are blockers. The audit never changes player settings or lineups.
 
 ## Final Lock Check, Entry Safety, and build recipes
 
@@ -161,3 +159,4 @@ Every release must also update the user-facing guide and release notes, recaptur
 ```powershell
 python -m unittest discover -v
 ```
+

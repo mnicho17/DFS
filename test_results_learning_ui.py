@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtCore, QtWidgets
 
-from main_window import BuildDiagnosticsDialog, ContestProfileDialog, EntrySafetyDialog, FinalLockCheckDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
+from main_window import BuildDiagnosticsDialog, ContestProfileDialog, EntrySafetyDialog, FinalLockCheckDialog, LineupBuildWorker, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
 from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
 from learning_db import generate_learning_report
 from nfl_simulation import SimLineup
@@ -67,8 +67,7 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIsNotNone(compute)
         self.assertEqual(compute.currentText(), "Fast (default)")
         self.assertEqual(window.findChild(QtWidgets.QPushButton, "gameDayCheckButton").text(), "Game-Day Check")
-        self.assertIsNotNone(window.findChild(QtWidgets.QPushButton, "liveDataSettingsButton"))
-        self.assertIn("Live data", window.findChild(QtWidgets.QLabel, "liveDataStatusLabel").text())
+        self.assertIn("Live player data", window.findChild(QtWidgets.QLabel, "liveDataStatusLabel").text())
         self.assertEqual(window.findChild(QtWidgets.QPushButton, "slateReadinessButton").text(), "Slate Readiness")
         self.assertIn("Readiness", window.findChild(QtWidgets.QLabel, "slateReadinessStatus").text())
         self.assertIn("Lineup space", window.findChild(QtWidgets.QLabel, "lineupSpaceStatus").text())
@@ -422,14 +421,6 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertTrue(all(button.isHidden() for button in window._captain_action_buttons))
         window.close()
 
-    def test_live_data_settings_masks_the_odds_api_key(self):
-        dialog = LiveDataSettingsDialog("secret-test-key")
-        field = dialog.findChild(QtWidgets.QLineEdit, "oddsApiKeyEdit")
-        self.assertIsNotNone(field)
-        self.assertEqual(field.text(), "secret-test-key")
-        self.assertEqual(field.echoMode(), QtWidgets.QLineEdit.Password)
-        dialog.close()
-
     def test_results_import_worker_reports_progress_and_supports_cancellation(self):
         path = os.path.join(self.temp.name, "NFL Sunday 150-Max.csv")
         rows = [
@@ -460,7 +451,7 @@ class ResultsLearningUITests(unittest.TestCase):
         second.run()
         self.assertTrue(cancelled[0]["cancelled"])
 
-    def test_player_table_shows_live_availability_and_implied_team_total(self):
+    def test_player_table_shows_live_availability_and_role_context(self):
         window = MainWindow()
         window.players = [{
             "Name": "Example QB", "Team": "BUF", "Position": "QB",
@@ -470,15 +461,10 @@ class ResultsLearningUITests(unittest.TestCase):
             "NFLReplacementFor": "Starting QB", "NFLReplacementBoost": 0.30,
             "NFLRosterStatus": "Active", "NFLPractice": "Full Participation",
             "InjurySource": "Sleeper", "LiveStatusUpdatedAt": "2026-09-13T15:00:00Z",
-            "NFLVegas": 0.5, "NFLVegasTeamTotal": 27.0, "NFLVegasGameTotal": 50.0,
-            "NFLVegasSpread": -4.0, "NFLVegasBookmakers": 5,
-            "NFLVegasUpdatedAt": "2026-09-13T14:55:00Z", "NFLVegasState": "matched",
         }]
         window._refresh_players_table()
         self.assertEqual(window.tbl_players.item(0, 3).text(), "Starter")
         self.assertIn("Depth: QB1", window.tbl_players.item(0, 3).toolTip())
-        self.assertEqual(window.tbl_players.item(0, 12).text(), "27.0")
-        self.assertIn("Game total: 50.0", window.tbl_players.item(0, 12).toolTip())
         self.assertIn("Starting QB", window.tbl_players.item(0, 10).toolTip())
         window.close()
 
@@ -974,3 +960,4 @@ class ResultsLearningUITests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

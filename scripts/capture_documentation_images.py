@@ -236,7 +236,7 @@ def capture(output_dir: Path) -> None:
         window.chk_nfl_contest_sim.setChecked(True)
         window.lbl_live_data.setText(
             "Live data 11:42 AM | Players 64/64 | 0 unavailable flags | "
-            "4 slate games with Vegas lines"
+            "0 next-up boosts | 0 changes"
         )
         window.lbl_live_data.setStyleSheet("color: #8FE3A1; padding: 1px 3px;")
         window._refresh_players_table()
@@ -457,8 +457,6 @@ def capture(output_dir: Path) -> None:
             "sleeper": len(players),
             "total": len(players),
             "checked_at": "2026-09-13T15:55:00Z",
-            "odds_state": "ok",
-            "odds_matched_games": len(GAMES),
         }
         readiness = window._calculate_slate_readiness()
         readiness_dialog = SlateReadinessDialog(readiness, window)
@@ -630,3 +628,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

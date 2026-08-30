@@ -4,7 +4,7 @@ from __future__ import annotations
 
 Sleeper supplies role/depth/practice context, nflverse supplies recent usage and
 opponent production allowed, Open-Meteo supplies game-time outdoor weather, and
-an optional user-supplied The Odds API key supplies consensus spreads/totals.
+NFL context uses key-free player, usage, matchup, and weather sources.
 Every source is optional: unavailable data is clearly reported and the combined
 projection change is capped at +/- 3.5 DK points.
 """
@@ -15,10 +15,8 @@ import gzip
 import io
 import logging
 import math
-import os
 import re
 from collections import defaultdict
-from statistics import median
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 try:
@@ -35,7 +33,6 @@ NFLVERSE_PLAYER_STATS_URL = (
     "player_stats/player_stats_{season}.csv.gz"
 )
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
-THE_ODDS_API_URL = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/"
 
 MAX_NFL_ADJUSTMENT = 3.5
 RECENT_WEEKS = 4
@@ -63,19 +60,6 @@ _TEAM_ALIASES = {
     "WAS": "WAS", "WSH": "WAS", "WSN": "WAS",
 }
 
-_NFL_TEAM_NAMES = {
-    "arizona cardinals": "ARI", "atlanta falcons": "ATL", "baltimore ravens": "BAL",
-    "buffalo bills": "BUF", "carolina panthers": "CAR", "chicago bears": "CHI",
-    "cincinnati bengals": "CIN", "cleveland browns": "CLE", "dallas cowboys": "DAL",
-    "denver broncos": "DEN", "detroit lions": "DET", "green bay packers": "GB",
-    "houston texans": "HOU", "indianapolis colts": "IND", "jacksonville jaguars": "JAX",
-    "kansas city chiefs": "KC", "las vegas raiders": "LV", "los angeles chargers": "LAC",
-    "los angeles rams": "LAR", "miami dolphins": "MIA", "minnesota vikings": "MIN",
-    "new england patriots": "NE", "new orleans saints": "NO", "new york giants": "NYG",
-    "new york jets": "NYJ", "philadelphia eagles": "PHI", "pittsburgh steelers": "PIT",
-    "san francisco 49ers": "SF", "seattle seahawks": "SEA", "tampa bay buccaneers": "TB",
-    "tennessee titans": "TEN", "washington commanders": "WAS",
-}
 
 _OUT_STATUSES = {"OUT", "IR", "PUP", "NFI", "SUSP", "SUSPENDED", "INACTIVE", "PRACTICE SQUAD"}
 
@@ -173,21 +157,6 @@ def fetch_sleeper_players(timeout_sec: int = 10) -> Optional[Dict[str, Any]]:
     return data if isinstance(data, dict) else None
 
 
-def configured_odds_api_key(explicit_key: Optional[str] = None) -> str:
-    """Return an explicitly supplied key or a supported environment key."""
-    return str(
-        explicit_key
-        or os.environ.get("THE_ODDS_API_KEY")
-        or os.environ.get("ODDS_API_KEY")
-        or ""
-    ).strip()
-
-
-def normalize_odds_team(team: Any) -> str:
-    text = re.sub(r"\s+", " ", str(team or "").strip().lower())
-    return _NFL_TEAM_NAMES.get(text, normalize_nfl_team(team))
-
-
 def _utc_now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -203,118 +172,6 @@ def _epoch_to_iso(value: Any) -> str:
         return dt.datetime.fromtimestamp(raw, tz=dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     except Exception:
         return ""
-
-
-def parse_nfl_odds(events: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    """Build consensus totals/spreads keyed by the app's ``AWAY@HOME`` game key."""
-    result: Dict[str, Dict[str, Any]] = {}
-    for event in events or []:
-        home_name = str(event.get("home_team") or "").strip()
-        away_name = str(event.get("away_team") or "").strip()
-        home = normalize_odds_team(home_name)
-        away = normalize_odds_team(away_name)
-        if not home or not away:
-            continue
-
-        totals: List[float] = []
-        home_spreads: List[float] = []
-        latest = ""
-        books_with_lines = 0
-        for book in event.get("bookmakers", []) or []:
-            book_has_line = False
-            latest = max(latest, str(book.get("last_update") or ""))
-            for market in book.get("markets", []) or []:
-                market_key = str(market.get("key") or "").strip().lower()
-                outcomes = market.get("outcomes", []) or []
-                if market_key == "totals":
-                    points = [
-                        _to_float(row.get("point"), 0.0)
-                        for row in outcomes
-                        if _to_float(row.get("point"), 0.0) > 0
-                    ]
-                    if points:
-                        totals.append(points[0])
-                        book_has_line = True
-                elif market_key == "spreads":
-                    for row in outcomes:
-                        if normalize_odds_team(row.get("name")) == home and row.get("point") not in (None, ""):
-                            home_spreads.append(_to_float(row.get("point"), 0.0))
-                            book_has_line = True
-                            break
-            if book_has_line:
-                books_with_lines += 1
-
-        game_total = float(median(totals)) if totals else 0.0
-        home_spread = float(median(home_spreads)) if home_spreads else 0.0
-        if not game_total and not home_spreads:
-            continue
-        home_implied = (game_total / 2.0 - home_spread / 2.0) if game_total else 0.0
-        away_implied = (game_total / 2.0 + home_spread / 2.0) if game_total else 0.0
-        result[f"{away}@{home}"] = {
-            "event_id": str(event.get("id") or ""),
-            "commence_time": str(event.get("commence_time") or ""),
-            "away_team": away,
-            "home_team": home,
-            "game_total": game_total,
-            "home_spread": home_spread,
-            "away_spread": -home_spread,
-            "home_implied": home_implied,
-            "away_implied": away_implied,
-            "bookmakers": books_with_lines,
-            "last_update": latest,
-        }
-    return result
-
-
-def fetch_nfl_odds(api_key: Optional[str] = None, timeout_sec: int = 10) -> Dict[str, Any]:
-    """Fetch current NFL spread/total consensus from The Odds API.
-
-    The key is never logged or included in the returned diagnostics.
-    """
-    checked_at = _utc_now_iso()
-    key = configured_odds_api_key(api_key)
-    if not key:
-        return {"state": "not_configured", "games": {}, "checked_at": checked_at, "remaining": None, "message": "Odds API key needed"}
-    if not HAS_REQUESTS:
-        return {"state": "unavailable", "games": {}, "checked_at": checked_at, "remaining": None, "message": "Network support unavailable"}
-    try:
-        response = requests.get(
-            THE_ODDS_API_URL,
-            params={
-                "apiKey": key,
-                "regions": "us",
-                "markets": "spreads,totals",
-                "oddsFormat": "american",
-                "dateFormat": "iso",
-            },
-            timeout=timeout_sec,
-        )
-        remaining_raw = response.headers.get("x-requests-remaining")
-        remaining = int(remaining_raw) if str(remaining_raw or "").isdigit() else None
-        if response.status_code >= 400:
-            message = "Odds service rejected the request"
-            try:
-                payload = response.json()
-                message = str(payload.get("message") or payload.get("error") or message)
-            except Exception:
-                pass
-            state = "invalid_key" if response.status_code in (401, 403) else "error"
-            logger.info("NFL odds request returned HTTP %s", response.status_code)
-            return {"state": state, "games": {}, "checked_at": checked_at, "remaining": remaining, "message": message}
-        payload = response.json()
-        if not isinstance(payload, list):
-            return {"state": "error", "games": {}, "checked_at": checked_at, "remaining": remaining, "message": "Unexpected odds response"}
-        games = parse_nfl_odds(payload)
-        return {
-            "state": "ok" if games else "no_games",
-            "games": games,
-            "checked_at": checked_at,
-            "remaining": remaining,
-            "message": "" if games else "No upcoming NFL lines were returned",
-        }
-    except Exception as exc:
-        logger.info("NFL odds request failed (%s)", type(exc).__name__)
-        return {"state": "unavailable", "games": {}, "checked_at": checked_at, "remaining": None, "message": "Odds service unavailable"}
 
 
 def _fetch_nflverse_season_rows(season: int, timeout_sec: int = 15) -> List[Dict[str, Any]]:
@@ -941,7 +798,6 @@ def apply_auto_nfl_context(
     usage_season: Optional[int] = None,
     weather_by_game: Optional[Mapping[str, Mapping[str, Any]]] = None,
     odds_by_game: Optional[Mapping[str, Mapping[str, Any]]] = None,
-    odds_api_key: Optional[str] = None,
     fetch_external: bool = True,
     season: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -961,7 +817,7 @@ def apply_auto_nfl_context(
     if fetch_external and weather_by_game is None:
         weather_by_game = _fetch_weather_for_games(players)
     if odds_by_game is None:
-        odds_result = fetch_nfl_odds(odds_api_key) if fetch_external else {
+        odds_result = {
             "state": "not_requested", "games": {}, "checked_at": _utc_now_iso(), "remaining": None, "message": ""
         }
         odds_by_game = odds_result.get("games") or {}
@@ -1081,12 +937,11 @@ def apply_auto_nfl_context(
 def refresh_live_nfl_data(
     players: List[Dict[str, Any]],
     *,
-    odds_api_key: Optional[str] = None,
     sleeper_data: Optional[Mapping[str, Any]] = None,
     odds_result: Optional[Mapping[str, Any]] = None,
     fetch_external: bool = True,
 ) -> Dict[str, Any]:
-    """Refresh only time-sensitive NFL availability and game lines.
+    """Refresh only time-sensitive NFL availability.
 
     This is intentionally smaller than :func:`apply_auto_nfl_context` so it can
     run immediately before generation without re-downloading usage history or
@@ -1098,7 +953,7 @@ def refresh_live_nfl_data(
     if fetch_external and sleeper_data is None:
         sleeper_data = fetch_sleeper_players()
     if odds_result is None:
-        odds_result = fetch_nfl_odds(odds_api_key) if fetch_external else {
+        odds_result = {
             "state": "not_requested", "games": {}, "checked_at": _utc_now_iso(), "remaining": None, "message": ""
         }
 
@@ -1215,3 +1070,4 @@ def clear_nfl_context(players: List[Dict[str, Any]]) -> None:
             "LiveStatusChanged", "LiveStatusConflict",
         ):
             player.pop(key, None)
+
