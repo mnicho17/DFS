@@ -126,7 +126,7 @@ def _ownership(lineup: Any, kind: str) -> float:
         if captain is player:
             values.append(float(player.get("ProjCptOwnPct", player.get("ProjOwnPct", 0.0)) or 0.0))
         else:
-            values.append(float(player.get("ProjOwnPct", player.get("ProjFlexOwnPct", 0.0)) or 0.0))
+            values.append(float(player.get("ProjFlexOwnPct", player.get("ProjOwnPct", 0.0)) or 0.0))
     return sum(values) / len(values)
 
 
@@ -278,6 +278,11 @@ def select_portfolio(
             "signature": _candidate_signature(lineup, kind),
             "captain_key": player_key(captain) if captain else "",
             "sim": _sim_metrics(lineup),
+            "archetype": str(
+                getattr(lineup, "candidate_archetype", "")
+                or _sim_metrics(lineup).get("candidate_archetype")
+                or ""
+            ),
             "top_hits": set(getattr(lineup, "sim_top_hits", set()) or set()),
             "top_five_hits": set(getattr(lineup, "sim_top_five_hits", set()) or set()),
             "win_hits": set(getattr(lineup, "sim_win_hits", set()) or set()),
@@ -296,6 +301,7 @@ def select_portfolio(
     sim_top_five_counts: Counter[int] = Counter()
     sim_win_counts: Counter[int] = Counter()
     sim_value_counts: Counter[int] = Counter()
+    archetype_counts: Counter[str] = Counter()
 
     for lineup in retained:
         meta = candidate_meta[id(lineup)]
@@ -308,6 +314,8 @@ def select_portfolio(
         sim_top_five_counts.update(meta["top_five_hits"])
         sim_win_counts.update(meta["win_hits"])
         sim_value_counts.update(meta["scenario_values"].keys())
+        if meta["archetype"]:
+            archetype_counts[meta["archetype"]] += 1
 
     uniqueness_cache: Dict[int, Dict[int, set[int]]] = {}
 
@@ -368,9 +376,18 @@ def select_portfolio(
         if captain_key and cpt_counts[captain_key] < min_cpt.get(captain_key, 0):
             deficit_bonus += 650.0
         concentration_penalty = sum(total_counts[key] for key in keys) * 0.08
+        captain_concentration_penalty = (
+            cpt_counts[captain_key] * 0.85
+            if kind == "showdown" and captain_key else 0.0
+        )
         team_penalty = sum(team_counts[team] for team in teams) * 0.04
         game_penalty = sum(game_counts[game] for game in games) * 0.03
         ownership_penalty = meta["ownership"] * 0.018 if normalized["balance_ownership"] else 0.0
+        archetype_bonus = 0.0
+        if kind == "showdown" and meta["archetype"]:
+            # Reward the first few lineups from a distinct Showdown story, then
+            # taper naturally so quality still controls the complete portfolio.
+            archetype_bonus = 14.0 / (1.0 + archetype_counts[meta["archetype"]])
         # Exposure concentration already captures repeated player overlap and
         # is much cheaper than comparing every candidate to every selected set.
         overlap_penalty = 0.0
@@ -421,8 +438,10 @@ def select_portfolio(
         return (
             quality_score
             + scenario_bonus
+            + archetype_bonus
             + deficit_bonus
             - concentration_penalty
+            - captain_concentration_penalty
             - team_penalty
             - game_penalty
             - ownership_penalty
@@ -462,6 +481,8 @@ def select_portfolio(
         sim_top_five_counts.update(chosen_top_five_hits)
         sim_win_counts.update(chosen_win_hits)
         sim_value_counts.update(chosen_values.keys())
+        if chosen_meta["archetype"]:
+            archetype_counts[chosen_meta["archetype"]] += 1
 
     # Deep builds have enough candidates to benefit from a small local-search
     # pass after the greedy portfolio is complete.  Only non-retained lineups
@@ -1010,3 +1031,4 @@ def _report_text(report: Dict[str, Any]) -> str:
 def format_portfolio_report_text(report: Dict[str, Any]) -> str:
     """Refresh the readable summary after callers add aggregate warnings."""
     return _report_text(report)
+
