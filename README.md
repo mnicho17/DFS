@@ -102,6 +102,8 @@ NFL salary files automatically receive current player availability, injury statu
 
 NFL Showdown generation uses the same key-free player, role, usage, matchup, and weather inputs without applying the Classic low-depth pool filter. When a confirmed starter is unavailable, the next active depth-chart player receives a small, reversible opportunity adjustment; manual locks and exposure limits remain hard rules.
 
+High-volume Showdown builds create a wider candidate bank before selecting the final portfolio. Captain-specific ownership, key-free QB/receiver and RB/DST correlations, team splits, salary use, leverage, estimated duplication, and distinct Passing Stack, Receiver Captain, Rushing Control, Defensive, Onslaught, and Balanced constructions guide selection. These are portfolio decision aids rather than predictions of exact contest outcomes.
+
 ## Slate Readiness
 
 **Slate Readiness** is a one-click, report-only preflight. For NFL it refreshes stale player status first, then audits roster viability, projections, ownership, locks, role certainty, and news freshness. After generation it also checks complete lineups, salary use, and how the portfolio's QB stacks, bring-backs, FLEX mix, and ownership coverage compare with the selected contest preset.
