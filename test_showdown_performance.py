@@ -11,6 +11,7 @@ from optimizers import (
     _showdown_pair_script_bonus,
     _showdown_player_script_bonus,
     _showdown_split_bonus_for_count,
+    showdown_correlation_flags,
 )
 
 
@@ -48,6 +49,50 @@ def _script_player(name, team, position, spread, total):
 
 
 class ShowdownPerformanceTests(unittest.TestCase):
+    def test_flags_strange_captain_and_specialist_constructions(self):
+        qb = {"Name": "ARI QB", "Team": "ARI", "Position": "QB"}
+        car_dst = {"Name": "CAR DST", "Team": "CAR", "Position": "DST"}
+        ari_k = {"Name": "ARI K", "Team": "ARI", "Position": "K"}
+        ari_dst = {"Name": "ARI DST", "Team": "ARI", "Position": "DST"}
+        flags = showdown_correlation_flags(
+            qb,
+            [car_dst, ari_k, ari_dst, {"Team": "CAR", "Position": "RB"}, {"Team": "CAR", "Position": "WR"}],
+        )
+        self.assertIn("QB Captain vs opposing DST", flags)
+        self.assertIn("QB Captain without same-team receiver", flags)
+        self.assertIn("both defenses", flags)
+        self.assertIn("three-plus kickers/defenses", flags)
+
+    def test_captain_correlation_rewards_coherent_stack(self):
+        qb = {"Name": "ARI QB", "Team": "ARI", "Position": "QB"}
+        teammate = {"Name": "ARI WR", "Team": "ARI", "Position": "WR"}
+        opponent_dst = {"Name": "CAR DST", "Team": "CAR", "Position": "DST"}
+        fillers = [
+            {"Name": "ARI RB", "Team": "ARI", "Position": "RB"},
+            {"Name": "CAR QB", "Team": "CAR", "Position": "QB"},
+            {"Name": "CAR WR", "Team": "CAR", "Position": "WR"},
+            {"Name": "CAR RB", "Team": "CAR", "Position": "RB"},
+        ]
+        coherent = _showdown_lineup_script_bonus(qb, [teammate] + fillers)
+        contradictory = _showdown_lineup_script_bonus(qb, [opponent_dst] + fillers)
+        self.assertGreater(coherent, contradictory)
+
+    def test_strategic_fast_build_excludes_qb_captain_opposing_dst(self):
+        players = _showdown_players()
+        captain = players[0]
+        captain["LockCpt"] = True
+        opposing_dst = {
+            "Name": "CAR DST", "Team": "CAR", "Position": "DST",
+            "FlexID": "dst1", "CptID": "dstc1",
+            "FlexSalary": 3200.0, "CptSalary": 4800.0,
+            "FlexProjection": 9.0, "CptProjection": 13.5,
+            "ProjOwnPct": 30.0,
+        }
+        players.append(opposing_dst)
+        lineups = ShowdownOptimizer(players, build_style="Strategic").build_lineups(30)
+        self.assertEqual(len(lineups), 30)
+        self.assertTrue(all(opposing_dst not in lineup["Flex"] for lineup in lineups))
+
     def test_key_free_qb_receiver_correlation_is_active(self):
         qb = {"Name": "QB", "Team": "ARI", "Position": "QB"}
         teammate = {"Name": "WR", "Team": "ARI", "Position": "WR"}
@@ -88,8 +133,10 @@ class ShowdownPerformanceTests(unittest.TestCase):
             _script_player("Dog TE", "MIA", "TE", 8, 42),
         ]
 
-        favorite_four_two = _showdown_lineup_script_bonus(favorite[0], favorite[1:] + underdog[:2])
-        underdog_four_two = _showdown_lineup_script_bonus(underdog[0], underdog[1:] + favorite[:2])
+        # Isolate the team-split preference from Captain-specific stack rules.
+        all_players = favorite + underdog
+        favorite_four_two = _showdown_split_bonus_for_count(4, "BUF", all_players)
+        underdog_four_two = _showdown_split_bonus_for_count(2, "BUF", all_players)
         self.assertGreater(favorite_four_two, underdog_four_two)
 
     def test_showdown_script_uses_total_for_correlated_roles(self):
