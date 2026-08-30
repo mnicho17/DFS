@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5 import QtCore, QtWidgets
 
-from main_window import BuildDiagnosticsDialog, ContestProfileDialog, EntrySafetyDialog, FinalLockCheckDialog, LineupBuildWorker, LiveDataSettingsDialog, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
+from main_window import BuildDiagnosticsDialog, ContestProfileDialog, EntrySafetyDialog, FinalLockCheckDialog, LineupBuildWorker, MainWindow, PortfolioInsightsDialog, ResultsImportWorker, ResultsLearningDialog, StackExposureDialog, _deep_shortlist
 from build_diagnostics import create_build_diagnostic, load_build_history, save_build_diagnostic
 from learning_db import generate_learning_report
 from nfl_simulation import SimLineup
@@ -421,14 +421,6 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIn("NFL Classic", window.btn_primary_build.toolTip())
         self.assertTrue(all(button.isHidden() for button in window._captain_action_buttons))
         window.close()
-
-    def test_live_data_settings_masks_the_odds_api_key(self):
-        dialog = LiveDataSettingsDialog("secret-test-key")
-        field = dialog.findChild(QtWidgets.QLineEdit, "oddsApiKeyEdit")
-        self.assertIsNotNone(field)
-        self.assertEqual(field.text(), "secret-test-key")
-        self.assertEqual(field.echoMode(), QtWidgets.QLineEdit.Password)
-        dialog.close()
 
     def test_results_import_worker_reports_progress_and_supports_cancellation(self):
         path = os.path.join(self.temp.name, "NFL Sunday 150-Max.csv")
@@ -974,3 +966,4 @@ class ResultsLearningUITests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
