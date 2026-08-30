@@ -6,6 +6,7 @@ import unittest
 from optimizers import (
     ShowdownOptimizer,
     _pkey,
+    attach_showdown_metrics,
     _showdown_lineup_script_bonus,
     _showdown_pair_script_bonus,
     _showdown_player_script_bonus,
@@ -47,6 +48,32 @@ def _script_player(name, team, position, spread, total):
 
 
 class ShowdownPerformanceTests(unittest.TestCase):
+    def test_key_free_qb_receiver_correlation_is_active(self):
+        qb = {"Name": "QB", "Team": "ARI", "Position": "QB"}
+        teammate = {"Name": "WR", "Team": "ARI", "Position": "WR"}
+        opponent = {"Name": "RB", "Team": "CAR", "Position": "RB"}
+
+        self.assertGreater(
+            _showdown_pair_script_bonus(qb, teammate),
+            _showdown_pair_script_bonus(qb, opponent),
+        )
+
+    def test_showdown_metrics_use_captain_ownership_and_archetypes(self):
+        players = _showdown_players()
+        captain = players[0]
+        captain["ProjCptOwnPct"] = 42.0
+        captain["ProjFlexOwnPct"] = 18.0
+        for player in players[1:6]:
+            player["ProjFlexOwnPct"] = 12.0
+        metrics_lineup = attach_showdown_metrics([
+            {"Captain": captain, "Flex": players[1:6]}
+        ])[0]
+
+        self.assertEqual(metrics_lineup.candidate_archetype, "Passing Stack")
+        self.assertEqual(metrics_lineup.sim_metrics["showdown_cpt_ownership"], 42.0)
+        self.assertGreater(metrics_lineup.sim_metrics["duplicate_risk"], 0.0)
+        self.assertIn("sim_edge", metrics_lineup.sim_metrics)
+
     def test_showdown_script_prefers_favorite_heavy_splits(self):
         favorite = [
             _script_player("Fav QB", "BUF", "QB", -8, 42),
@@ -187,3 +214,4 @@ class ShowdownPerformanceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
