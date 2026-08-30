@@ -2,8 +2,8 @@ from __future__ import annotations
 
 """Local, shareable diagnostics for completed lineup builds.
 
-The history intentionally contains only aggregate build settings and counts. It
-does not store player names, lineup contents, salary-file paths, or API keys.
+Reports may include compact lineup details to make strategy problems
+reproducible. They never include salary-file paths or API keys.
 """
 
 import datetime as _dt
@@ -13,6 +13,7 @@ import os
 import sys
 import tempfile
 import uuid
+from collections import Counter
 from typing import Any, Dict, List, Mapping, Optional
 
 
@@ -143,8 +144,9 @@ def create_build_diagnostic(
     sim_report: Optional[Mapping[str, Any]] = None,
     displayed_count: int = 0,
     cancelled: bool = False,
+    lineups: Optional[List[Any]] = None,
 ) -> Dict[str, Any]:
-    """Build a JSON-safe aggregate diagnostic record."""
+    """Build a JSON-safe diagnostic record with bounded lineup detail."""
     settings = dict(context.get("settings") or {})
     rules = dict(context.get("portfolio_rules") or {})
     space = dict(context.get("lineup_space") or {})
@@ -154,6 +156,57 @@ def create_build_diagnostic(
     sim_summary = dict(portfolio.get("sim_summary") or sim.get("portfolio") or {})
     candidate_sources = dict(sim.get("candidate_sources") or {})
     joint = dict(sim.get("joint_portfolio") or portfolio.get("joint_contest") or {})
+    contest_type = str(context.get("kind") or "classic").strip().lower()
+
+    def player_snapshot(player: Mapping[str, Any], *, captain: bool = False) -> Dict[str, Any]:
+        salary_key = "CptSalary" if captain else "FlexSalary"
+        projection_key = "CptProjection" if captain else "FlexProjection"
+        ownership_key = "ProjCptOwnPct" if captain else "ProjFlexOwnPct"
+        ownership = player.get(ownership_key)
+        if ownership in (None, ""):
+            ownership = player.get("ProjOwnPct")
+        return {
+            "name": str(player.get("Name") or "Unknown"),
+            "team": str(player.get("Team") or "").upper(),
+            "position": str(player.get("Position") or "").upper(),
+            "salary": _number(player.get(salary_key)),
+            "projection": _number(player.get(projection_key)),
+            "ownership": _number(ownership),
+        }
+
+    lineup_details: List[Dict[str, Any]] = []
+    correlation_counts: Dict[str, int] = {}
+    correlation_exception_lineups = 0
+    if contest_type == "showdown":
+        for index, lineup in enumerate(list(lineups or [])):
+            captain = dict(lineup.get("Captain") or {})
+            flex = [dict(player) for player in lineup.get("Flex") or []]
+            metrics = dict(getattr(lineup, "sim_metrics", {}) or {})
+            flags = [str(flag) for flag in metrics.get("showdown_correlation_flags") or []]
+            if flags:
+                correlation_exception_lineups += 1
+            for flag in flags:
+                correlation_counts[flag] = correlation_counts.get(flag, 0) + 1
+            if index < 50:
+                captain_row = player_snapshot(captain, captain=True)
+                flex_rows = [player_snapshot(player) for player in flex]
+                lineup_details.append({
+                    "number": index + 1,
+                    "captain": captain_row,
+                    "flex": flex_rows,
+                    "salary": captain_row["salary"] + sum(row["salary"] for row in flex_rows),
+                    "projection": captain_row["projection"] + sum(row["projection"] for row in flex_rows),
+                    "team_split": dict(Counter(
+                        row["team"] for row in [captain_row] + flex_rows if row["team"]
+                    )),
+                    "archetype": str(
+                        getattr(lineup, "candidate_archetype", "")
+                        or metrics.get("candidate_archetype")
+                        or ""
+                    ),
+                    "duplicate_risk": _number(metrics.get("duplicate_risk")),
+                    "flags": flags,
+                })
 
     def aggregate_counts(value: Any) -> Dict[str, int]:
         allowed = {"optimizer", "field_shaped", "scenario_built"}
@@ -174,11 +227,11 @@ def create_build_diagnostic(
     preset = dict(sim.get("preset_comparison") or {})
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
     diagnostic = {
-        "schema_version": 2,
+        "schema_version": 3,
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
         "sport": str(context.get("sport") or "NFL").strip().upper(),
-        "contest_type": str(context.get("kind") or "classic").strip().lower(),
+        "contest_type": contest_type,
         "salary_cap": _number(context.get("salary_cap"), 50000.0),
         "requested_count": _integer(timing.get("requested_count"), _integer(context.get("requested_count"))),
         "displayed_count": max(0, _integer(displayed_count)),
@@ -235,7 +288,12 @@ def create_build_diagnostic(
             "compliant": bool(portfolio.get("compliant", not warnings)),
             "warning_count": len(warnings),
             "warnings": warnings,
+            "correlation_exception_count": sum(correlation_counts.values()),
+            "correlation_exception_lineups": correlation_exception_lineups,
+            "correlation_exceptions": correlation_counts,
         },
+        "lineup_details": lineup_details,
+        "lineup_details_total": len(list(lineups or [])),
         "sim": {
             "preset_fit": _number(preset.get("fit_score")) if preset.get("available") else None,
             "field_lineups": max(0, _integer(sim.get("field_lineups"), _integer(sim.get("field_lineup_count")))),
@@ -336,6 +394,9 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     rules = dict(record.get("portfolio_rules") or {})
     portfolio = dict(record.get("portfolio") or {})
     sim = dict(record.get("sim") or {})
+    lineup_details = [dict(row) for row in record.get("lineup_details") or []]
+    is_showdown = str(record.get("contest_type") or "").casefold() == "showdown"
+    sim_ran = bool(settings.get("sim_enabled") and _integer(sim.get("scenario_count")) > 0)
 
     phase_times = {
         "Generate": _number(timing.get("generation_seconds")),
@@ -406,7 +467,14 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Ownership: {settings.get('ownership_mode') or 'n/a'} (weight {_number(settings.get('ownership_weight')):.2f})",
         f"- NFL SIM Edge: {sim_text}",
         f"- Compute: {compute_mode}",
-        f"- Portfolio: minimum unique {_integer(rules.get('minimum_unique'))}; team max {_number(rules.get('team_max_pct'), 100.0):.0f}%; game max {_number(rules.get('game_max_pct'), 100.0):.0f}%",
+        (
+            f"- Portfolio: minimum unique {_integer(rules.get('minimum_unique'))}; "
+            f"team exposure cap {_number(rules.get('team_max_pct'), 100.0):.0f}%"
+            if is_showdown else
+            f"- Portfolio: minimum unique {_integer(rules.get('minimum_unique'))}; "
+            f"team max {_number(rules.get('team_max_pct'), 100.0):.0f}%; "
+            f"game max {_number(rules.get('game_max_pct'), 100.0):.0f}%"
+        ),
         f"- Balance ownership/dup risk: {'On' if rules.get('balance_ownership') else 'Off'}",
         f"- Player groups: {_integer(rules.get('group_count'))} | Player limits: {_integer(rules.get('constrained_player_count'))}",
     ])
@@ -475,7 +543,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
                 f"- Independent top-candidate agreement: "
                 f"{_number(sim.get('validation_top_overlap_pct')):.1f}%"
             )
-    if sim.get("average_edge") is not None:
+    if sim.get("average_edge") is not None and sim_ran:
         lines.append(
             f"- SIM portfolio: edge {_number(sim.get('average_edge')):.0f}/100; "
             f"return {_number(sim.get('average_return_index')):.0f}/100; "
@@ -483,6 +551,28 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             f"top-1% paths {_integer(sim.get('top_one_scenarios_covered')):,}/"
             f"{_integer(sim.get('scenario_count')):,}"
         )
+    elif sim.get("average_edge") is not None:
+        lines.append(
+            f"- Portfolio estimates (no SIM): quality {_number(sim.get('average_edge')):.0f}/100; "
+            f"leverage-adjusted return {_number(sim.get('average_return_index')):.0f}/100; "
+            f"dup risk {_number(sim.get('average_duplicate_risk')):.0f}/100"
+        )
+    if is_showdown:
+        exception_count = _integer(portfolio.get("correlation_exception_count"))
+        exception_lineups = _integer(portfolio.get("correlation_exception_lineups"))
+        lines.append(
+            f"- Correlation exceptions: {exception_count:,} flags across "
+            f"{exception_lineups:,} of {_integer(candidates.get('selected')):,} lineups"
+        )
+        exception_types = dict(portfolio.get("correlation_exceptions") or {})
+        if exception_types:
+            lines.append(
+                "- Exception types: "
+                + "; ".join(
+                    f"{name} ({_integer(count)})"
+                    for name, count in sorted(exception_types.items())
+                )
+            )
     selected_sources = dict(sim.get("selected_sources") or {})
     if selected_sources:
         source_labels = {
@@ -505,10 +595,49 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in warnings)
     else:
         lines.append("- None")
-    lines.extend([
-        "",
-        "Privacy: This report contains aggregate settings and counts only; no players, lineups, file paths, or API keys.",
-    ])
+    if is_showdown and lineup_details:
+        lines.extend(["", "Showdown lineup diagnostics"])
+        for row in lineup_details:
+            captain = dict(row.get("captain") or {})
+            flex = [dict(player) for player in row.get("flex") or []]
+
+            def player_text(player: Mapping[str, Any], slot: str) -> str:
+                own = _number(player.get("ownership"))
+                return (
+                    f"{slot} {player.get('name') or 'Unknown'} "
+                    f"[{player.get('team') or '?'} {player.get('position') or '?'}] "
+                    f"${_number(player.get('salary')):,.0f} / "
+                    f"proj {_number(player.get('projection')):.2f} / own {own:.1f}%"
+                )
+
+            split = "-".join(
+                str(count) for count in sorted(
+                    (_integer(value) for value in dict(row.get("team_split") or {}).values()),
+                    reverse=True,
+                )
+            ) or "n/a"
+            lines.append(
+                f"- #{_integer(row.get('number'))}: ${_number(row.get('salary')):,.0f} salary | "
+                f"proj {_number(row.get('projection')):.2f} | split {split} | "
+                f"{row.get('archetype') or 'Unclassified'} | dup {_number(row.get('duplicate_risk')):.0f}/100"
+            )
+            lines.append(f"  - {player_text(captain, 'CPT')}")
+            for player in flex:
+                lines.append(f"  - {player_text(player, 'FLEX')}")
+            flags = [str(flag) for flag in row.get("flags") or []]
+            lines.append(f"  - Flags: {', '.join(flags) if flags else 'None'}")
+        total_detail = _integer(record.get("lineup_details_total"), len(lineup_details))
+        if total_detail > len(lineup_details):
+            lines.append(
+                f"- Detail limited to the first {len(lineup_details):,} of {total_detail:,} selected lineups."
+            )
+    lines.extend(["", (
+        "Privacy: This report includes lineup names and strategy inputs for troubleshooting; "
+        "it excludes file paths and API keys."
+        if lineup_details else
+        "Privacy: This report contains aggregate settings and counts only; no players, "
+        "lineups, file paths, or API keys."
+    )])
     return "\n".join(lines)
 
 
@@ -597,3 +726,4 @@ def format_build_comparison(first: Mapping[str, Any], second: Mapping[str, Any])
         "Privacy: This comparison contains aggregate settings and counts only; no players, lineups, file paths, or API keys.",
     ])
     return "\n".join(lines)
+
