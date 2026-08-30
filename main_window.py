@@ -6897,6 +6897,7 @@ class MainWindow(QtWidgets.QMainWindow):
             sim_report=dict(payload.get("sim_report") or {}),
             displayed_count=displayed_count,
             cancelled=bool(payload.get("cancelled")),
+            lineups=list(payload.get("lineups") or []),
         )
         self.last_build_diagnostic = diagnostic
         try:

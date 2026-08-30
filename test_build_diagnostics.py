@@ -138,6 +138,53 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertIn("Deep polish: 18.25s across 5 search passes", report)
         self.assertIn("Independent top-candidate agreement: 78.4%", report)
 
+    def test_showdown_report_includes_lineups_flags_and_honest_estimate_labels(self):
+        class Lineup(dict):
+            pass
+
+        lineup = Lineup(
+            Captain={
+                "Name": "Alpha QB", "Team": "AAA", "Position": "QB",
+                "CptSalary": 15000, "CptProjection": 33, "ProjCptOwnPct": 24,
+            },
+            Flex=[
+                {"Name": "Beta DST", "Team": "BBB", "Position": "DST", "FlexSalary": 4000, "FlexProjection": 8, "ProjFlexOwnPct": 20},
+                {"Name": "Alpha WR", "Team": "AAA", "Position": "WR", "FlexSalary": 9000, "FlexProjection": 18, "ProjFlexOwnPct": 30},
+                {"Name": "Alpha RB", "Team": "AAA", "Position": "RB", "FlexSalary": 8000, "FlexProjection": 16, "ProjFlexOwnPct": 25},
+                {"Name": "Beta QB", "Team": "BBB", "Position": "QB", "FlexSalary": 10000, "FlexProjection": 21, "ProjFlexOwnPct": 45},
+                {"Name": "Beta WR", "Team": "BBB", "Position": "WR", "FlexSalary": 4000, "FlexProjection": 9, "ProjFlexOwnPct": 12},
+            ],
+        )
+        lineup.sim_metrics = {
+            "candidate_archetype": "Passing Stack",
+            "duplicate_risk": 52,
+            "showdown_correlation_flags": ["QB Captain vs opposing DST"],
+        }
+        diagnostic = create_build_diagnostic(
+            context={
+                "sport": "NFL", "kind": "showdown", "salary_cap": 50000,
+                "requested_count": 20, "lineup_space": {},
+                "settings": {"sim_enabled": False, "compute_mode": "Fast"},
+                "portfolio_rules": {"min_unique": 2, "max_team_pct": 100, "max_game_pct": 100},
+            },
+            timing_report={"requested_count": 20, "selected_count": 1},
+            portfolio_report={
+                "warnings": [],
+                "sim_summary": {"average_edge": 85, "average_return_index": 75, "average_duplicate_risk": 52},
+            },
+            displayed_count=1,
+            lineups=[lineup],
+        )
+        report = format_build_report(diagnostic)
+        self.assertIn("Portfolio estimates (no SIM)", report)
+        self.assertNotIn("top-1% paths", report)
+        self.assertNotIn("game max", report)
+        self.assertIn("Correlation exceptions: 1 flags across 1 of 1 lineups", report)
+        self.assertIn("CPT Alpha QB [AAA QB]", report)
+        self.assertIn("FLEX Beta DST [BBB DST]", report)
+        self.assertIn("Flags: QB Captain vs opposing DST", report)
+        self.assertIn("excludes file paths and API keys", report)
+
     def test_joint_contest_report_shows_total_cost_range_and_stability(self):
         diagnostic = create_build_diagnostic(
             context={
@@ -225,3 +272,4 @@ class BuildDiagnosticsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
