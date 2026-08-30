@@ -1302,7 +1302,7 @@ from widgets import CopyRowTableWidget
 from mlb_enrichment import apply_mlb_factors, clear_mlb_factors
 from mlb_batting_order import apply_batting_order, clear_batting_order, build_best_stacks
 from mlb_auto_data import apply_auto_mlb_context
-from nfl_auto_data import apply_auto_nfl_context, configured_odds_api_key, refresh_live_nfl_data
+from nfl_auto_data import apply_auto_nfl_context, refresh_live_nfl_data
 from learning_db import (
     archive_export_file,
     attach_salary_csv_to_latest_field,
@@ -2060,49 +2060,6 @@ class ResultsLearningDialog(QtWidgets.QDialog):
     def open_history_folder(self) -> None:
         folder = history_folder_structure()["history"]
         QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(folder))
-
-
-class LiveDataSettingsDialog(QtWidgets.QDialog):
-    """Local settings for optional live-data credentials."""
-
-    def __init__(self, api_key: str = "", parent: Optional[QtWidgets.QWidget] = None):
-        super().__init__(parent)
-        self.setWindowTitle("NFL Live Data Settings")
-        self.setModal(True)
-        self.resize(540, 250)
-
-        layout = QtWidgets.QVBoxLayout(self)
-        explainer = QtWidgets.QLabel(
-            "Player availability, injuries, practice participation, and depth-chart roles use Sleeper automatically. "
-            "Consensus NFL totals and spreads use your own The Odds API key."
-        )
-        explainer.setWordWrap(True)
-        layout.addWidget(explainer)
-
-        form = QtWidgets.QFormLayout()
-        self.api_key_edit = QtWidgets.QLineEdit(str(api_key or ""))
-        self.api_key_edit.setObjectName("oddsApiKeyEdit")
-        self.api_key_edit.setEchoMode(QtWidgets.QLineEdit.Password)
-        self.api_key_edit.setPlaceholderText("Paste The Odds API key")
-        self.api_key_edit.setClearButtonEnabled(True)
-        form.addRow("The Odds API key:", self.api_key_edit)
-        layout.addLayout(form)
-
-        note = QtWidgets.QLabel(
-            "The key is saved only in your Windows user settings and is never written to lineup exports or GitHub. "
-            '<a href="https://the-odds-api.com/">Get or manage a key</a>.'
-        )
-        note.setWordWrap(True)
-        note.setOpenExternalLinks(True)
-        layout.addWidget(note)
-
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def api_key(self) -> str:
-        return self.api_key_edit.text().strip()
 
 
 class SlateReadinessDialog(QtWidgets.QDialog):
@@ -3207,15 +3164,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         btn_refresh_inj = QtWidgets.QPushButton("Game-Day Check")
         btn_refresh_inj.setObjectName("gameDayCheckButton")
-        btn_refresh_inj.setToolTip("Check current NFL availability, injuries, practice participation, depth-chart roles, and configured Vegas lines.")
+        btn_refresh_inj.setToolTip("Check current NFL availability, injuries, practice participation, and depth-chart roles.")
         btn_refresh_inj.clicked.connect(self.on_refresh_injuries)
         row1.addWidget(btn_refresh_inj)
-
-        btn_live_settings = QtWidgets.QPushButton("Live Data Settings")
-        btn_live_settings.setObjectName("liveDataSettingsButton")
-        btn_live_settings.setToolTip("Save or replace the optional The Odds API key used for NFL totals and spreads.")
-        btn_live_settings.clicked.connect(self.on_live_data_settings)
-        row1.addWidget(btn_live_settings)
 
         btn_learning = QtWidgets.QPushButton("Results and Learning")
         btn_learning.setObjectName("resultsLearningButton")
@@ -3259,9 +3210,7 @@ class MainWindow(QtWidgets.QMainWindow):
         top_box.addLayout(row1)
 
         live_row = QtWidgets.QHBoxLayout()
-        self.lbl_live_data = QtWidgets.QLabel(
-            "Live data: not checked • Vegas " + ("configured" if self._odds_api_key() else "key needed")
-        )
+        self.lbl_live_data = QtWidgets.QLabel("Live player data: not checked")
         self.lbl_live_data.setObjectName("liveDataStatusLabel")
         self.lbl_live_data.setWordWrap(True)
         self.lbl_live_data.setStyleSheet("color: #AEB7C5; padding: 1px 3px;")
@@ -3577,7 +3526,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_slate_readiness = QtWidgets.QPushButton("Slate Readiness")
         self.btn_slate_readiness.setObjectName("slateReadinessButton")
         self.btn_slate_readiness.setToolTip(
-            "Refresh stale NFL news, then audit projections, ownership, roles, Vegas context, locks, salary use, and preset fit."
+            "Refresh stale NFL news, then audit projections, ownership, roles, locks, salary use, and preset fit."
         )
         self.btn_slate_readiness.clicked.connect(self.on_slate_readiness)
         command_layout.addWidget(self.btn_slate_readiness)
@@ -3599,7 +3548,6 @@ class MainWindow(QtWidgets.QMainWindow):
         settings_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         settings_menu = QtWidgets.QMenu(settings_button)
         settings_menu.addSection("Data")
-        settings_menu.addAction("Live Data Settings", self.on_live_data_settings)
         settings_menu.addAction("Results and Learning", self.on_results_learning)
         settings_menu.addSection("Build Recipes")
         save_recipe_action = settings_menu.addAction("Save Current Recipe...", self.on_save_build_recipe)
@@ -3749,7 +3697,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Player table
         self.tbl_players = QtWidgets.QTableWidget(self)
         self.tbl_players.setColumnCount(23)
-        self.tbl_players.setHorizontalHeaderLabels(["Name", "Team", "Pos", "Status", "Salary", "BaseProj", "AdjProj", "NFL±", "Usage", "Matchup", "Role", "Wx", "Vegas ITT", "TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "MinCPT%", "Max%", "Min%", "Order", "Bats", "Conf"] )
+        self.tbl_players.setHorizontalHeaderLabels(["Name", "Team", "Pos", "Status", "Salary", "BaseProj", "AdjProj", "NFL±", "Usage", "Matchup", "Role", "Wx", "", "TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "MinCPT%", "Max%", "Min%", "Order", "Bats", "Conf"] )
         self.tbl_players.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.tbl_players.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.tbl_players.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
@@ -4507,7 +4455,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # is useful, but no longer consume permanent table width.
         visible = {0, 1, 2, 3, 4, 6, 14, 15}
         if sport_u == "NFL":
-            visible.update({7, 8, 9, 10, 11, 12})
+            visible.update({7, 8, 9, 10, 11})
         elif sport_u == "MLB":
             visible.update({7, 8, 9, 10, 11, 12, 13, 20, 21, 22})
         return visible
@@ -5260,7 +5208,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if detected_sport == "NFL":
                 self._load_step(progress, 46, "Refreshing NFL role, usage, matchup, and weather context...")
                 try:
-                    ctx = apply_auto_nfl_context(self.players, odds_api_key=self._odds_api_key())
+                    ctx = apply_auto_nfl_context(self.players)
                     self._record_live_check(ctx)
                     logger.info("NFL auto context applied: %s", ctx)
                 except Exception:
@@ -5320,28 +5268,6 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "Load Error", str(e))
         finally:
             self._finish_load_progress()
-
-    def _odds_api_key(self) -> str:
-        stored = ""
-        try:
-            stored = str(self.app_settings.value("live/the_odds_api_key", "") or "").strip()
-        except Exception:
-            stored = ""
-        return configured_odds_api_key(stored)
-
-    def on_live_data_settings(self) -> None:
-        dialog = LiveDataSettingsDialog(self._odds_api_key(), self)
-        if dialog.exec_() != QtWidgets.QDialog.Accepted:
-            return
-        key = dialog.api_key()
-        if key:
-            self.app_settings.setValue("live/the_odds_api_key", key)
-        else:
-            self.app_settings.remove("live/the_odds_api_key")
-        self.app_settings.sync()
-        self.lbl_live_data.setText("Live data: settings saved • Vegas " + ("configured" if self._odds_api_key() else "key needed"))
-        if self.players and self._current_sport() == "NFL":
-            self._run_live_nfl_check(show_dialog=True, full_context=False)
 
     def _calculate_slate_readiness(self) -> Dict[str, Any]:
         sport = self._current_sport()
@@ -5559,41 +5485,22 @@ class MainWindow(QtWidgets.QMainWindow):
         flags = int(summary.get("status_flags", 0) or 0)
         changes = int(summary.get("status_changes", 0) or 0) if had_previous else 0
         promotions = int(summary.get("replacement_promotions", 0) or 0)
-        odds_state = str(summary.get("odds_state") or "not_configured")
-        odds_games = int(summary.get("odds_matched_games", summary.get("odds_games", 0)) or 0)
-        odds_text = {
-            "not_configured": "Vegas key needed",
-            "invalid_key": "Vegas key rejected",
-            "no_games": "Vegas: no NFL lines returned",
-            "unavailable": "Vegas unavailable",
-            "error": "Vegas error",
-            "not_requested": "Vegas not checked",
-        }.get(odds_state, f"Vegas {odds_games} game{'s' if odds_games != 1 else ''}")
         status_text = f"Players {matched}/{total}" if sleeper_ok else "Player status unavailable"
         checked = time.strftime("%I:%M %p").lstrip("0")
         self.lbl_live_data.setText(
             f"Live data {checked} • {status_text} • {flags} unavailable flags • "
-            f"{promotions} next-up boosts • {changes} changes • {odds_text}"
+            f"{promotions} next-up boosts • {changes} changes"
         )
-        remaining = summary.get("odds_remaining")
         details = [
             f"Player source: {'Sleeper' if sleeper_ok else 'unavailable'}",
             f"Matched players: {matched}/{total}",
             f"Unavailable/out flags: {flags}",
             f"Next active players promoted: {promotions}",
             f"Status changes: {changes}",
-            f"Odds state: {odds_state}",
-            f"Slate games with matched lines: {odds_games}",
         ]
-        if remaining is not None:
-            details.append(f"Odds API requests remaining: {remaining}")
-        if summary.get("odds_message"):
-            details.append(str(summary.get("odds_message")))
         self.lbl_live_data.setToolTip("\n".join(details))
-        if not sleeper_ok or odds_state in {"invalid_key", "error"}:
+        if not sleeper_ok:
             color = "#FF8A80"
-        elif odds_state in {"not_configured", "no_games", "unavailable"}:
-            color = "#FFD180"
         else:
             color = "#8FE3A1"
         self.lbl_live_data.setStyleSheet(f"color: {color}; padding: 1px 3px;")
@@ -5613,16 +5520,15 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
             if full_context:
-                summary = apply_auto_nfl_context(self.players, odds_api_key=self._odds_api_key())
+                summary = apply_auto_nfl_context(self.players)
             else:
-                summary = refresh_live_nfl_data(self.players, odds_api_key=self._odds_api_key())
+                summary = refresh_live_nfl_data(self.players)
             self._record_live_check(summary)
             faded = self._auto_fade_out_players()
             self.recalc_ownership_quick()
             self._refresh_players_table()
             self.status.showMessage(
-                f"Game-day check complete: {int(summary.get('sleeper', 0))}/{len(self.players)} players matched; "
-                f"{int(summary.get('odds_matched_games', 0))} slate games with Vegas lines."
+                f"Game-day check complete: {int(summary.get('sleeper', 0))}/{len(self.players)} players matched."
                 + (f" Auto-faded {faded}." if faded else ""),
                 7000,
             )
@@ -5637,20 +5543,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 if len(change_rows) > 12:
                     rendered.append(f"• plus {len(change_rows) - 12} more")
                 change_text = "\n\nChanges since the prior check:\n" + "\n".join(rendered)
-            odds_state = str(summary.get("odds_state") or "not_configured")
-            odds_note = {
-                "not_configured": "Vegas lines were not checked because no API key is saved.",
-                "invalid_key": "The saved Vegas API key was rejected. Open Live Data Settings to replace it.",
-                "no_games": "The odds service is connected but returned no upcoming NFL lines.",
-                "unavailable": "The odds service could not be reached; cached values were retained.",
-            }.get(odds_state, f"Vegas lines matched {int(summary.get('odds_matched_games', 0))} slate game(s).")
             QtWidgets.QMessageBox.information(
                 self,
                 "Game-Day Check",
                 f"Player status matched {int(summary.get('sleeper', 0))} of {len(self.players)} players.\n"
                 f"Unavailable/out flags: {int(summary.get('status_flags', 0))}.\n"
-                f"Next active players promoted: {int(summary.get('replacement_promotions', 0))}.\n"
-                f"{odds_note}{change_text}",
+                f"Next active players promoted: {int(summary.get('replacement_promotions', 0))}."
+                f"{change_text}",
             )
         return summary
 
@@ -6875,7 +6774,7 @@ class MainWindow(QtWidgets.QMainWindow):
         headers = ["Save"] + slots + ["TotalSal", "Grade"]
         try:
             context_headers = {
-                "NFL": ["NFL±", "Usage", "Matchup", "Role", "Wx", "Vegas ITT"],
+                "NFL": ["NFL±", "Usage", "Matchup", "Role", "Wx", ""],
                 "MLB": ["MLB±", "Form", "Matchup", "Park", "Wx", "Vegas"],
             }.get(sport_u, ["Adj±", "Context", "Matchup", "Role", "Wx", "Vegas"])
             player_headers = ["Name", "Team", "Pos", "Injury", "Salary", "BaseProj", "AdjProj"] + context_headers + ["TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "MinCPT%", "Max%", "Min%", "Order", "Bats", "Conf"]
@@ -7835,3 +7734,4 @@ class MainWindow(QtWidgets.QMainWindow):
             cells = self._classic_export_cells(lu, sport)
             for col, txt in enumerate(cells):
                 self.tbl_saved_cl.setItem(row, col, QtWidgets.QTableWidgetItem(txt))
+
