@@ -129,7 +129,7 @@ def cover_story(version: str, styles):
     ]))
     overview = Table(
         [[Paragraph("Inside", styles["h3"]), Paragraph("Start here", styles["h3"])],
-         [Paragraph("Install and five-minute workflow<br/>Classic and Showdown<br/>Live NFL data and Vegas<br/>Build and portfolio controls", styles["small"]),
+         [Paragraph("Install and five-minute workflow<br/>Classic and Showdown<br/>Live NFL player data<br/>Build and portfolio controls", styles["small"]),
           Paragraph("NFL SIM Edge explained<br/>Saving and export<br/>Results & Learning<br/>Troubleshooting and privacy", styles["small"])]],
         colWidths=[3.17 * inch, 3.17 * inch],
     )
@@ -310,3 +310,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
