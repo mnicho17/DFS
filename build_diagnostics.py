@@ -177,6 +177,12 @@ def create_build_diagnostic(
     lineup_details: List[Dict[str, Any]] = []
     correlation_counts: Dict[str, int] = {}
     correlation_exception_lineups = 0
+    exposure_counts: Counter[str] = Counter()
+    captain_exposure_counts: Counter[str] = Counter()
+    exposure_labels: Dict[str, str] = {}
+    salary_exception_count = 0
+    salary_strategy = str(settings.get("salary_strategy") or "").strip().casefold()
+    salary_cap = _number(context.get("salary_cap"), 50000.0)
     if contest_type == "showdown":
         for index, lineup in enumerate(list(lineups or [])):
             captain = dict(lineup.get("Captain") or {})
@@ -187,6 +193,30 @@ def create_build_diagnostic(
                 correlation_exception_lineups += 1
             for flag in flags:
                 correlation_counts[flag] = correlation_counts.get(flag, 0) + 1
+            all_players = [captain] + flex
+            for player in all_players:
+                key = str(
+                    player.get("FlexNamePlusID")
+                    or player.get("FlexID")
+                    or f"{player.get('Name')}|{player.get('Team')}|{player.get('Position')}"
+                )
+                exposure_counts[key] += 1
+                exposure_labels[key] = (
+                    f"{player.get('Name') or 'Unknown'} "
+                    f"[{str(player.get('Team') or '?').upper()} {str(player.get('Position') or '?').upper()}]"
+                )
+            captain_key = str(
+                captain.get("FlexNamePlusID")
+                or captain.get("FlexID")
+                or f"{captain.get('Name')}|{captain.get('Team')}|{captain.get('Position')}"
+            )
+            captain_exposure_counts[captain_key] += 1
+            captain_salary = _number(captain.get("CptSalary"))
+            flex_salary = sum(_number(player.get("FlexSalary")) for player in flex)
+            salary_left = salary_cap - captain_salary - flex_salary
+            salary_threshold = 500.0 if "max" in salary_strategy else 2500.0
+            if ("near cap" in salary_strategy or "max" in salary_strategy) and salary_left > salary_threshold:
+                salary_exception_count += 1
             if index < 50:
                 captain_row = player_snapshot(captain, captain=True)
                 flex_rows = [player_snapshot(player) for player in flex]
@@ -223,11 +253,41 @@ def create_build_diagnostic(
             warning = _aggregate_warning(item)
             if warning and warning not in warnings:
                 warnings.append(warning)
+    if correlation_exception_lineups:
+        warnings.append(
+            f"{correlation_exception_lineups} selected Showdown lineups contain "
+            f"{sum(correlation_counts.values())} correlation exception flags."
+        )
+    if salary_exception_count:
+        warnings.append(
+            f"{salary_exception_count} selected Showdown lineups fall outside the "
+            f"{settings.get('salary_strategy') or 'selected'} salary strategy tolerance."
+        )
+
+    selected_total = max(1, len(list(lineups or [])))
+    exposure_summary = {
+        "total": [
+            {
+                "label": exposure_labels.get(key, key),
+                "count": count,
+                "pct": 100.0 * count / selected_total,
+            }
+            for key, count in exposure_counts.most_common()
+        ],
+        "captain": [
+            {
+                "label": exposure_labels.get(key, key),
+                "count": count,
+                "pct": 100.0 * count / selected_total,
+            }
+            for key, count in captain_exposure_counts.most_common()
+        ],
+    }
 
     preset = dict(sim.get("preset_comparison") or {})
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
     diagnostic = {
-        "schema_version": 3,
+        "schema_version": 4,
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
         "sport": str(context.get("sport") or "NFL").strip().upper(),
@@ -291,7 +351,12 @@ def create_build_diagnostic(
             "correlation_exception_count": sum(correlation_counts.values()),
             "correlation_exception_lineups": correlation_exception_lineups,
             "correlation_exceptions": correlation_counts,
+            "salary_exception_count": salary_exception_count,
+            "automatic_showdown_guardrails": dict(
+                portfolio.get("automatic_showdown_guardrails") or {}
+            ),
         },
+        "exposures": exposure_summary,
         "lineup_details": lineup_details,
         "lineup_details_total": len(list(lineups or [])),
         "sim": {
@@ -395,6 +460,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     portfolio = dict(record.get("portfolio") or {})
     sim = dict(record.get("sim") or {})
     lineup_details = [dict(row) for row in record.get("lineup_details") or []]
+    exposures = dict(record.get("exposures") or {})
     is_showdown = str(record.get("contest_type") or "").casefold() == "showdown"
     sim_ran = bool(settings.get("sim_enabled") and _integer(sim.get("scenario_count")) > 0)
 
@@ -573,6 +639,13 @@ def format_build_report(record: Mapping[str, Any]) -> str:
                     for name, count in sorted(exception_types.items())
                 )
             )
+        guardrails = dict(portfolio.get("automatic_showdown_guardrails") or {})
+        if guardrails:
+            lines.append(
+                f"- Automatic guardrails: player { _number(guardrails.get('total_player_pct')):.0f}% max; "
+                f"Captain {_number(guardrails.get('captain_pct')):.0f}% max; "
+                f"combined K/DST Captain {_number(guardrails.get('specialist_captain_pct')):.0f}% max"
+            )
     selected_sources = dict(sim.get("selected_sources") or {})
     if selected_sources:
         source_labels = {
@@ -595,6 +668,21 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in warnings)
     else:
         lines.append("- None")
+    if is_showdown and exposures.get("total"):
+        selected_count = max(1, _integer(candidates.get("selected")))
+        lines.extend(["", "Full portfolio exposures"])
+        lines.append("- Overall (all selected lineups):")
+        for row in list(exposures.get("total") or [])[:15]:
+            lines.append(
+                f"  - {row.get('label')}: {_integer(row.get('count'))}/{selected_count} "
+                f"({_number(row.get('pct')):.1f}%)"
+            )
+        lines.append("- Captain (all selected lineups):")
+        for row in list(exposures.get("captain") or [])[:12]:
+            lines.append(
+                f"  - {row.get('label')}: {_integer(row.get('count'))}/{selected_count} "
+                f"({_number(row.get('pct')):.1f}%)"
+            )
     if is_showdown and lineup_details:
         lines.extend(["", "Showdown lineup diagnostics"])
         for row in lineup_details:
