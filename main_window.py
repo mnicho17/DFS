@@ -705,7 +705,14 @@ class LineupBuildWorker(QtCore.QObject):
                             750,
                             max(expanded_target, int(math.ceil(build_request * 8.0 / 3.0))),
                         )
-            elif self.kind == "showdown" or hard_portfolio_rules:
+            elif self.kind == "showdown":
+                # Showdown needs a materially wider bank so the portfolio
+                # selector can diversify Captain and game-script outcomes.
+                candidate_target = min(
+                    2500,
+                    max(expanded_target, 300, build_request * 10),
+                )
+            elif hard_portfolio_rules:
                 candidate_target = expanded_target
             else:
                 candidate_target = build_request
@@ -759,6 +766,7 @@ class LineupBuildWorker(QtCore.QObject):
                     ),
                     cancel_callback=self._cancel_event.is_set,
                 )
+                lineups = attach_showdown_metrics(lineups, self.salary_cap)
             else:
                 retained_signatures_for_build = [
                     tuple(sorted(player_key(player) for player in lineup))
@@ -1297,7 +1305,7 @@ class LineupBuildWorker(QtCore.QObject):
 
 from data_io import read_players_csv
 from injury_api import enrich_players_with_injuries
-from optimizers import ShowdownOptimizer, ClassicOptimizer, MultiSportClassicOptimizer, get_roster_slots_for_sport, lineup_slots_for_sport, _eligible_for_slot, lineup_grade_for_sport
+from optimizers import ShowdownOptimizer, ClassicOptimizer, MultiSportClassicOptimizer, attach_showdown_metrics, get_roster_slots_for_sport, lineup_slots_for_sport, _eligible_for_slot, lineup_grade_for_sport
 from widgets import CopyRowTableWidget
 from mlb_enrichment import apply_mlb_factors, clear_mlb_factors
 from mlb_batting_order import apply_batting_order, clear_batting_order, build_best_stacks
@@ -6454,13 +6462,35 @@ class MainWindow(QtWidgets.QMainWindow):
                 return "No lineups generated."
             if kind == "showdown":
                 team_splits = Counter()
+                captains = Counter()
+                archetypes = Counter()
+                duplication = []
                 for lu in lineups:
-                    teams = [str((lu.get("Captain") or {}).get("Team", ""))] + [str(p.get("Team", "")) for p in lu.get("Flex", [])]
+                    captain = lu.get("Captain") or {}
+                    teams = [str(captain.get("Team", ""))] + [str(p.get("Team", "")) for p in lu.get("Flex", [])]
                     counts = sorted([c for _, c in Counter(t for t in teams if t).items()], reverse=True)
                     if counts:
                         team_splits["-".join(map(str, counts))] += 1
+                    captain_name = str(captain.get("Name") or "").strip()
+                    if captain_name:
+                        captains[captain_name] += 1
+                    metrics = dict(getattr(lu, "sim_metrics", {}) or {})
+                    archetype = str(getattr(lu, "candidate_archetype", "") or metrics.get("candidate_archetype") or "")
+                    if archetype:
+                        archetypes[archetype] += 1
+                    if metrics.get("duplicate_risk") is not None:
+                        duplication.append(float(metrics.get("duplicate_risk") or 0.0))
                 common = ", ".join(f"{k}: {v}" for k, v in team_splits.most_common(3))
-                return f"Quality: {len(lineups)} Showdown lineups | common splits {common or 'n/a'}."
+                captain_count = len(captains)
+                script_count = len(archetypes)
+                dup_text = (
+                    f" | avg duplicate risk {sum(duplication) / len(duplication):.0f}/100"
+                    if duplication else ""
+                )
+                return (
+                    f"Quality: {len(lineups)} Showdown lineups | {captain_count} captains | "
+                    f"{script_count} scripts | common splits {common or 'n/a'}{dup_text}."
+                )
             sport_u = (sport or "NFL").upper()
             if sport_u == "MLB":
                 stacks = Counter()
