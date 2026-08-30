@@ -416,10 +416,16 @@ def _showdown_pair_script_bonus(a: Dict[str, Any], b: Dict[str, Any]) -> float:
         bonus += 0.22
     elif ta != tb and ((a_qb and b_receiver) or (b_qb and a_receiver)):
         bonus += 0.07
+    # Offensive ceilings are negatively correlated with the opposing DST's
+    # ceiling. Captain-specific handling below applies stronger penalties.
+    if ta != tb and ((a_qb and "DST" in pb) or (b_qb and "DST" in pa)):
+        bonus -= 0.72
+    if ta != tb and ((a_receiver and "DST" in pb) or (b_receiver and "DST" in pa)):
+        bonus -= 0.38
     if ta == tb and (("RB" in pa and "DST" in pb) or ("RB" in pb and "DST" in pa)):
         bonus += 0.12
     if ta != tb and (("RB" in pa and "DST" in pb) or ("RB" in pb and "DST" in pa)):
-        bonus -= 0.14
+        bonus -= 0.22
     if total >= 47.0:
         scale = min(1.0, (total - 45.0) / 9.0)
         if ta == tb and ((a_qb and b_receiver) or (b_qb and a_receiver)):
@@ -434,6 +440,90 @@ def _showdown_pair_script_bonus(a: Dict[str, Any], b: Dict[str, Any]) -> float:
         elif ("K" in pa and "DST" in pb) or ("K" in pb and "DST" in pa):
             bonus += 0.12 * scale
 
+    return bonus
+
+
+def showdown_correlation_flags(captain: Dict[str, Any], flex: List[Dict[str, Any]]) -> List[str]:
+    """Return strategically awkward, though platform-valid, constructions."""
+    captain_pos = _position_tokens(captain)
+    captain_team = _team(captain)
+    flex = list(flex or [])
+    flags: List[str] = []
+    opposing_dst = any(
+        "DST" in _position_tokens(player) and _team(player) != captain_team
+        for player in flex
+    )
+    same_team_qb = any(
+        "QB" in _position_tokens(player) and _team(player) == captain_team
+        for player in flex
+    )
+    same_team_receivers = sum(
+        1 for player in flex
+        if _team(player) == captain_team and _position_tokens(player) & {"WR", "TE"}
+    )
+
+    if opposing_dst:
+        if "QB" in captain_pos:
+            flags.append("QB Captain vs opposing DST")
+        elif captain_pos & {"WR", "TE"}:
+            flags.append("receiver Captain vs opposing DST")
+        elif "RB" in captain_pos:
+            flags.append("RB Captain vs opposing DST")
+        elif "K" in captain_pos:
+            flags.append("kicker Captain vs opposing DST")
+    if "QB" in captain_pos and same_team_receivers == 0:
+        flags.append("QB Captain without same-team receiver")
+    if captain_pos & {"WR", "TE"} and not same_team_qb:
+        flags.append("receiver Captain without same-team QB")
+
+    specialist_count = sum(
+        1 for player in [captain] + flex
+        if _position_tokens(player) & {"DST", "K"}
+    )
+    dst_count = sum(
+        1 for player in [captain] + flex
+        if "DST" in _position_tokens(player)
+    )
+    if dst_count >= 2:
+        flags.append("both defenses")
+    if specialist_count >= 3:
+        flags.append("three-plus kickers/defenses")
+    return flags
+
+
+def _showdown_captain_script_bonus(captain: Dict[str, Any], flex: List[Dict[str, Any]]) -> float:
+    """Captain-specific coherence adjustment for a complete lineup."""
+    flags = set(showdown_correlation_flags(captain, flex))
+    penalties = {
+        "QB Captain vs opposing DST": -3.20,
+        "receiver Captain vs opposing DST": -1.55,
+        "RB Captain vs opposing DST": -0.70,
+        "kicker Captain vs opposing DST": -0.25,
+        "QB Captain without same-team receiver": -1.35,
+        "receiver Captain without same-team QB": -1.10,
+        "both defenses": -0.90,
+        "three-plus kickers/defenses": -1.35,
+    }
+    bonus = sum(penalties.get(flag, 0.0) for flag in flags)
+
+    captain_pos = _position_tokens(captain)
+    captain_team = _team(captain)
+    if "QB" in captain_pos:
+        receivers = sum(
+            1 for player in flex
+            if _team(player) == captain_team and _position_tokens(player) & {"WR", "TE"}
+        )
+        bonus += 0.35 if receivers == 1 else 0.60 if receivers >= 2 else 0.0
+    elif captain_pos & {"WR", "TE"} and any(
+        _team(player) == captain_team and "QB" in _position_tokens(player)
+        for player in flex
+    ):
+        bonus += 0.45
+    elif "RB" in captain_pos and any(
+        _team(player) == captain_team and "DST" in _position_tokens(player)
+        for player in flex
+    ):
+        bonus += 0.22
     return bonus
 
 
@@ -510,7 +600,7 @@ def _showdown_lineup_script_bonus(captain: Dict[str, Any], flex: List[Dict[str, 
     for index, player in enumerate(players):
         for other in players[index + 1:]:
             pair_bonus += _showdown_pair_script_bonus(player, other)
-    return split_bonus + pair_bonus
+    return split_bonus + pair_bonus + _showdown_captain_script_bonus(captain, flex)
 
 
 class ShowdownLineup(dict):
@@ -591,6 +681,7 @@ def attach_showdown_metrics(lineups: List[Dict[str, Any]], salary_cap: float = 5
             "showdown_total_ownership": total_own,
             "showdown_salary_left": salary_left,
             "showdown_correlation": correlation,
+            "showdown_correlation_flags": showdown_correlation_flags(captain, flex),
             "sim_leverage": leverage,
             "duplicate_risk": duplication,
         }
@@ -819,6 +910,23 @@ class ShowdownOptimizer:
                         ypair[index] * (pair_bonus * style)
                         for index, (_, _, pair_bonus) in enumerate(scripted_pairs)
                     ])
+
+                # Standard Strategic mode excludes the most contradictory
+                # Captain/DST pairing. Other modes keep it available as a rare,
+                # heavily penalized contrarian construction.
+                if style >= 1.0:
+                    for qb_key in keys:
+                        qb = key_to_player[qb_key]
+                        if "QB" not in _position_tokens(qb):
+                            continue
+                        for dst_key in keys:
+                            dst = key_to_player[dst_key]
+                            if (
+                                "DST" in _position_tokens(dst)
+                                and _team(dst)
+                                and _team(dst) != _team(qb)
+                            ):
+                                prob += cpt[qb_key] + flx[dst_key] <= 1
 
                 # Tiny jitter so repeated lineups are not just strictly deterministic after no-good cuts.
                 obj += pulp.lpSum([
@@ -1080,6 +1188,11 @@ class ShowdownOptimizer:
             if signature in used_signatures:
                 return None
             if len({_team(player) for player in [captain] + flex if _team(player)}) != 2:
+                return None
+            if (
+                style >= 1.0
+                and "QB Captain vs opposing DST" in showdown_correlation_flags(captain, flex)
+            ):
                 return None
             games = {_game_key(player) for player in [captain] + flex if _game_key(player)}
             if len(games) > 1:
