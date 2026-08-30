@@ -6464,6 +6464,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 team_splits = Counter()
                 captains = Counter()
                 archetypes = Counter()
+                correlation_flags = Counter()
                 duplication = []
                 for lu in lineups:
                     captain = lu.get("Captain") or {}
@@ -6480,6 +6481,8 @@ class MainWindow(QtWidgets.QMainWindow):
                         archetypes[archetype] += 1
                     if metrics.get("duplicate_risk") is not None:
                         duplication.append(float(metrics.get("duplicate_risk") or 0.0))
+                    for flag in metrics.get("showdown_correlation_flags") or []:
+                        correlation_flags[str(flag)] += 1
                 common = ", ".join(f"{k}: {v}" for k, v in team_splits.most_common(3))
                 captain_count = len(captains)
                 script_count = len(archetypes)
@@ -6487,9 +6490,13 @@ class MainWindow(QtWidgets.QMainWindow):
                     f" | avg duplicate risk {sum(duplication) / len(duplication):.0f}/100"
                     if duplication else ""
                 )
+                exception_text = (
+                    f" | correlation exceptions {sum(correlation_flags.values())}"
+                    if correlation_flags else ""
+                )
                 return (
                     f"Quality: {len(lineups)} Showdown lineups | {captain_count} captains | "
-                    f"{script_count} scripts | common splits {common or 'n/a'}{dup_text}."
+                    f"{script_count} scripts | common splits {common or 'n/a'}{dup_text}{exception_text}."
                 )
             sport_u = (sport or "NFL").upper()
             if sport_u == "MLB":
