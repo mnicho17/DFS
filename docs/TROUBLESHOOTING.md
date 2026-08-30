@@ -11,13 +11,6 @@ The app is not code-signed. Download it only from this repository's Releases pag
 - Close the file in Excel before loading it again.
 - Do not rename or remove DraftKings columns.
 
-## Vegas lines are blank
-
-- Open **Live Data Settings** and confirm a personal The Odds API key is saved.
-- Choose **Game-Day Check** again.
-- Read the live-data status message. It distinguishes a missing or rejected key from a slate where no lines are posted.
-- Confirm the DraftKings game names match the teams returned by the odds provider.
-
 ## An NFL player looks active when news says otherwise
 
 Choose **Game-Day Check** immediately before generating and again near lock. The app uses structured availability, practice, roster, and depth-chart data, but late-breaking news can lead the data source. A manually locked unavailable player stops generation instead of being silently removed.
@@ -26,7 +19,7 @@ Choose **Game-Day Check** immediately before generating and again near lock. The
 
 - Open the report and follow the **Next step** beside each item.
 - **Blocked** identifies a hard preparation problem such as missing roster eligibility, poor projection coverage, or a locked unavailable player.
-- **Review** identifies uncertainty or an optional gap such as stale news, questionable players, deep backups, incomplete ownership, no posted Vegas lines, or no generated portfolio yet.
+- **Review** identifies uncertainty such as stale news, questionable players, deep backups, incomplete ownership, or no generated portfolio yet.
 - Generate lineups and reopen the report to add salary and contest-preset fit checks.
 - The score is a preflight summary, not a prediction of lineup results, and the audit never changes the slate.
 
@@ -105,3 +98,4 @@ Results & Learning matches exact rosters previously exported by the app. A row m
 ## Where local data is stored
 
 Choose **Results & Learning**, then **Open Local History Folder**. Exports, imported results, slate snapshots, and build diagnostics remain on the computer.
+
