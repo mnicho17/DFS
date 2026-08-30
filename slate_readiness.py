@@ -326,23 +326,6 @@ def audit_slate(
             },
         ))
 
-        odds_state = str(live.get("odds_state") or "not_configured")
-        odds_games = int(_number(live.get("odds_matched_games", live.get("odds_games")), 0.0))
-        slate_games = len({str(player.get("GameKey") or "").strip() for player in players if player.get("GameKey")})
-        odds_ok = odds_state == "ok" and (not slate_games or odds_games >= max(1, int(math.ceil(slate_games * 0.6))))
-        odds_label = {
-            "not_configured": "No Vegas API key is configured.",
-            "no_games": "The odds source returned no posted NFL lines.",
-            "invalid_key": "The saved Vegas API key was rejected.",
-            "unavailable": "Vegas lines are temporarily unavailable.",
-            "error": "The Vegas check failed.",
-        }.get(odds_state, f"Vegas lines matched {odds_games}/{slate_games or odds_games} slate games.")
-        checks.append(_check(
-            "vegas", "Vegas context", "pass" if odds_ok else "review", odds_label,
-            "Open Live Data Settings or retry after books post lines." if not odds_ok else "",
-            weight=0.75,
-        ))
-
     checks.extend(_portfolio_checks(
         list(generated_lineups or []), sport_u, mode_l, float(salary_cap or 50000.0), preset, dict(sim_report or {})
     ))
@@ -373,7 +356,6 @@ def audit_slate(
         age_minutes = (live_check.get("details") or {}).get("age_minutes")
         live_freshness = "Not checked" if age_minutes is None else f"{max(0.0, _number(age_minutes)):.0f} minutes old"
         sources.append(source_row("Player news / roles", "live_status", live_freshness))
-        sources.append(source_row("Vegas", "vegas", str(live.get("odds_state") or "Not checked")))
     report: Dict[str, Any] = {
         "status": overall,
         "title": title,
@@ -421,3 +403,4 @@ def format_readiness_report(report: Mapping[str, Any]) -> str:
         "Readiness is a preflight report, not a projection guarantee. It never changes players or settings.",
     ])
     return "\n".join(lines)
+
