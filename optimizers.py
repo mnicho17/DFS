@@ -461,6 +461,14 @@ def showdown_correlation_flags(captain: Dict[str, Any], flex: List[Dict[str, Any
         1 for player in flex
         if _team(player) == captain_team and _position_tokens(player) & {"WR", "TE"}
     )
+    opposing_qbs = [
+        player for player in flex
+        if "QB" in _position_tokens(player) and _team(player) != captain_team
+    ]
+    opposing_receivers = [
+        player for player in flex
+        if _position_tokens(player) & {"WR", "TE"} and _team(player) != captain_team
+    ]
 
     if opposing_dst:
         if "QB" in captain_pos:
@@ -475,6 +483,11 @@ def showdown_correlation_flags(captain: Dict[str, Any], flex: List[Dict[str, Any
         flags.append("QB Captain without same-team receiver")
     if captain_pos & {"WR", "TE"} and not same_team_qb:
         flags.append("receiver Captain without same-team QB")
+    if "DST" in captain_pos and opposing_qbs:
+        if opposing_receivers:
+            flags.append("DST Captain vs opposing QB stack")
+        else:
+            flags.append("DST Captain vs opposing QB")
 
     specialist_count = sum(
         1 for player in [captain] + flex
@@ -503,6 +516,8 @@ def _showdown_captain_script_bonus(captain: Dict[str, Any], flex: List[Dict[str,
         "receiver Captain without same-team QB": -1.10,
         "both defenses": -0.90,
         "three-plus kickers/defenses": -1.35,
+        "DST Captain vs opposing QB stack": -3.10,
+        "DST Captain vs opposing QB": -0.85,
     }
     bonus = sum(penalties.get(flag, 0.0) for flag in flags)
 
@@ -942,6 +957,44 @@ class ShowdownOptimizer:
             for pk in keys:
                 prob += cpt[pk] + flx[pk] <= 1
 
+            if style >= 1.0:
+                specialist_keys = [
+                    pk for pk in keys
+                    if _position_tokens(key_to_player[pk]) & {"DST", "K"}
+                ]
+                prob += pulp.lpSum([cpt[pk] + flx[pk] for pk in specialist_keys]) <= 2
+
+                # Receiver Captains need their own quarterback in the lineup.
+                for receiver_key in keys:
+                    receiver = key_to_player[receiver_key]
+                    if not (_position_tokens(receiver) & {"WR", "TE"}):
+                        continue
+                    team_qbs = [
+                        qb_key for qb_key in keys
+                        if _team(key_to_player[qb_key]) == _team(receiver)
+                        and "QB" in _position_tokens(key_to_player[qb_key])
+                    ]
+                    if team_qbs:
+                        prob += cpt[receiver_key] <= pulp.lpSum([flx[qb_key] for qb_key in team_qbs])
+
+                # A DST Captain ceiling is incompatible with an opposing QB
+                # plus one of that QB's pass catchers reaching ceiling together.
+                for dst_key in specialist_keys:
+                    dst = key_to_player[dst_key]
+                    if "DST" not in _position_tokens(dst):
+                        continue
+                    for qb_key in keys:
+                        qb = key_to_player[qb_key]
+                        if "QB" not in _position_tokens(qb) or _team(qb) == _team(dst):
+                            continue
+                        for receiver_key in keys:
+                            receiver = key_to_player[receiver_key]
+                            if (
+                                _team(receiver) == _team(qb)
+                                and _position_tokens(receiver) & {"WR", "TE"}
+                            ):
+                                prob += cpt[dst_key] + flx[qb_key] + flx[receiver_key] <= 2
+
             # DraftKings Showdown lineups must include both teams. Keep this a
             # hard platform-validity rule even when the build style is Randomized.
             for team_name in sorted({_team(player) for player in self.players if _team(player)}):
@@ -1032,6 +1085,7 @@ class ShowdownOptimizer:
         flex_salary = {id(player): _salary(player) for player in players}
         captain_salary = {id(player): _cpt_salary(player) for player in players}
 
+        style = _style_level(self.build_style)
         cap_cpt, cap_flex = _build_showdown_cap_maps(players, num_lineups)
         used_cpt: Dict[str, int] = {}
         used_flex: Dict[str, int] = {}
@@ -1041,7 +1095,6 @@ class ShowdownOptimizer:
         own_s = _own_sign(self.own_mode)
         w_cpt = self.own_weight * 1.35 * own_s
         w_flex = self.own_weight * own_s
-        style = _style_level(self.build_style)
         captain_scores = {
             id(player): (
                 _cpt_proj(player)
@@ -1139,9 +1192,32 @@ class ShowdownOptimizer:
             if cap_left < 0:
                 return None
 
+            # Build receiver-Captain correlation directly instead of creating
+            # and rejecting large numbers of incoherent candidates.
+            if style >= 1.0 and _position_tokens(captain) & {"WR", "TE"}:
+                same_team_qbs = [
+                    p for p in players
+                    if "QB" in _position_tokens(p)
+                    and _team(p) == _team(captain)
+                    and player_key[id(p)] != captain_key
+                    and not p.get("FadeFlex")
+                    and under_cap(cap_flex, used_flex, player_key[id(p)])
+                ]
+                if not any(
+                    "QB" in _position_tokens(p) and _team(p) == _team(captain)
+                    for p in flex
+                ):
+                    feasible_qbs = [p for p in same_team_qbs if flex_salary[id(p)] <= cap_left]
+                    if not feasible_qbs or len(flex) >= 5:
+                        return None
+                    quarterback = max(feasible_qbs, key=flex_score)
+                    flex.append(quarterback)
+                    cap_left -= flex_salary[id(quarterback)]
+
             available = [
                 p for p in players
                 if player_key[id(p)] != captain_key
+                and player_key[id(p)] not in {player_key[id(chosen)] for chosen in flex}
                 and player_key[id(p)] not in locked_flex_keys
                 and not p.get("FadeFlex")
                 and under_cap(cap_flex, used_flex, player_key[id(p)])
@@ -1194,6 +1270,14 @@ class ShowdownOptimizer:
                 and "QB Captain vs opposing DST" in showdown_correlation_flags(captain, flex)
             ):
                 return None
+            if style >= 1.0:
+                strategic_flags = set(showdown_correlation_flags(captain, flex))
+                if strategic_flags.intersection({
+                    "receiver Captain without same-team QB",
+                    "DST Captain vs opposing QB stack",
+                    "three-plus kickers/defenses",
+                }):
+                    return None
             games = {_game_key(player) for player in [captain] + flex if _game_key(player)}
             if len(games) > 1:
                 return None
