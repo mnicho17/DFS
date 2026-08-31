@@ -1087,18 +1087,6 @@ class ShowdownOptimizer:
 
         style = _style_level(self.build_style)
         cap_cpt, cap_flex = _build_showdown_cap_maps(players, num_lineups)
-        if style > 0:
-            # Candidate-bank guardrails prevent the final selector from seeing
-            # hundreds of cosmetic variants around one core. User locks and
-            # explicit limits still take precedence.
-            automatic_flex_cap = max(1, int(math.floor(num_lineups * 0.85)))
-            automatic_cpt_cap = max(1, int(math.floor(num_lineups * 0.40)))
-            for player in players:
-                key = _pkey(player)
-                if not player.get("LockFlex") and key not in cap_flex:
-                    cap_flex[key] = automatic_flex_cap
-                if not player.get("LockCpt") and key not in cap_cpt:
-                    cap_cpt[key] = automatic_cpt_cap
         used_cpt: Dict[str, int] = {}
         used_flex: Dict[str, int] = {}
         used_signatures: set[Tuple[str, Tuple[str, ...]]] = set()
@@ -1204,9 +1192,32 @@ class ShowdownOptimizer:
             if cap_left < 0:
                 return None
 
+            # Build receiver-Captain correlation directly instead of creating
+            # and rejecting large numbers of incoherent candidates.
+            if style >= 1.0 and _position_tokens(captain) & {"WR", "TE"}:
+                same_team_qbs = [
+                    p for p in players
+                    if "QB" in _position_tokens(p)
+                    and _team(p) == _team(captain)
+                    and player_key[id(p)] != captain_key
+                    and not p.get("FadeFlex")
+                    and under_cap(cap_flex, used_flex, player_key[id(p)])
+                ]
+                if not any(
+                    "QB" in _position_tokens(p) and _team(p) == _team(captain)
+                    for p in flex
+                ):
+                    feasible_qbs = [p for p in same_team_qbs if flex_salary[id(p)] <= cap_left]
+                    if not feasible_qbs or len(flex) >= 5:
+                        return None
+                    quarterback = max(feasible_qbs, key=flex_score)
+                    flex.append(quarterback)
+                    cap_left -= flex_salary[id(quarterback)]
+
             available = [
                 p for p in players
                 if player_key[id(p)] != captain_key
+                and player_key[id(p)] not in {player_key[id(chosen)] for chosen in flex}
                 and player_key[id(p)] not in locked_flex_keys
                 and not p.get("FadeFlex")
                 and under_cap(cap_flex, used_flex, player_key[id(p)])
