@@ -371,6 +371,27 @@ class PortfolioRulesTests(unittest.TestCase):
         self.assertTrue(report["compliant"])
         self.assertFalse(any("Observed minimum uniqueness" in warning for warning in report["warnings"]))
 
+    def test_relaxed_uniqueness_is_recorded_as_effective_rule(self):
+        players = [
+            _player(f"P{index}", f"T{index % 2}", "G1", 20 - index)
+            for index in range(7)
+        ]
+        candidates = [
+            {"Captain": players[0], "Flex": players[1:6]},
+            {"Captain": players[0], "Flex": [*players[1:5], players[6]]},
+        ]
+
+        result = select_portfolio(
+            candidates,
+            2,
+            rules={"min_unique": 2, "balance_ownership": False},
+            kind="showdown",
+        )
+
+        self.assertEqual(len(result["lineups"]), 2)
+        self.assertEqual(result["report"]["effective_min_unique"], 1)
+        self.assertEqual(result["report"]["kind"], "showdown")
+
 
 if __name__ == "__main__":
     unittest.main()
