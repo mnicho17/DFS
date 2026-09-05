@@ -841,6 +841,7 @@ def select_portfolio(
         )
 
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
+    report["effective_min_unique"] = current_min_unique
     report["refinement_swaps"] = refinement_swaps
     report["duplication_refinement_swaps"] = duplication_refinement_swaps
     report["refinement_attempts"] = refinement_attempts
@@ -1037,6 +1038,7 @@ def portfolio_report(
                 })
 
     report = {
+        "kind": kind,
         "lineup_count": total,
         "requested": target,
         "rules": normalized,
@@ -1044,6 +1046,7 @@ def portfolio_report(
         "teams": [{"name": key, "count": value, "pct": value / max(1, total) * 100.0} for key, value in team_counts.most_common()],
         "games": [{"name": key, "count": value, "pct": value / max(1, total) * 100.0} for key, value in game_counts.most_common()],
         "min_observed_unique": min_observed_unique,
+        "effective_min_unique": normalized["min_unique"],
         "warnings": warnings,
         "compliant": not warnings and total >= target,
         "sim_summary": sim_summary,
