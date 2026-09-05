@@ -340,6 +340,27 @@ class PortfolioRulesTests(unittest.TestCase):
         }
         self.assertEqual(len(signatures), 150)
 
+    def test_relaxed_uniqueness_is_recorded_as_effective_rule(self):
+        players = [
+            _player(f"P{index}", f"T{index % 2}", "G1", 20 - index)
+            for index in range(7)
+        ]
+        candidates = [
+            {"Captain": players[0], "Flex": players[1:6]},
+            {"Captain": players[0], "Flex": [*players[1:5], players[6]]},
+        ]
+
+        result = select_portfolio(
+            candidates,
+            2,
+            rules={"min_unique": 2, "balance_ownership": False},
+            kind="showdown",
+        )
+
+        self.assertEqual(len(result["lineups"]), 2)
+        self.assertEqual(result["report"]["effective_min_unique"], 1)
+        self.assertEqual(result["report"]["kind"], "showdown")
+
     def test_report_flags_group_violations(self):
         a = _player("A", "T1", "G1", 20)
         b = _player("B", "T2", "G2", 19)

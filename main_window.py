@@ -1192,7 +1192,7 @@ class LineupBuildWorker(QtCore.QObject):
                 )
                 for key in (
                     "refinement_swaps", "duplication_refinement_swaps", "refinement_attempts",
-                    "refinement_stop_reason", "refinement_seconds",
+                    "refinement_stop_reason", "refinement_seconds", "effective_min_unique",
                 ):
                     if key in previous_report:
                         refreshed_report[key] = previous_report[key]
@@ -7307,7 +7307,15 @@ class MainWindow(QtWidgets.QMainWindow):
         selected = list(lineups if lineups is not None else (
             self.saved_showdown if kind_l == "showdown" else self.saved_classic
         ))
-        return portfolio_report(selected, self._portfolio_rules(), kind=kind_l, requested=len(selected))
+        rules = self._portfolio_rules()
+        previous = dict(self.last_portfolio_report or {})
+        if (
+            str(previous.get("kind") or "").lower() == kind_l
+            and int(previous.get("lineup_count", 0) or 0) == len(selected)
+            and previous.get("effective_min_unique") is not None
+        ):
+            rules["min_unique"] = int(previous["effective_min_unique"])
+        return portfolio_report(selected, rules, kind=kind_l, requested=len(selected))
 
     def on_portfolio_summary(self) -> None:
         kind = "showdown" if self.tabs_lineups.currentIndex() == 0 else "classic"
