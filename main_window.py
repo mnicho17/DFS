@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 93235)
-Total output lines: 7876
-
 # main_window.py
 from __future__ import annotations
 
@@ -2136,7 +2133,3649 @@ class SlateReadinessDialog(QtWidgets.QDialog):
             table.setItem(row, 2, QtWidgets.QTableWidgetItem(str(check.get("summary") or "")))
             table.setItem(row, 3, QtWidgets.QTableWidgetItem(str(check.get("action") or "")))
         table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
-        table.horizontalHeader().setSectionResizeMode(1, QtWi…43235 tokens truncated…True)
+        table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        table.resizeRowsToContents()
+        layout.addWidget(table, 1)
+
+        note = QtWidgets.QLabel(
+            "This is a report-only preflight. It does not change projections, ownership, locks, fades, or lineups."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        show_players = buttons.addButton("Show Players", QtWidgets.QDialogButtonBox.ActionRole)
+        show_players.setObjectName("showReadinessPlayers")
+        show_players.setToolTip("Close this report and filter the player table to this finding.")
+        show_players.setEnabled(False)
+        self.show_players_button = show_players
+        show_players.clicked.connect(self._show_selected_players)
+        table.currentCellChanged.connect(lambda *_args: self._update_show_players_button())
+        table.cellDoubleClicked.connect(lambda *_args: self._show_selected_players())
+        copy_button = buttons.addButton("Copy Report", QtWidgets.QDialogButtonBox.ActionRole)
+        copy_button.setObjectName("copySlateReadinessReport")
+        copy_button.clicked.connect(
+            lambda: QtWidgets.QApplication.clipboard().setText(str(self.report.get("text") or ""))
+        )
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _selected_check(self) -> Dict[str, Any]:
+        row = self.table.currentRow()
+        if 0 <= row < len(self.checks):
+            return dict(self.checks[row] or {})
+        return {}
+
+    def _update_show_players_button(self) -> None:
+        details = dict(self._selected_check().get("details") or {})
+        self.show_players_button.setEnabled(bool(details.get("player_names")))
+
+    def _show_selected_players(self) -> None:
+        check = self._selected_check()
+        names = list((check.get("details") or {}).get("player_names") or [])
+        if not names:
+            return
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "focus_readiness_players"):
+            self.accept()
+            parent.focus_readiness_players(check)
+
+
+class FinalLockCheckDialog(QtWidgets.QDialog):
+    """Show the last live refresh and map changes to exact saved lineups."""
+
+    def __init__(self, report: Dict[str, Any], parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.report = dict(report or {})
+        self.repair_requested = False
+        self.setWindowTitle("Final Lock Check")
+        self.setModal(True)
+        self.resize(920, 500)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        status = str(self.report.get("status") or "attention")
+        color = {"ready": "#8FE3A1", "attention": "#FFD180", "unavailable": "#FFB071"}.get(status, "#FFD180")
+        title = QtWidgets.QLabel(str(self.report.get("title") or "Saved Lineups Need Review"))
+        title.setObjectName("finalLockTitle")
+        title.setStyleSheet(f"color: {color}; font-size: 18pt; font-weight: 700;")
+        layout.addWidget(title)
+
+        source_text = "cached check" if self.report.get("used_cached_check") else "fresh refresh"
+        context = QtWidgets.QLabel(
+            f"{source_text.title()} | Players {int(self.report.get('sleeper_matches', 0) or 0)}/"
+            f"{int(self.report.get('player_count', 0) or 0)} matched | "
+            f"{int(self.report.get('affected_lineups', 0) or 0)}/"
+            f"{int(self.report.get('lineup_count', 0) or 0)} saved lineups affected"
+        )
+        context.setWordWrap(True)
+        layout.addWidget(context)
+
+        changes = list(self.report.get("changes") or [])
+        table = QtWidgets.QTableWidget(max(1, len(changes)), 5, self)
+        table.setObjectName("finalLockChanges")
+        table.setHorizontalHeaderLabels(["Player", "Team", "Availability", "Change", "Saved lineups"])
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setVisible(False)
+        if changes:
+            for row, change in enumerate(changes):
+                values = [
+                    str(change.get("name") or "Unknown"),
+                    str(change.get("team") or ""),
+                    str(change.get("availability") or "Updated"),
+                    str(change.get("change") or "Updated"),
+                    ", ".join(str(value) for value in change.get("lineup_numbers") or []) or "None",
+                ]
+                for column, value in enumerate(values):
+                    table.setItem(row, column, QtWidgets.QTableWidgetItem(value))
+        else:
+            item = QtWidgets.QTableWidgetItem("No player-status changes were returned by the final check.")
+            table.setItem(0, 0, item)
+            table.setSpan(0, 0, 1, 5)
+        table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
+        table.resizeRowsToContents()
+        layout.addWidget(table, 1)
+
+        notes: List[str] = []
+        if self.report.get("unavailable_players"):
+            notes.append(
+                "Unavailable players still rostered: "
+                + ", ".join(str(value) for value in self.report.get("unavailable_players") or [])
+            )
+        if status == "unavailable":
+            notes.append("The live source could not be confirmed. Continuing uses cached player data and Entry Safety will keep the uncertainty visible.")
+        if not notes:
+            notes.append("Continue to Entry Safety for the complete roster, salary, team, slate, and portfolio-rule audit.")
+        note = QtWidgets.QLabel("\n".join(notes))
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Cancel)
+        copy_button = buttons.addButton("Copy Report", QtWidgets.QDialogButtonBox.ActionRole)
+        copy_button.setObjectName("copyFinalLockReport")
+        copy_button.clicked.connect(
+            lambda: QtWidgets.QApplication.clipboard().setText(str(self.report.get("text") or ""))
+        )
+        if self.report.get("affected_indexes"):
+            repair_button = buttons.addButton("Replace Affected Lineups", QtWidgets.QDialogButtonBox.ActionRole)
+            repair_button.setObjectName("repairFinalLockLineups")
+            repair_button.clicked.connect(self._request_repair)
+        continue_button = buttons.addButton(
+            "Continue with Cached Data" if status == "unavailable" else "Continue to Entry Safety",
+            QtWidgets.QDialogButtonBox.AcceptRole,
+        )
+        continue_button.setObjectName("continueFinalLockCheck")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _request_repair(self) -> None:
+        self.repair_requested = True
+        self.done(2)
+
+
+class EntrySafetyDialog(QtWidgets.QDialog):
+    """Final report for the exact saved portfolio about to be exported."""
+
+    def __init__(self, report: Dict[str, Any], parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.report = dict(report or {})
+        self.repair_requested = False
+        self.setWindowTitle("Entry Safety")
+        self.setModal(True)
+        self.resize(920, 520)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        status = str(self.report.get("status") or "review")
+        color = {"ready": "#8FE3A1", "review": "#FFD180", "blocked": "#FF8A80"}.get(status, "#FFD180")
+        title = QtWidgets.QLabel(str(self.report.get("title") or "Review Before Export"))
+        title.setObjectName("entrySafetyTitle")
+        title.setStyleSheet(f"color: {color}; font-size: 18pt; font-weight: 700;")
+        layout.addWidget(title)
+
+        context = QtWidgets.QLabel(
+            f"{self.report.get('sport', '')} {str(self.report.get('kind', '')).title()} | "
+            f"{int(self.report.get('lineup_count', 0) or 0)} saved lineups | "
+            f"{int(self.report.get('blockers', 0) or 0)} blockers | "
+            f"{int(self.report.get('reviews', 0) or 0)} items to review"
+        )
+        context.setWordWrap(True)
+        layout.addWidget(context)
+
+        checks = sorted(
+            list(self.report.get("checks") or []),
+            key=lambda item: {"block": 0, "review": 1, "pass": 2}.get(str(item.get("status") or "review"), 1),
+        )
+        table = QtWidgets.QTableWidget(len(checks), 4, self)
+        table.setObjectName("entrySafetyChecks")
+        table.setHorizontalHeaderLabels(["State", "Check", "Finding", "Next step"])
+        table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setVisible(False)
+        for row, check in enumerate(checks):
+            check_status = str(check.get("status") or "review")
+            state = QtWidgets.QTableWidgetItem(check_status.upper())
+            state.setForeground(QtGui.QColor(
+                {"pass": "#8FE3A1", "review": "#FFD180", "block": "#FF8A80"}.get(check_status, "#FFD180")
+            ))
+            state.setTextAlignment(QtCore.Qt.AlignCenter)
+            table.setItem(row, 0, state)
+            table.setItem(row, 1, QtWidgets.QTableWidgetItem(str(check.get("label") or "")))
+            table.setItem(row, 2, QtWidgets.QTableWidgetItem(str(check.get("summary") or "")))
+            table.setItem(row, 3, QtWidgets.QTableWidgetItem(str(check.get("action") or "")))
+        table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+        table.resizeRowsToContents()
+        layout.addWidget(table, 1)
+
+        note_text = (
+            "Resolve every blocker before export. Review items may be intentional, but should be checked before lock. "
+            "Nothing changes unless you explicitly choose and confirm replacement."
+        )
+        note = QtWidgets.QLabel(note_text)
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Cancel)
+        copy_button = buttons.addButton("Copy Report", QtWidgets.QDialogButtonBox.ActionRole)
+        copy_button.setObjectName("copyEntrySafetyReport")
+        copy_button.clicked.connect(
+            lambda: QtWidgets.QApplication.clipboard().setText(str(self.report.get("text") or ""))
+        )
+        if status == "blocked" and self.report.get("blocked_lineup_indexes"):
+            repair_button = buttons.addButton("Replace Blocked Lineups", QtWidgets.QDialogButtonBox.ActionRole)
+            repair_button.setObjectName("repairBlockedEntrySafetyLineups")
+            repair_button.clicked.connect(self._request_repair)
+        export_button = buttons.addButton(
+            "Export CSV" if status == "ready" else "Export Anyway",
+            QtWidgets.QDialogButtonBox.AcceptRole,
+        )
+        export_button.setObjectName("confirmSafeExport")
+        export_button.setEnabled(status != "blocked")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _request_repair(self) -> None:
+        self.repair_requested = True
+        self.done(2)
+
+
+class BuildRecipesDialog(QtWidgets.QDialog):
+    """Apply or remove named, slate-independent build configurations."""
+
+    def __init__(
+        self,
+        recipes: Dict[str, Dict[str, Any]],
+        parent: Optional[QtWidgets.QWidget] = None,
+    ):
+        super().__init__(parent)
+        self.recipes = dict(recipes or {})
+        self.applied_name = ""
+        self.changed = False
+        self.setWindowTitle("Build Recipes")
+        self.setModal(True)
+        self.resize(660, 300)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        intro = QtWidgets.QLabel(
+            "Apply a saved build setup without bringing old player locks, fades, exposure limits, or groups into the new slate."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        self.recipe_list = QtWidgets.QListWidget(self)
+        self.recipe_list.setObjectName("buildRecipeList")
+        self.recipe_list.itemSelectionChanged.connect(self._update_details)
+        self.recipe_list.itemDoubleClicked.connect(lambda *_args: self._apply_selected())
+        layout.addWidget(self.recipe_list, 1)
+
+        self.details = QtWidgets.QLabel("")
+        self.details.setObjectName("buildRecipeDetails")
+        self.details.setWordWrap(True)
+        self.details.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(self.details)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        delete_button = buttons.addButton("Delete", QtWidgets.QDialogButtonBox.DestructiveRole)
+        delete_button.setObjectName("deleteBuildRecipe")
+        delete_button.clicked.connect(self._delete_selected)
+        apply_button = buttons.addButton("Apply Recipe", QtWidgets.QDialogButtonBox.AcceptRole)
+        apply_button.setObjectName("applyBuildRecipe")
+        apply_button.clicked.connect(self._apply_selected)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.delete_button = delete_button
+        self.apply_button = apply_button
+        self._refresh()
+
+    def _selected_name(self) -> str:
+        item = self.recipe_list.currentItem()
+        return str(item.data(QtCore.Qt.UserRole) or "") if item is not None else ""
+
+    def _refresh(self, selected_name: str = "") -> None:
+        self.recipe_list.clear()
+        for name, recipe in sorted(self.recipes.items(), key=lambda item: item[0].casefold()):
+            label = f"{name}  —  {recipe.get('sport', 'NFL')} {str(recipe.get('contest_kind', 'classic')).title()}"
+            item = QtWidgets.QListWidgetItem(label)
+            item.setData(QtCore.Qt.UserRole, name)
+            self.recipe_list.addItem(item)
+            if name == selected_name:
+                self.recipe_list.setCurrentItem(item)
+        if self.recipe_list.count() and self.recipe_list.currentRow() < 0:
+            self.recipe_list.setCurrentRow(0)
+        self._update_details()
+
+    def _update_details(self) -> None:
+        name = self._selected_name()
+        recipe = dict(self.recipes.get(name) or {})
+        enabled = bool(recipe)
+        self.apply_button.setEnabled(enabled)
+        self.delete_button.setEnabled(enabled)
+        if not recipe:
+            self.details.setText("No saved recipes yet. Close this window and choose Save Current Recipe from Settings.")
+            return
+        sim_text = "SIM Off"
+        if recipe.get("nfl_sim_enabled"):
+            depth = "Deep" if str(recipe.get("nfl_compute_mode") or "").startswith("Deep") else "Fast"
+            sim_text = f"SIM {depth} • {recipe.get('nfl_field_preset', '150-Max')}"
+        self.details.setText(
+            f"{recipe.get('build_style', 'Strategic')} • {recipe.get('salary_strategy', 'Near Cap')} • "
+            f"{int(recipe.get('requested_lineups', 1) or 1)} lineups • {sim_text} • "
+            f"minimum unique {int(recipe.get('min_unique', 1) or 1)}"
+        )
+
+    def _apply_selected(self) -> None:
+        name = self._selected_name()
+        if not name:
+            return
+        self.applied_name = name
+        self.accept()
+
+    def _delete_selected(self) -> None:
+        name = self._selected_name()
+        if not name:
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Delete Build Recipe",
+            f"Delete the saved recipe '{name}'?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Cancel,
+        )
+        if answer != QtWidgets.QMessageBox.Yes:
+            return
+        self.recipes.pop(name, None)
+        self.changed = True
+        self._refresh()
+
+
+class ContestProfileDialog(QtWidgets.QDialog):
+    """Create, reuse, or disable an exact contest payout profile."""
+
+    def __init__(
+        self,
+        profiles: Dict[str, Dict[str, Any]],
+        active_name: str = "",
+        parent: Optional[QtWidgets.QWidget] = None,
+    ):
+        super().__init__(parent)
+        self.profiles = dict(profiles or {})
+        self.active_name = str(active_name or "").strip()
+        self.selected_profile: Optional[Dict[str, Any]] = None
+        self.changed = False
+        self.setWindowTitle("Contest-Aware SIM")
+        self.setModal(True)
+        self.resize(720, 620)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        intro = QtWidgets.QLabel(
+            "Attach the real field size, entry fee, and payout table to NFL SIM Edge. "
+            "The selected entry-limit preset still shapes the opponent field; this profile replaces only the payout economics."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        saved_row = QtWidgets.QHBoxLayout()
+        saved_row.addWidget(QtWidgets.QLabel("Saved profile"))
+        self.profile_combo = QtWidgets.QComboBox(self)
+        self.profile_combo.setObjectName("contestProfileSelector")
+        self.profile_combo.currentIndexChanged.connect(self._load_selected)
+        saved_row.addWidget(self.profile_combo, 1)
+        layout.addLayout(saved_row)
+
+        form = QtWidgets.QFormLayout()
+        self.name_edit = QtWidgets.QLineEdit(self)
+        self.name_edit.setObjectName("contestProfileName")
+        self.name_edit.setPlaceholderText("Example: NFL Sunday Million")
+        form.addRow("Contest name", self.name_edit)
+
+        self.field_size = QtWidgets.QSpinBox(self)
+        self.field_size.setObjectName("contestFieldSize")
+        self.field_size.setRange(2, 5_000_000)
+        self.field_size.setSingleStep(100)
+        self.field_size.setValue(100_000)
+        self.field_size.setGroupSeparatorShown(True)
+        form.addRow("Field size", self.field_size)
+
+        self.entry_fee = QtWidgets.QDoubleSpinBox(self)
+        self.entry_fee.setObjectName("contestEntryFee")
+        self.entry_fee.setRange(0.01, 1_000_000.0)
+        self.entry_fee.setDecimals(2)
+        self.entry_fee.setPrefix("$")
+        self.entry_fee.setValue(20.0)
+        form.addRow("Entry fee", self.entry_fee)
+
+        self.user_entries = QtWidgets.QSpinBox(self)
+        self.user_entries.setObjectName("contestUserEntries")
+        self.user_entries.setRange(1, 5_000_000)
+        self.user_entries.setValue(150)
+        form.addRow("Your entries", self.user_entries)
+        layout.addLayout(form)
+
+        payout_label = QtWidgets.QLabel(
+            "Payouts — one rank or range per line. Examples: 1 = $100,000 or 2-10 = $5,000"
+        )
+        payout_label.setWordWrap(True)
+        layout.addWidget(payout_label)
+        self.payouts_edit = QtWidgets.QPlainTextEdit(self)
+        self.payouts_edit.setObjectName("contestPayoutTable")
+        self.payouts_edit.setPlaceholderText(
+            "1 = $100,000\n2 = $50,000\n3-5 = $20,000\n6-10 = $10,000"
+        )
+        self.payouts_edit.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+        layout.addWidget(self.payouts_edit, 1)
+
+        self.preview = QtWidgets.QLabel("")
+        self.preview.setObjectName("contestProfilePreview")
+        self.preview.setWordWrap(True)
+        self.preview.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(self.preview)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        self.delete_button = buttons.addButton("Delete Saved", QtWidgets.QDialogButtonBox.DestructiveRole)
+        self.delete_button.setObjectName("deleteContestProfile")
+        self.delete_button.clicked.connect(self._delete_selected)
+        preset_button = buttons.addButton("Use Preset Only", QtWidgets.QDialogButtonBox.ActionRole)
+        preset_button.setObjectName("disableContestProfile")
+        preset_button.setToolTip("Keep NFL SIM Edge on, but return to the preset's payout-shape proxy.")
+        preset_button.clicked.connect(self._use_preset_only)
+        save_button = buttons.addButton("Save and Use", QtWidgets.QDialogButtonBox.AcceptRole)
+        save_button.setObjectName("saveContestProfile")
+        save_button.clicked.connect(self._save_and_use)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        for widget in (self.name_edit, self.payouts_edit):
+            if isinstance(widget, QtWidgets.QLineEdit):
+                widget.textChanged.connect(self._update_preview)
+            else:
+                widget.textChanged.connect(self._update_preview)
+        self.field_size.valueChanged.connect(self._update_preview)
+        self.entry_fee.valueChanged.connect(self._update_preview)
+        self.user_entries.valueChanged.connect(self._update_preview)
+        self._refresh_profiles(self.active_name)
+
+    def _selected_name(self) -> str:
+        return str(self.profile_combo.currentData() or "")
+
+    def _refresh_profiles(self, selected_name: str = "") -> None:
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        self.profile_combo.addItem("New profile", "")
+        selected_index = 0
+        for name in sorted(self.profiles, key=str.casefold):
+            self.profile_combo.addItem(name, name)
+            if name == selected_name:
+                selected_index = self.profile_combo.count() - 1
+        self.profile_combo.setCurrentIndex(selected_index)
+        self.profile_combo.blockSignals(False)
+        self._load_selected()
+
+    def _load_selected(self, *_args: Any) -> None:
+        name = self._selected_name()
+        profile = dict(self.profiles.get(name) or {})
+        self.delete_button.setEnabled(bool(profile))
+        if profile:
+            self.name_edit.setText(name)
+            self.field_size.setValue(int(profile.get("field_size", 100_000) or 100_000))
+            self.entry_fee.setValue(float(profile.get("entry_fee", 20.0) or 20.0))
+            self.user_entries.setValue(int(profile.get("user_entries", 1) or 1))
+            self.payouts_edit.setPlainText(format_payout_text(profile.get("payouts") or []))
+        else:
+            self.name_edit.clear()
+            self.field_size.setValue(100_000)
+            self.entry_fee.setValue(20.0)
+            self.user_entries.setValue(150)
+            self.payouts_edit.clear()
+        self._update_preview()
+
+    def _profile_from_fields(self) -> Dict[str, Any]:
+        return normalize_contest_profile({
+            "name": self.name_edit.text(),
+            "field_size": self.field_size.value(),
+            "entry_fee": self.entry_fee.value(),
+            "user_entries": self.user_entries.value(),
+            "payouts": parse_payout_text(self.payouts_edit.toPlainText()),
+        })
+
+    def _update_preview(self, *_args: Any) -> None:
+        try:
+            profile = self._profile_from_fields()
+        except ValueError as exc:
+            self.preview.setText(str(exc))
+            return
+        paid_pct = profile["cash_places"] / max(1, profile["field_size"]) * 100.0
+        self.preview.setText(
+            f"Prize pool entered: ${profile['prize_pool']:,.2f} • pays through {profile['cash_places']:,} "
+            f"({paid_pct:.1f}% of field) • top prize ${profile['top_prize']:,.2f}. "
+            "Ties and duplicate lineups split all prizes covered by their finishing range."
+        )
+
+    def _save_and_use(self) -> None:
+        try:
+            profile = self._profile_from_fields()
+        except ValueError as exc:
+            QtWidgets.QMessageBox.warning(self, "Contest Profile", str(exc))
+            return
+        name = str(profile["name"])
+        self.profiles[name] = profile
+        self.active_name = name
+        self.selected_profile = profile
+        self.changed = True
+        self.accept()
+
+    def _use_preset_only(self) -> None:
+        self.active_name = ""
+        self.selected_profile = None
+        self.changed = True
+        self.accept()
+
+    def reject(self) -> None:
+        # Deleting a saved profile is an intentional edit even if the user then
+        # closes the dialog instead of choosing another profile.
+        if self.changed:
+            self.accept()
+            return
+        super().reject()
+
+    def _delete_selected(self) -> None:
+        name = self._selected_name()
+        if not name:
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Delete Contest Profile",
+            f"Delete the saved contest profile '{name}'?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+            QtWidgets.QMessageBox.Cancel,
+        )
+        if answer != QtWidgets.QMessageBox.Yes:
+            return
+        self.profiles.pop(name, None)
+        if self.active_name == name:
+            self.active_name = ""
+            self.selected_profile = None
+        self.changed = True
+        self._refresh_profiles()
+
+
+class BuildDiagnosticsDialog(QtWidgets.QDialog):
+    """Review and copy recent aggregate build diagnostics."""
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
+        super().__init__(parent)
+        self.setWindowTitle("Build History")
+        self.setModal(True)
+        self.resize(980, 620)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        intro = QtWidgets.QLabel(
+            "Recent lineup builds are saved locally so timing and settings can be compared between app releases. "
+            "Reports contain aggregate counts only—never player names, lineups, file paths, or API keys."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
+        self.history_list = QtWidgets.QListWidget(splitter)
+        self.history_list.setObjectName("buildHistoryList")
+        self.history_list.setMinimumWidth(360)
+        self.history_list.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.report = QtWidgets.QPlainTextEdit(splitter)
+        self.report.setObjectName("buildHistoryReport")
+        self.report.setReadOnly(True)
+        self.report.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+        self.report.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+        splitter.setSizes([390, 590])
+        layout.addWidget(splitter, 1)
+
+        self.note = QtWidgets.QLabel("")
+        self.note.setObjectName("buildHistoryNote")
+        self.note.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(self.note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        self.copy_button = buttons.addButton("Copy Selected Report", QtWidgets.QDialogButtonBox.ActionRole)
+        self.copy_button.setObjectName("copySelectedBuildReport")
+        self.copy_button.clicked.connect(self.copy_selected_report)
+        self.compare_button = buttons.addButton("Compare Two Builds", QtWidgets.QDialogButtonBox.ActionRole)
+        self.compare_button.setObjectName("compareBuildsButton")
+        self.compare_button.setToolTip("Select exactly two build-history rows, then compare their timing, settings, and SIM portfolio metrics.")
+        self.compare_button.clicked.connect(self.compare_selected)
+        self.clear_button = buttons.addButton("Clear History", QtWidgets.QDialogButtonBox.DestructiveRole)
+        self.clear_button.setObjectName("clearBuildHistory")
+        self.clear_button.clicked.connect(self.clear_history)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.history_list.currentItemChanged.connect(lambda *_args: self._show_selected())
+        self.history_list.itemSelectionChanged.connect(self._update_compare_button)
+        self.reload()
+
+    def reload(self) -> None:
+        self.history_list.clear()
+        records = load_build_history()
+        for record in records:
+            item = QtWidgets.QListWidgetItem(build_history_label(record))
+            item.setData(QtCore.Qt.UserRole, record)
+            self.history_list.addItem(item)
+        has_records = bool(records)
+        self.copy_button.setEnabled(has_records)
+        self.clear_button.setEnabled(has_records)
+        self.compare_button.setEnabled(False)
+        if has_records:
+            self.history_list.setCurrentRow(0)
+            self.note.setText(f"Showing {len(records)} most recent build{'s' if len(records) != 1 else ''}.")
+        else:
+            self.report.setPlainText("No completed lineup builds have been recorded yet.")
+            self.note.setText("Generate lineups to create the first local build report.")
+
+    def selected_record(self) -> Dict[str, Any]:
+        item = self.history_list.currentItem()
+        if item is None:
+            return {}
+        value = item.data(QtCore.Qt.UserRole)
+        return dict(value) if isinstance(value, dict) else {}
+
+    def _show_selected(self) -> None:
+        record = self.selected_record()
+        self.report.setPlainText(format_build_report(record) if record else "Select a build to view its report.")
+        self.copy_button.setEnabled(bool(record))
+
+    def _update_compare_button(self) -> None:
+        self.compare_button.setEnabled(len(self.history_list.selectedItems()) == 2)
+
+    def compare_selected(self) -> None:
+        items = self.history_list.selectedItems()
+        if len(items) != 2:
+            self.note.setText("Select exactly two build rows to compare.")
+            return
+        records = [item.data(QtCore.Qt.UserRole) for item in items]
+        records = [dict(record) for record in records if isinstance(record, dict)]
+        if len(records) != 2:
+            return
+        self.report.setPlainText(format_build_comparison(records[0], records[1]))
+        self.copy_button.setEnabled(True)
+        self.note.setText("Comparing two aggregate build reports. Negative total-time change means the newer run was faster.")
+
+    def copy_selected_report(self) -> None:
+        report_text = self.report.toPlainText().strip()
+        if not report_text:
+            return
+        QtWidgets.QApplication.clipboard().setText(report_text)
+        self.note.setText("Displayed build report copied to the clipboard.")
+
+    def clear_history(self) -> None:
+        if not load_build_history(limit=1):
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Clear Build History",
+            "Clear all locally saved build diagnostics? This does not remove exported lineups or contest results.",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if answer != QtWidgets.QMessageBox.Yes:
+            return
+        clear_build_history()
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "_on_build_history_cleared"):
+            parent._on_build_history_cleared()
+        self.reload()
+
+
+class PortfolioInsightsDialog(QtWidgets.QDialog):
+    """Explain a portfolio and return user-selected repair actions to MainWindow."""
+
+    FILTERS = [
+        ("All lineups", "all"),
+        ("Any review signal", "flagged"),
+        ("C/D grades", "weak_grade"),
+        ("High duplication", "high_duplication"),
+        ("More than $2k left", "unused_salary"),
+        ("No QB stack", "unstacked"),
+        ("Concentrated core", "concentrated_core"),
+    ]
+
+    def __init__(
+        self,
+        insights: Dict[str, Any],
+        parent: Optional[QtWidgets.QWidget] = None,
+        *,
+        actions_enabled: bool = True,
+        source_label: str = "generated",
+    ):
+        super().__init__(parent)
+        self.insights = dict(insights or {})
+        self.source_label = str(source_label or "generated")
+        self.requested_action = ""
+        self.requested_indexes: List[int] = []
+        self._lineup_rows = list(self.insights.get("lineup_rows") or [])
+        self._lineup_by_number = {
+            int(row.get("number", index + 1) or index + 1): row
+            for index, row in enumerate(self._lineup_rows)
+        }
+        self.setObjectName("portfolioInsightsDialog")
+        self.setWindowTitle("Portfolio Insights")
+        self.setModal(True)
+        self.resize(1240, 760)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        header = QtWidgets.QHBoxLayout()
+        title = QtWidgets.QLabel("Portfolio Insights")
+        title.setObjectName("portfolioInsightsTitle")
+        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #F1F5F9;")
+        header.addWidget(title)
+        header.addStretch(1)
+        status = QtWidgets.QLabel(str(self.insights.get("status") or "Ready"))
+        status.setObjectName("portfolioInsightsStatus")
+        has_flags = bool(self.insights.get("review_flags") or self.insights.get("flagged_count"))
+        status.setStyleSheet(
+            "padding: 5px 10px; border-radius: 9px; font-weight: 700; "
+            + ("background: #4A2B12; color: #FFD28A;" if has_flags else "background: #123B31; color: #8BE0C3;")
+        )
+        header.addWidget(status)
+        layout.addLayout(header)
+
+        intro = QtWidgets.QLabel(
+            "Find the lineups behind each warning, inspect player exposure, and replace only the rows you do not want."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(intro)
+
+        self.tabs = QtWidgets.QTabWidget(self)
+        self.tabs.setObjectName("portfolioInsightsTabs")
+        overview = QtWidgets.QPlainTextEdit(self)
+        overview.setObjectName("portfolioInsightsReport")
+        overview.setReadOnly(True)
+        overview.setLineWrapMode(QtWidgets.QPlainTextEdit.WidgetWidth)
+        overview.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
+        overview.setPlainText(str(self.insights.get("text") or "No portfolio insights are available."))
+        self.tabs.addTab(overview, "Overview")
+
+        lineup_panel = QtWidgets.QWidget(self)
+        lineup_layout = QtWidgets.QVBoxLayout(lineup_panel)
+        lineup_layout.setContentsMargins(6, 6, 6, 6)
+        filter_row = QtWidgets.QHBoxLayout()
+        filter_row.addWidget(QtWidgets.QLabel("Show:"))
+        self.filter_combo = QtWidgets.QComboBox(self)
+        self.filter_combo.setObjectName("portfolioInsightsFilter")
+        for label, code in self.FILTERS:
+            self.filter_combo.addItem(label, code)
+        self.filter_combo.currentIndexChanged.connect(self._apply_filter)
+        filter_row.addWidget(self.filter_combo)
+        select_flagged = QtWidgets.QPushButton("Select flagged", self)
+        select_flagged.setObjectName("selectFlaggedLineups")
+        select_flagged.clicked.connect(self._select_flagged)
+        filter_row.addWidget(select_flagged)
+        filter_row.addStretch(1)
+        filter_row.addWidget(QtWidgets.QLabel("Select one or more rows to remove or replace."))
+        lineup_layout.addLayout(filter_row)
+
+        self.table = QtWidgets.QTableWidget(self)
+        self.table.setObjectName("portfolioInsightsLineups")
+        headers = [
+            "#", "Review", "Grade", "Source", "Scenario", "Salary", "Stack", "Bring-back",
+            "FLEX", "Own sum", "Edge", "Leverage", "Dup risk", "Top 1%", "Return", "Top paths",
+        ]
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(len(self._lineup_rows))
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setVisible(False)
+
+        def metric(value: Any, suffix: str = "") -> str:
+            if value is None:
+                return "—"
+            try:
+                return f"{float(value):.1f}{suffix}"
+            except (TypeError, ValueError):
+                return "—"
+
+        numeric_columns = {
+            0: "number", 5: "salary", 9: "ownership", 10: "edge", 11: "leverage",
+            12: "duplication", 13: "top_one_pct", 14: "return_index", 15: "top_scenarios",
+        }
+        for row_index, row in enumerate(self._lineup_rows):
+            number = int(row.get("number", row_index + 1) or row_index + 1)
+            values = [
+                str(number),
+                str(row.get("review") or "—"),
+                str(row.get("grade") or "—"),
+                str(row.get("source") or "—"),
+                str(row.get("archetype") or "—"),
+                f"${float(row.get('salary', 0.0) or 0.0):,.0f}",
+                str(row.get("stack") or "—"),
+                str(row.get("bringback") or "—"),
+                str(row.get("flex") or "—"),
+                metric(row.get("ownership"), "%"),
+                metric(row.get("edge")),
+                metric(row.get("leverage")),
+                metric(row.get("duplication")),
+                metric(row.get("top_one_pct"), "%"),
+                metric(row.get("return_index")),
+                str(int(row.get("top_scenarios", 0) or 0)),
+            ]
+            for column, value in enumerate(values):
+                item = SortKeyItem(value)
+                item.setData(QtCore.Qt.UserRole + 1, number)
+                numeric = row.get(numeric_columns.get(column, ""))
+                if numeric is not None:
+                    item.setData(QtCore.Qt.UserRole, float(numeric))
+                if column == 1 and row.get("review"):
+                    item.setToolTip(str(row.get("review")))
+                    item.setForeground(QtGui.QColor("#FFD28A"))
+                self.table.setItem(row_index, column, item)
+        self.table.setSortingEnabled(True)
+        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.itemSelectionChanged.connect(self._update_action_buttons)
+        lineup_layout.addWidget(self.table, 1)
+        self.tabs.addTab(lineup_panel, "Lineup details")
+
+        exposure_panel = QtWidgets.QWidget(self)
+        exposure_layout = QtWidgets.QVBoxLayout(exposure_panel)
+        exposure_layout.setContentsMargins(6, 6, 6, 6)
+        exposure_help = QtWidgets.QLabel(
+            "Select a player to see exactly which portfolio rows contain that player."
+        )
+        exposure_layout.addWidget(exposure_help)
+        self.exposure_table = QtWidgets.QTableWidget(self)
+        self.exposure_table.setObjectName("portfolioInsightsExposure")
+        exposure_headers = ["Player", "Team", "Pos", "Count", "Exposure", "Lineups"]
+        self.exposure_table.setColumnCount(len(exposure_headers))
+        self.exposure_table.setHorizontalHeaderLabels(exposure_headers)
+        exposure_rows = list(self.insights.get("exposure_rows") or [])
+        self.exposure_table.setRowCount(len(exposure_rows))
+        self.exposure_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.exposure_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.exposure_table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.exposure_table.setAlternatingRowColors(True)
+        self.exposure_table.verticalHeader().setVisible(False)
+        for row_index, row in enumerate(exposure_rows):
+            lineup_numbers = [int(value) for value in row.get("lineup_numbers") or []]
+            values = [
+                str(row.get("name") or ""),
+                str(row.get("team") or ""),
+                str(row.get("position") or ""),
+                str(int(row.get("count", 0) or 0)),
+                f"{float(row.get('pct', 0.0) or 0.0):.1f}%",
+                ", ".join(str(value) for value in lineup_numbers),
+            ]
+            for column, value in enumerate(values):
+                item = SortKeyItem(value)
+                item.setData(QtCore.Qt.UserRole + 1, lineup_numbers)
+                numeric = row.get("count") if column == 3 else row.get("pct") if column == 4 else None
+                if numeric is not None:
+                    item.setData(QtCore.Qt.UserRole, float(numeric))
+                self.exposure_table.setItem(row_index, column, item)
+        self.exposure_table.setSortingEnabled(True)
+        self.exposure_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.exposure_table.horizontalHeader().setStretchLastSection(True)
+        self.exposure_table.itemDoubleClicked.connect(lambda _item: self._show_player_lineups())
+        exposure_layout.addWidget(self.exposure_table, 1)
+        show_player = QtWidgets.QPushButton("Show selected player's lineups", self)
+        show_player.setObjectName("showExposureLineups")
+        show_player.clicked.connect(self._show_player_lineups)
+        exposure_layout.addWidget(show_player, 0, QtCore.Qt.AlignRight)
+        self.tabs.addTab(exposure_panel, "Player exposure")
+        layout.addWidget(self.tabs, 1)
+
+        note = QtWidgets.QLabel(
+            "Remove changes only the current in-memory set. Replace keeps every unselected lineup and fills the open slots using the current build settings."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #AEB7C5;")
+        layout.addWidget(note)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+        copy_button = buttons.addButton("Copy Insights", QtWidgets.QDialogButtonBox.ActionRole)
+        copy_button.setObjectName("copyPortfolioInsights")
+        copy_button.clicked.connect(
+            lambda: QtWidgets.QApplication.clipboard().setText(str(self.insights.get("text") or ""))
+        )
+        self.remove_button = buttons.addButton("Remove selected", QtWidgets.QDialogButtonBox.ActionRole)
+        self.remove_button.setObjectName("removeInsightLineups")
+        self.remove_button.clicked.connect(lambda: self._request_action("remove"))
+        self.replace_button = buttons.addButton("Replace selected", QtWidgets.QDialogButtonBox.ActionRole)
+        self.replace_button.setObjectName("replaceInsightLineups")
+        self.replace_button.clicked.connect(lambda: self._request_action("replace"))
+        self.remove_button.setVisible(actions_enabled)
+        self.replace_button.setVisible(actions_enabled)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self._update_action_buttons()
+
+    def _number_for_table_row(self, row_index: int) -> int:
+        item = self.table.item(row_index, 0)
+        return int(item.data(QtCore.Qt.UserRole + 1) or 0) if item is not None else 0
+
+    def selected_lineup_indexes(self) -> List[int]:
+        numbers = {
+            self._number_for_table_row(index.row())
+            for index in self.table.selectionModel().selectedRows()
+        }
+        return sorted(number - 1 for number in numbers if number > 0)
+
+    def _apply_filter(self) -> None:
+        code = str(self.filter_combo.currentData() or "all")
+        for table_row in range(self.table.rowCount()):
+            number = self._number_for_table_row(table_row)
+            row = self._lineup_by_number.get(number, {})
+            flags = set(row.get("flag_codes") or [])
+            visible = code == "all" or (code == "flagged" and bool(flags)) or code in flags
+            self.table.setRowHidden(table_row, not visible)
+
+    def _select_flagged(self) -> None:
+        self.tabs.setCurrentIndex(1)
+        self.filter_combo.setCurrentIndex(self.filter_combo.findData("flagged"))
+        self.table.clearSelection()
+        selection_model = self.table.selectionModel()
+        for table_row in range(self.table.rowCount()):
+            number = self._number_for_table_row(table_row)
+            if self._lineup_by_number.get(number, {}).get("flag_codes"):
+                selection_model.select(
+                    self.table.model().index(table_row, 0),
+                    QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows,
+                )
+        self._update_action_buttons()
+
+    def _show_player_lineups(self) -> None:
+        selected = self.exposure_table.selectionModel().selectedRows()
+        if not selected:
+            return
+        item = self.exposure_table.item(selected[0].row(), 0)
+        lineup_numbers = set(item.data(QtCore.Qt.UserRole + 1) or []) if item is not None else set()
+        self.tabs.setCurrentIndex(1)
+        self.filter_combo.setCurrentIndex(self.filter_combo.findData("all"))
+        self.table.clearSelection()
+        selection_model = self.table.selectionModel()
+        for table_row in range(self.table.rowCount()):
+            number = self._number_for_table_row(table_row)
+            self.table.setRowHidden(table_row, number not in lineup_numbers)
+            if number in lineup_numbers:
+                selection_model.select(
+                    self.table.model().index(table_row, 0),
+                    QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows,
+                )
+        self._update_action_buttons()
+
+    def _update_action_buttons(self) -> None:
+        enabled = bool(self.selected_lineup_indexes())
+        if hasattr(self, "remove_button"):
+            self.remove_button.setEnabled(enabled)
+        if hasattr(self, "replace_button"):
+            self.replace_button.setEnabled(enabled)
+
+    def _request_action(self, action: str) -> None:
+        indexes = self.selected_lineup_indexes()
+        if not indexes:
+            QtWidgets.QMessageBox.information(self, "Select Lineups", "Select one or more lineup rows first.")
+            return
+        self.requested_action = str(action or "")
+        self.requested_indexes = indexes
+        self.accept()
+
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("DFS Optimizer")
+        self.resize(1450, 900)
+
+        self.players: List[Dict[str, Any]] = []
+        self.last_showdown: List[Dict[str, Any]] = []
+        self.last_classic: List[List[Dict[str, Any]]] = []
+
+        self.saved_showdown: List[Dict[str, Any]] = []
+        self.saved_classic: List[List[Dict[str, Any]]] = []
+        self.portfolio_groups: List[Dict[str, Any]] = []
+        self.last_portfolio_report: Dict[str, Any] = {}
+        self.last_sim_report: Dict[str, Any] = {}
+        self.last_live_check_summary: Dict[str, Any] = {}
+        self.last_readiness_report: Dict[str, Any] = {}
+        self.last_final_lock_report: Dict[str, Any] = {}
+        self.last_entry_safety_report: Dict[str, Any] = {}
+        self.last_build_timing_report: Dict[str, Any] = {}
+        history = load_build_history(limit=1)
+        self.last_build_diagnostic: Dict[str, Any] = dict(history[0]) if history else {}
+        self._active_build_context: Dict[str, Any] = {}
+        self._readiness_filter_names: set[str] = set()
+        self._lineup_space_phase = ""
+        self._last_live_check_epoch = 0.0
+        self._active_recipe_name = ""
+        self.app_settings = QtCore.QSettings("DFS Optimizer", "DFS Optimizer")
+        self._active_contest_profile_name = str(
+            self.app_settings.value("contest/active_profile_name", "") or ""
+        ).strip()
+
+        self._build_ui()
+
+    # ---------------- UI ----------------
+
+    def _build_ui(self) -> None:
+        root = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
+        root.setObjectName("workspaceSplitter")
+        self.workspace_splitter = root
+        self.setCentralWidget(root)
+
+        # Left panel
+        left = QtWidgets.QWidget(self)
+        left_layout = QtWidgets.QVBoxLayout(left)
+
+
+        # Top controls (multi-row so buttons/toggles don't scrunch)
+        top_box = QtWidgets.QVBoxLayout()
+
+        # --- Row 1: load + injuries + ownership sim ---
+        row1 = QtWidgets.QHBoxLayout()
+
+        btn_load = QtWidgets.QPushButton("Load Player CSV")
+        btn_load.setText("Load CSV")
+        btn_load.setToolTip("Load a DraftKings player salary CSV.")
+        btn_load.clicked.connect(self.on_load_csv)
+        row1.addWidget(btn_load)
+
+        btn_refresh_inj = QtWidgets.QPushButton("Game-Day Check")
+        btn_refresh_inj.setObjectName("gameDayCheckButton")
+        btn_refresh_inj.setToolTip("Check current NFL availability, injuries, practice participation, and depth-chart roles.")
+        btn_refresh_inj.clicked.connect(self.on_refresh_injuries)
+        row1.addWidget(btn_refresh_inj)
+
+        btn_learning = QtWidgets.QPushButton("Results and Learning")
+        btn_learning.setObjectName("resultsLearningButton")
+        btn_learning.setToolTip("Import DraftKings results and review local lineup performance.")
+        btn_learning.clicked.connect(self.on_results_learning)
+        row1.addWidget(btn_learning)
+
+        row1.addSpacing(18)
+        row1.addWidget(QtWidgets.QLabel("Sport:"))
+        self.combo_sport = QtWidgets.QComboBox()
+        self.combo_sport.addItems(["NFL", "MLB", "NBA", "WNBA"])
+        self.combo_sport.setCurrentText("NFL")
+        self.combo_sport.setToolTip("Choose the sport for Classic roster rules. Showdown remains CPT + 5 FLEX.")
+        self.combo_sport.currentTextChanged.connect(self._on_sport_changed)
+        row1.addWidget(self.combo_sport)
+
+        row1.addSpacing(18)
+        row1.addWidget(QtWidgets.QLabel("Own Sims:"))
+        self.spin_own_sims = QtWidgets.QSpinBox()
+        self.spin_own_sims.setRange(500, 50000)
+        self.spin_own_sims.setSingleStep(500)
+        self.spin_own_sims.setValue(5000)
+        self.spin_own_sims.setToolTip("Number of simulated lineups to estimate slate ownership.")
+        row1.addWidget(self.spin_own_sims)
+
+        # Template-based Showdown ownership sim (Option B)
+        self.chk_sd_template_sim = QtWidgets.QCheckBox("Field Templates (SD)")
+        self.chk_sd_template_sim.setChecked(True)
+        self.chk_sd_template_sim.setToolTip(
+            "Showdown only: simulate field-like lineup constructions (QB-heavy templates).\n"
+            "Helps capture realities like 'only one viable QB' increasing ownership."
+        )
+        row1.addWidget(self.chk_sd_template_sim)
+
+        btn_own_sim = QtWidgets.QPushButton("Recalc Own% (Sim)")
+        btn_own_sim.setToolTip("Run a lineup simulation to estimate slate ownership (uses projections/value + salary cap constraints).")
+        btn_own_sim.clicked.connect(self.on_recalc_ownership_sim)
+        row1.addWidget(btn_own_sim)
+
+        row1.addStretch(1)
+        top_box.addLayout(row1)
+
+        live_row = QtWidgets.QHBoxLayout()
+        self.lbl_live_data = QtWidgets.QLabel("Live player data: not checked")
+        self.lbl_live_data.setObjectName("liveDataStatusLabel")
+        self.lbl_live_data.setWordWrap(True)
+        self.lbl_live_data.setStyleSheet("color: #AEB7C5; padding: 1px 3px;")
+        self.lbl_live_data.setToolTip("Loads automatically with an NFL salary file and is checked again when stale before generation.")
+        live_row.addWidget(self.lbl_live_data, 1)
+        top_box.addLayout(live_row)
+
+        # --- Row 2: builder ownership influence ---
+        row2 = QtWidgets.QHBoxLayout()
+        row2.addWidget(QtWidgets.QLabel("Build Own Mode:"))
+
+        self.combo_build_own_mode = QtWidgets.QComboBox()
+        self.combo_build_own_mode.addItems(["Balanced", "Leverage", "Chalk"])
+        self.combo_build_own_mode.setCurrentText("Balanced")
+        self.combo_build_own_mode.setToolTip(
+            "How to use simulated Own% while building lineups.\n"
+            "Balanced: mild tie-break toward lower-owned combos.\n"
+            "Leverage: prefer lower-owned plays/combos.\n"
+            "Chalk: prefer higher-owned plays/combos (cash-like)."
+        )
+        row2.addWidget(self.combo_build_own_mode)
+
+        row2.addWidget(QtWidgets.QLabel("λ:"))
+        self.spin_build_own_weight = QtWidgets.QDoubleSpinBox()
+        self.spin_build_own_weight.setRange(0.0, 5.0)
+        self.spin_build_own_weight.setSingleStep(0.05)
+        self.spin_build_own_weight.setDecimals(2)
+        self.spin_build_own_weight.setValue(0.15)
+        self.spin_build_own_weight.setToolTip(
+            "Ownership influence weight (λ). Higher = stronger push.\n"
+            "Start around 0.10–0.30. Set 0 to ignore Own% in building."
+        )
+        row2.addWidget(self.spin_build_own_weight)
+
+        row2.addSpacing(18)
+        row2.addWidget(QtWidgets.QLabel("Build Style:"))
+        self.combo_build_style = QtWidgets.QComboBox()
+        self.combo_build_style.addItems(["Strategic", "Balanced", "Contrarian", "Chalk", "Randomized"])
+        self.combo_build_style.setCurrentText("Strategic")
+        self.combo_build_style.setToolTip(
+            "NFL Strategic: QB stack required, correlation scoring, 2+ portfolio uniques preferred.\n"
+            "Balanced: lighter strategy bias with QB correlation intact.\n"
+            "Contrarian: stronger portfolio diversity (3 uniques preferred) and leverage-friendly scoring.\n"
+            "Chalk: projection/chalk-leaning builds with basic QB correlation.\n"
+            "Randomized: mostly projection/value, while retaining anti-correlation safety rails. "
+            "With NFL SIM Edge off, it also keeps the broad player pool, including deep backups.\n"
+            "Other sports keep their existing sport-specific strategy behavior."
+        )
+        row2.addWidget(self.combo_build_style)
+
+        row2.addSpacing(18)
+        row2.addWidget(QtWidgets.QLabel("MLB Stack:"))
+        self.combo_mlb_stack_pref = QtWidgets.QComboBox()
+        self.combo_mlb_stack_pref.addItems(["Any Strategic", "Prefer 5-3", "Prefer 5-2-1", "Prefer 4-4", "Prefer 4-3-1", "No Stack Bias"])
+        self.combo_mlb_stack_pref.setCurrentText("Any Strategic")
+        self.combo_mlb_stack_pref.setToolTip("Soft preference for MLB stack shapes. This nudges generation; it does not hard-lock impossible builds.")
+        row2.addWidget(self.combo_mlb_stack_pref)
+
+        row2.addSpacing(18)
+        row2.addWidget(QtWidgets.QLabel("Salary:"))
+        self.combo_salary_strategy = QtWidgets.QComboBox()
+        self.combo_salary_strategy.addItems(["Near Cap", "Maximize Salary", "Balanced Spend", "Salary Leverage"])
+        self.combo_salary_strategy.setCurrentText("Near Cap")
+        self.combo_salary_strategy.setToolTip(
+            "Near Cap: NFL prefers $49k+ on a $50k cap.\n"
+            "Maximize Salary: NFL usually uses $49.5k+.\n"
+            "Balanced Spend: allows around $47k+.\n"
+            "Salary Leverage: allows more unused salary for contrarian builds."
+        )
+        row2.addWidget(self.combo_salary_strategy)
+
+        row2.addSpacing(18)
+        self.chk_nfl_contest_sim = QtWidgets.QCheckBox("NFL SIM Edge")
+        self.chk_nfl_contest_sim.setObjectName("nflSimEdgeCheck")
+        self.chk_nfl_contest_sim.setChecked(True)
+        self.chk_nfl_contest_sim.setToolTip(
+            "NFL Classic only: rank candidate lineups against correlated outcome scenarios\n"
+            "and a representative field, then select a diversified SIM Edge portfolio."
+        )
+        row2.addWidget(self.chk_nfl_contest_sim)
+
+        row2.addWidget(QtWidgets.QLabel("Scenarios:"))
+        self.spin_nfl_sim_scenarios = QtWidgets.QSpinBox()
+        self.spin_nfl_sim_scenarios.setObjectName("nflSimScenarios")
+        self.spin_nfl_sim_scenarios.setRange(250, 5000)
+        self.spin_nfl_sim_scenarios.setSingleStep(250)
+        self.spin_nfl_sim_scenarios.setValue(750)
+        self.spin_nfl_sim_scenarios.setToolTip(
+            "More scenarios stabilize SIM Edge estimates but take longer. 750 is the Fast default.\n"
+            "Deep uses this as a minimum and independently validates with at least 2,500 scenarios."
+        )
+        row2.addWidget(self.spin_nfl_sim_scenarios)
+
+        self.lbl_field_preset = QtWidgets.QLabel("Contest preset")
+        self.combo_field_preset = QtWidgets.QComboBox()
+        self.combo_field_preset.setObjectName("nflFieldPreset")
+        self.combo_field_preset.addItems(["Single Entry", "3-Max", "20-Max", "150-Max"])
+        self.combo_field_preset.setCurrentText("150-Max")
+        self.combo_field_preset.setToolTip(
+            "Shapes the simulated opponent field for the contest's entry limit.\n"
+            "Complete imported standings can refine this preset after the learning guardrails are met."
+        )
+        row2.addWidget(self.lbl_field_preset)
+        row2.addWidget(self.combo_field_preset)
+
+        self.lbl_nfl_compute_mode = QtWidgets.QLabel("Build depth")
+        self.combo_nfl_compute_mode = QtWidgets.QComboBox()
+        self.combo_nfl_compute_mode.setObjectName("nflComputeMode")
+        self.combo_nfl_compute_mode.addItems(["Fast (default)", "Deep (up to 5 min)"])
+        self.combo_nfl_compute_mode.setCurrentText("Fast (default)")
+        self.combo_nfl_compute_mode.setToolTip(
+            "Fast uses the normal candidate bank and selected scenario count.\n"
+            "Deep spends up to five minutes exploring thousands of candidates, then screens,\n"
+            "independently validates, and locally refines the final portfolio. NFL Classic only."
+        )
+        self.chk_nfl_contest_sim.toggled.connect(self.combo_nfl_compute_mode.setEnabled)
+
+        row2.addStretch(1)
+        top_box.addLayout(row2)
+
+        # --- Row 3: tags + max exposure controls ---
+        row3 = QtWidgets.QHBoxLayout()
+        row3.addWidget(QtWidgets.QLabel("Tags (selected players):"))
+
+        btn_max_cpt = QtWidgets.QPushButton("Max CPT%")
+        btn_max_cpt.setToolTip("Set a maximum Captain ownership % for selected players (Showdown only).")
+        btn_max_cpt.clicked.connect(lambda: self.set_max_pct(kind="cpt"))
+        row3.addWidget(btn_max_cpt)
+
+        btn_max_exposure = QtWidgets.QPushButton("Max Exposure%")
+        btn_max_exposure.setToolTip("Set a maximum total portfolio exposure % for selected players.")
+        btn_max_exposure.clicked.connect(lambda: self.set_max_pct(kind="exposure"))
+        row3.addWidget(btn_max_exposure)
+
+        btn_clear_max = QtWidgets.QPushButton("Clear Max%")
+        btn_clear_max.setToolTip("Clear Max CPT% / Max% for selected players.")
+        btn_clear_max.clicked.connect(self.clear_max_pct)
+        row3.addWidget(btn_clear_max)
+
+        btn_copy_own_to_max = QtWidgets.QPushButton("Own% → Max%")
+        btn_copy_own_to_max.setToolTip(
+            "Copy simulated projected ownership into Max% caps.\n"
+            "Showdown: CPT Own% -> MaxCPT%, FLEX Own% -> Max Exposure%.\n"
+            "Classic: Own% -> Max Exposure%.\n"
+            "Applies to selected players; if none selected, applies to ALL players."
+        )
+        btn_copy_own_to_max.clicked.connect(self.copy_own_to_max)
+        row3.addWidget(btn_copy_own_to_max)
+
+        row3.addSpacing(12)
+
+        btn_lock = QtWidgets.QPushButton("Lock")
+        btn_lock.clicked.connect(lambda: self.apply_tags(mode="lock"))
+        row3.addWidget(btn_lock)
+
+        btn_fade = QtWidgets.QPushButton("Fade")
+        btn_fade.clicked.connect(lambda: self.apply_tags(mode="fade"))
+        row3.addWidget(btn_fade)
+
+        btn_cpt_lock = QtWidgets.QPushButton("CPT Lock")
+        btn_cpt_lock.clicked.connect(lambda: self.apply_tags(mode="cpt_lock"))
+        row3.addWidget(btn_cpt_lock)
+
+        btn_cpt_fade = QtWidgets.QPushButton("CPT Fade")
+        btn_cpt_fade.clicked.connect(lambda: self.apply_tags(mode="cpt_fade"))
+        row3.addWidget(btn_cpt_fade)
+
+        btn_clear = QtWidgets.QPushButton("Clear Tags")
+        btn_clear.setToolTip("Clears tags for selected rows; if none selected, clears ALL tags.")
+        btn_clear.clicked.connect(self.clear_tags)
+        row3.addWidget(btn_clear)
+
+        row3.addSpacing(12)
+        btn_team_boost = QtWidgets.QPushButton("Team Boost")
+        btn_team_boost.setToolTip("Boost all players from the selected player/team by a projection percentage.")
+        btn_team_boost.clicked.connect(lambda: self.set_team_adjustment(boost=True))
+        row3.addWidget(btn_team_boost)
+
+        btn_team_fade = QtWidgets.QPushButton("Team Fade")
+        btn_team_fade.setToolTip("Reduce all players from the selected player/team by a projection percentage.")
+        btn_team_fade.clicked.connect(lambda: self.set_team_adjustment(boost=False))
+        row3.addWidget(btn_team_fade)
+
+        btn_clear_team_adj = QtWidgets.QPushButton("Clear Team Adj")
+        btn_clear_team_adj.setToolTip("Clear all team boost/fade adjustments.")
+        btn_clear_team_adj.clicked.connect(self.clear_team_adjustments)
+        row3.addWidget(btn_clear_team_adj)
+        btn_clear_team_adj.setVisible(False)
+
+        row3.addSpacing(12)
+        btn_save_tags = QtWidgets.QPushButton("Save Tags (JSON)")
+        btn_save_tags.clicked.connect(self.save_tags_json)
+        row3.addWidget(btn_save_tags)
+        btn_save_tags.setVisible(False)
+
+        btn_load_tags = QtWidgets.QPushButton("Load Tags (JSON)")
+        btn_load_tags.clicked.connect(self.load_tags_json)
+        row3.addWidget(btn_load_tags)
+        btn_load_tags.setVisible(False)
+
+        row3.addSpacing(12)
+        btn_load_mlb = QtWidgets.QPushButton("Load MLB Factors")
+        btn_load_mlb.setToolTip("Load optional MLB recent form / matchup / park / weather / Vegas factor CSV and adjust projections.")
+        btn_load_mlb.clicked.connect(self.on_load_mlb_factors)
+        row3.addWidget(btn_load_mlb)
+        btn_load_mlb.setVisible(False)
+
+        btn_clear_mlb = QtWidgets.QPushButton("Clear MLB Factors")
+        btn_clear_mlb.setToolTip("Reset MLB-adjusted projections back to base projections.")
+        btn_clear_mlb.clicked.connect(self.on_clear_mlb_factors)
+        row3.addWidget(btn_clear_mlb)
+        btn_clear_mlb.setVisible(False)
+
+        btn_load_order = QtWidgets.QPushButton("Load Batting Order")
+        btn_load_order.setToolTip("Load optional MLB confirmed lineups / batting order / handedness CSV.")
+        btn_load_order.clicked.connect(self.on_load_batting_order)
+        row3.addWidget(btn_load_order)
+        btn_load_order.setVisible(False)
+
+        btn_clear_order = QtWidgets.QPushButton("Clear Batting Order")
+        btn_clear_order.setToolTip("Clear MLB batting order and handedness fields.")
+        btn_clear_order.clicked.connect(self.on_clear_batting_order)
+        row3.addWidget(btn_clear_order)
+        btn_clear_order.setVisible(False)
+
+        row3.addStretch(1)
+        top_box.addLayout(row3)
+
+        # --- Row 4: portfolio-wide exposure and diversity rules ---
+        row4 = QtWidgets.QHBoxLayout()
+        row4.addWidget(QtWidgets.QLabel("Portfolio:"))
+
+        btn_min_cpt = QtWidgets.QPushButton("Min CPT%")
+        btn_min_cpt.setToolTip("Set a minimum Captain exposure for selected players in Showdown portfolios.")
+        btn_min_cpt.clicked.connect(lambda: self.set_min_pct(kind="cpt"))
+        row4.addWidget(btn_min_cpt)
+
+        btn_min_exposure = QtWidgets.QPushButton("Min Exposure%")
+        btn_min_exposure.setToolTip("Set a minimum total portfolio exposure for selected players.")
+        btn_min_exposure.clicked.connect(lambda: self.set_min_pct(kind="exposure"))
+        row4.addWidget(btn_min_exposure)
+
+        btn_clear_min = QtWidgets.QPushButton("Clear Min%")
+        btn_clear_min.clicked.connect(self.clear_min_pct)
+        row4.addWidget(btn_clear_min)
+
+        row4.addSpacing(8)
+        row4.addWidget(QtWidgets.QLabel("Min unique:"))
+        self.spin_portfolio_unique = QtWidgets.QSpinBox()
+        self.spin_portfolio_unique.setObjectName("portfolioMinUnique")
+        self.spin_portfolio_unique.setRange(1, 5)
+        self.spin_portfolio_unique.setValue(2)
+        self.spin_portfolio_unique.setToolTip("Minimum different players between lineups; relaxes safely only if necessary.")
+        row4.addWidget(self.spin_portfolio_unique)
+
+        row4.addWidget(QtWidgets.QLabel("Team max:"))
+        self.spin_team_exposure = QtWidgets.QDoubleSpinBox()
+        self.spin_team_exposure.setObjectName("portfolioTeamMax")
+        self.spin_team_exposure.setRange(1.0, 100.0)
+        self.spin_team_exposure.setDecimals(0)
+        self.spin_team_exposure.setSuffix("%")
+        self.spin_team_exposure.setValue(100.0)
+        row4.addWidget(self.spin_team_exposure)
+
+        row4.addWidget(QtWidgets.QLabel("Game max:"))
+        self.spin_game_exposure = QtWidgets.QDoubleSpinBox()
+        self.spin_game_exposure.setObjectName("portfolioGameMax")
+        self.spin_game_exposure.setRange(1.0, 100.0)
+        self.spin_game_exposure.setDecimals(0)
+        self.spin_game_exposure.setSuffix("%")
+        self.spin_game_exposure.setValue(100.0)
+        row4.addWidget(self.spin_game_exposure)
+
+        self.chk_portfolio_balance = QtWidgets.QCheckBox("Balance ownership/dup risk")
+        self.chk_portfolio_balance.setObjectName("portfolioBalance")
+        self.chk_portfolio_balance.setChecked(True)
+        row4.addWidget(self.chk_portfolio_balance)
+
+        btn_group_one = QtWidgets.QPushButton("Group: At Least 1")
+        btn_group_one.setToolTip("Require at least one of the selected players in every lineup.")
+        btn_group_one.clicked.connect(lambda: self.add_portfolio_group("at_least_one"))
+        row4.addWidget(btn_group_one)
+
+        btn_group_never = QtWidgets.QPushButton("Group: Never Together")
+        btn_group_never.setToolTip("Allow at most one of the selected players in any lineup.")
+        btn_group_never.clicked.connect(lambda: self.add_portfolio_group("never_together"))
+        row4.addWidget(btn_group_never)
+
+        btn_groups_clear = QtWidgets.QPushButton("Clear Groups")
+        btn_groups_clear.clicked.connect(self.clear_portfolio_groups)
+        row4.addWidget(btn_groups_clear)
+
+        self.lbl_portfolio_groups = QtWidgets.QLabel("Groups: 0")
+        self.lbl_portfolio_groups.setObjectName("portfolioGroupCount")
+        row4.addWidget(self.lbl_portfolio_groups)
+        row4.addStretch(1)
+        top_box.addLayout(row4)
+
+        # Compact command bar. The detailed controls still exist below, but the
+        # most common workflow now fits in a single, predictable row.
+        command_bar = QtWidgets.QFrame(self)
+        command_bar.setObjectName("compactCommandBar")
+        command_layout = QtWidgets.QHBoxLayout(command_bar)
+        command_layout.setContentsMargins(10, 7, 10, 7)
+        command_layout.setSpacing(8)
+
+        brand = QtWidgets.QLabel("DFS")
+        brand.setObjectName("workspaceBrand")
+        command_layout.addWidget(brand)
+        command_layout.addSpacing(8)
+        command_layout.addWidget(btn_load)
+        command_layout.addWidget(btn_refresh_inj)
+        self.btn_slate_readiness = QtWidgets.QPushButton("Slate Readiness")
+        self.btn_slate_readiness.setObjectName("slateReadinessButton")
+        self.btn_slate_readiness.setToolTip(
+            "Refresh stale NFL news, then audit projections, ownership, roles, locks, salary use, and preset fit."
+        )
+        self.btn_slate_readiness.clicked.connect(self.on_slate_readiness)
+        command_layout.addWidget(self.btn_slate_readiness)
+        command_layout.addSpacing(8)
+        command_layout.addWidget(QtWidgets.QLabel("Sport"))
+        command_layout.addWidget(self.combo_sport)
+
+        self.lbl_workspace_summary = QtWidgets.QLabel("")
+        self.lbl_workspace_summary.setObjectName("workspaceSummary")
+        self.lbl_workspace_summary.setToolTip(
+            "Current build recipe. Use Settings > Show Build Controls to change it."
+        )
+        command_layout.addWidget(self.lbl_workspace_summary)
+        command_layout.addStretch(1)
+
+        settings_button = QtWidgets.QToolButton(self)
+        settings_button.setObjectName("workspaceSettingsButton")
+        settings_button.setText("Settings")
+        settings_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        settings_menu = QtWidgets.QMenu(settings_button)
+        settings_menu.addSection("Data")
+        settings_menu.addAction("Results and Learning", self.on_results_learning)
+        settings_menu.addSection("Build Recipes")
+        save_recipe_action = settings_menu.addAction("Save Current Recipe...", self.on_save_build_recipe)
+        save_recipe_action.setObjectName("saveBuildRecipeAction")
+        manage_recipes_action = settings_menu.addAction("Apply or Delete Recipes...", self.on_manage_build_recipes)
+        manage_recipes_action.setObjectName("manageBuildRecipesAction")
+        settings_menu.addSection("Contest")
+        contest_profile_action = settings_menu.addAction("Contest-Aware SIM...", self.on_contest_profiles)
+        contest_profile_action.setObjectName("contestAwareSimAction")
+        settings_menu.addSection("Review")
+        portfolio_insights_action = settings_menu.addAction("Portfolio Insights...", self.on_portfolio_summary)
+        portfolio_insights_action.setObjectName("portfolioInsightsAction")
+        self.action_copy_build_report = settings_menu.addAction(
+            "Copy Last Build Report", self.copy_last_build_report
+        )
+        self.action_copy_build_report.setObjectName("copyLastBuildReportAction")
+        self.action_copy_build_report.setEnabled(bool(self.last_build_diagnostic))
+        build_history_action = settings_menu.addAction("Build History...", self.on_build_history)
+        build_history_action.setObjectName("buildHistoryAction")
+
+        settings_menu.addSection("Workspace")
+        self.action_show_build_controls = settings_menu.addAction("Show Build Controls")
+        self.action_show_build_controls.setObjectName("showBuildControlsAction")
+        self.action_show_build_controls.setCheckable(True)
+        self.action_show_build_controls.setChecked(False)
+        self.action_show_build_controls.toggled.connect(self._set_build_controls_visible)
+
+        self.action_show_saved_portfolio = settings_menu.addAction("Show Saved Portfolio")
+        self.action_show_saved_portfolio.setObjectName("showSavedPortfolioAction")
+        self.action_show_saved_portfolio.setCheckable(True)
+        self.action_show_saved_portfolio.setChecked(False)
+        self.action_show_saved_portfolio.toggled.connect(self._set_saved_portfolio_visible)
+        settings_button.setMenu(settings_menu)
+        command_layout.addWidget(settings_button)
+
+        self.btn_primary_build = QtWidgets.QPushButton("Generate")
+        self.btn_primary_build.setObjectName("primaryGenerateButton")
+        self.btn_primary_build.setToolTip("Generate lineups for the selected lineup tab.")
+        self.btn_primary_build.clicked.connect(self._on_primary_build)
+        command_layout.addWidget(self.btn_primary_build)
+        left_layout.addWidget(command_bar)
+
+        live_strip = QtWidgets.QFrame(self)
+        live_strip.setObjectName("liveStatusStrip")
+        live_strip_layout = QtWidgets.QHBoxLayout(live_strip)
+        live_strip_layout.setContentsMargins(8, 2, 8, 2)
+        live_strip_layout.addWidget(self.lbl_live_data, 1)
+        self.lbl_lineup_space = QtWidgets.QLabel("Lineup space: load a slate")
+        self.lbl_lineup_space.setObjectName("lineupSpaceStatus")
+        self.lbl_lineup_space.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.lbl_lineup_space.setStyleSheet("color: #C7D2E3; padding: 1px 6px;")
+        live_strip_layout.addWidget(self.lbl_lineup_space)
+        self.btn_clear_readiness_filter = QtWidgets.QToolButton(self)
+        self.btn_clear_readiness_filter.setObjectName("clearReadinessFilterButton")
+        self.btn_clear_readiness_filter.setText("Clear player filter")
+        self.btn_clear_readiness_filter.setToolTip("Show the full player pool again.")
+        self.btn_clear_readiness_filter.clicked.connect(self.clear_readiness_player_filter)
+        self.btn_clear_readiness_filter.setVisible(False)
+        live_strip_layout.addWidget(self.btn_clear_readiness_filter)
+        self.lbl_readiness = QtWidgets.QLabel("Readiness: load a slate")
+        self.lbl_readiness.setObjectName("slateReadinessStatus")
+        self.lbl_readiness.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.lbl_readiness.setStyleSheet("color: #AEB7C5; padding: 1px 3px;")
+        live_strip_layout.addWidget(self.lbl_readiness)
+        left_layout.addWidget(live_strip)
+
+        # Secondary controls are grouped by intent instead of competing for
+        # space in four permanent button rows.
+        self.tabs_workspace_controls = QtWidgets.QTabWidget(self)
+        self.tabs_workspace_controls.setObjectName("workspaceControlTabs")
+        self.tabs_workspace_controls.setMaximumHeight(184)
+
+        strategy_panel = QtWidgets.QWidget(self)
+        strategy_grid = QtWidgets.QGridLayout(strategy_panel)
+        strategy_grid.setContentsMargins(10, 7, 10, 7)
+        strategy_grid.setHorizontalSpacing(8)
+        strategy_grid.setVerticalSpacing(6)
+        strategy_grid.addWidget(QtWidgets.QLabel("Build style"), 0, 0)
+        strategy_grid.addWidget(self.combo_build_style, 0, 1)
+        strategy_grid.addWidget(QtWidgets.QLabel("Ownership mode"), 0, 2)
+        strategy_grid.addWidget(self.combo_build_own_mode, 0, 3)
+        strategy_grid.addWidget(QtWidgets.QLabel("Weight"), 1, 0)
+        strategy_grid.addWidget(self.spin_build_own_weight, 1, 1)
+        strategy_grid.addWidget(QtWidgets.QLabel("Salary use"), 1, 2)
+        strategy_grid.addWidget(self.combo_salary_strategy, 1, 3)
+        strategy_grid.addWidget(QtWidgets.QLabel("Ownership sims"), 2, 0)
+        strategy_grid.addWidget(self.spin_own_sims, 2, 1)
+        strategy_grid.addWidget(self.chk_sd_template_sim, 2, 2)
+        strategy_grid.addWidget(btn_own_sim, 2, 3)
+        self.lbl_mlb_stack_pref = QtWidgets.QLabel("MLB stack")
+        strategy_grid.addWidget(self.lbl_mlb_stack_pref, 3, 0)
+        strategy_grid.addWidget(self.combo_mlb_stack_pref, 3, 1)
+        strategy_grid.addWidget(self.lbl_field_preset, 3, 2)
+        strategy_grid.addWidget(self.combo_field_preset, 3, 3)
+        strategy_grid.addWidget(self.chk_nfl_contest_sim, 3, 4)
+        self.lbl_nfl_scenarios = QtWidgets.QLabel("Scenarios")
+        strategy_grid.addWidget(self.lbl_nfl_scenarios, 3, 5)
+        strategy_grid.addWidget(self.spin_nfl_sim_scenarios, 3, 6)
+        strategy_grid.addWidget(self.lbl_nfl_compute_mode, 4, 4)
+        strategy_grid.addWidget(self.combo_nfl_compute_mode, 4, 5, 1, 2)
+        strategy_grid.setColumnStretch(7, 1)
+        self.tabs_workspace_controls.addTab(strategy_panel, "Build Strategy")
+
+        portfolio_panel = QtWidgets.QWidget(self)
+        portfolio_grid = QtWidgets.QGridLayout(portfolio_panel)
+        portfolio_grid.setContentsMargins(10, 7, 10, 7)
+        portfolio_grid.setHorizontalSpacing(8)
+        portfolio_grid.setVerticalSpacing(6)
+        portfolio_grid.addWidget(QtWidgets.QLabel("Minimum unique"), 0, 0)
+        portfolio_grid.addWidget(self.spin_portfolio_unique, 0, 1)
+        portfolio_grid.addWidget(self.chk_portfolio_balance, 0, 2, 1, 2)
+        portfolio_grid.addWidget(QtWidgets.QLabel("Team maximum"), 1, 0)
+        portfolio_grid.addWidget(self.spin_team_exposure, 1, 1)
+        portfolio_grid.addWidget(QtWidgets.QLabel("Game maximum"), 1, 2)
+        portfolio_grid.addWidget(self.spin_game_exposure, 1, 3)
+        portfolio_grid.addWidget(btn_group_one, 2, 0)
+        portfolio_grid.addWidget(btn_group_never, 2, 1)
+        portfolio_grid.addWidget(btn_groups_clear, 2, 2)
+        portfolio_grid.addWidget(self.lbl_portfolio_groups, 2, 3)
+        portfolio_grid.setColumnStretch(4, 1)
+        self.tabs_workspace_controls.addTab(portfolio_panel, "Portfolio Rules")
+
+        data_panel = QtWidgets.QWidget(self)
+        data_grid = QtWidgets.QGridLayout(data_panel)
+        data_grid.setContentsMargins(10, 7, 10, 7)
+        data_grid.setHorizontalSpacing(8)
+        data_grid.setVerticalSpacing(6)
+        data_grid.addWidget(btn_learning, 0, 0)
+        data_grid.addWidget(btn_clear_team_adj, 0, 1)
+        data_grid.addWidget(btn_save_tags, 1, 0)
+        data_grid.addWidget(btn_load_tags, 1, 1)
+        data_grid.addWidget(btn_load_mlb, 2, 0)
+        data_grid.addWidget(btn_clear_mlb, 2, 1)
+        data_grid.addWidget(btn_load_order, 3, 0)
+        data_grid.addWidget(btn_clear_order, 3, 1)
+        data_grid.setColumnStretch(3, 1)
+        btn_clear_team_adj.setVisible(True)
+        btn_save_tags.setVisible(True)
+        btn_load_tags.setVisible(True)
+        self._mlb_data_controls = [btn_load_mlb, btn_clear_mlb, btn_load_order, btn_clear_order]
+        self.tabs_workspace_controls.addTab(data_panel, "Data and Learning")
+        left_layout.addWidget(self.tabs_workspace_controls)
+        self.tabs_workspace_controls.setVisible(False)
+
+
+        # Player table
+        self.tbl_players = QtWidgets.QTableWidget(self)
+        self.tbl_players.setColumnCount(23)
+        self.tbl_players.setHorizontalHeaderLabels(["Name", "Team", "Pos", "Status", "Salary", "BaseProj", "AdjProj", "NFL±", "Usage", "Matchup", "Role", "Wx", "", "TeamAdj", "Tags", "Own% Tot", "MaxCPT%", "MinCPT%", "Max%", "Min%", "Order", "Bats", "Conf"] )
+        self.tbl_players.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.tbl_players.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.tbl_players.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        # Enable click-to-sort without changing the visual layout.
+        self.tbl_players.setSortingEnabled(True)
+        # Allow user to drag column widths; responsive defaults are applied
+        # after sport-specific columns are shown.
+        self.tbl_players.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self.tbl_players.setAlternatingRowColors(True)
+        self.tbl_players.verticalHeader().setDefaultSectionSize(27)
+        self.tbl_players.verticalHeader().setVisible(False)
+        self.tbl_players.horizontalHeader().setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.tbl_players.horizontalHeader().customContextMenuRequested.connect(self._show_player_columns_menu)
+        self.tbl_players.setToolTip("Right-click a column heading to show or hide player fields.")
+
+        player_area = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
+        player_area.setObjectName("playerWorkspaceSplitter")
+        player_area.addWidget(self.tbl_players)
+
+        self.player_inspector = QtWidgets.QGroupBox("Selected player", self)
+        self.player_inspector.setObjectName("playerInspector")
+        inspector_layout = QtWidgets.QVBoxLayout(self.player_inspector)
+        inspector_layout.setContentsMargins(10, 11, 10, 10)
+        inspector_layout.setSpacing(7)
+        self.lbl_player_inspector_title = QtWidgets.QLabel("Select a player")
+        self.lbl_player_inspector_title.setObjectName("playerInspectorTitle")
+        self.lbl_player_inspector_title.setWordWrap(True)
+        inspector_layout.addWidget(self.lbl_player_inspector_title)
+        self.lbl_player_inspector_meta = QtWidgets.QLabel("Player actions will appear here.")
+        self.lbl_player_inspector_meta.setObjectName("playerInspectorMeta")
+        self.lbl_player_inspector_meta.setWordWrap(True)
+        inspector_layout.addWidget(self.lbl_player_inspector_meta)
+
+        status_group = QtWidgets.QGroupBox("Lineup status", self.player_inspector)
+        status_group.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
+        status_grid = QtWidgets.QGridLayout(status_group)
+        status_grid.setContentsMargins(7, 7, 7, 6)
+        status_grid.setVerticalSpacing(3)
+        status_grid.addWidget(btn_lock, 0, 0)
+        status_grid.addWidget(btn_fade, 0, 1)
+        status_grid.addWidget(btn_cpt_lock, 1, 0)
+        status_grid.addWidget(btn_cpt_fade, 1, 1)
+        status_grid.addWidget(btn_clear, 2, 0, 1, 2)
+        inspector_layout.addWidget(status_group)
+
+        exposure_group = QtWidgets.QGroupBox("Portfolio exposure", self.player_inspector)
+        exposure_group.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
+        exposure_grid = QtWidgets.QGridLayout(exposure_group)
+        exposure_grid.setContentsMargins(7, 7, 7, 6)
+        exposure_grid.setVerticalSpacing(3)
+        exposure_grid.addWidget(btn_max_exposure, 0, 0)
+        exposure_grid.addWidget(btn_min_exposure, 0, 1)
+        exposure_grid.addWidget(btn_max_cpt, 1, 0)
+        exposure_grid.addWidget(btn_min_cpt, 1, 1)
+        exposure_grid.addWidget(btn_clear_max, 2, 0)
+        exposure_grid.addWidget(btn_clear_min, 2, 1)
+        exposure_grid.addWidget(btn_copy_own_to_max, 3, 0, 1, 2)
+        inspector_layout.addWidget(exposure_group)
+
+        btn_max_exposure.setText("Set Max %")
+        btn_min_exposure.setText("Set Min %")
+        btn_max_cpt.setText("Set CPT Max")
+        btn_min_cpt.setText("Set CPT Min")
+        btn_clear_max.setText("Clear Max %")
+        btn_clear_min.setText("Clear Min %")
+        btn_copy_own_to_max.setText("Use Own% as Max")
+
+        team_group = QtWidgets.QGroupBox("Team adjustment", self.player_inspector)
+        team_group.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
+        team_layout = QtWidgets.QHBoxLayout(team_group)
+        team_layout.setContentsMargins(7, 7, 7, 6)
+        btn_team_boost.setText("Boost Team")
+        btn_team_fade.setText("Fade Team")
+        team_layout.addWidget(btn_team_boost)
+        team_layout.addWidget(btn_team_fade)
+        inspector_layout.addWidget(team_group)
+        inspector_layout.addStretch(1)
+
+        self._player_action_buttons = [
+            btn_lock, btn_fade, btn_cpt_lock, btn_cpt_fade, btn_clear,
+            btn_max_exposure, btn_min_exposure, btn_max_cpt, btn_min_cpt,
+            btn_clear_max, btn_clear_min, btn_team_boost, btn_team_fade,
+        ]
+        self._captain_action_buttons = [btn_cpt_lock, btn_cpt_fade, btn_max_cpt, btn_min_cpt]
+        for button in self._player_action_buttons + [btn_copy_own_to_max]:
+            button.setMinimumHeight(22)
+        self.player_inspector.setMinimumWidth(270)
+        self.player_inspector.setMaximumWidth(330)
+        player_area.addWidget(self.player_inspector)
+        player_area.setSizes([690, 290])
+        player_area.setStretchFactor(0, 1)
+        player_area.setStretchFactor(1, 0)
+        self.tbl_players.itemSelectionChanged.connect(self._update_player_inspector)
+        left_layout.addWidget(player_area, 2)
+
+        # Bottom tabs
+        tabs = QtWidgets.QTabWidget(self)
+
+        self.tabs_lineups = tabs
+        # Showdown tab
+        tab_sd = QtWidgets.QWidget(self)
+        sd_layout = QtWidgets.QVBoxLayout(tab_sd)
+
+        sd_controls = QtWidgets.QHBoxLayout()
+        sd_controls.addWidget(QtWidgets.QLabel("Lineups:"))
+        self.spin_sd = QtWidgets.QSpinBox()
+        self.spin_sd.setRange(1, 150)
+        self.spin_sd.setValue(5)
+        self.spin_sd.valueChanged.connect(self._update_lineup_space_dashboard)
+        sd_controls.addWidget(self.spin_sd)
+
+        sd_controls.addWidget(QtWidgets.QLabel("Cap:"))
+        self.edit_sd_cap = QtWidgets.QLineEdit("50000")
+        self.edit_sd_cap.setFixedWidth(90)
+        sd_controls.addWidget(self.edit_sd_cap)
+
+        btn_sd_save_all = QtWidgets.QPushButton("Save All")
+        btn_sd_save_all.clicked.connect(self.on_sd_save_all)
+        sd_controls.addWidget(btn_sd_save_all)
+
+        btn_sd_unsave_all = QtWidgets.QPushButton("Unsave")
+        btn_sd_unsave_all.clicked.connect(self.on_sd_unsave_all)
+        sd_controls.addWidget(btn_sd_unsave_all)
+
+        btn_export_sd = QtWidgets.QPushButton("Export CSV")
+        btn_export_sd.setToolTip("Save DraftKings roster IDs and record these lineups for local result matching.")
+        btn_export_sd.clicked.connect(lambda: self.on_export_saved("showdown"))
+        sd_controls.addWidget(btn_export_sd)
+
+        btn_entries_sd = QtWidgets.QPushButton("Update Entries")
+        btn_entries_sd.setObjectName("updateShowdownEntriesButton")
+        btn_entries_sd.setToolTip("Replace the lineups in a downloaded DraftKings entries CSV.")
+        btn_entries_sd.clicked.connect(lambda: self.on_update_entries("showdown"))
+        sd_controls.addWidget(btn_entries_sd)
+
+        sd_controls.addStretch(1)
+        sd_layout.addLayout(sd_controls)
+
+        self.tbl_sd = CopyRowTableWidget(self)
+        self.tbl_sd.setColumnCount(7)
+        self.tbl_sd.setHorizontalHeaderLabels(["Save", "CPT", "FLEX1", "FLEX2", "FLEX3", "FLEX4", "FLEX5"])
+        self.tbl_sd.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.tbl_sd.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.tbl_sd.setAlternatingRowColors(True)
+        self.tbl_sd.verticalHeader().setVisible(False)
+        self.tbl_sd.verticalHeader().setDefaultSectionSize(27)
+        self.tbl_sd.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self._fit_lineup_table_columns(self.tbl_sd)
+        sd_layout.addWidget(self.tbl_sd, 2)
+
+        tabs.addTab(tab_sd, "Showdown")
+
+        # Classic tab
+        tab_cl = QtWidgets.QWidget(self)
+        cl_layout = QtWidgets.QVBoxLayout(tab_cl)
+
+        cl_controls = QtWidgets.QHBoxLayout()
+        cl_controls.addWidget(QtWidgets.QLabel("Lineups:"))
+        self.spin_cl = QtWidgets.QSpinBox()
+        self.spin_cl.setRange(1, 150)
+        self.spin_cl.setValue(5)
+        self.spin_cl.valueChanged.connect(self._update_lineup_space_dashboard)
+        cl_controls.addWidget(self.spin_cl)
+
+        cl_controls.addWidget(QtWidgets.QLabel("Cap:"))
+        self.edit_cl_cap = QtWidgets.QLineEdit("50000")
+        self.edit_cl_cap.setFixedWidth(90)
+        cl_controls.addWidget(self.edit_cl_cap)
+
+        btn_cl_save_all = QtWidgets.QPushButton("Save All")
+        btn_cl_save_all.clicked.connect(self.on_cl_save_all)
+        cl_controls.addWidget(btn_cl_save_all)
+
+        btn_cl_unsave_all = QtWidgets.QPushButton("Unsave")
+        btn_cl_unsave_all.clicked.connect(self.on_cl_unsave_all)
+        cl_controls.addWidget(btn_cl_unsave_all)
+
+        btn_export_cl = QtWidgets.QPushButton("Export CSV")
+        btn_export_cl.setToolTip("Save DraftKings roster IDs and record these lineups for local result matching.")
+        btn_export_cl.clicked.connect(lambda: self.on_export_saved("classic"))
+        cl_controls.addWidget(btn_export_cl)
+
+        btn_entries_cl = QtWidgets.QPushButton("Update Entries")
+        btn_entries_cl.setObjectName("updateClassicEntriesButton")
+        btn_entries_cl.setToolTip("Replace the lineups in a downloaded DraftKings entries CSV.")
+        btn_entries_cl.clicked.connect(lambda: self.on_update_entries("classic"))
+        cl_controls.addWidget(btn_entries_cl)
+
+        cl_controls.addStretch(1)
+        cl_layout.addLayout(cl_controls)
+
+        self.tbl_cl = CopyRowTableWidget(self)
+        self.tbl_cl.setColumnCount(11)
+        self.tbl_cl.setHorizontalHeaderLabels(
+            ["Save", "QB", "RB1", "RB2", "WR1", "WR2", "WR3", "TE", "FLEX", "DST", "TotalSal"]
+        )
+        self.tbl_cl.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.tbl_cl.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.tbl_cl.setAlternatingRowColors(True)
+        self.tbl_cl.verticalHeader().setVisible(False)
+        self.tbl_cl.verticalHeader().setDefaultSectionSize(27)
+        self.tbl_cl.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self._fit_lineup_table_columns(self.tbl_cl)
+        cl_layout.addWidget(self.tbl_cl, 2)
+
+        tabs.addTab(tab_cl, "Classic")
+
+        # Best Stacks tab (MLB-first report)
+        tab_stacks = QtWidgets.QWidget(self)
+        stacks_layout = QtWidgets.QVBoxLayout(tab_stacks)
+        stacks_controls = QtWidgets.QHBoxLayout()
+        btn_refresh_stacks = QtWidgets.QPushButton("Refresh Best Stacks")
+        btn_refresh_stacks.clicked.connect(self._refresh_best_stacks_table)
+        stacks_controls.addWidget(btn_refresh_stacks)
+        stacks_controls.addStretch(1)
+        stacks_layout.addLayout(stacks_controls)
+        self.tbl_best_stacks = CopyRowTableWidget(self)
+        self.tbl_best_stacks.setColumnCount(14)
+        self.tbl_best_stacks.setHorizontalHeaderLabels(["Rank", "Team", "Score", "Top5Proj", "Top8Proj", "Form", "Matchup", "Park", "Wx", "Vegas", "TeamAdj", "Confirmed", "TopOrder", "Top Hitters"] )
+        self.tbl_best_stacks.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.tbl_best_stacks.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.tbl_best_stacks.setSortingEnabled(True)
+        self.tbl_best_stacks.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        stacks_layout.addWidget(self.tbl_best_stacks, 1)
+        tabs.addTab(tab_stacks, "Best Stacks")
+
+        left_layout.addWidget(self.tabs_lineups, 3)
+        self.tabs_lineups.currentChanged.connect(self._on_lineup_tab_changed)
+        root.addWidget(left)
+
+        # Right panel (Saved)
+        right = QtWidgets.QWidget(self)
+        right.setObjectName("savedPortfolioPanel")
+        self.saved_portfolio_panel = right
+        right_layout = QtWidgets.QVBoxLayout(right)
+
+        self.lbl_saved = QtWidgets.QLabel("Saved: 0 showdown | 0 classic")
+        self.lbl_saved.setAlignment(QtCore.Qt.AlignCenter)
+        right_layout.addWidget(self.lbl_saved)
+
+        btn_clear_saved = QtWidgets.QPushButton("Clear All Saved")
+        btn_clear_saved.clicked.connect(self.on_clear_saved)
+
+        btn_view_exposure = QtWidgets.QPushButton("Exposure")
+        btn_view_exposure.setToolTip("Show player exposure based on the lineups currently saved on the right.")
+        btn_view_exposure.clicked.connect(self.on_view_exposure)
+
+        btn_portfolio_summary = QtWidgets.QPushButton("Portfolio Insights")
+        btn_portfolio_summary.setObjectName("portfolioSummaryButton")
+        btn_portfolio_summary.setToolTip(
+            "Explain quality grades, candidate sources, stacks, salary, ownership, duplication risk, concentration, and scenario coverage."
+        )
+        btn_portfolio_summary.clicked.connect(self.on_portfolio_summary)
+        btn_portfolio_summary.setText("Insights")
+
+        btn_view_stack_exp = QtWidgets.QPushButton("Stack Exposure Dashboard")
+        btn_view_stack_exp.setToolTip("Show saved-lineup team, stack-shape, salary-band, and pitcher exposure.")
+        btn_view_stack_exp.clicked.connect(self.on_view_stack_exposure)
+
+        saved_actions = QtWidgets.QHBoxLayout()
+        saved_actions.setSpacing(6)
+        saved_actions.addWidget(btn_portfolio_summary)
+        saved_actions.addWidget(btn_view_exposure)
+        saved_more = QtWidgets.QToolButton(self)
+        saved_more.setText("More")
+        saved_more.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        saved_more_menu = QtWidgets.QMenu(saved_more)
+        saved_more_menu.addAction("Stack Exposure Dashboard", self.on_view_stack_exposure)
+        saved_more_menu.addSeparator()
+        saved_more_menu.addAction("Clear All Saved", self.on_clear_saved)
+        saved_more.setMenu(saved_more_menu)
+        saved_actions.addWidget(saved_more)
+        right_layout.addLayout(saved_actions)
+
+        self.tbl_saved_sd = CopyRowTableWidget(self)
+        self.tbl_saved_sd.setColumnCount(6)
+        self.tbl_saved_sd.setHorizontalHeaderLabels(["CPT", "FLEX1", "FLEX2", "FLEX3", "FLEX4", "FLEX5"])
+        self.tbl_saved_sd.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.tbl_saved_sd.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.tbl_saved_sd.setAlternatingRowColors(True)
+        self.tbl_saved_sd.verticalHeader().setVisible(False)
+        self.tbl_saved_sd.verticalHeader().setDefaultSectionSize(27)
+        self.tbl_saved_sd.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+
+        self.tbl_saved_cl = CopyRowTableWidget(self)
+        self.tbl_saved_cl.setColumnCount(9)
+        self.tbl_saved_cl.setHorizontalHeaderLabels(["QB", "RB1", "RB2", "WR1", "WR2", "WR3", "TE", "FLEX", "DST"])
+        self.tbl_saved_cl.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.tbl_saved_cl.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.tbl_saved_cl.setAlternatingRowColors(True)
+        self.tbl_saved_cl.verticalHeader().setVisible(False)
+        self.tbl_saved_cl.verticalHeader().setDefaultSectionSize(27)
+        self.tbl_saved_cl.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+
+        self.tabs_saved = QtWidgets.QTabWidget(self)
+        self.tabs_saved.setObjectName("savedLineupTabs")
+        self.tabs_saved.addTab(self.tbl_saved_sd, "Showdown")
+        self.tabs_saved.addTab(self.tbl_saved_cl, "Classic")
+        self.tabs_saved.setToolTip("Ctrl+C copies selected saved lineup rows.")
+        right_layout.addWidget(self.tabs_saved, 1)
+
+        root.addWidget(right)
+        right.setVisible(self.action_show_saved_portfolio.isChecked())
+        root.setSizes([900, 400])
+
+        # Status bar
+        self.status = QtWidgets.QStatusBar(self)
+        self.setStatusBar(self.status)
+
+        # Ownership sim progress widgets (hidden by default)
+        self._own_progress = QtWidgets.QProgressBar(self)
+        self._own_progress.setVisible(False)
+        self._own_progress.setMaximumWidth(260)
+        self._own_progress.setTextVisible(False)
+        self.status.addPermanentWidget(self._own_progress)
+
+        self._own_eta = QtWidgets.QLabel("")
+        self._own_eta.setVisible(False)
+        self.status.addPermanentWidget(self._own_eta)
+
+        self._own_thread = None
+        self._own_worker = None
+
+        # Lineup build progress widgets (hidden by default)
+        self._build_progress = QtWidgets.QProgressBar(self)
+        self._build_progress.setVisible(False)
+        self._build_progress.setMaximumWidth(260)
+        self._build_progress.setTextVisible(False)
+        self.status.addPermanentWidget(self._build_progress)
+
+        self._build_eta = QtWidgets.QLabel("")
+        self._build_eta.setVisible(False)
+        self.status.addPermanentWidget(self._build_eta)
+
+        self._build_cancel = QtWidgets.QPushButton("Cancel")
+        self._build_cancel.setToolTip("Stop the active Showdown lineup build and keep completed lineups.")
+        self._build_cancel.setVisible(False)
+        self._build_cancel.clicked.connect(self._cancel_lineup_build)
+        self.status.addPermanentWidget(self._build_cancel)
+
+        self._build_thread = None
+        self._build_worker = None
+
+        # CSV / auto-context load progress widgets (hidden by default).
+        self._load_progress = QtWidgets.QProgressBar(self)
+        self._load_progress.setVisible(False)
+        self._load_progress.setMaximumWidth(260)
+        self._load_progress.setTextVisible(True)
+        self.status.addPermanentWidget(self._load_progress)
+
+        self._load_eta = QtWidgets.QLabel("")
+        self._load_eta.setVisible(False)
+        self.status.addPermanentWidget(self._load_eta)
+
+        # Small, scoped accents layer on top of the application's existing dark
+        # palette without changing dialog or table behavior.
+        self.setStyleSheet(
+            "#compactCommandBar { background: #171C25; border: 1px solid #30394A; border-radius: 8px; }"
+            "#workspaceBrand { color: #F6F8FA; font-size: 11pt; font-weight: 700; letter-spacing: 1px; }"
+            "#workspaceSummary { color: #AEB7C5; padding: 0 8px; }"
+            "#primaryGenerateButton { background: #2F6FED; border-color: #4D83F3; font-weight: 700; padding: 6px 14px; }"
+            "#primaryGenerateButton:hover { background: #3B78EE; }"
+            "#liveStatusStrip { background: #111722; border-left: 3px solid #2F6FED; border-radius: 3px; }"
+            "#playerInspectorTitle { font-size: 12pt; font-weight: 700; color: #F6F8FA; }"
+            "#playerInspectorMeta { color: #AEB7C5; }"
+        )
+        self._on_sport_changed(self._current_sport())
+        self._on_lineup_tab_changed(self.tabs_lineups.currentIndex())
+        self._update_player_inspector()
+        self.chk_nfl_contest_sim.toggled.connect(self._update_lineup_space_dashboard)
+        self.combo_build_style.currentTextChanged.connect(self._update_lineup_space_dashboard)
+        self.combo_build_style.currentTextChanged.connect(self._update_workspace_summary)
+        self.combo_salary_strategy.currentTextChanged.connect(self._update_workspace_summary)
+        self.combo_field_preset.currentTextChanged.connect(self._update_workspace_summary)
+        self.combo_nfl_compute_mode.currentTextChanged.connect(self._update_workspace_summary)
+        self.chk_nfl_contest_sim.toggled.connect(self._update_workspace_summary)
+        self._update_workspace_summary()
+        self._update_lineup_space_dashboard()
+
+    def _set_build_controls_visible(self, visible: bool) -> None:
+        """Reveal detailed controls only when the user asks for them."""
+        if hasattr(self, "tabs_workspace_controls"):
+            self.tabs_workspace_controls.setVisible(bool(visible))
+
+    @staticmethod
+    def _fit_lineup_table_columns(table: QtWidgets.QTableWidget) -> None:
+        """Use the output width while keeping summary fields compact and aligned."""
+        header = table.horizontalHeader()
+        if table.columnCount() <= 0:
+            return
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Fixed)
+        header.resizeSection(0, 64)
+        save_header = table.horizontalHeaderItem(0)
+        if save_header is not None:
+            save_header.setTextAlignment(int(QtCore.Qt.AlignCenter))
+        for column in range(1, table.columnCount()):
+            header_item = table.horizontalHeaderItem(column)
+            label = header_item.text() if header_item is not None else ""
+            if label == "TotalSal":
+                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Fixed)
+                header.resizeSection(column, 88)
+                header_item.setTextAlignment(int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter))
+            elif label in {"Grade", "SIM Edge"}:
+                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Fixed)
+                header.resizeSection(column, 126 if label == "SIM Edge" else 92)
+                header_item.setTextAlignment(int(QtCore.Qt.AlignCenter))
+            else:
+                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
+                if header_item is not None:
+                    header_item.setTextAlignment(int(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter))
+
+    @staticmethod
+    def _player_column_alignment(column: int) -> int:
+        """Match cell alignment to the kind of information in each column."""
+        if column in {0, 3, 10, 14}:
+            return int(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        if column in {1, 2, 20, 21, 22}:
+            return int(QtCore.Qt.AlignCenter)
+        return int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+
+    def _fit_player_table_columns(self) -> None:
+        """Fit visible player fields predictably without oversized text columns."""
+        if not hasattr(self, "tbl_players"):
+            return
+        table = self.tbl_players
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        header.setMinimumSectionSize(38)
+        header.setStretchLastSection(False)
+
+        preferred = {
+            0: 168, 1: 48, 2: 42, 3: 104, 4: 64, 5: 68, 6: 64,
+            7: 58, 8: 58, 9: 68, 10: 108, 11: 46, 12: 74,
+            13: 66, 14: 100, 15: 74, 16: 76, 17: 76, 18: 64,
+            19: 64, 20: 54, 21: 48, 22: 54,
+        }
+        visible = [
+            column for column in range(table.columnCount())
+            if not table.isColumnHidden(column)
+        ]
+        for column in visible:
+            header.resizeSection(column, preferred.get(column, 64))
+            header_item = table.horizontalHeaderItem(column)
+            if header_item is not None:
+                header_item.setTextAlignment(self._player_column_alignment(column))
+
+        # Share any spare width among descriptive fields. This keeps Role near
+        # its values while letting names, injuries, and tags breathe.
+        available = max(0, table.viewport().width() - 2)
+        used = sum(header.sectionSize(column) for column in visible)
+        spare = max(0, available - used)
+        elastic = [(0, 0.40), (3, 0.15), (10, 0.20), (14, 0.25)]
+        elastic = [(column, weight) for column, weight in elastic if column in visible]
+        weight_total = sum(weight for _, weight in elastic)
+        distributed = 0
+        for index, (column, weight) in enumerate(elastic):
+            if index == len(elastic) - 1:
+                addition = spare - distributed
+            else:
+                addition = int(spare * weight / max(weight_total, 1e-9))
+                distributed += addition
+            header.resizeSection(column, preferred[column] + max(0, addition))
+
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "tbl_players"):
+            QtCore.QTimer.singleShot(0, self._fit_player_table_columns)
+
+    def _set_saved_portfolio_visible(self, visible: bool) -> None:
+        """Let the main player and lineup workspace use the full window."""
+        if hasattr(self, "saved_portfolio_panel"):
+            self.saved_portfolio_panel.setVisible(bool(visible))
+        if visible and hasattr(self, "workspace_splitter"):
+            sizes = self.workspace_splitter.sizes()
+            if len(sizes) == 2 and sizes[1] <= 0:
+                total = max(1, sum(sizes))
+                self.workspace_splitter.setSizes([max(650, total - 360), 360])
+
+    def _update_workspace_summary(self, *_args: Any) -> None:
+        """Keep the engine's active recipe visible while its controls are folded away."""
+        if not hasattr(self, "lbl_workspace_summary"):
+            return
+        style = self.combo_build_style.currentText() if hasattr(self, "combo_build_style") else "Strategic"
+        salary = self.combo_salary_strategy.currentText() if hasattr(self, "combo_salary_strategy") else "Near Cap"
+        parts = [style, salary]
+        if self._current_sport() == "NFL" and self._contest_mode() == "classic":
+            if self.chk_nfl_contest_sim.isChecked():
+                depth = "Deep" if self.combo_nfl_compute_mode.currentText().startswith("Deep") else "Fast"
+                parts.extend([f"SIM {depth}", self.combo_field_preset.currentText()])
+                contest_profile = self._active_contest_profile()
+                if contest_profile:
+                    parts.append(f"ROI {contest_profile['name']}")
+            else:
+                parts.append("SIM Off")
+        if self._active_recipe_name:
+            parts.insert(0, self._active_recipe_name)
+        self.lbl_workspace_summary.setText(" | ".join(parts))
+
+    def _load_build_recipes(self) -> Dict[str, Dict[str, Any]]:
+        try:
+            return load_recipes_json(self.app_settings.value("build/recipes_json", "{}"))
+        except Exception:
+            logger.exception("Saved build recipes could not be loaded")
+            return {}
+
+    def _store_build_recipes(self, recipes: Dict[str, Dict[str, Any]]) -> None:
+        self.app_settings.setValue("build/recipes_json", dump_recipes_json(recipes))
+        self.app_settings.sync()
+
+    def _load_contest_profiles(self) -> Dict[str, Dict[str, Any]]:
+        try:
+            return load_profiles_json(self.app_settings.value("contest/profiles_json", "{}"))
+        except Exception:
+            logger.exception("Saved contest profiles could not be loaded")
+            return {}
+
+    def _store_contest_profiles(
+        self,
+        profiles: Dict[str, Dict[str, Any]],
+        active_name: str,
+    ) -> None:
+        cleaned = load_profiles_json(dump_profiles_json(profiles))
+        selected = str(active_name or "").strip()
+        if selected not in cleaned:
+            selected = ""
+        self.app_settings.setValue("contest/profiles_json", dump_profiles_json(cleaned))
+        self.app_settings.setValue("contest/active_profile_name", selected)
+        self.app_settings.sync()
+        self._active_contest_profile_name = selected
+
+    def _active_contest_profile(self) -> Optional[Dict[str, Any]]:
+        name = str(getattr(self, "_active_contest_profile_name", "") or "").strip()
+        if not name:
+            return None
+        profile = self._load_contest_profiles().get(name)
+        return dict(profile) if profile else None
+
+    def on_contest_profiles(self) -> None:
+        profiles = self._load_contest_profiles()
+        dialog = ContestProfileDialog(
+            profiles,
+            str(getattr(self, "_active_contest_profile_name", "") or ""),
+            self,
+        )
+        if dialog.exec_() != QtWidgets.QDialog.Accepted:
+            return
+        if dialog.changed:
+            self._store_contest_profiles(dialog.profiles, dialog.active_name)
+        if dialog.active_name:
+            self.chk_nfl_contest_sim.setChecked(True)
+            profile = dict(dialog.profiles.get(dialog.active_name) or {})
+            self.status.showMessage(
+                f"Contest-Aware SIM active: {dialog.active_name} • {int(profile.get('field_size', 0) or 0):,} entries • "
+                f"${float(profile.get('entry_fee', 0.0) or 0.0):,.2f} entry.",
+                7000,
+            )
+        else:
+            self.status.showMessage("Contest profile disabled; NFL SIM Edge will use the preset payout proxy.", 6000)
+        self._update_workspace_summary()
+
+    def _current_build_recipe(self) -> Dict[str, Any]:
+        kind = self._contest_mode()
+        requested = self.spin_sd.value() if kind == "showdown" else self.spin_cl.value()
+        cap_text = self.edit_sd_cap.text() if kind == "showdown" else self.edit_cl_cap.text()
+        return normalize_recipe({
+            "sport": self._current_sport(),
+            "contest_kind": kind,
+            "requested_lineups": requested,
+            "salary_cap": self._safe_float(cap_text, 50000.0),
+            "ownership_sims": self.spin_own_sims.value(),
+            "showdown_field_templates": self.chk_sd_template_sim.isChecked(),
+            "ownership_mode": self.combo_build_own_mode.currentText(),
+            "ownership_weight": self.spin_build_own_weight.value(),
+            "build_style": self.combo_build_style.currentText(),
+            "mlb_stack_preference": self.combo_mlb_stack_pref.currentText(),
+            "salary_strategy": self.combo_salary_strategy.currentText(),
+            "nfl_sim_enabled": self.chk_nfl_contest_sim.isChecked(),
+            "nfl_sim_scenarios": self.spin_nfl_sim_scenarios.value(),
+            "nfl_field_preset": self.combo_field_preset.currentText(),
+            "nfl_compute_mode": self.combo_nfl_compute_mode.currentText(),
+            "min_unique": self.spin_portfolio_unique.value(),
+            "team_max_pct": self.spin_team_exposure.value(),
+            "game_max_pct": self.spin_game_exposure.value(),
+            "balance_ownership": self.chk_portfolio_balance.isChecked(),
+        })
+
+    @staticmethod
+    def _set_recipe_combo(combo: QtWidgets.QComboBox, value: Any) -> None:
+        text = str(value or "").strip()
+        index = combo.findText(text)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+
+    def _apply_build_recipe(self, name: str, recipe: Dict[str, Any]) -> None:
+        value = normalize_recipe(recipe)
+        self._set_recipe_combo(self.combo_sport, value.get("sport"))
+        kind = str(value.get("contest_kind") or "classic")
+        self.tabs_lineups.setCurrentIndex(0 if kind == "showdown" else 1)
+        requested = int(value.get("requested_lineups", 1) or 1)
+        salary_cap = float(value.get("salary_cap", 50000.0) or 50000.0)
+        if kind == "showdown":
+            self.spin_sd.setValue(requested)
+            self.edit_sd_cap.setText(f"{salary_cap:.0f}")
+        else:
+            self.spin_cl.setValue(requested)
+            self.edit_cl_cap.setText(f"{salary_cap:.0f}")
+
+        if "ownership_sims" in value:
+            self.spin_own_sims.setValue(int(value["ownership_sims"]))
+        if "showdown_field_templates" in value:
+            self.chk_sd_template_sim.setChecked(bool(value["showdown_field_templates"]))
+        self._set_recipe_combo(self.combo_build_own_mode, value.get("ownership_mode"))
+        if "ownership_weight" in value:
+            self.spin_build_own_weight.setValue(float(value["ownership_weight"]))
+        self._set_recipe_combo(self.combo_build_style, value.get("build_style"))
+        self._set_recipe_combo(self.combo_mlb_stack_pref, value.get("mlb_stack_preference"))
+        self._set_recipe_combo(self.combo_salary_strategy, value.get("salary_strategy"))
+        if "nfl_sim_enabled" in value:
+            self.chk_nfl_contest_sim.setChecked(bool(value["nfl_sim_enabled"]))
+        if "nfl_sim_scenarios" in value:
+            self.spin_nfl_sim_scenarios.setValue(int(value["nfl_sim_scenarios"]))
+        self._set_recipe_combo(self.combo_field_preset, value.get("nfl_field_preset"))
+        self._set_recipe_combo(self.combo_nfl_compute_mode, value.get("nfl_compute_mode"))
+        if "min_unique" in value:
+            self.spin_portfolio_unique.setValue(int(value["min_unique"]))
+        if "team_max_pct" in value:
+            self.spin_team_exposure.setValue(float(value["team_max_pct"]))
+        if "game_max_pct" in value:
+            self.spin_game_exposure.setValue(float(value["game_max_pct"]))
+        if "balance_ownership" in value:
+            self.chk_portfolio_balance.setChecked(bool(value["balance_ownership"]))
+        self._active_recipe_name = str(name or "").strip()
+        self._update_workspace_summary()
+        self._update_lineup_space_dashboard()
+        self.status.showMessage(f"Applied build recipe: {self._active_recipe_name}.", 5000)
+
+    def on_save_build_recipe(self) -> None:
+        recipe = self._current_build_recipe()
+        default_name = self._active_recipe_name or (
+            f"{recipe.get('sport', 'NFL')} {recipe.get('nfl_field_preset', 'Classic')}"
+            if recipe.get("contest_kind") == "classic"
+            else f"{recipe.get('sport', 'NFL')} Showdown"
+        )
+        name, ok = QtWidgets.QInputDialog.getText(
+            self,
+            "Save Build Recipe",
+            "Recipe name:",
+            QtWidgets.QLineEdit.Normal,
+            default_name,
+        )
+        name = str(name or "").strip()
+        if not ok or not name:
+            return
+        recipes = self._load_build_recipes()
+        if name in recipes:
+            answer = QtWidgets.QMessageBox.question(
+                self,
+                "Replace Build Recipe",
+                f"Replace the existing recipe '{name}' with the current build settings?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+                QtWidgets.QMessageBox.Cancel,
+            )
+            if answer != QtWidgets.QMessageBox.Yes:
+                return
+        recipes[name] = recipe
+        self._store_build_recipes(recipes)
+        self._active_recipe_name = name
+        self._update_workspace_summary()
+        self.status.showMessage(f"Saved build recipe: {name}.", 5000)
+
+    def on_manage_build_recipes(self) -> None:
+        recipes = self._load_build_recipes()
+        dialog = BuildRecipesDialog(recipes, self)
+        result = dialog.exec_()
+        if dialog.changed:
+            self._store_build_recipes(dialog.recipes)
+            if self._active_recipe_name not in dialog.recipes:
+                self._active_recipe_name = ""
+                self._update_workspace_summary()
+        if result != QtWidgets.QDialog.Accepted or not dialog.applied_name:
+            return
+        recipe = dict(dialog.recipes.get(dialog.applied_name) or {})
+        requested_sport = str(recipe.get("sport") or "NFL").upper()
+        if requested_sport != self._current_sport() and (self.last_classic or self.saved_classic):
+            answer = QtWidgets.QMessageBox.question(
+                self,
+                "Change Sport and Apply Recipe",
+                "Changing sport clears the current Classic generated and saved lineups. Apply this recipe?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel,
+                QtWidgets.QMessageBox.Cancel,
+            )
+            if answer != QtWidgets.QMessageBox.Yes:
+                return
+        self._apply_build_recipe(dialog.applied_name, recipe)
+
+    def _on_primary_build(self) -> None:
+        """Run the action represented by the primary command-bar button."""
+        index = self.tabs_lineups.currentIndex() if hasattr(self, "tabs_lineups") else 0
+        if index == 0:
+            self.on_build_showdown()
+        elif index == 1:
+            self.on_build_classic()
+        else:
+            self._refresh_best_stacks_table()
+
+    def _on_lineup_tab_changed(self, index: int) -> None:
+        sport = self._current_sport()
+        if index == 0:
+            self.btn_primary_build.setText("Generate")
+            self.btn_primary_build.setToolTip("Generate Showdown lineups.")
+        elif index == 1:
+            self.btn_primary_build.setText("Generate")
+            self.btn_primary_build.setToolTip(f"Generate {sport} Classic lineups.")
+        else:
+            self.btn_primary_build.setText("Refresh Stacks")
+            self.btn_primary_build.setToolTip("Refresh the MLB best-stack report.")
+
+        if hasattr(self, "tabs_saved") and index in (0, 1):
+            self.tabs_saved.setCurrentIndex(index)
+
+        self._apply_player_column_visibility(sport)
+        self._update_sport_controls(sport)
+        self._update_player_inspector()
+        self._update_readiness_badge()
+        self._lineup_space_phase = ""
+        self._update_workspace_summary()
+        self._update_lineup_space_dashboard()
+
+    def _update_sport_controls(self, sport: str) -> None:
+        """Keep sport-only choices out of the way until they apply."""
+        sport_u = (sport or "NFL").strip().upper()
+        is_mlb = sport_u == "MLB"
+        is_nfl_classic = sport_u == "NFL" and self._contest_mode() == "classic"
+        is_showdown = self._contest_mode() == "showdown"
+
+        for control in getattr(self, "_mlb_data_controls", []):
+            control.setVisible(is_mlb)
+        if hasattr(self, "lbl_mlb_stack_pref"):
+            self.lbl_mlb_stack_pref.setVisible(is_mlb)
+            self.combo_mlb_stack_pref.setVisible(is_mlb)
+        if hasattr(self, "chk_nfl_contest_sim"):
+            self.chk_nfl_contest_sim.setVisible(is_nfl_classic)
+            self.lbl_nfl_scenarios.setVisible(is_nfl_classic)
+            self.spin_nfl_sim_scenarios.setVisible(is_nfl_classic)
+            self.lbl_field_preset.setVisible(is_nfl_classic)
+            self.combo_field_preset.setVisible(is_nfl_classic)
+            self.lbl_nfl_compute_mode.setVisible(is_nfl_classic)
+            self.combo_nfl_compute_mode.setVisible(is_nfl_classic)
+            self.combo_nfl_compute_mode.setEnabled(
+                is_nfl_classic and self.chk_nfl_contest_sim.isChecked()
+            )
+        if hasattr(self, "chk_sd_template_sim"):
+            self.chk_sd_template_sim.setVisible(is_showdown)
+
+        if hasattr(self, "tabs_lineups"):
+            stack_index = 2
+            if hasattr(self.tabs_lineups, "setTabVisible"):
+                self.tabs_lineups.setTabVisible(stack_index, is_mlb)
+            else:
+                self.tabs_lineups.setTabEnabled(stack_index, is_mlb)
+
+    def _default_player_columns(self, sport: str) -> set:
+        """Return the useful-at-a-glance player columns for this workspace."""
+        sport_u = (sport or "NFL").strip().upper()
+        # Exposure limits live in the selected-player inspector. They remain
+        # available from the header's column menu when side-by-side comparison
+        # is useful, but no longer consume permanent table width.
+        visible = {0, 1, 2, 3, 4, 6, 14, 15}
+        if sport_u == "NFL":
+            visible.update({7, 8, 9, 10, 11})
+        elif sport_u == "MLB":
+            visible.update({7, 8, 9, 10, 11, 12, 13, 20, 21, 22})
+        return visible
+
+    def _apply_player_column_visibility(self, sport: str) -> None:
+        if not hasattr(self, "tbl_players"):
+            return
+        visible = self._default_player_columns(sport)
+        for column in range(self.tbl_players.columnCount()):
+            self.tbl_players.setColumnHidden(column, column not in visible)
+        self._fit_player_table_columns()
+
+    def _show_player_columns_menu(self, point: QtCore.QPoint) -> None:
+        """Allow any compacted column to be restored on demand."""
+        menu = QtWidgets.QMenu(self)
+        reset_action = menu.addAction("Use sport defaults")
+        reset_action.triggered.connect(
+            lambda: self._apply_player_column_visibility(self._current_sport())
+        )
+        menu.addSeparator()
+        for column in range(self.tbl_players.columnCount()):
+            header_item = self.tbl_players.horizontalHeaderItem(column)
+            label = header_item.text() if header_item is not None else f"Column {column + 1}"
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(not self.tbl_players.isColumnHidden(column))
+            action.toggled.connect(
+                lambda checked, col=column: self.tbl_players.setColumnHidden(col, not checked)
+            )
+        header = self.tbl_players.horizontalHeader()
+        menu.exec_(header.mapToGlobal(point))
+
+    def _update_player_inspector(self) -> None:
+        if not hasattr(self, "lbl_player_inspector_title"):
+            return
+        rows = self._get_selected_player_rows()
+        has_selection = bool(rows)
+        for button in getattr(self, "_player_action_buttons", []):
+            button.setEnabled(has_selection)
+
+        is_showdown = self._contest_mode() == "showdown"
+        for button in getattr(self, "_captain_action_buttons", []):
+            button.setVisible(is_showdown)
+
+        if not rows:
+            self.player_inspector.setTitle("Selected player")
+            self.lbl_player_inspector_title.setText("Select a player")
+            self.lbl_player_inspector_meta.setText(
+                "Choose one or more rows to lock, fade, cap exposure, or adjust a team."
+            )
+            return
+
+        if len(rows) > 1:
+            selected = [self.players[row] for row in rows]
+            teams = sorted({str(player.get("Team") or "").strip() for player in selected if player.get("Team")})
+            self.player_inspector.setTitle("Selected players")
+            self.lbl_player_inspector_title.setText(f"{len(rows)} players selected")
+            team_text = ", ".join(teams[:4]) + ("…" if len(teams) > 4 else "")
+            self.lbl_player_inspector_meta.setText(
+                "Actions apply to every selected player."
+                + (f"\nTeams: {team_text}" if team_text else "")
+            )
+            return
+
+        player = self.players[rows[0]]
+        name = str(player.get("Name") or "Unknown player")
+        team = str(player.get("Team") or "—")
+        position = str(player.get("Position") or "—")
+        salary = int(float(player.get("FlexSalary", 0) or 0))
+        projection = float(player.get("FlexProjection", 0.0) or 0.0)
+        ownership = float(player.get("ProjOwnPct", 0.0) or 0.0)
+        status = str(player.get("InjuryStatus") or player.get("NFLAvailability") or "No status flag")
+        tags = self._tags_to_text(player) or "No lineup tags"
+        min_pct = player.get("MinPct")
+        max_pct = player.get("MaxPct")
+        exposure_text = (
+            f"Exposure {float(min_pct):.0f}–{float(max_pct):.0f}%"
+            if min_pct not in (None, "") and max_pct not in (None, "")
+            else f"Exposure max {float(max_pct):.0f}%"
+            if max_pct not in (None, "")
+            else f"Exposure min {float(min_pct):.0f}%"
+            if min_pct not in (None, "")
+            else "No exposure limits"
+        )
+        if is_showdown:
+            min_cpt = player.get("MinCptPct")
+            max_cpt = player.get("MaxCptPct")
+            if min_cpt not in (None, "") and max_cpt not in (None, ""):
+                exposure_text += f" · CPT {float(min_cpt):.0f}–{float(max_cpt):.0f}%"
+            elif max_cpt not in (None, ""):
+                exposure_text += f" · CPT max {float(max_cpt):.0f}%"
+            elif min_cpt not in (None, ""):
+                exposure_text += f" · CPT min {float(min_cpt):.0f}%"
+        self.player_inspector.setTitle("Selected player")
+        self.lbl_player_inspector_title.setText(name)
+        self.lbl_player_inspector_meta.setText(
+            f"{team} · {position} · ${salary:,}\n"
+            f"Projection {projection:.2f} · Own {ownership:.1f}%\n"
+            f"{status} · {tags}\n{exposure_text}"
+        )
+
+    # ---------------- Tag model ----------------
+
+    def _get_selected_player_rows(self) -> List[int]:
+        """Return indices into self.players for currently selected table rows.
+
+        NOTE: The players table can be sorted by the user. QTableWidget's row numbers
+        reflect the *view* order, not the underlying self.players order. To keep tags/fades
+        consistent under sorting, we store each player's stable key (_pkey) in the Name
+        cell's Qt.UserRole, then map selected keys back to self.players indices.
+        """
+        view_rows = sorted({idx.row() for idx in self.tbl_players.selectedIndexes()})
+        if not view_rows or not self.players:
+            return []
+
+        # Pull stable keys from the Name column (col 0)
+        keys: List[str] = []
+        for vr in view_rows:
+            item = self.tbl_players.item(vr, 0)
+            if item is None:
+                continue
+            k = item.data(QtCore.Qt.UserRole)
+            if k is None:
+                continue
+            ks = str(k).strip()
+            if ks:
+                keys.append(ks)
+
+        if not keys:
+            return []
+
+        key_to_index = {_pkey(p): i for i, p in enumerate(self.players)}
+        indices = []
+        seen = set()
+        for k in keys:
+            idx = key_to_index.get(k)
+            if idx is None or idx in seen:
+                continue
+            seen.add(idx)
+            indices.append(idx)
+        return indices
+
+    def _tags_to_text(self, p: Dict[str, Any]) -> str:
+        bits = []
+        if p.get("LockFlex"):
+            bits.append("L")
+        if p.get("FadeFlex"):
+            bits.append("F")
+        if p.get("LockCpt"):
+            bits.append("CL")
+        if p.get("FadeCpt"):
+            bits.append("CF")
+        return " ".join(bits)
+
+    def apply_tags(self, mode: str) -> None:
+        rows = self._get_selected_player_rows()
+        if not rows:
+            self.status.showMessage("Select one or more players first.", 3000)
+            return
+
+        for r in rows:
+            p = self.players[r]
+            if mode == "lock":
+                p["LockFlex"] = True
+                p["FadeFlex"] = False
+            elif mode == "fade":
+                p["FadeFlex"] = True
+                p["LockFlex"] = False
+                # If they fade overall, also prevent CPT implicitly unless you want otherwise
+                p["FadeCpt"] = True
+                p["LockCpt"] = False
+            elif mode == "cpt_lock":
+                p["LockCpt"] = True
+                p["FadeCpt"] = False
+                # If CPT is locked, don't allow fading overall
+                p["FadeFlex"] = False
+            elif mode == "cpt_fade":
+                p["FadeCpt"] = True
+                p["LockCpt"] = False
+
+        self._refresh_players_table()
+        self.status.showMessage(f"Applied tags: {mode}", 2000)
+
+    def clear_tags(self) -> None:
+        rows = self._get_selected_player_rows()
+        if rows:
+            targets = [self.players[r] for r in rows]
+            msg = "Cleared tags for selected players."
+        else:
+            targets = self.players
+            msg = "Cleared tags for ALL players."
+
+        for p in targets:
+            p["LockFlex"] = False
+            p["FadeFlex"] = False
+            p["LockCpt"] = False
+            p["FadeCpt"] = False
+
+        self._refresh_players_table()
+        self.status.showMessage(msg, 3000)
+
+    def set_team_adjustment(self, *, boost: bool) -> None:
+        if not self.players:
+            self.status.showMessage("Load a CSV first.", 3000)
+            return
+        rows = self._get_selected_player_rows()
+        if not rows:
+            self.status.showMessage("Select a player from the team you want to adjust.", 3000)
+            return
+        team = str(self.players[rows[0]].get("Team", "")).strip()
+        if not team:
+            self.status.showMessage("Selected player has no team value.", 3000)
+            return
+        default = 8.0 if boost else 8.0
+        label = "Boost" if boost else "Fade"
+        val, ok = QtWidgets.QInputDialog.getDouble(
+            self,
+            f"{label} Team {team}",
+            f"Projection percentage to {'boost' if boost else 'reduce'} every {team} player:",
+            default,
+            0.0,
+            50.0,
+            1,
+        )
+        if not ok:
+            return
+        signed = float(val if boost else -val)
+        changed = 0
+        for p in self.players:
+            if str(p.get("Team", "")).strip() == team:
+                p["TeamAdjPct"] = signed
+                changed += 1
+        self.recalc_ownership_quick()
+        self._refresh_players_table()
+        self._refresh_best_stacks_table()
+        self.status.showMessage(f"Applied {signed:+.1f}% team adjustment to {changed} {team} players.", 5000)
+
+    def clear_team_adjustments(self) -> None:
+        if not self.players:
+            return
+        for p in self.players:
+            p["TeamAdjPct"] = 0.0
+        self.recalc_ownership_quick()
+        self._refresh_players_table()
+        self._refresh_best_stacks_table()
+        self.status.showMessage("Cleared all team boost/fade adjustments.", 4000)
+
+
+    # ---------------- Showdown Max Ownership Caps ----------------
+
+    
+    # ---------------- Max Ownership / Exposure Caps ----------------
+
+    def _portfolio_rules(self) -> Dict[str, Any]:
+        constraints = {}
+        for player in self.players:
+            if not any(player.get(field) not in (None, "") for field in ("MinPct", "MaxPct", "MinCptPct", "MaxCptPct")):
+                continue
+            key = player_key(player)
+            if not key:
+                continue
+            constraints[key] = {
+                "Name": str(player.get("Name") or key),
+                "MinPct": player.get("MinPct"),
+                "MaxPct": player.get("MaxPct"),
+                "MinCptPct": player.get("MinCptPct"),
+                "MaxCptPct": player.get("MaxCptPct"),
+            }
+        return {
+            "min_unique": int(self.spin_portfolio_unique.value()),
+            "max_team_pct": float(self.spin_team_exposure.value()),
+            "max_game_pct": float(self.spin_game_exposure.value()),
+            "balance_ownership": bool(self.chk_portfolio_balance.isChecked()),
+            "groups": list(self.portfolio_groups),
+            "player_constraints": constraints,
+        }
+
+    def set_min_pct(self, *, kind: str) -> None:
+        rows = self._get_selected_player_rows()
+        if not rows:
+            self.status.showMessage("Select one or more players first.", 3000)
+            return
+        kind_u = str(kind or "exposure").strip().lower()
+        key = "MinCptPct" if kind_u == "cpt" else "MinPct"
+        label = "Min CPT%" if kind_u == "cpt" else "Min Exposure%"
+        current = [self.players[row].get(key) for row in rows]
+        values = [float(value) for value in current if value not in (None, "")]
+        default = values[0] if values and all(abs(value - values[0]) < 1e-9 for value in values) else 10.0
+        value, ok = QtWidgets.QInputDialog.getDouble(
+            self,
+            f"Set {label}",
+            f"{label} (0-100). Minimums are prioritized across the complete portfolio and reported if infeasible.",
+            default,
+            0.0,
+            100.0,
+            1,
+        )
+        if not ok:
+            return
+        for row in rows:
+            self.players[row][key] = float(value)
+        self._refresh_players_table()
+        self.status.showMessage(f"Set {label} = {value:.1f}% for {len(rows)} players.", 5000)
+
+    def clear_min_pct(self) -> None:
+        rows = self._get_selected_player_rows()
+        if not rows:
+            self.status.showMessage("Select one or more players first.", 3000)
+            return
+        for row in rows:
+            self.players[row]["MinCptPct"] = None
+            self.players[row]["MinPct"] = None
+        self._refresh_players_table()
+        self.status.showMessage(f"Cleared minimum exposure for {len(rows)} players.", 4000)
+
+    def add_portfolio_group(self, group_type: str) -> None:
+        rows = self._get_selected_player_rows()
+        minimum = 1 if group_type == "at_least_one" else 2
+        if len(rows) < minimum:
+            self.status.showMessage(f"Select at least {minimum} player(s) for this group.", 4000)
+            return
+        selected = [self.players[row] for row in rows]
+        keys = sorted({player_key(player) for player in selected if player_key(player)})
+        names = [str(player.get("Name") or player_key(player)) for player in selected]
+        if len(keys) < minimum:
+            return
+        label = ("At least one: " if group_type == "at_least_one" else "Never together: ") + ", ".join(names)
+        group = {"type": group_type, "player_keys": keys, "label": label}
+        if group not in self.portfolio_groups:
+            self.portfolio_groups.append(group)
+        self.lbl_portfolio_groups.setText(f"Groups: {len(self.portfolio_groups)}")
+        self.lbl_portfolio_groups.setToolTip("\n".join(item.get("label", "") for item in self.portfolio_groups))
+        self.status.showMessage(label, 5000)
+
+    def clear_portfolio_groups(self) -> None:
+        self.portfolio_groups.clear()
+        self.lbl_portfolio_groups.setText("Groups: 0")
+        self.lbl_portfolio_groups.setToolTip("")
+        self.status.showMessage("Cleared portfolio player groups.", 3000)
+
+    def set_max_pct(self, *, kind: str) -> None:
+        """Set max ownership/exposure percent for selected players.
+
+        - kind="cpt": sets MaxCptPct (Captain slot cap) — used in Showdown only.
+        - kind="exposure": sets MaxPct, the total portfolio appearance cap.
+
+        Notes:
+        - Classic lineup generation ignores MaxCptPct entirely.
+        - For backward compatibility, Showdown FLEX capping also accepts legacy MaxFlexPct where present.
+        """
+        rows = self._get_selected_player_rows()
+        if not rows:
+            self.status.showMessage("Select one or more players first.", 3000)
+            return
+
+        kind_u = (kind or "").strip().lower()
+        if kind_u not in ("cpt", "exposure"):
+            self.status.showMessage("Invalid max% kind.", 3000)
+            return
+
+        if kind_u == "cpt":
+            label = "Max CPT%"
+            key = "MaxCptPct"
+            help_text = "Applies to generated Showdown lineups only. Classic ignores this."
+        else:
+            label = "Max Exposure%"
+            key = "MaxPct"
+            help_text = "Caps total appearances across the selected portfolio."
+
+        # If all selected share the same value, use it as default; else 25.
+        current_vals: List[float] = []
+        for r in rows:
+            v = self.players[r].get(key, None)
+            if v is None and key == "MaxPct":
+                # legacy fallback (older sessions may have MaxFlexPct only)
+                v = self.players[r].get("MaxFlexPct", None)
+            if v is None:
+                continue
+            try:
+                current_vals.append(float(v))
+            except Exception:
+                pass
+
+        default = 25.0
+        if current_vals and all(abs(v - current_vals[0]) < 1e-9 for v in current_vals):
+            default = float(current_vals[0])
+
+        prompt = (
+            f"{label} (0-100).\n"
+            f"{help_text}\n"
+            "Leave as 0 to effectively block a player from that slot/exposure."
+        )
+
+        val, ok = QtWidgets.QInputDialog.getDouble(
+            self,
+            f"Set {label}",
+            prompt,
+            float(default),
+            0.0,
+            100.0,
+            1,
+        )
+        if not ok:
+            return
+
+        for r in rows:
+            self.players[r][key] = float(val)
+            # If user is setting unified exposure, keep legacy field in sync (optional but helps older code paths)
+            if key == "MaxPct":
+                self.players[r]["MaxFlexPct"] = None
+
+        self._refresh_players_table()
+        self.status.showMessage(f"Set {label} = {val:.1f}% for {len(rows)} players.", 5000)
+
+
+    def clear_max_pct(self) -> None:
+        rows = self._get_selected_player_rows()
+        if not rows:
+            self.status.showMessage("Select one or more players first.", 3000)
+            return
+
+        for r in rows:
+            self.players[r]["MaxCptPct"] = None
+            self.players[r]["MaxPct"] = None
+            # Legacy compatibility:
+            self.players[r]["MaxFlexPct"] = None
+
+        self._refresh_players_table()
+        self.status.showMessage(f"Cleared Max% for {len(rows)} players.", 4000)
+
+    def copy_own_to_max(self) -> None:
+        """Copy simulated ownership into max exposure cap fields.
+
+        - Applies to selected players; if none selected, applies to all players.
+        - Showdown:
+            * MaxCptPct <= ProjCptOwnPct * scale
+            * MaxPct    <= ProjFlexOwnPct * scale  (FLEX cap)
+        - Classic:
+            * MaxPct    <= ProjOwnPct * scale      (total cap)
+        """
+        if not self.players:
+            self.status.showMessage("Load a CSV first.", 3000)
+            return
+
+        rows = self._get_selected_player_rows()
+        targets = [self.players[r] for r in rows] if rows else list(self.players)
+
+        scale, ok = QtWidgets.QInputDialog.getDouble(
+            self,
+            "Copy Own% → Max%",
+            "Scale factor (1.0 = same, 1.15 = +15% cushion):",
+            1.00,
+            0.00,
+            5.00,
+            2,
+        )
+        if not ok:
+            return
+
+        mode = self._contest_mode()
+
+        def cap_from_own(raw_own: float):
+            """Convert simulated Own% into a safe Max% cap.
+
+            Zero simulated ownership usually means the player simply did not appear
+            in the sim sample, not that the optimizer should be hard-blocked. So
+            zero own clears the cap instead of setting Max% to 0. Positive but tiny
+            values are lifted to 1% so they allow at least one lineup when used as
+            caps.
+            """
+            try:
+                raw = float(raw_own or 0.0)
+            except Exception:
+                raw = 0.0
+            if raw <= 0.0:
+                return None
+            return max(1.0, min(100.0, raw * scale))
+
+        applied = 0
+        for p in targets:
+            if mode == "showdown":
+                cpt_own = float(p.get("ProjCptOwnPct", 0.0) or 0.0)
+                flex_own = float(p.get("ProjFlexOwnPct", 0.0) or 0.0)
+                p["MaxCptPct"] = cap_from_own(cpt_own)
+                p["MaxPct"] = cap_from_own(flex_own)
+                p["MaxFlexPct"] = None
+            else:
+                tot_own = float(p.get("ProjOwnPct", 0.0) or 0.0)
+                p["MaxPct"] = cap_from_own(tot_own)
+                p["MaxFlexPct"] = None
+
+            applied += 1
+
+        self._refresh_players_table()
+        scope = "selected players" if rows else "ALL players"
+        self.status.showMessage(f"Copied Own% → Max% for {applied} ({scope}).", 5000)
+
+
+    def save_tags_json(self) -> None:
+        if not self.players:
+            self.status.showMessage("Load a CSV first.", 3000)
+            return
+
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save Tags JSON", "", "JSON Files (*.json)")
+        if not path:
+            return
+
+        payload = {
+            "version": 1,
+            "tags": {
+                _pkey(p): {
+                    "Name": p.get("Name", ""),
+                    "Team": p.get("Team", ""),
+                    "LockFlex": bool(p.get("LockFlex", False)),
+                    "FadeFlex": bool(p.get("FadeFlex", False)),
+                    "LockCpt": bool(p.get("LockCpt", False)),
+                    "FadeCpt": bool(p.get("FadeCpt", False)),
+                }
+                for p in self.players
+                if p.get("LockFlex") or p.get("FadeFlex") or p.get("LockCpt") or p.get("FadeCpt")
+            },
+        }
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            self.status.showMessage(f"Saved tags: {os.path.basename(path)}", 4000)
+            logger.info("Saved tags JSON: %s (%d tagged)", path, len(payload["tags"]))
+        except Exception as e:
+            logger.exception("Save tags failed")
+            QtWidgets.QMessageBox.critical(self, "Save Tags Error", str(e))
+
+    def load_tags_json(self) -> None:
+        if not self.players:
+            self.status.showMessage("Load a CSV first.", 3000)
+            return
+
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load Tags JSON", "", "JSON Files (*.json)")
+        if not path:
+            return
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+
+            tags = (payload or {}).get("tags", {})
+            if not isinstance(tags, dict):
+                raise ValueError("Invalid tags JSON format.")
+
+            key_to_player = {_pkey(p): p for p in self.players}
+            applied = 0
+            for k, tv in tags.items():
+                p = key_to_player.get(k)
+                if not p:
+                    continue
+                p["LockFlex"] = bool(tv.get("LockFlex", False))
+                p["FadeFlex"] = bool(tv.get("FadeFlex", False))
+                p["LockCpt"] = bool(tv.get("LockCpt", False))
+                p["FadeCpt"] = bool(tv.get("FadeCpt", False))
+                applied += 1
+
+            self._refresh_players_table()
+            self.status.showMessage(f"Loaded tags: {os.path.basename(path)} ({applied} applied)", 5000)
+            logger.info("Loaded tags JSON: %s (%d applied)", path, applied)
+        except Exception as e:
+            logger.exception("Load tags failed")
+            QtWidgets.QMessageBox.critical(self, "Load Tags Error", str(e))
+
+    # ---------------- Visual highlighting ----------------
+
+    def _set_player_row_style(self, row: int, p: Dict[str, Any]) -> None:
+        """
+        Visual-only highlighting. Does NOT change any logic.
+
+        The old fade style painted the whole row very light gray, which made faded
+        players hard to distinguish in the dark theme. This version keeps the row
+        readable and uses the Tags/Injury cells plus muted text to show state:
+          - Overall fade: muted text + red-tinted Tags/Injury cells
+          - CPT fade only: red-tinted Tags cell
+          - Lock: green/blue-tinted Tags cell
+        """
+        is_faded = bool(p.get("FadeFlex"))
+        is_cpt_fade = bool(p.get("FadeCpt"))
+        is_lock_cpt = bool(p.get("LockCpt"))
+        is_lock_flex = bool(p.get("LockFlex"))
+
+        # Column indices from player table headers.
+        injury_col = 3
+        tags_col = 14
+
+        for c in range(self.tbl_players.columnCount()):
+            item = self.tbl_players.item(row, c)
+            if item is None:
+                continue
+
+            # Reset first so sorting/refreshing does not leave stale styles.
+            item.setBackground(QtGui.QBrush())
+            item.setForeground(QtGui.QBrush(QtGui.QColor(232, 234, 237)))
+            font = item.font()
+            font.setStrikeOut(False)
+            font.setBold(False)
+            item.setFont(font)
+
+            if is_faded:
+                # Keep the table dark/readable; do not white-out the whole row.
+                item.setForeground(QtGui.QBrush(QtGui.QColor(160, 160, 160)))
+                if c in (injury_col, tags_col):
+                    item.setBackground(QtGui.QBrush(QtGui.QColor(85, 38, 38)))
+                    item.setForeground(QtGui.QBrush(QtGui.QColor(255, 205, 205)))
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+            elif is_lock_cpt and c == tags_col:
+                item.setBackground(QtGui.QBrush(QtGui.QColor(38, 70, 110)))
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
+            elif is_lock_flex and c == tags_col:
+                item.setBackground(QtGui.QBrush(QtGui.QColor(35, 85, 55)))
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
+            elif is_cpt_fade and c == tags_col:
+                item.setBackground(QtGui.QBrush(QtGui.QColor(85, 48, 48)))
+                item.setForeground(QtGui.QBrush(QtGui.QColor(255, 215, 215)))
+
+    # ---------------- Helpers ----------------
+
+    def _safe_float(self, text: str, default: float) -> float:
+        try:
+            return float((text or "").strip())
+        except Exception:
+            return default
+
+    def _display_name(self, p: Optional[Dict[str, Any]]) -> str:
+        if not p:
+            return ""
+        return f"{p.get('Name','')} ({p.get('Team','')})"
+
+    def _display_id(self, p: Optional[Dict[str, Any]], *, slot: str = "FLEX") -> str:
+        """Return the exact DraftKings ID for the requested roster slot."""
+        if not p:
+            return ""
+        slot_u = (slot or "").upper()
+        if slot_u in ("CPT", "CAPTAIN"):
+            return str(p.get("CptID") or "").strip()
+        return str(p.get("FlexID") or "").strip()
+
+
+    def _load_step(self, progress: Optional[QtWidgets.QProgressDialog], pct: int, msg: str) -> None:
+        """Update visible CSV-load progress while long auto steps run on the UI thread."""
+        try:
+            self.status.showMessage(msg)
+            if hasattr(self, "_load_progress"):
+                self._load_progress.setVisible(True)
+                self._load_progress.setMaximum(100)
+                self._load_progress.setValue(max(0, min(100, int(pct))))
+                self._load_progress.setFormat(f"{int(pct)}%")
+            if hasattr(self, "_load_eta"):
+                self._load_eta.setVisible(True)
+                self._load_eta.setText(msg)
+            if progress is not None:
+                progress.setValue(max(0, min(100, int(pct))))
+                progress.setLabelText(msg)
+            QtWidgets.QApplication.processEvents()
+        except Exception:
+            pass
+
+    def _finish_load_progress(self) -> None:
+        try:
+            if hasattr(self, "_load_progress"):
+                self._load_progress.setVisible(False)
+            if hasattr(self, "_load_eta"):
+                self._load_eta.setVisible(False)
+                self._load_eta.setText("")
+            QtWidgets.QApplication.processEvents()
+        except Exception:
+            pass
+
+
+    # ---------------- Actions ----------------
+
+    def on_load_csv(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select Player CSV", "", "CSV Files (*.csv)")
+        if not path:
+            return
+
+        progress = QtWidgets.QProgressDialog("Starting CSV load…", None, 0, 100, self)
+        progress.setWindowTitle("Loading Player CSV")
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(True)
+        progress.setAutoReset(True)
+        progress.setValue(0)
+
+        try:
+            logger.info("Loading CSV: %s", path)
+            self._load_step(progress, 5, "Reading DraftKings CSV…")
+            self.players = read_players_csv(path)
+            self.last_showdown = []
+            self.last_classic = []
+            self.last_portfolio_report = {}
+            self.last_sim_report = {}
+            self.last_readiness_report = {}
+            self.last_final_lock_report = {}
+            self.last_build_timing_report = {}
+            self._active_build_context = {}
+            self._readiness_filter_names.clear()
+            self._lineup_space_phase = ""
+            self.last_live_check_summary = {}
+            self._last_live_check_epoch = 0.0
+            if hasattr(self, "tbl_sd"):
+                self.tbl_sd.setRowCount(0)
+            if hasattr(self, "tbl_cl"):
+                self.tbl_cl.setRowCount(0)
+            parsed_opponents = sum(1 for p in self.players if str(p.get("Opponent") or "").strip())
+            parsed_games = len({str(p.get("GameKey") or "").strip() for p in self.players if str(p.get("GameKey") or "").strip()})
+            logger.info(
+                "Parsed DK game context: opponents=%d/%d | games=%d",
+                parsed_opponents, len(self.players), parsed_games,
+            )
+
+            self._load_step(progress, 18, "Initializing player fields…")
+            for p in self.players:
+                p.setdefault("LockFlex", False)
+                p.setdefault("FadeFlex", False)
+                p.setdefault("LockCpt", False)
+                p.setdefault("FadeCpt", False)
+                p.setdefault("MaxCptPct", None)
+                p.setdefault("MaxPct", None)
+                p.setdefault("MaxFlexPct", None)
+                p.setdefault("MinCptPct", None)
+                p.setdefault("MinPct", None)
+                p.setdefault("BaseProjection", float(p.get("FlexProjection", 0.0) or 0.0))
+                p.setdefault("BattingOrder", 0)
+                p.setdefault("Bats", "")
+                p.setdefault("ConfirmedLineup", False)
+                p.setdefault("LineupStatus", "")
+
+            self._load_step(progress, 28, "Detecting sport and contest type…")
+            detected_sport = self._detect_sport_from_players()
+            try:
+                if hasattr(self, "combo_sport") and self.combo_sport.currentText().strip().upper() != detected_sport:
+                    self.combo_sport.setCurrentText(detected_sport)
+                    logger.info("Auto-detected sport: %s", detected_sport)
+            except Exception:
+                detected_sport = self._current_sport()
+
+            self._load_step(progress, 40, f"Refreshing {detected_sport} injury/status data…")
+            if detected_sport == "NFL":
+                self._load_step(progress, 46, "Refreshing NFL role, usage, matchup, and weather context...")
+                try:
+                    ctx = apply_auto_nfl_context(self.players)
+                    self._record_live_check(ctx)
+                    logger.info("NFL auto context applied: %s", ctx)
+                except Exception:
+                    # Loading the CSV remains useful even if an unexpected
+                    # external payload bypasses the enrichment fallbacks.
+                    logger.exception("NFL auto context failed; using neutral context")
+            elif self._should_run_injury_enrichment(detected_sport):
+                enrich_players_with_injuries(self.players, sport=detected_sport)
+            else:
+                self._clear_injury_fields()
+                logger.info("Skipping injury enrichment for unsupported sport: %s", detected_sport)
+
+            if detected_sport == "MLB":
+                self._load_step(progress, 58, "Applying MLB ballpark factors and batting orders…")
+                try:
+                    ctx = apply_auto_mlb_context(self.players)
+                    logger.info("MLB auto context applied: %s", ctx)
+                except Exception:
+                    logger.exception("MLB auto context failed")
+
+            self._load_step(progress, 72, "Preparing tables and ownership…")
+            detected_mode = self._detect_contest_mode_from_players()
+            try:
+                if hasattr(self, "tabs_lineups"):
+                    self.tabs_lineups.setCurrentIndex(0 if detected_mode == "showdown" else 1)
+            except Exception:
+                pass
+
+            faded = self._auto_fade_out_players()
+            self.recalc_ownership_quick()
+            try:
+                self._refresh_best_stacks_table()
+            except Exception:
+                pass
+
+            self._load_step(progress, 88, "Starting ownership simulation…")
+            try:
+                if detected_mode == "showdown":
+                    cap = self._safe_float(self.edit_sd_cap.text(), 50000.0)
+                else:
+                    cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
+            except Exception:
+                cap = 50000.0
+
+            self._start_ownership_sim(num_sims=500, mode=detected_mode, cap=cap)
+
+            self._load_step(progress, 100, "CSV load complete.")
+            extra = f" | auto-faded {faded}" if faded else ""
+            self.status.showMessage(
+                f"Loaded {len(self.players)} players ({detected_mode}, {self._current_sport()}) from {os.path.basename(path)}{extra}",
+                6000
+            )
+            self._update_readiness_badge()
+        except Exception as e:
+            logger.exception("Failed to load CSV")
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(self, "Load Error", str(e))
+        finally:
+            self._finish_load_progress()
+
+    def _calculate_slate_readiness(self) -> Dict[str, Any]:
+        sport = self._current_sport()
+        mode = self._contest_mode()
+        if mode == "showdown":
+            cap = self._safe_float(self.edit_sd_cap.text(), 50000.0)
+            lineups: List[Any] = list(self.last_showdown)
+        else:
+            cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
+            lineups = list(self.last_classic)
+        preset_name = self.combo_field_preset.currentText() if hasattr(self, "combo_field_preset") else "150-Max"
+        calibration: Dict[str, Any] = {}
+        if sport == "NFL" and mode == "classic":
+            try:
+                calibration = load_nfl_field_calibration(preset_name)
+            except Exception:
+                logger.exception("Slate readiness could not load NFL field calibration")
+        selected_preset = (
+            nfl_field_preset(preset_name, calibration)
+            if sport == "NFL" and mode == "classic"
+            else {"name": "", "min_salary_pct": 0.90 if mode == "showdown" else 0.94}
+        )
+        report = audit_slate(
+            self.players,
+            sport=sport,
+            mode=mode,
+            salary_cap=cap,
+            field_preset=selected_preset,
+            live_summary=self.last_live_check_summary,
+            generated_lineups=lineups,
+            sim_report=self.last_sim_report if mode == "classic" else {},
+        )
+        self.last_readiness_report = report
+        return report
+
+    def _calculate_lineup_space(self) -> Dict[str, Any]:
+        mode = self._contest_mode()
+        sport = self._current_sport()
+        requested = 0
+        if mode == "showdown" and hasattr(self, "spin_sd"):
+            requested = int(self.spin_sd.value())
+        elif hasattr(self, "spin_cl"):
+            requested = int(self.spin_cl.value())
+
+        pool = list(self.players or [])
+        pool_label = "active player pool"
+        sim_enabled = bool(
+            hasattr(self, "chk_nfl_contest_sim") and self.chk_nfl_contest_sim.isChecked()
+        )
+        build_style = (
+            self.combo_build_style.currentText()
+            if hasattr(self, "combo_build_style")
+            else "Strategic"
+        )
+        use_role_pool = should_use_nfl_role_pool(
+            sport=sport,
+            kind=mode,
+            build_style=build_style,
+            sim_enabled=sim_enabled,
+        )
+        if use_role_pool and pool:
+            def has_minimum_exposure(player: Dict[str, Any]) -> bool:
+                try:
+                    return (
+                        float(player.get("MinPct") or 0.0) > 0.0
+                        or float(player.get("MinCptPct") or 0.0) > 0.0
+                    )
+                except (TypeError, ValueError):
+                    return False
+
+            required_role_pool_keys = {
+                player_key(player)
+                for player in pool
+                if has_minimum_exposure(player)
+            }
+            required_role_pool_keys.update(
+                str(key)
+                for group in self.portfolio_groups
+                if str(group.get("type") or "") == "at_least_one"
+                for key in group.get("player_keys") or []
+            )
+            pool = build_nfl_role_pool(
+                pool,
+                preserve_locks=True,
+                preserve_player_keys=required_role_pool_keys,
+            )
+            pool_label = "NFL starter/rotation pool"
+        return calculate_lineup_space(
+            pool,
+            sport=sport,
+            mode=mode,
+            requested=requested,
+            loaded_total=len(self.players or []),
+            pool_label=pool_label,
+        )
+
+    def _update_lineup_space_dashboard(self, *_args: Any) -> None:
+        if not hasattr(self, "lbl_lineup_space"):
+            return
+        if not self.players:
+            self.lbl_lineup_space.setText("Lineup space: load a slate")
+            self.lbl_lineup_space.setToolTip(
+                "Load a salary file to see how fades, inactive players, locks, and the NFL role pool shrink the build space."
+            )
+            return
+        report = self._calculate_lineup_space()
+        count = int(report.get("structural_combinations", 0) or 0)
+        count_prefix = "" if report.get("exact") else "≤"
+        text = (
+            f"Space: {int(report.get('eligible', 0))}/{int(report.get('loaded', 0))} pool • "
+            f"{count_prefix}{report.get('compact_combinations', '0')} possible • "
+            f"{int(report.get('requested', 0))} target"
+        )
+        if self._lineup_space_phase:
+            text += f" • {self._lineup_space_phase}"
+        self.lbl_lineup_space.setText(text)
+        tooltip = [
+            f"Pool: {int(report.get('eligible', 0)):,} of {int(report.get('loaded', 0)):,} ({report.get('pool_label')})",
+            f"Omitted from this pool: {int(report.get('omitted', 0)):,}",
+            f"Locked in every lineup: {int(report.get('locked', 0)):,}",
+            f"Structural combinations: {count:,}" + (" (exact roster shapes)" if report.get("exact") else " (upper bound)"),
+            str(report.get("explanation") or ""),
+            "This intentionally excludes salary-cap, stacking, correlation, exposure, and uniqueness checks.",
+        ]
+        timing = dict(self.last_build_timing_report or {})
+        if timing:
+            tooltip.extend([
+                "",
+                "Last build timing:",
+                f"Generate {float(timing.get('generation_seconds', 0.0)):.2f}s • "
+                f"SIM {float(timing.get('simulation_seconds', 0.0)):.2f}s • "
+                f"Select {float(timing.get('selection_seconds', 0.0)):.2f}s • "
+                f"Total {float(timing.get('total_seconds', 0.0)):.2f}s",
+                f"Candidates {int(timing.get('candidate_count', 0)):,}/"
+                f"{int(timing.get('candidate_target', 0)):,} budget → selected "
+                f"{int(timing.get('selected_count', 0)):,}",
+                "Use Settings > Copy Last Build Report to share the full diagnostic.",
+            ])
+        self.lbl_lineup_space.setToolTip("\n".join(line for line in tooltip if line is not None))
+
+    def _apply_readiness_player_filter(self) -> None:
+        if not hasattr(self, "tbl_players"):
+            return
+        wanted = {name.casefold() for name in self._readiness_filter_names if name}
+        first_visible = -1
+        visible = 0
+        for row in range(self.tbl_players.rowCount()):
+            item = self.tbl_players.item(row, 0)
+            matches = not wanted or (item is not None and item.text().strip().casefold() in wanted)
+            self.tbl_players.setRowHidden(row, not matches)
+            if matches:
+                visible += 1
+                if first_visible < 0:
+                    first_visible = row
+        if hasattr(self, "btn_clear_readiness_filter"):
+            self.btn_clear_readiness_filter.setVisible(bool(wanted))
+        if wanted and first_visible >= 0:
+            self.tbl_players.selectRow(first_visible)
+            self.tbl_players.scrollToItem(self.tbl_players.item(first_visible, 0))
+        if wanted:
+            self.status.showMessage(f"Showing {visible} player(s) from the readiness finding.", 5000)
+
+    def focus_readiness_players(self, check: Dict[str, Any]) -> None:
+        details = dict((check or {}).get("details") or {})
+        self._readiness_filter_names = {
+            str(name).strip() for name in details.get("player_names") or [] if str(name).strip()
+        }
+        self._apply_readiness_player_filter()
+
+    def clear_readiness_player_filter(self) -> None:
+        self._readiness_filter_names.clear()
+        self._apply_readiness_player_filter()
+        self.status.showMessage("Showing the full player pool.", 3000)
+
+    def _update_readiness_badge(self) -> None:
+        if not hasattr(self, "lbl_readiness"):
+            return
+        if not self.players:
+            self.lbl_readiness.setText("Readiness: load a slate")
+            self.lbl_readiness.setStyleSheet("color: #AEB7C5; padding: 1px 3px;")
+            return
+        report = self._calculate_slate_readiness()
+        status = str(report.get("status") or "review")
+        color = {"ready": "#8FE3A1", "review": "#FFD180", "blocked": "#FF8A80"}.get(status, "#FFD180")
+        self.lbl_readiness.setText(
+            f"Readiness: {str(report.get('title') or 'Review')} {int(report.get('score', 0) or 0)}/100"
+        )
+        self.lbl_readiness.setStyleSheet(f"color: {color}; font-weight: 700; padding: 1px 3px;")
+        self.lbl_readiness.setToolTip(
+            f"{int(report.get('blockers', 0) or 0)} blocker(s); "
+            f"{int(report.get('reviews', 0) or 0)} item(s) to review. Click Slate Readiness for details."
+        )
+
+    def on_slate_readiness(self) -> None:
+        if self.players and self._current_sport() == "NFL":
+            stale = not self._last_live_check_epoch or (time.time() - self._last_live_check_epoch) > 15 * 60
+            if stale:
+                try:
+                    self._run_live_nfl_check(show_dialog=False, full_context=False)
+                except Exception:
+                    logger.exception("Slate Readiness live refresh failed; reporting cached state")
+                    self.status.showMessage("Live refresh was unavailable; readiness uses the last known data.", 6000)
+        report = self._calculate_slate_readiness()
+        self._update_readiness_badge()
+        SlateReadinessDialog(report, self).exec_()
+
+    def _record_live_check(self, summary: Dict[str, Any]) -> None:
+        had_previous = bool(self.last_live_check_summary)
+        self.last_live_check_summary = dict(summary or {})
+        sleeper_ok = summary.get("sleeper_state") == "ok"
+        if sleeper_ok:
+            self._last_live_check_epoch = time.time()
+        matched = int(summary.get("sleeper", 0) or 0)
+        total = int(summary.get("total", len(self.players)) or 0)
+        flags = int(summary.get("status_flags", 0) or 0)
+        changes = int(summary.get("status_changes", 0) or 0) if had_previous else 0
+        promotions = int(summary.get("replacement_promotions", 0) or 0)
+        status_text = f"Players {matched}/{total}" if sleeper_ok else "Player status unavailable"
+        checked = time.strftime("%I:%M %p").lstrip("0")
+        self.lbl_live_data.setText(
+            f"Live data {checked} • {status_text} • {flags} unavailable flags • "
+            f"{promotions} next-up boosts • {changes} changes"
+        )
+        details = [
+            f"Player source: {'Sleeper' if sleeper_ok else 'unavailable'}",
+            f"Matched players: {matched}/{total}",
+            f"Unavailable/out flags: {flags}",
+            f"Next active players promoted: {promotions}",
+            f"Status changes: {changes}",
+        ]
+        self.lbl_live_data.setToolTip("\n".join(details))
+        if not sleeper_ok:
+            color = "#FF8A80"
+        else:
+            color = "#8FE3A1"
+        self.lbl_live_data.setStyleSheet(f"color: {color}; padding: 1px 3px;")
+        self._update_readiness_badge()
+
+    def _locked_live_conflicts(self) -> List[Dict[str, Any]]:
+        return [
+            player for player in self.players
+            if bool(player.get("LiveStatusConflict"))
+            or (
+                (bool(player.get("LockFlex")) or bool(player.get("LockCpt")))
+                and str(player.get("NFLAvailability") or "").strip().upper() == "OUT"
+            )
+        ]
+
+    def _run_live_nfl_check(self, *, show_dialog: bool, full_context: bool) -> Dict[str, Any]:
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+        try:
+            if full_context:
+                summary = apply_auto_nfl_context(self.players)
+            else:
+                summary = refresh_live_nfl_data(self.players)
+            self._record_live_check(summary)
+            faded = self._auto_fade_out_players()
+            self.recalc_ownership_quick()
+            self._refresh_players_table()
+            self.status.showMessage(
+                f"Game-day check complete: {int(summary.get('sleeper', 0))}/{len(self.players)} players matched."
+                + (f" Auto-faded {faded}." if faded else ""),
+                7000,
+            )
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+
+        if show_dialog:
+            change_rows = list(summary.get("changes") or [])
+            change_text = ""
+            if change_rows:
+                rendered = [f"• {row.get('name')}: {row.get('availability') or 'updated'}" for row in change_rows[:12]]
+                if len(change_rows) > 12:
+                    rendered.append(f"• plus {len(change_rows) - 12} more")
+                change_text = "\n\nChanges since the prior check:\n" + "\n".join(rendered)
+            QtWidgets.QMessageBox.information(
+                self,
+                "Game-Day Check",
+                f"Player status matched {int(summary.get('sleeper', 0))} of {len(self.players)} players.\n"
+                f"Unavailable/out flags: {int(summary.get('status_flags', 0))}.\n"
+                f"Next active players promoted: {int(summary.get('replacement_promotions', 0))}."
+                f"{change_text}",
+            )
+        return summary
+
+    def _ensure_live_nfl_before_build(self) -> bool:
+        if self._current_sport() != "NFL":
+            return True
+        stale = not self._last_live_check_epoch or (time.time() - self._last_live_check_epoch) > 15 * 60
+        if stale:
+            try:
+                summary = self._run_live_nfl_check(show_dialog=False, full_context=False)
+            except Exception as exc:
+                logger.exception("Pre-build NFL game-day check failed")
+                answer = QtWidgets.QMessageBox.question(
+                    self,
+                    "Live Check Unavailable",
+                    f"The app could not complete the final player-status check:\n{exc}\n\nContinue using the last known data?",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                    QtWidgets.QMessageBox.No,
+                )
+                if answer != QtWidgets.QMessageBox.Yes:
+                    return False
+            else:
+                if summary.get("sleeper_state") != "ok":
+                    answer = QtWidgets.QMessageBox.question(
+                        self,
+                        "Player Status Unavailable",
+                        "Sleeper did not return current player data. Continue using the last known statuses?",
+                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                        QtWidgets.QMessageBox.No,
+                    )
+                    if answer != QtWidgets.QMessageBox.Yes:
+                        return False
+
+        conflicts = self._locked_live_conflicts()
+        if conflicts:
+            names = "\n".join(f"• {player.get('Name')} ({player.get('NFLAvailability') or player.get('InjuryStatus')})" for player in conflicts[:12])
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Locked Unavailable Player",
+                "Generation stopped because an unavailable player is still locked. Unlock or manually override the player, then try again:\n\n" + names,
+            )
+            return False
+        return True
+
+    def on_refresh_injuries(self) -> None:
+        if not self.players:
+            self.status.showMessage("Load a CSV first.", 3000)
+            return
+
+        sport = self._current_sport()
+        if not self._should_run_injury_enrichment(sport):
+            self._clear_injury_fields()
+            self._refresh_players_table()
+            self.status.showMessage(f"Injury refresh skipped for {sport}; current injury source is NFL-only.", 5000)
+            logger.info("Manual injury refresh skipped for %s slate; NFL-only injury source.", sport)
+            return
+
+        try:
+            if sport == "NFL":
+                ctx = self._run_live_nfl_check(show_dialog=True, full_context=False)
+                logger.info("Manual NFL game-day check applied: %s", ctx)
+                return
+            else:
+                enrich_players_with_injuries(self.players, sport=sport)
+            faded = self._auto_fade_out_players()
+            self.recalc_ownership_quick()
+
+            # Small sim to keep Own% aligned after injury refresh
+            mode = self._contest_mode()
+            try:
+                cap = self._safe_float(self.edit_sd_cap.text(), 50000.0) if mode == "showdown" else self._safe_float(self.edit_cl_cap.text(), 50000.0)
+            except Exception:
+                cap = 50000.0
+            self._start_ownership_sim(num_sims=500, mode=mode, cap=cap)
+
+            msg = "NFL context refreshed." if sport == "NFL" else "Injuries refreshed."
+            msg += f" Auto-faded {faded} OUT." if faded else ""
+            self.status.showMessage(msg, 4000)
+        except Exception as e:
+            logger.exception("Injury refresh failed")
+            QtWidgets.QMessageBox.warning(self, "Injury API Error", str(e))
+
+    def _should_run_injury_enrichment(self, sport: Optional[str] = None) -> bool:
+        """Return True only for sports supported by the current injury source."""
+        return (sport or self._current_sport() or "NFL").strip().upper() in ("NFL", "MLB")
+
+    def _clear_injury_fields(self) -> None:
+        """Clear NFL-only injury metadata on non-NFL slates."""
+        for p in self.players or []:
+            p["InjuryStatus"] = ""
+            p["InjuryBodyPart"] = ""
+            p["InjuryStartDate"] = ""
+            p["AutoFadeInjury"] = False
+
+
+    def _detect_contest_mode_from_players(self) -> str:
+        """Detect contest mode from loaded player pool.
+
+        Heuristic:
+          - If any player has a non-empty CptID/CptNamePlusID, treat as Showdown.
+          - Otherwise treat as Classic.
+        """
+        for p in self.players or []:
+            if str(p.get("CptID") or "").strip() or str(p.get("CptNamePlusID") or "").strip():
+                return "showdown"
+        return "classic"
+
+    def _contest_mode(self) -> str:
+        # Determine current mode from the bottom tabs (0=Showdown, 1=Classic)
+        try:
+            if hasattr(self, "tabs_lineups") and self.tabs_lineups.currentIndex() == 0:
+                return "showdown"
+        except Exception:
+            pass
+        return "classic"
+
+    def _auto_fade_out_players(self) -> int:
+        """Auto-fade players projected OUT after injury enrichment.
+
+        We only *set* fades; we never remove fades the user set manually.
+        If a player is explicitly locked, we do not auto-fade them.
+        """
+        if not self.players:
+            return 0
+        out_tokens = ("OUT", "IR", "INACTIVE", "PUP", "SUSP", "PRACTICE SQUAD", "NFI")
+        faded = 0
+        for p in self.players:
+            status = str(p.get("InjuryStatus") or "").strip().upper()
+            if not status:
+                continue
+            availability = str(p.get("NFLAvailability") or "").strip().upper()
+            is_out = availability == "OUT" or any(t in status for t in out_tokens) or status == "O"
+            if is_out:
+                if not bool(p.get("LockFlex")) and not bool(p.get("LockCpt")):
+                    if not bool(p.get("FadeFlex")):
+                        p["FadeFlex"] = True
+                        faded += 1
+                    if not bool(p.get("FadeCpt")):
+                        p["FadeCpt"] = True
+        return faded
+
+    def _estimate_ownership_quick(self, *, mode: str) -> Dict[str, Dict[str, float]]:
+        """Fast ownership estimate used immediately after CSV load.
+
+        This is a heuristic (not a Monte Carlo). The full sim, when run, overwrites these values.
+        Returns:
+            {"total": {key:pct}, "cpt": {key:pct}, "flex": {key:pct}}
+        """
+        players = [p for p in (self.players or []) if float(p.get("FlexSalary", 0) or 0) > 0]
+        if not players:
+            return {"total": {}, "cpt": {}, "flex": {}}
+
+        # Base weights: projection + value nudge
+        scores: List[float] = []
+        keys: List[str] = []
+        for p in players:
+            sal = float(p.get("FlexSalary", 0.0) or 0.0)
+            proj = float(p.get("FlexProjection", 0.0) or 0.0)
+            val = (proj / (sal / 1000.0)) if sal > 0 else 0.0
+            s = proj + 0.35 * val
+            s = max(0.0, s)
+            scores.append(s + 1e-6)  # keep >0
+            keys.append(_pkey(p))
+
+        total_sum = float(sum(scores) or 1.0)
+        total_pct = {k: (w / total_sum) * 100.0 for k, w in zip(keys, scores)}
+
+        if mode.strip().lower() != "showdown":
+            # Classic doesn't use CPT/FLEX split; keep those blank.
+            return {"total": total_pct, "cpt": {}, "flex": total_pct}
+
+        # For showdown: CPT ownership is typically more concentrated than FLEX.
+        # We sharpen the same base weights with a power transform for CPT.
+        pow_cpt = 1.35
+        cpt_raw = [w ** pow_cpt for w in scores]
+        cpt_sum = float(sum(cpt_raw) or 1.0)
+        cpt_pct = {k: (w / cpt_sum) * 100.0 for k, w in zip(keys, cpt_raw)}
+
+        # FLEX ownership tends to be flatter; we slightly soften (sqrt-ish).
+        pow_flex = 0.85
+        flex_raw = [w ** pow_flex for w in scores]
+        flex_sum = float(sum(flex_raw) or 1.0)
+        flex_pct = {k: (w / flex_sum) * 100.0 for k, w in zip(keys, flex_raw)}
+
+        return {"total": total_pct, "cpt": cpt_pct, "flex": flex_pct}
+
+    def recalc_ownership_quick(self) -> None:
+        if not self.players:
+            return
+        mode = self._contest_mode()
+        own = self._estimate_ownership_quick(mode=mode)
+        tot = (own or {}).get("total", {})
+        cpt = (own or {}).get("cpt", {})
+        flx = (own or {}).get("flex", {})
+        for p in self.players:
+            k = _pkey(p)
+            p["ProjOwnPct"] = float(tot.get(k, 0.0) or 0.0)
+            p["ProjCptOwnPct"] = float(cpt.get(k, 0.0) or 0.0)
+            p["ProjFlexOwnPct"] = float(flx.get(k, 0.0) or 0.0)
+        self._refresh_players_table()
+
+    def _start_ownership_sim(self, *, num_sims: int, mode: str, cap: float, sport: Optional[str] = None) -> None:
+        # UI: show progress bar + eta in status bar
+        self._own_progress.setValue(0)
+        self._own_progress.setMaximum(num_sims)
+        self._own_progress.setVisible(True)
         self._own_eta.setText("Starting…")
         self._own_eta.setVisible(True)
         self.status.showMessage(f"Simulating ownership ({mode}, {num_sims:,} lineups)…")
