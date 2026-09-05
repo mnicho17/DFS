@@ -1304,6 +1304,7 @@ class LineupBuildWorker(QtCore.QObject):
 
 
 from data_io import read_players_csv
+from dk_entries import read_entries_template, write_updated_entries
 from injury_api import enrich_players_with_injuries
 from optimizers import ShowdownOptimizer, ClassicOptimizer, MultiSportClassicOptimizer, attach_showdown_metrics, get_roster_slots_for_sport, lineup_slots_for_sport, _eligible_for_slot, lineup_grade_for_sport
 from widgets import CopyRowTableWidget
@@ -3834,6 +3835,12 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_export_sd.clicked.connect(lambda: self.on_export_saved("showdown"))
         sd_controls.addWidget(btn_export_sd)
 
+        btn_entries_sd = QtWidgets.QPushButton("Update Entries")
+        btn_entries_sd.setObjectName("updateShowdownEntriesButton")
+        btn_entries_sd.setToolTip("Replace the lineups in a downloaded DraftKings entries CSV.")
+        btn_entries_sd.clicked.connect(lambda: self.on_update_entries("showdown"))
+        sd_controls.addWidget(btn_entries_sd)
+
         sd_controls.addStretch(1)
         sd_layout.addLayout(sd_controls)
 
@@ -3880,6 +3887,12 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_export_cl.setToolTip("Save DraftKings roster IDs and record these lineups for local result matching.")
         btn_export_cl.clicked.connect(lambda: self.on_export_saved("classic"))
         cl_controls.addWidget(btn_export_cl)
+
+        btn_entries_cl = QtWidgets.QPushButton("Update Entries")
+        btn_entries_cl.setObjectName("updateClassicEntriesButton")
+        btn_entries_cl.setToolTip("Replace the lineups in a downloaded DraftKings entries CSV.")
+        btn_entries_cl.clicked.connect(lambda: self.on_update_entries("classic"))
+        cl_controls.addWidget(btn_entries_cl)
 
         cl_controls.addStretch(1)
         cl_layout.addLayout(cl_controls)
@@ -7040,6 +7053,87 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Saved {len(rows)} lineup(s) to:\n{path}\n\n"
             "These exact rosters are now ready to match when you import DraftKings results."
             + ("" if "failed" not in learning_note.lower() else f"\n\n{learning_note.strip()}"),
+        )
+
+    def on_update_entries(self, kind: str) -> None:
+        """Create a DK upload file by replacing rosters in an entries download."""
+        kind_l = str(kind or "classic").strip().lower()
+        sport = self._current_sport()
+        if kind_l == "showdown":
+            lineups: List[Any] = list(self.saved_showdown or [])
+            rows = [
+                [self._display_id(lineup.get("Captain") or {}, slot="CPT")]
+                + [self._display_id(player, slot="FLEX") for player in lineup.get("Flex") or []]
+                for lineup in lineups
+            ]
+        else:
+            lineups = list(self.saved_classic or [])
+            rows = [self._classic_export_cells(lineup, sport) for lineup in lineups]
+
+        if not lineups:
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Saved Lineups",
+                "Save the replacement lineups first, then choose the DraftKings entries file.",
+            )
+            return
+
+        if not self._confirm_portfolio_export(kind_l, lineups):
+            return
+
+        source_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select DraftKings Entries CSV",
+            "",
+            "CSV Files (*.csv)",
+        )
+        if not source_path:
+            return
+        try:
+            template = read_entries_template(source_path)
+            expected_first = "CPT" if kind_l == "showdown" else get_roster_slots_for_sport(sport)[0]
+            if template.roster_headers[0] != expected_first:
+                raise ValueError(
+                    f"This entries file starts with {template.roster_headers[0]}, but the saved "
+                    f"{kind_l.title()} lineups start with {expected_first}."
+                )
+            if len(rows) != template.entry_count:
+                raise ValueError(
+                    f"The file has {template.entry_count} entries, but {len(rows)} lineups are saved. "
+                    "Save exactly one lineup for every entry before creating the upload file."
+                )
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Entries File Error", str(exc))
+            return
+
+        base, _ = os.path.splitext(source_path)
+        suggested = f"{base}-updated.csv"
+        output_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save Updated DraftKings Entries",
+            suggested,
+            "CSV Files (*.csv)",
+        )
+        if not output_path:
+            return
+        if not output_path.lower().endswith(".csv"):
+            output_path += ".csv"
+        try:
+            write_updated_entries(source_path, output_path, rows)
+        except Exception as exc:
+            logger.exception("DraftKings entries update failed")
+            QtWidgets.QMessageBox.critical(self, "Entries Export Error", str(exc))
+            return
+
+        self.status.showMessage(
+            f"Updated {template.entry_count} DraftKings entries in {output_path}.",
+            10000,
+        )
+        QtWidgets.QMessageBox.information(
+            self,
+            "Entries File Ready",
+            f"Updated {template.entry_count} entries and preserved their contest identifiers.\n\n"
+            f"Upload this file to DraftKings:\n{output_path}",
         )
 
 
