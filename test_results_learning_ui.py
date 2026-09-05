@@ -957,6 +957,33 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(report["exported_lineups"], 1)
         window.close()
 
+    def test_update_entries_button_preserves_entry_identity_and_replaces_roster(self):
+        window = MainWindow()
+        lineup = _showdown_lineup()
+        window.saved_showdown = [lineup]
+        source_path = os.path.join(self.temp.name, "entries.csv")
+        output_path = os.path.join(self.temp.name, "entries-updated.csv")
+        with open(source_path, "w", newline="", encoding="utf-8-sig") as handle:
+            import csv
+            csv.writer(handle).writerows([
+                ["Entry ID", "Contest Name", "Contest ID", "Entry Fee", "CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX", "", "Instructions"],
+                ["5241766977", "Showdown", "193391004", "$0.50", "old", "old", "old", "old", "old", "old", "", "keep"],
+            ])
+        with mock.patch.object(window, "_confirm_portfolio_export", return_value=True), mock.patch.object(
+            QtWidgets.QFileDialog, "getOpenFileName", return_value=(source_path, "CSV Files (*.csv)")
+        ), mock.patch.object(
+            QtWidgets.QFileDialog, "getSaveFileName", return_value=(output_path, "CSV Files (*.csv)")
+        ), mock.patch.object(QtWidgets.QMessageBox, "information"):
+            window.on_update_entries("showdown")
+        with open(output_path, newline="", encoding="utf-8-sig") as handle:
+            import csv
+            rows = list(csv.reader(handle))
+        self.assertEqual(rows[1][:4], ["5241766977", "Showdown", "193391004", "$0.50"])
+        self.assertEqual(rows[1][4], str(lineup["Captain"]["CptID"]))
+        self.assertEqual(rows[1][5:10], [str(player["FlexID"]) for player in lineup["Flex"]])
+        self.assertEqual(rows[1][11], "keep")
+        window.close()
+
 
 if __name__ == "__main__":
     unittest.main()
