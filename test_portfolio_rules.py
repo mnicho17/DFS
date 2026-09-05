@@ -351,6 +351,27 @@ class PortfolioRulesTests(unittest.TestCase):
         self.assertFalse(report["compliant"])
         self.assertTrue(any("player-group" in warning for warning in report["warnings"]))
 
+    def test_showdown_captain_swap_counts_as_one_unique_assignment(self):
+        players = [
+            _player(f"P{index}", f"T{index % 2}", "G1", 20 - index)
+            for index in range(6)
+        ]
+        lineups = [
+            {"Captain": players[0], "Flex": players[1:]},
+            {"Captain": players[1], "Flex": [players[0], *players[2:]]},
+        ]
+
+        report = portfolio_report(
+            lineups,
+            {"min_unique": 1},
+            kind="showdown",
+            requested=2,
+        )
+
+        self.assertTrue(report["compliant"])
+        self.assertFalse(any("Observed minimum uniqueness" in warning for warning in report["warnings"]))
+
 
 if __name__ == "__main__":
     unittest.main()
+
