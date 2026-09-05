@@ -162,6 +162,22 @@ def _lineup_sets(lineup: Any, kind: str) -> Tuple[set[str], set[str], set[str]]:
     )
 
 
+def _uniqueness_keys(lineup: Any, kind: str) -> set[str]:
+    """Return roster keys used by both selection and final portfolio auditing.
+
+    A Showdown Captain assignment is a real DraftKings roster-slot difference.
+    Keep the ordinary player keys for player-swap uniqueness, and add a
+    role-specific key so two otherwise identical six-player rosters with
+    different Captains are one unique assignment apart instead of zero.
+    """
+    keys = set(_lineup_sets(lineup, kind)[0])
+    captain = lineup_captain(lineup, kind)
+    captain_key = player_key(captain) if captain else ""
+    if captain_key:
+        keys.add(f"CPT:{captain_key}")
+    return keys
+
+
 def select_portfolio(
     candidates: Iterable[Any],
     requested: int,
@@ -265,7 +281,7 @@ def select_portfolio(
         and (max_game is None or max_game >= requested)
     )
     if unrestricted_full_pool:
-        key_sets = [_lineup_sets(lineup, kind)[0] for lineup in pool]
+        key_sets = [_uniqueness_keys(lineup, kind) for lineup in pool]
         min_unique = normalized["min_unique"]
         pairwise_unique = all(
             len(key_sets[i] - key_sets[j]) >= min_unique
@@ -359,10 +375,10 @@ def select_portfolio(
             conflicts: Dict[int, set[int]] = {id(lineup): set() for lineup in all_lineups}
             for index, lineup in enumerate(all_lineups):
                 lineup_id = id(lineup)
-                keys = candidate_meta[lineup_id]["keys"]
+                keys = _uniqueness_keys(lineup, kind)
                 for previous in all_lineups[:index]:
                     previous_id = id(previous)
-                    if len(keys - candidate_meta[previous_id]["keys"]) < min_unique:
+                    if len(keys - _uniqueness_keys(previous, kind)) < min_unique:
                         conflicts[lineup_id].add(previous_id)
                         conflicts[previous_id].add(lineup_id)
             uniqueness_cache[min_unique] = conflicts
@@ -875,7 +891,7 @@ def portfolio_report(
 
     for lineup in lineups or []:
         keys, teams, games = _lineup_sets(lineup, kind)
-        key_sets.append(keys)
+        key_sets.append(_uniqueness_keys(lineup, kind))
         total_counts.update(keys)
         team_counts.update(teams)
         game_counts.update(games)
