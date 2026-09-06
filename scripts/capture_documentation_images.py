@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from PyQt5 import QtCore, QtWidgets  # noqa: E402
+from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
 from main_window import BuildDiagnosticsDialog, BuildRecipesDialog, ContestProfileDialog, EntrySafetyDialog, FinalLockCheckDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog, StackExposureDialog  # noqa: E402
@@ -306,7 +306,7 @@ def capture(output_dir: Path) -> None:
         app.processEvents()
         save_widget(window, output_dir / "main-workspace.png")
 
-        window.combo_nfl_compute_mode.setCurrentText("Deep (up to 5 min)")
+        window.combo_nfl_compute_mode.setCurrentText("Deep (custom budget)")
         window.action_show_build_controls.setChecked(True)
         window.tabs_workspace_controls.setCurrentIndex(0)
         app.processEvents()
@@ -531,7 +531,7 @@ def capture(output_dir: Path) -> None:
                 "sport": "NFL", "contest_kind": "classic", "requested_lineups": 150,
                 "build_style": "Strategic", "salary_strategy": "Near Cap",
                 "nfl_sim_enabled": True, "nfl_field_preset": "150-Max",
-                "nfl_compute_mode": "Deep (up to 5 min)", "min_unique": 2,
+                "nfl_compute_mode": "Deep (custom budget)", "min_unique": 2,
             },
             "NFL Single Entry": {
                 "sport": "NFL", "contest_kind": "classic", "requested_lineups": 1,
@@ -609,13 +609,47 @@ def capture(output_dir: Path) -> None:
         app.processEvents()
 
 
+def capture_deep_compute(output_dir: Path) -> None:
+    from unittest import mock
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    if sys.platform == "win32" and os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        QtGui.QFontDatabase.addApplicationFont("C:/Windows/Fonts/segoeui.ttf")
+        app.setFont(QtGui.QFont("Segoe UI", 10))
+    app.setStyle("Fusion")
+    app.setStyleSheet(DARK_QSS)
+    with tempfile.TemporaryDirectory() as directory:
+        settings = QtCore.QSettings(str(Path(directory) / "capture.ini"), QtCore.QSettings.IniFormat)
+        with mock.patch("main_window.QtCore.QSettings", return_value=settings):
+            window = MainWindow()
+            window.combo_sport.setCurrentText("NFL")
+            window.tabs_lineups.setCurrentIndex(1)
+            window.chk_nfl_contest_sim.setChecked(True)
+            window.combo_nfl_compute_mode.setCurrentIndex(1)
+            window.action_show_build_controls.setChecked(True)
+            window.tabs_workspace_controls.setCurrentIndex(0)
+            window.resize(1400, 900)
+            window.show()
+            app.processEvents()
+            save_widget(window.tabs_workspace_controls, output_dir / "deep-build.png")
+            def capture_dialog():
+                dialog = app.activeModalWidget()
+                save_widget(dialog, output_dir / "deep-compute-settings.png")
+                dialog.reject()
+            QtCore.QTimer.singleShot(100, capture_dialog)
+            window._edit_deep_compute_settings()
+            window.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute"), default="all")
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    if args.only == "contest-aware-sim":
+    if args.only == "deep-compute":
+        capture_deep_compute(output_dir)
+    elif args.only == "contest-aware-sim":
         output_dir.mkdir(parents=True, exist_ok=True)
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
         app.setStyle("Fusion")
@@ -628,4 +662,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

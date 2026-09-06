@@ -14,6 +14,7 @@ from collections import Counter
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from compute_settings import DEEP_CONTROLS, normalize_deep_settings, deep_candidate_budget, deep_search_seeds
 
 
 class SortKeyItem(QtWidgets.QTableWidgetItem):
@@ -492,6 +493,7 @@ class LineupBuildWorker(QtCore.QObject):
         contest_profile: Optional[Dict[str, Any]] = None,
         compute_mode: str = "Fast",
         deep_time_limit_seconds: float = 300.0,
+        deep_options: Optional[Dict[str, Any]] = None,
         retained_lineups: Optional[List[Any]] = None,
         repair_source: str = "",
     ):
@@ -508,7 +510,7 @@ class LineupBuildWorker(QtCore.QObject):
         self.salary_strategy = salary_strategy or "Near Cap"
         self.portfolio_rules = dict(portfolio_rules or {})
         self.sim_enabled = bool(sim_enabled)
-        self.sim_scenarios = max(100, int(sim_scenarios or 750))
+        self.sim_scenarios = max(100, min(10000, int(sim_scenarios or 750)))
         self.field_preset = field_preset or "150-Max"
         self.field_calibration = dict(field_calibration or {})
         self.contest_profile = (
@@ -518,6 +520,7 @@ class LineupBuildWorker(QtCore.QObject):
         )
         self.compute_mode = str(compute_mode or "Fast").strip()
         self.deep_time_limit_seconds = max(1.0, float(deep_time_limit_seconds or 300.0))
+        self.deep_options = normalize_deep_settings(deep_options)
         self.retained_lineups = list(retained_lineups or [])[:self.num_lineups]
         self.repair_source = str(repair_source or "")
         self._cancel_event = threading.Event()
@@ -664,12 +667,9 @@ class LineupBuildWorker(QtCore.QObject):
             if use_nfl_sim:
                 alternate_sources_allowed = not hard_portfolio_rules and not has_locks
                 if deep_build:
-                    # A Deep build explores roughly nine times the normal 150-Max
-                    # bank.  Generation is deadline-aware, so this is a ceiling,
-                    # not a promise that slower hardware must fill every slot.
-                    total_candidate_budget = min(
-                        6000,
-                        max(1200, int(math.ceil(build_request * 30.0))),
+                    # Explicit ceilings remain deadline-aware; Auto preserves the old budget.
+                    total_candidate_budget = deep_candidate_budget(
+                        build_request, self.deep_options, alternate_sources_allowed,
                     )
                     if alternate_sources_allowed:
                         candidate_target = int(math.ceil(total_candidate_budget * 0.55))
@@ -677,10 +677,7 @@ class LineupBuildWorker(QtCore.QObject):
                         scenario_candidate_target = int(math.ceil(remaining_budget * 0.68))
                         ownership_candidate_target = max(0, remaining_budget - scenario_candidate_target)
                     else:
-                        candidate_target = min(
-                            5000,
-                            max(1200, int(math.ceil(build_request * 24.0))),
-                        )
+                        candidate_target = total_candidate_budget
                 else:
                     # Keep the measured 500-candidate budget for a normal 150-Max
                     # build, but diversify its sources. Projection-led optimizer
@@ -777,7 +774,7 @@ class LineupBuildWorker(QtCore.QObject):
                     # salary shapes, and value combinations.  Batching also keeps
                     # the generator's pairwise uniqueness work bounded.
                     lineups = []
-                    seeds = (1337, 4241, 7919, 12007)
+                    seeds = deep_search_seeds(self.deep_options["seeds"])
                     remaining_optimizer = candidate_target
                     completed_optimizer = 0
                     for batch_index, seed in enumerate(seeds):
@@ -955,7 +952,7 @@ class LineupBuildWorker(QtCore.QObject):
                 deep_report["candidate_bank_count"] = candidate_bank_count
 
                 if deep_build:
-                    screening_scenarios = max(250, min(600, self.sim_scenarios))
+                    screening_scenarios = max(250, min(self.deep_options["screening"], self.sim_scenarios))
                     screening_field_count = max(800, min(1600, build_request * 8))
                     self.progress.emit(
                         0,
@@ -981,9 +978,12 @@ class LineupBuildWorker(QtCore.QObject):
                     shortlist_limit = min(
                         len(coarse_lineups),
                         max(
-                            400,
-                            self.num_lineups + len(self.retained_lineups) + 100,
-                            build_request * 6 + len(self.retained_lineups),
+                            self.num_lineups,
+                            self.deep_options["shortlist"] or max(
+                                400,
+                                self.num_lineups + len(self.retained_lineups) + 100,
+                                build_request * 6 + len(self.retained_lineups),
+                            ),
                         ),
                     )
                     if coarse_lineups and deep_report["screening_scenarios"] > 0:
@@ -1024,7 +1024,7 @@ class LineupBuildWorker(QtCore.QObject):
                     deep_report["shortlist_count"] = len(lineups) + len(self.retained_lineups)
 
                     validation_scenarios = max(2500, self.sim_scenarios)
-                    validation_field_count = max(1800, min(3600, build_request * 18))
+                    validation_field_count = self.deep_options["field"] or max(1800, min(3600, build_request * 18))
                     sim_result = coarse_result
                     if lineups and not validation_should_stop():
                         self.progress.emit(
@@ -1266,6 +1266,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "scenario_candidate_report": scenario_candidate_report,
                 "compute_mode": "Deep" if deep_build else "Fast",
                 "deep_time_limit_seconds": self.deep_time_limit_seconds if deep_build else 0.0,
+                "deep_options": dict(self.deep_options) if deep_build else {},
                 "screening_scenarios": int(deep_report.get("screening_scenarios", 0) or 0),
                 "validation_scenarios": int(deep_report.get("validation_scenarios", 0) or 0),
                 "shortlist_count": int(deep_report.get("shortlist_count", 0) or 0),
@@ -3304,7 +3305,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row2.addWidget(QtWidgets.QLabel("Scenarios:"))
         self.spin_nfl_sim_scenarios = QtWidgets.QSpinBox()
         self.spin_nfl_sim_scenarios.setObjectName("nflSimScenarios")
-        self.spin_nfl_sim_scenarios.setRange(250, 5000)
+        self.spin_nfl_sim_scenarios.setRange(250, 10000)
         self.spin_nfl_sim_scenarios.setSingleStep(250)
         self.spin_nfl_sim_scenarios.setValue(750)
         self.spin_nfl_sim_scenarios.setToolTip(
@@ -3328,14 +3329,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.lbl_nfl_compute_mode = QtWidgets.QLabel("Build depth")
         self.combo_nfl_compute_mode = QtWidgets.QComboBox()
         self.combo_nfl_compute_mode.setObjectName("nflComputeMode")
-        self.combo_nfl_compute_mode.addItems(["Fast (default)", "Deep (up to 5 min)"])
+        self.combo_nfl_compute_mode.addItems(["Fast (default)", "Deep (custom budget)"])
         self.combo_nfl_compute_mode.setCurrentText("Fast (default)")
         self.combo_nfl_compute_mode.setToolTip(
             "Fast uses the normal candidate bank and selected scenario count.\n"
-            "Deep spends up to five minutes exploring thousands of candidates, then screens,\n"
+            "Deep uses the time and pool limits in Compute settings, then screens,\n"
             "independently validates, and locally refines the final portfolio. NFL Classic only."
         )
         self.chk_nfl_contest_sim.toggled.connect(self.combo_nfl_compute_mode.setEnabled)
+        try:
+            stored_compute = json.loads(str(self.app_settings.value("build/deep_compute_json", "{}")))
+        except (ValueError, TypeError):
+            stored_compute = {}
+        self.deep_compute_settings = normalize_deep_settings(stored_compute)
+        self.btn_deep_compute = QtWidgets.QPushButton("Compute settings…")
+        self.btn_deep_compute.setObjectName("deepComputeSettings")
+        self.btn_deep_compute.clicked.connect(self._edit_deep_compute_settings)
+        self.combo_nfl_compute_mode.currentTextChanged.connect(self._update_deep_compute_button)
+        self.chk_nfl_contest_sim.toggled.connect(self._update_deep_compute_button)
+        self._update_deep_compute_button()
 
         row2.addStretch(1)
         top_box.addLayout(row2)
@@ -3627,7 +3639,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # space in four permanent button rows.
         self.tabs_workspace_controls = QtWidgets.QTabWidget(self)
         self.tabs_workspace_controls.setObjectName("workspaceControlTabs")
-        self.tabs_workspace_controls.setMaximumHeight(184)
+        self.tabs_workspace_controls.setMaximumHeight(230)
 
         strategy_panel = QtWidgets.QWidget(self)
         strategy_grid = QtWidgets.QGridLayout(strategy_panel)
@@ -3657,6 +3669,7 @@ class MainWindow(QtWidgets.QMainWindow):
         strategy_grid.addWidget(self.spin_nfl_sim_scenarios, 3, 6)
         strategy_grid.addWidget(self.lbl_nfl_compute_mode, 4, 4)
         strategy_grid.addWidget(self.combo_nfl_compute_mode, 4, 5, 1, 2)
+        strategy_grid.addWidget(self.btn_deep_compute, 4, 2, 1, 2)
         strategy_grid.setColumnStretch(7, 1)
         self.tabs_workspace_controls.addTab(strategy_panel, "Build Strategy")
 
@@ -4286,11 +4299,60 @@ class MainWindow(QtWidgets.QMainWindow):
             "nfl_sim_scenarios": self.spin_nfl_sim_scenarios.value(),
             "nfl_field_preset": self.combo_field_preset.currentText(),
             "nfl_compute_mode": self.combo_nfl_compute_mode.currentText(),
+            "deep_compute": dict(self.deep_compute_settings),
             "min_unique": self.spin_portfolio_unique.value(),
             "team_max_pct": self.spin_team_exposure.value(),
             "game_max_pct": self.spin_game_exposure.value(),
             "balance_ownership": self.chk_portfolio_balance.isChecked(),
         })
+
+    def _update_deep_compute_button(self, *_args) -> None:
+        if not hasattr(self, "btn_deep_compute"):
+            return
+        self.btn_deep_compute.setEnabled(
+            self.chk_nfl_contest_sim.isChecked()
+            and self.combo_nfl_compute_mode.currentText().startswith("Deep")
+        )
+        self.btn_deep_compute.setText(f"Compute settings ({self.deep_compute_settings['minutes']} min)…")
+
+    def _edit_deep_compute_settings(self) -> None:
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Deep compute settings — NFL Classic")
+        layout = QtWidgets.QFormLayout(dialog)
+        note = QtWidgets.QLabel(
+            "Time is a maximum, not a required duration. Builds may finish early.\n"
+            "Candidate pools contain lineups; player eligibility rules stay active.\n"
+            "Auto preserves the original pool sizes. Larger pools use more time and memory.\n"
+            "Set validation scenarios in Build Strategy (up to 10,000)."
+        )
+        note.setWordWrap(True)
+        layout.addRow(note)
+        controls = {}
+        for key, (label, default, low, high, step) in DEEP_CONTROLS.items():
+            spin = QtWidgets.QSpinBox(dialog)
+            spin.setObjectName("deep_" + key)
+            spin.setRange(low, high)
+            spin.setSingleStep(step)
+            spin.setGroupSeparatorShown(True)
+            if low == 0:
+                spin.setSpecialValueText("Auto")
+            spin.setValue(self.deep_compute_settings[key])
+            controls[key] = spin
+            layout.addRow(label, spin)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+            | QtWidgets.QDialogButtonBox.RestoreDefaults, parent=dialog,
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        buttons.button(QtWidgets.QDialogButtonBox.RestoreDefaults).clicked.connect(
+            lambda: [controls[key].setValue(spec[1]) for key, spec in DEEP_CONTROLS.items()]
+        )
+        layout.addRow(buttons)
+        if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            self.deep_compute_settings = normalize_deep_settings({key: spin.value() for key, spin in controls.items()})
+            self.app_settings.setValue("build/deep_compute_json", json.dumps(self.deep_compute_settings))
+            self._update_deep_compute_button()
 
     @staticmethod
     def _set_recipe_combo(combo: QtWidgets.QComboBox, value: Any) -> None:
@@ -4328,7 +4390,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if "nfl_sim_scenarios" in value:
             self.spin_nfl_sim_scenarios.setValue(int(value["nfl_sim_scenarios"]))
         self._set_recipe_combo(self.combo_field_preset, value.get("nfl_field_preset"))
-        self._set_recipe_combo(self.combo_nfl_compute_mode, value.get("nfl_compute_mode"))
+        recipe_mode = str(value.get("nfl_compute_mode") or "")
+        if recipe_mode.startswith("Deep"):
+            recipe_mode = "Deep (custom budget)"
+        self._set_recipe_combo(self.combo_nfl_compute_mode, recipe_mode)
+        # Old recipes intentionally reset custom budgets to the original defaults.
+        self.deep_compute_settings = normalize_deep_settings(value.get("deep_compute"))
+        self.app_settings.setValue("build/deep_compute_json", json.dumps(self.deep_compute_settings))
+        self._update_deep_compute_button()
         if "min_unique" in value:
             self.spin_portfolio_unique.setValue(int(value["min_unique"]))
         if "team_max_pct" in value:
@@ -4454,6 +4523,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.combo_field_preset.setVisible(is_nfl_classic)
             self.lbl_nfl_compute_mode.setVisible(is_nfl_classic)
             self.combo_nfl_compute_mode.setVisible(is_nfl_classic)
+            self.btn_deep_compute.setVisible(is_nfl_classic)
+            self._update_deep_compute_button()
             self.combo_nfl_compute_mode.setEnabled(
                 is_nfl_classic and self.chk_nfl_contest_sim.isChecked()
             )
@@ -6238,6 +6309,8 @@ class MainWindow(QtWidgets.QMainWindow):
             field_calibration=field_calibration,
             contest_profile=contest_profile,
             compute_mode=compute_mode,
+            deep_time_limit_seconds=self.deep_compute_settings["minutes"] * 60,
+            deep_options=dict(self.deep_compute_settings),
             retained_lineups=retained,
             repair_source=repair_source,
         )
@@ -7873,4 +7946,3 @@ class MainWindow(QtWidgets.QMainWindow):
             cells = self._classic_export_cells(lu, sport)
             for col, txt in enumerate(cells):
                 self.tbl_saved_cl.setItem(row, col, QtWidgets.QTableWidgetItem(txt))
-

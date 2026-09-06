@@ -102,7 +102,7 @@ The **Build Strategy** tab controls how candidates are created and ranked. Avail
 - Use salary strategy to discourage obviously under-cap builds without forcing every lineup to spend the full cap.
 - For NFL Classic, enable **NFL SIM Edge** for correlated scenario and field evaluation.
 - For NFL Classic, choose the contest entry-limit preset: **Single Entry**, **3-Max**, **20-Max**, or **150-Max**. This changes the opponent field size, salary floor, ownership emphasis, stack mix, bring-back rate, and FLEX mix used by the SIM.
-- Choose **Build depth: Fast (default)** for normal builds. Choose **Deep (up to 5 min)** for broader NFL Classic SIM exploration and independent validation.
+- Choose **Build depth: Fast (default)** for normal builds. Choose **Deep (custom budget)** for broader NFL Classic SIM exploration and independent validation.
 
 ### Saved build recipes
 
@@ -136,7 +136,7 @@ The compact **Space** display shows the current eligible build pool, structural 
 
 During generation, the Space display follows the Generate, SIM, and Select stages. After completion, hover it for the last build's phase timing and the number of candidates evaluated versus lineups selected.
 
-Deep Build shows Explore, Screen, Validate, and Select/Refine. When a contest profile is active, a final **Joint Contest** stage evaluates the selected entries together. Its five-minute value is a ceiling, not a required wait. After the normal coverage refinements, Select/Refine uses remaining compute to search for lower-duplication replacements that retain combined Edge and return strength. Every replacement must still satisfy uniqueness, exposure, group, team, and game rules. The search stops at the deadline or at a constrained local optimum, and time is reserved for the final joint check. The app keeps the strongest completed stage if you cancel or the compute budget is reached.
+Deep Build shows Explore, Screen, Validate, and Select/Refine. When a contest profile is active, a final **Joint Contest** stage evaluates the selected entries together. Its selected time budget is a ceiling, not a required wait. After the normal coverage refinements, Select/Refine uses remaining compute to search for lower-duplication replacements that retain combined Edge and return strength. Every replacement must still satisfy uniqueness, exposure, group, team, and game rules. The search stops at the deadline or at a constrained local optimum, and time is reserved for the final joint check. The app keeps the strongest completed stage if you cancel or the compute budget is reached.
 
 To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate budget, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. For NFL SIM Edge, the budget separates optimizer candidates from additional field-shaped and scenario-built candidates. Deep reports also show the coarse shortlist, independent validation count, top-candidate agreement between the two SIM passes, portfolio swaps, and time-budget status. The report identifies the slowest phase so a performance problem can be isolated without guessing.
 
@@ -185,6 +185,17 @@ Generated-lineup columns keep salary and grade/SIM summaries compact so the rost
 Large candidate pools, NFL simulation, and restrictive portfolio rules take more time than a simple projection build.
 
 ![Deep Build control in the NFL Classic Build Strategy tab](images/deep-build.png)
+
+Choose **Compute settings** for longer builds. The default remains five minutes, with Auto pools and four search seeds. You can choose 1–60 minutes, up to 20,000 candidate lineups, a 2,000-lineup validation shortlist, 10,000 sampled validation opponents, 4–32 search seeds, and 250–1,000 screening scenarios. The main Scenarios control allows up to 10,000 validation scenarios; Deep uses at least 2,500. Screening uses the smaller of its configured count and the main scenario setting, with a minimum of 250. Its opponent field stays smaller than the validation field.
+
+![Deep compute settings](images/deep-compute-settings.png)
+
+Auto retains the original pool budgets. Explicit candidate and shortlist sizes are raised to accommodate the requested portfolio when necessary. Pools describe **lineups**, not extra eligible players. Availability filters, locks, and portfolio constraints stay active. Time and pool values are maximum budgets; deadlines and available unique constructions can reduce the actual work. A local optimum may stop a build early. Cancellation is checked between work units, so the time budget is not an exact wall-clock guarantee.
+
+For a first server test, use 15 minutes, 8,000 candidates, 1,200 shortlisted lineups, 4,000 opponents, eight search seeds, 750 screening scenarios, and 5,000 validation scenarios. Increase one setting at a time while comparing the same slate. Larger counts increase time and memory consumption and do not guarantee stronger predictions. These controls apply to NFL Classic SIM Deep builds. The final joint-contest pass retains its existing adaptive sample budget.
+
+Compute settings persist locally and are included in saved build recipes. Loading an older recipe restores the original five-minute compute settings. Copy Last Build Report includes the chosen limits alongside actual counts and timing.
+
 
 ## 9. Understand NFL SIM Edge
 

@@ -420,6 +420,7 @@ def create_build_diagnostic(
             "time_remaining_seconds": max(0.0, _number(timing.get("time_remaining_seconds"))),
             "deep_time_limit_seconds": max(0.0, _number(timing.get("deep_time_limit_seconds"))),
             "deep_time_limit_reached": bool(timing.get("time_limit_reached")),
+            "deep_options": dict(timing.get("deep_options") or {}),
             "validation_top_overlap_pct": (
                 _number(timing.get("validation_top_overlap_pct"))
                 if timing.get("validation_top_overlap_pct") is not None
@@ -544,6 +545,15 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Balance ownership/dup risk: {'On' if rules.get('balance_ownership') else 'Off'}",
         f"- Player groups: {_integer(rules.get('group_count'))} | Player limits: {_integer(rules.get('constrained_player_count'))}",
     ])
+    if deep_mode:
+        options = sim.get("deep_options") or {}
+        def pool_limit(key):
+            return f"{_integer(options.get(key)):,}" if options.get(key) else "Auto"
+        lines.append(
+            f"- Deep limits: {_number(sim.get('deep_time_limit_seconds')) / 60:g} min; "
+            f"candidates {pool_limit('candidates')}; shortlist {pool_limit('shortlist')}; "
+            f"opponent sample {pool_limit('field')}; search seeds {_integer(options.get('seeds'), 4)}"
+        )
     if settings.get("contest_profile_name"):
         lines.insert(
             lines.index(f"- Compute: {compute_mode}"),
