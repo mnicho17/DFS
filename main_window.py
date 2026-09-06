@@ -6485,7 +6485,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_cancel.setVisible(False)
 
     def _add_result_pages(self, layout, kind):
+        table = self.tbl_sd if kind == "showdown" else self.tbl_cl
+        table.horizontalHeader().setSectionsClickable(True)
+        table.horizontalHeader().sectionClicked.connect(lambda column: self._sort_result_column(kind, column))
         bar = QtWidgets.QHBoxLayout()
+        reset = QtWidgets.QPushButton("Best first")
+        reset.clicked.connect(lambda: self._reset_result_sort(kind))
+        bar.addWidget(reset)
         previous = QtWidgets.QPushButton("Previous 150")
         following = QtWidgets.QPushButton("Next 150")
         combo = QtWidgets.QComboBox()
@@ -6497,10 +6503,53 @@ class MainWindow(QtWidgets.QMainWindow):
         combo.currentIndexChanged.connect(lambda page: self._change_result_page(kind, page))
         for widget in (previous, combo, following):
             bar.addWidget(widget)
-        note = QtWidgets.QLabel("SIM order: top-1% rate first. Rules apply to the full output, not each page.")
+        note = QtWidgets.QLabel("Click a column to sort all results. Best first restores SIM ranking. Rules apply to the full output.")
         note.setWordWrap(True)
         bar.addWidget(note, 1)
         layout.addLayout(bar)
+
+    def _reset_result_sort(self, kind):
+        setattr(self, "_" + kind + "_sort", None)
+        self._change_result_page(kind, 0)
+
+    def _sort_result_column(self, kind, column):
+        if column == 0:
+            return
+        table = self.tbl_sd if kind == "showdown" else self.tbl_cl
+        item = table.horizontalHeaderItem(column)
+        if item is None:
+            return
+        previous = getattr(self, "_" + kind + "_sort", None)
+        label = item.text()
+        numeric = label in {"SIM Edge", "Grade", "TotalSal", "Top 1%", "Top 2%", "Top 5%", "First %", "Mean pts"}
+        descending = not previous[1] if previous and previous[0] == column else numeric
+        setattr(self, "_" + kind + "_sort", (column, descending, label))
+        self._change_result_page(kind, 0)
+
+    def _sorted_result_rows(self, rows, kind, sport="NFL"):
+        choice = getattr(self, "_" + kind + "_sort", None)
+        if not choice:
+            return rows
+        column, descending, label = choice
+        metrics = {"SIM Edge": "sim_edge", "Top 1%": "sim_top_one_pct", "Top 2%": "sim_top_two_pct",
+                   "Top 5%": "sim_top_five_pct", "First %": "sim_win_rate", "Mean pts": "sim_mean"}
+        def key(lu):
+            if label in metrics:
+                try:
+                    value = float((getattr(lu, "sim_metrics", {}) or {}).get(metrics[label], float("nan")))
+                except (ValueError, TypeError):
+                    value = float("nan")
+                return value if math.isfinite(value) else (float("-inf") if descending else float("inf"))
+            if label == "TotalSal":
+                return sum(float(p.get("FlexSalary", 0) or 0) for p in lu)
+            if label == "Grade":
+                return float(lineup_grade_for_sport(lu, sport, self._safe_float(self.edit_cl_cap.text(), 50000)).get("score", 0) or 0)
+            if kind == "showdown":
+                players = [lu.get("Captain")] + sorted(lu.get("Flex", []), key=lambda p: p.get("FlexSalary", 0), reverse=True)
+                return self._display_name(players[column - 1]).casefold() if 0 < column <= len(players) else ""
+            cells = self._classic_display_cells(lu, sport)
+            return cells[column - 1].casefold() if 0 < column <= len(cells) else ""
+        return sorted(rows, key=key, reverse=descending)
 
     def _change_result_page(self, kind, page):
         if page < 0:
@@ -6521,7 +6570,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if any(finish_rank(lu)[0] for lu in rows):
             columns = [("Top 1%", "sim_top_one_pct"), ("Top 2%", "sim_top_two_pct"),
                        ("Top 5%", "sim_top_five_pct"), ("First %", "sim_win_rate"), ("Mean pts", "sim_mean")]
-            start = table.columnCount()
+            # Set the schema explicitly: repeated refreshes must not append columns.
+            start = 8 if kind == "showdown" else len(get_roster_slots_for_sport(getattr(self, "_classic_result_sport", "NFL"))) + 3
             table.setColumnCount(start + len(columns))
             for col, (label, key) in enumerate(columns, start):
                 table.setHorizontalHeaderItem(col, QtWidgets.QTableWidgetItem(label))
@@ -6540,10 +6590,14 @@ class MainWindow(QtWidgets.QMainWindow):
         combo.blockSignals(False)
         previous.setEnabled(page > 0)
         following.setEnabled((page + 1) * 150 < len(rows))
+        choice = getattr(self, "_" + kind + "_sort", None)
+        table.horizontalHeader().setSortIndicatorShown(bool(choice))
+        if choice:
+            table.horizontalHeader().setSortIndicator(choice[0], QtCore.Qt.DescendingOrder if choice[1] else QtCore.Qt.AscendingOrder)
         self._sync_saved_checkboxes(kind)
 
     def _populate_showdown_lineups(self, lineups: List[Dict[str, Any]], page: int = 0) -> None:
-        self.last_showdown = ranked_lineups(lineups or [])
+        self.last_showdown = self._sorted_result_rows(ranked_lineups(lineups or []), "showdown")
         self._showdown_page = page
         visible = self.last_showdown[page * 150:(page + 1) * 150]
         has_sim = any(getattr(lu, "sim_metrics", {}).get("sim_scenarios", 0) for lu in self.last_showdown)
@@ -6586,7 +6640,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tbl_sd.setItem(i, 7, item)
             self._build_progress.setValue(i + 1)
             self._build_eta.setText(f"Rendering {i + 1:,}/{total:,}")
-            QtWidgets.QApplication.processEvents()
 
         self._finish_result_page("showdown", visible)
 
@@ -6619,7 +6672,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if any(finish_rank(lu)[0] for lu in valid_lineups):
             valid_lineups = ranked_lineups(valid_lineups)
-        self.last_classic = valid_lineups
+        self.last_classic = self._sorted_result_rows(valid_lineups, "classic", sport)
         self._classic_page = page
         self._classic_result_sport = sport
         visible = self.last_classic[page * 150:(page + 1) * 150]
@@ -6735,7 +6788,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self._build_progress.setValue(i + 1)
             self._build_eta.setText(f"Rendering {i + 1:,}/{total:,}")
-            QtWidgets.QApplication.processEvents()
 
         self._finish_result_page("classic", visible)
 

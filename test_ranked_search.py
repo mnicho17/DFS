@@ -152,6 +152,27 @@ class RankedSearchTests(unittest.TestCase):
                     self.assertTrue(table.cellWidget(0, 0).isChecked())
                     table.cellWidget(0, 0).setChecked(False)
                     self.assertFalse(saved)
+                    visible = (window.last_classic if kind == 'classic' else window.last_showdown)[150:300]
+                    count = table.columnCount()
+                    window._finish_result_page(kind, visible)
+                    window._finish_result_page(kind, visible)
+                    self.assertEqual(table.columnCount(), count)
+                    labels = [table.horizontalHeaderItem(i).text() for i in range(count)]
+                    self.assertEqual(labels.count('Top 1%'), 1)
+                    column = labels.index('Top 1%')
+                    window._sort_result_column(kind, column)
+                    generated = window.last_classic if kind == 'classic' else window.last_showdown
+                    self.assertIs(generated[0], rows[449])
+                    window._sort_result_column(kind, column)
+                    generated = window.last_classic if kind == 'classic' else window.last_showdown
+                    self.assertIs(generated[0], rows[0])
+                    self.assertIs(generated[150], rows[150])
+                    table.cellWidget(0, 0).setChecked(True)
+                    self.assertIs(saved[0], rows[0])
+                    window._reset_result_sort(kind)
+                    combo.setCurrentIndex(2)
+                    self.assertTrue(table.cellWidget(149, 0).isChecked())
+                    table.cellWidget(149, 0).setChecked(False)
                 self.assertEqual(window.spin_cl.maximum(), 1000)
                 self.assertEqual(window.spin_sd.maximum(), 1000)
             finally:
