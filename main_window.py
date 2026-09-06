@@ -368,6 +368,9 @@ class OwnershipSimWorker(QtCore.QObject):
 
 
 def _lineup_signature(lineup: Sequence[Dict[str, Any]]) -> Tuple[str, ...]:
+    if isinstance(lineup, dict):
+        from showdown_simulation import showdown_signature
+        return showdown_signature(lineup)
     return tuple(sorted(player_key(player) for player in lineup if player_key(player)))
 
 
@@ -381,7 +384,11 @@ def _deep_candidate_quality(lineup: Any) -> Tuple[float, float, float, float, Tu
         except (TypeError, ValueError):
             return 0.0
 
-    projection = sum(number(player.get("FlexProjection")) for player in lineup)
+    projection = (
+        1.5 * number(lineup["Captain"].get("FlexProjection"))
+        + sum(number(player.get("FlexProjection")) for player in lineup["Flex"])
+        if isinstance(lineup, dict) else sum(number(player.get("FlexProjection")) for player in lineup)
+    )
     return (
         number(metrics.get("sim_edge")),
         number(metrics.get("sim_top_one_pct")),
@@ -535,6 +542,10 @@ class LineupBuildWorker(QtCore.QObject):
         try:
             build_started = time.perf_counter()
             deep_requested = self.compute_mode.casefold().startswith("deep")
+            if deep_requested and self.kind == "showdown" and self.sport == "NFL" and self.sim_enabled:
+                from showdown_simulation import run_deep_showdown
+                self.finished.emit(run_deep_showdown(self, _deep_shortlist))
+                return
             deep_build = bool(
                 deep_requested
                 and self.kind != "showdown"
@@ -3298,7 +3309,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.chk_nfl_contest_sim.setObjectName("nflSimEdgeCheck")
         self.chk_nfl_contest_sim.setChecked(True)
         self.chk_nfl_contest_sim.setToolTip(
-            "NFL Classic only: rank candidate lineups against correlated outcome scenarios\n"
+            "NFL Classic, or Showdown with Deep selected: rank candidates against shared outcome scenarios\n"
             "and a representative field, then select a diversified SIM Edge portfolio."
         )
         row2.addWidget(self.chk_nfl_contest_sim)
@@ -3340,7 +3351,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.combo_nfl_compute_mode.setToolTip(
             "Fast uses the normal candidate bank and selected scenario count.\n"
             "Deep uses the time and pool limits in Compute settings, then screens,\n"
-            "independently validates, and locally refines the final portfolio. NFL Classic only."
+            "independently validates, and locally refines the final portfolio. NFL Classic and Showdown."
         )
         self.chk_nfl_contest_sim.toggled.connect(self.combo_nfl_compute_mode.setEnabled)
         try:
@@ -4326,7 +4337,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _edit_deep_compute_settings(self) -> None:
         dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle("Deep compute settings — NFL Classic")
+        dialog.setWindowTitle("Deep compute settings — NFL " + ("Showdown" if self._contest_mode() == "showdown" else "Classic"))
         dialog.setMinimumWidth(640)
         layout = QtWidgets.QFormLayout(dialog)
         note = QtWidgets.QLabel(
@@ -4370,6 +4381,13 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addRow(estimate)
 
         def refresh_estimate():
+            if self._contest_mode() == "showdown":
+                estimate.setText(
+                    "Showdown runtime is not calibrated yet. These tiers set resource ceilings; "
+                    "Classic Acer timing estimates do not apply.\n"
+                    "The build can finish early. Start with Baseline and use the completed build report to compare runs."
+                )
+                return
             options = {key: spin.value() for key, spin in controls.items()}
             runtime = estimate_acer_runtime(options, validation.value())
             qualifier = "Extrapolated" if runtime["extrapolated"] else "Based on measured workloads"
@@ -4577,17 +4595,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self.lbl_mlb_stack_pref.setVisible(is_mlb)
             self.combo_mlb_stack_pref.setVisible(is_mlb)
         if hasattr(self, "chk_nfl_contest_sim"):
-            self.chk_nfl_contest_sim.setVisible(is_nfl_classic)
-            self.lbl_nfl_scenarios.setVisible(is_nfl_classic)
-            self.spin_nfl_sim_scenarios.setVisible(is_nfl_classic)
+            self.chk_nfl_contest_sim.setText("Showdown Deep SIM" if is_showdown else "NFL SIM Edge")
+            self.chk_nfl_contest_sim.setVisible(sport_u == "NFL")
+            self.lbl_nfl_scenarios.setVisible(sport_u == "NFL")
+            self.spin_nfl_sim_scenarios.setVisible(sport_u == "NFL")
             self.lbl_field_preset.setVisible(is_nfl_classic)
             self.combo_field_preset.setVisible(is_nfl_classic)
-            self.lbl_nfl_compute_mode.setVisible(is_nfl_classic)
-            self.combo_nfl_compute_mode.setVisible(is_nfl_classic)
-            self.btn_deep_compute.setVisible(is_nfl_classic)
+            self.lbl_nfl_compute_mode.setVisible(sport_u == "NFL")
+            self.combo_nfl_compute_mode.setVisible(sport_u == "NFL")
+            self.btn_deep_compute.setVisible(sport_u == "NFL")
             self._update_deep_compute_button()
             self.combo_nfl_compute_mode.setEnabled(
-                is_nfl_classic and self.chk_nfl_contest_sim.isChecked()
+                sport_u == "NFL" and self.chk_nfl_contest_sim.isChecked()
             )
         if hasattr(self, "chk_sd_template_sim"):
             self.chk_sd_template_sim.setVisible(is_showdown)
@@ -6293,9 +6312,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         portfolio_rules = self._portfolio_rules()
         effective_sim_enabled = bool(
-            str(sport or "").strip().upper() == "NFL" and kind != "showdown" and sim_enabled
+            str(sport or "").strip().upper() == "NFL" and sim_enabled
+            and (kind != "showdown" or compute_mode.casefold().startswith("deep"))
         )
-        contest_profile = self._active_contest_profile() if effective_sim_enabled else None
+        contest_profile = self._active_contest_profile() if effective_sim_enabled and kind != "showdown" else None
         if contest_profile and not str(repair_source or "").strip():
             resolved_num = self._confirm_contest_entry_count(num, contest_profile)
             if resolved_num is None:
@@ -6318,7 +6338,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "ownership_weight": lam,
                 "sim_enabled": effective_sim_enabled,
                 "sim_scenarios": sim_scenarios if effective_sim_enabled else 0,
-                "field_preset": field_preset if effective_sim_enabled else "",
+                "field_preset": ("Showdown ownership sample" if kind == "showdown" else field_preset) if effective_sim_enabled else "",
                 "contest_profile": dict(contest_profile or {}),
                 "compute_mode": (
                     "Deep" if effective_sim_enabled and compute_mode.casefold().startswith("deep") else "Fast"
@@ -6431,6 +6451,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _populate_showdown_lineups(self, lineups: List[Dict[str, Any]]) -> None:
         self.last_showdown = lineups or []
+        has_sim = any(getattr(lu, "sim_metrics", {}).get("sim_scenarios", 0) for lu in self.last_showdown)
+        self.tbl_sd.setColumnCount(8 if has_sim else 7)
+        self.tbl_sd.setHorizontalHeaderLabels(["Save", "CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX"] + (["SIM Edge"] if has_sim else []))
         self.tbl_sd.setRowCount(0)
         self.tbl_sd.setRowCount(len(self.last_showdown))
 
@@ -6456,6 +6479,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 flex_item.setTextAlignment(int(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter))
                 self.tbl_sd.setItem(i, 2 + j, flex_item)
+            if has_sim:
+                metrics = getattr(lu, "sim_metrics", {})
+                item = QtWidgets.QTableWidgetItem(f"{metrics.get('sim_edge', 0):.1f}")
+                item.setToolTip(
+                    f"Top 1%: {metrics.get('sim_top_one_pct', 0):.2f}%\n"
+                    f"Scenarios: {metrics.get('sim_scenarios', 0):,}\n"
+                    f"Sampled opponents: {metrics.get('sim_field_lineups', 0):,}\n"
+                    "Shared player outcomes with 1.5x Captain scoring. Payout proxy, not contest-specific ROI."
+                )
+                self.tbl_sd.setItem(i, 7, item)
             self._build_progress.setValue(i + 1)
             self._build_eta.setText(f"Rendering {i + 1:,}/{total:,}")
             QtWidgets.QApplication.processEvents()

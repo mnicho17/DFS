@@ -20,7 +20,7 @@ from contest_profiles import normalize_contest_profile, payout_for_tied_ranks
 INACTIVE_STATUSES = {"OUT", "IR", "PUP", "NFI", "SUSP", "SUSPENDED"}
 ROLE_LIMITS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
 ROLE_POOL_BUILD_STYLES = {"strategic", "balanced", "contrarian", "chalk"}
-POSITION_CV = {"QB": 0.32, "RB": 0.55, "WR": 0.65, "TE": 0.70, "DST": 0.80}
+POSITION_CV = {"QB": 0.32, "RB": 0.55, "WR": 0.65, "TE": 0.70, "DST": 0.80, "K": 0.45}
 SCENARIO_ARCHETYPES = ("Ceiling", "Balanced", "Leverage", "Low-Dup")
 
 
@@ -908,6 +908,9 @@ def _scenario_outcomes(
             z = 0.32 * game_z + 0.43 * pass_z + 0.12 * env_z + math.sqrt(0.699) * idio
         elif pos == "RB":
             z = 0.22 * game_z + 0.38 * rush_z + 0.15 * env_z + math.sqrt(0.785) * idio
+        elif pos == "K":
+            # Kicker scoring follows opportunities on its own offense, unlike DST.
+            z = 0.15 * game_z + 0.30 * env_z + math.sqrt(0.8875) * idio
         else:  # DST: own rushing success helps; opposing offense and game scoring hurt.
             opp_env = team_environment.get(opponent, 0.0)
             z = -0.20 * game_z + 0.18 * rush_z - 0.38 * opp_env + math.sqrt(0.783) * idio

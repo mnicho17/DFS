@@ -609,7 +609,7 @@ def capture(output_dir: Path) -> None:
         app.processEvents()
 
 
-def capture_deep_compute(output_dir: Path) -> None:
+def capture_deep_compute(output_dir: Path, showdown: bool = False) -> None:
     from unittest import mock
     output_dir.mkdir(parents=True, exist_ok=True)
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
@@ -623,7 +623,7 @@ def capture_deep_compute(output_dir: Path) -> None:
         with mock.patch("main_window.QtCore.QSettings", return_value=settings):
             window = MainWindow()
             window.combo_sport.setCurrentText("NFL")
-            window.tabs_lineups.setCurrentIndex(1)
+            window.tabs_lineups.setCurrentIndex(0 if showdown else 1)
             window.chk_nfl_contest_sim.setChecked(True)
             window.combo_nfl_compute_mode.setCurrentIndex(1)
             window.action_show_build_controls.setChecked(True)
@@ -631,11 +631,12 @@ def capture_deep_compute(output_dir: Path) -> None:
             window.resize(1400, 900)
             window.show()
             app.processEvents()
-            save_widget(window.tabs_workspace_controls, output_dir / "deep-build.png")
+            prefix = "showdown-" if showdown else ""
+            save_widget(window.tabs_workspace_controls, output_dir / (prefix + "deep-build.png"))
             def capture_dialog():
                 dialog = app.activeModalWidget()
                 dialog.findChild(QtWidgets.QComboBox, "deepProfile").setCurrentText("Thorough — 20 min cap")
-                save_widget(dialog, output_dir / "deep-compute-settings.png")
+                save_widget(dialog, output_dir / (prefix + "deep-compute-settings.png"))
                 dialog.reject()
             QtCore.QTimer.singleShot(100, capture_dialog)
             window._edit_deep_compute_settings()
@@ -645,10 +646,12 @@ def capture_deep_compute(output_dir: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep"), default="all")
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    if args.only == "deep-compute":
+    if args.only == "showdown-deep":
+        capture_deep_compute(output_dir, showdown=True)
+    elif args.only == "deep-compute":
         capture_deep_compute(output_dir)
     elif args.only == "contest-aware-sim":
         output_dir.mkdir(parents=True, exist_ok=True)

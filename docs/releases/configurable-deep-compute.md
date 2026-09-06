@@ -9,3 +9,6 @@
 - Add Baseline, Balanced, Thorough, Extended, Maximum, and Custom tiers, including validation scenarios.
 - Show live Acer-reference runtime ranges based on four completed 150-lineup runs, with wider uncertainty for unmeasured workloads.
 - Persist the main validation scenario setting; selecting Custom retains the tier values.
+
+- Add NFL Showdown Deep: seeded exploration, Captain-aware screening and independent validation, shared athlete outcomes with 1.5x Captain scoring, and portfolio refinement.
+- Add legal Showdown opponent sampling, SIM Edge display, cancellation/retained-entry tests, and explicit uncalibrated timing/payout-proxy messaging.
