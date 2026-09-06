@@ -22,6 +22,8 @@ def normalize_deep_settings(value=None):
         except (TypeError, ValueError, OverflowError):
             number = default
         result[key] = max(low, min(high, number))
+    result["all_styles"] = value.get("all_styles", False) is True
+    result["selection_mode"] = "Individual ranking" if value.get("selection_mode") == "Individual ranking" else "Portfolio selection"
     return result
 
 
@@ -57,7 +59,7 @@ DEEP_PROFILES = {
 def matching_deep_profile(options, scenarios):
     normalized = normalize_deep_settings(options)
     for name, profile in DEEP_PROFILES.items():
-        if normalized == normalize_deep_settings(profile) and normalize_validation_scenarios(scenarios) == profile["scenarios"]:
+        if all(normalized[key] == profile[key] for key in DEEP_CONTROLS) and normalize_validation_scenarios(scenarios) == profile["scenarios"]:
             return name
     return "Custom"
 

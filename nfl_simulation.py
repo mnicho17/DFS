@@ -1273,6 +1273,7 @@ def simulate_nfl_contest(
     top_five_hits: List[set[int]] = [set() for _ in candidate_lists]
     win_hits: List[set[int]] = [set() for _ in candidate_lists]
     scenario_values: List[Dict[int, float]] = [dict() for _ in candidate_lists]
+    top_two_counts = [0 for _ in candidate_lists]
     wins = [0 for _ in candidate_lists]
     cashes = [0 for _ in candidate_lists]
     busts = [0 for _ in candidate_lists]
@@ -1295,6 +1296,7 @@ def simulate_nfl_contest(
         if not field_scores:
             continue
         top_one_threshold = field_scores[max(0, int(math.floor(0.99 * (len(field_scores) - 1))))]
+        top_two_threshold = field_scores[max(0, int(math.floor(0.98 * (len(field_scores) - 1))))]
         top_five_threshold = field_scores[max(0, int(math.floor(0.95 * (len(field_scores) - 1))))]
         cash_threshold = field_scores[max(0, int(math.floor(0.80 * (len(field_scores) - 1))))]
         bust_threshold = field_scores[max(0, int(math.floor(0.40 * (len(field_scores) - 1))))]
@@ -1308,6 +1310,8 @@ def simulate_nfl_contest(
             percentile_sums[index] += percentile
             if score >= top_one_threshold:
                 top_hits[index].add(scenario_index)
+            if score >= top_two_threshold:
+                top_two_counts[index] += 1
             if score >= top_five_threshold:
                 top_five_hits[index].add(scenario_index)
             if score < bust_threshold:
@@ -1374,6 +1378,7 @@ def simulate_nfl_contest(
         learned_profile_fit = _learned_ownership_profile_fit(lineup, winning_ownership_target)
         row = {
             "sim_win_rate": wins[index] / denominator * 100.0,
+            "sim_top_two_pct": top_two_counts[index] / denominator * 100.0,
             "sim_top_one_pct": len(top_hits[index]) / denominator * 100.0,
             "sim_top_five_pct": len(top_five_hits[index]) / denominator * 100.0,
             "sim_cash_rate": cashes[index] / denominator * 100.0,

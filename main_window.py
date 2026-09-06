@@ -398,11 +398,15 @@ def _deep_candidate_quality(lineup: Any) -> Tuple[float, float, float, float, Tu
     )
 
 
+from lineup_ranking import search_jobs, ranked_lineups, finish_rank, finish_tooltip
+
+
 def _deep_shortlist(
     lineups: Sequence[Any],
     limit: int,
     *,
     reserved_signatures: Optional[Sequence[Tuple[str, ...]]] = None,
+    individual_ranking: bool = False,
 ) -> List[Any]:
     """Keep the strongest coarse-SIM candidates without erasing rare sources.
 
@@ -427,6 +431,10 @@ def _deep_shortlist(
         if lineup is not None and len(chosen) < target:
             chosen.append(lineup)
             chosen_signatures.add(signature)
+
+    if individual_ranking:
+        remaining = ranked_lineups([lu for sig, lu in unique.items() if sig not in chosen_signatures])
+        return chosen + remaining[:max(0, target - len(chosen))]
 
     buckets: Dict[Tuple[str, str], List[Any]] = {}
     for signature, lineup in unique.items():
@@ -754,6 +762,7 @@ class LineupBuildWorker(QtCore.QObject):
                     preserve_locks=True,
                     preserve_player_keys=required_role_pool_keys,
                 )
+            style_counts = {}
             if self.kind == "showdown":
                 opt = ShowdownOptimizer(
                     build_players,
@@ -787,12 +796,14 @@ class LineupBuildWorker(QtCore.QObject):
                     # the generator's pairwise uniqueness work bounded.
                     lineups = []
                     seeds = deep_search_seeds(self.deep_options["seeds"])
+                    jobs = search_jobs(seeds, self.build_style, self.deep_options["all_styles"])
                     remaining_optimizer = candidate_target
                     completed_optimizer = 0
-                    for batch_index, seed in enumerate(seeds):
+                    for batch_index, (batch_style, seed) in enumerate(jobs):
                         if remaining_optimizer <= 0 or generation_should_stop():
                             break
-                        batches_left = len(seeds) - batch_index
+                        batches_left = len(jobs) - batch_index
+                        batch_deadline = time.perf_counter() + max(0, generation_deadline - time.perf_counter()) / batches_left
                         batch_target = int(math.ceil(remaining_optimizer / max(1, batches_left)))
                         opt = MultiSportClassicOptimizer(
                             build_players,
@@ -801,7 +812,7 @@ class LineupBuildWorker(QtCore.QObject):
                             seed=seed,
                             own_mode=self.own_mode,
                             own_weight=self.own_weight,
-                            build_style=self.build_style,
+                            build_style=batch_style,
                             mlb_stack_pref=self.mlb_stack_pref,
                             salary_strategy=self.salary_strategy,
                         )
@@ -810,12 +821,13 @@ class LineupBuildWorker(QtCore.QObject):
                             progress_callback=lambda done, total, text, offset=completed_optimizer: self.progress.emit(
                                 min(candidate_budget, offset + int(done)),
                                 candidate_budget,
-                                f"Phase 1 of {total_phases} - Deep explore (seed {batch_index + 1}/{len(seeds)})",
+                                f"Phase 1 of {total_phases} - Deep {batch_style} search {batch_index + 1}/{len(jobs)}",
                             ),
-                            cancel_callback=generation_should_stop,
+                            cancel_callback=lambda: generation_should_stop() or time.perf_counter() >= batch_deadline,
                             excluded_signatures=retained_signatures_for_build,
                             minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
                         )
+                        style_counts[batch_style] = style_counts.get(batch_style, 0) + len(batch_lineups)
                         lineups.extend(batch_lineups)
                         completed_optimizer += len(batch_lineups)
                         remaining_optimizer = max(0, candidate_target - completed_optimizer)
@@ -1003,6 +1015,7 @@ class LineupBuildWorker(QtCore.QObject):
                             coarse_lineups,
                             shortlist_limit,
                             reserved_signatures=list(retained_signatures),
+                            individual_ranking=self.deep_options["selection_mode"] == "Individual ranking",
                         )
                         coarse_by_signature = {
                             _lineup_signature(lineup): lineup for lineup in shortlist_all
@@ -1134,6 +1147,7 @@ class LineupBuildWorker(QtCore.QObject):
                 refinement_passes=256 if deep_build else 0,
                 refinement_stop_callback=refinement_should_stop if deep_build else None,
                 refinement_polish_duplication=deep_build,
+                individual_ranking=deep_build and self.deep_options["selection_mode"] == "Individual ranking",
             )
             if deep_build:
                 selection_report = selected.get("report", {})
@@ -1249,6 +1263,8 @@ class LineupBuildWorker(QtCore.QObject):
                     nfl_field_preset(self.field_preset, self.field_calibration),
                     salary_cap=self.salary_cap,
                 )
+            if use_nfl_sim:
+                lineups = ranked_lineups(lineups)
             selection_seconds = selection_core_seconds
             reported_candidate_count = (
                 int(deep_report.get("candidate_bank_count", 0) or 0)
@@ -1279,6 +1295,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "compute_mode": "Deep" if deep_build else "Fast",
                 "deep_time_limit_seconds": self.deep_time_limit_seconds if deep_build else 0.0,
                 "deep_options": dict(self.deep_options) if deep_build else {},
+                "style_candidate_counts": dict(style_counts),
                 "screening_scenarios": int(deep_report.get("screening_scenarios", 0) or 0),
                 "validation_scenarios": int(deep_report.get("validation_scenarios", 0) or 0),
                 "shortlist_count": int(deep_report.get("shortlist_count", 0) or 0),
@@ -3843,7 +3860,7 @@ class MainWindow(QtWidgets.QMainWindow):
         sd_controls = QtWidgets.QHBoxLayout()
         sd_controls.addWidget(QtWidgets.QLabel("Lineups:"))
         self.spin_sd = QtWidgets.QSpinBox()
-        self.spin_sd.setRange(1, 150)
+        self.spin_sd.setRange(1, 1000)
         self.spin_sd.setValue(5)
         self.spin_sd.valueChanged.connect(self._update_lineup_space_dashboard)
         sd_controls.addWidget(self.spin_sd)
@@ -3853,11 +3870,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.edit_sd_cap.setFixedWidth(90)
         sd_controls.addWidget(self.edit_sd_cap)
 
-        btn_sd_save_all = QtWidgets.QPushButton("Save All")
+        btn_sd_save_all = QtWidgets.QPushButton("Save page")
         btn_sd_save_all.clicked.connect(self.on_sd_save_all)
         sd_controls.addWidget(btn_sd_save_all)
 
-        btn_sd_unsave_all = QtWidgets.QPushButton("Unsave")
+        btn_sd_unsave_all = QtWidgets.QPushButton("Unsave page")
         btn_sd_unsave_all.clicked.connect(self.on_sd_unsave_all)
         sd_controls.addWidget(btn_sd_unsave_all)
 
@@ -3886,6 +3903,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tbl_sd.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         self._fit_lineup_table_columns(self.tbl_sd)
         sd_layout.addWidget(self.tbl_sd, 2)
+        self._add_result_pages(sd_layout, "showdown")
 
         tabs.addTab(tab_sd, "Showdown")
 
@@ -3896,7 +3914,7 @@ class MainWindow(QtWidgets.QMainWindow):
         cl_controls = QtWidgets.QHBoxLayout()
         cl_controls.addWidget(QtWidgets.QLabel("Lineups:"))
         self.spin_cl = QtWidgets.QSpinBox()
-        self.spin_cl.setRange(1, 150)
+        self.spin_cl.setRange(1, 1000)
         self.spin_cl.setValue(5)
         self.spin_cl.valueChanged.connect(self._update_lineup_space_dashboard)
         cl_controls.addWidget(self.spin_cl)
@@ -3906,11 +3924,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.edit_cl_cap.setFixedWidth(90)
         cl_controls.addWidget(self.edit_cl_cap)
 
-        btn_cl_save_all = QtWidgets.QPushButton("Save All")
+        btn_cl_save_all = QtWidgets.QPushButton("Save page")
         btn_cl_save_all.clicked.connect(self.on_cl_save_all)
         cl_controls.addWidget(btn_cl_save_all)
 
-        btn_cl_unsave_all = QtWidgets.QPushButton("Unsave")
+        btn_cl_unsave_all = QtWidgets.QPushButton("Unsave page")
         btn_cl_unsave_all.clicked.connect(self.on_cl_unsave_all)
         cl_controls.addWidget(btn_cl_unsave_all)
 
@@ -3941,6 +3959,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tbl_cl.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
         self._fit_lineup_table_columns(self.tbl_cl)
         cl_layout.addWidget(self.tbl_cl, 2)
+        self._add_result_pages(cl_layout, "classic")
 
         tabs.addTab(tab_cl, "Classic")
 
@@ -4333,7 +4352,9 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         profile = matching_deep_profile(self.deep_compute_settings, self.spin_nfl_sim_scenarios.value())
         label = profile.split(" — ")[0]
-        self.btn_deep_compute.setText(f"Compute: {label} ({self.deep_compute_settings['minutes']} min)…")
+        search = " / All styles" if self.deep_compute_settings["all_styles"] else ""
+        self.btn_deep_compute.setToolTip("Search: " + ("All five styles" if search else "Selected style") + "\nOutput: " + self.deep_compute_settings["selection_mode"])
+        self.btn_deep_compute.setText(f"Compute: {label}{search} ({self.deep_compute_settings['minutes']} min)…")
 
     def _edit_deep_compute_settings(self) -> None:
         dialog = QtWidgets.QDialog(self)
@@ -4354,6 +4375,17 @@ class MainWindow(QtWidgets.QMainWindow):
         profile_combo.addItems(list(DEEP_PROFILES) + ["Custom"])
         profile_combo.setCurrentText(matching_deep_profile(self.deep_compute_settings, self.spin_nfl_sim_scenarios.value()))
         layout.addRow("Compute tier", profile_combo)
+        all_styles = QtWidgets.QCheckBox("Search all five build styles", dialog)
+        all_styles.setObjectName("deepAllStyles")
+        all_styles.setChecked(self.deep_compute_settings["all_styles"])
+        all_styles.setToolTip("Shares one candidate and time budget across styles; duplicates are removed before SIM.")
+        layout.addRow(all_styles)
+        selection = QtWidgets.QComboBox(dialog)
+        selection.setObjectName("deepSelectionMode")
+        selection.addItems(["Portfolio selection", "Individual ranking"])
+        selection.setCurrentText(self.deep_compute_settings["selection_mode"])
+        selection.setToolTip("Individual ranking: top-1%, then top-2%, top-5%, first-place rate and mean points. Explicit rules still apply. Minimum exposure is reported, not prioritized. Portfolio selection: choose complementary lineups, then display in the same finish-rate order.")
+        layout.addRow("Output selection", selection)
         controls = {}
         for key, (label, default, low, high, step) in DEEP_CONTROLS.items():
             spin = QtWidgets.QSpinBox(dialog)
@@ -4381,9 +4413,9 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addRow(estimate)
 
         def refresh_estimate():
-            if self._contest_mode() == "showdown":
+            if self._contest_mode() == "showdown" or all_styles.isChecked() or max(self.spin_cl.value(), self.spin_sd.value()) > 150:
                 estimate.setText(
-                    "Showdown runtime is not calibrated yet. These tiers set resource ceilings; "
+                    "This workload is not calibrated yet. These tiers set resource ceilings; "
                     "Classic Acer timing estimates do not apply.\n"
                     "The build can finish early. Start with Baseline and use the completed build report to compare runs."
                 )
@@ -4410,6 +4442,7 @@ class MainWindow(QtWidgets.QMainWindow):
             refresh_estimate()
 
         # Selecting Custom retains the current tier values for easy adjustment.
+        all_styles.toggled.connect(refresh_estimate)
         profile_combo.currentTextChanged.connect(apply_profile)
         for spin in list(controls.values()) + [validation]:
             spin.valueChanged.connect(refresh_estimate)
@@ -4425,10 +4458,12 @@ class MainWindow(QtWidgets.QMainWindow):
             for key, spec in DEEP_CONTROLS.items():
                 controls[key].setValue(spec[1])
             validation.setValue(750)
+            all_styles.setChecked(False)
+            selection.setCurrentText("Portfolio selection")
         buttons.button(QtWidgets.QDialogButtonBox.RestoreDefaults).clicked.connect(restore_defaults)
         layout.addRow(buttons)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
-            self.deep_compute_settings = normalize_deep_settings({key: spin.value() for key, spin in controls.items()})
+            self.deep_compute_settings = normalize_deep_settings(dict({key: spin.value() for key, spin in controls.items()}, all_styles=all_styles.isChecked(), selection_mode=selection.currentText()))
             self.spin_nfl_sim_scenarios.setValue(validation.value())
             self.app_settings.setValue("build/deep_compute_json", json.dumps(self.deep_compute_settings))
             self._update_deep_compute_button()
@@ -6449,25 +6484,85 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_eta.setVisible(False)
         self._build_cancel.setVisible(False)
 
-    def _populate_showdown_lineups(self, lineups: List[Dict[str, Any]]) -> None:
-        self.last_showdown = lineups or []
+    def _add_result_pages(self, layout, kind):
+        bar = QtWidgets.QHBoxLayout()
+        previous = QtWidgets.QPushButton("Previous 150")
+        following = QtWidgets.QPushButton("Next 150")
+        combo = QtWidgets.QComboBox()
+        combo.setObjectName(kind + "ResultPage")
+        combo.setMinimumWidth(220)
+        setattr(self, "_" + kind + "_pages", (combo, previous, following))
+        previous.clicked.connect(lambda: combo.setCurrentIndex(max(0, combo.currentIndex() - 1)))
+        following.clicked.connect(lambda: combo.setCurrentIndex(min(combo.count() - 1, combo.currentIndex() + 1)))
+        combo.currentIndexChanged.connect(lambda page: self._change_result_page(kind, page))
+        for widget in (previous, combo, following):
+            bar.addWidget(widget)
+        note = QtWidgets.QLabel("SIM order: top-1% rate first. Rules apply to the full output, not each page.")
+        note.setWordWrap(True)
+        bar.addWidget(note, 1)
+        layout.addLayout(bar)
+
+    def _change_result_page(self, kind, page):
+        if page < 0:
+            return
+        if kind == "showdown":
+            self._populate_showdown_lineups(self.last_showdown, page)
+        else:
+            self._populate_classic_lineups(self.last_classic, getattr(self, "_classic_result_sport", "NFL"), page)
+        self._build_progress.setVisible(False)
+        self._build_eta.setVisible(False)
+
+    def _finish_result_page(self, kind, visible):
+        table = self.tbl_sd if kind == "showdown" else self.tbl_cl
+        rows = self.last_showdown if kind == "showdown" else self.last_classic
+        page = getattr(self, "_" + kind + "_page", 0)
+        table.verticalHeader().setVisible(True)
+        table.setVerticalHeaderLabels([str(page * 150 + i + 1) for i in range(len(visible))])
+        if any(finish_rank(lu)[0] for lu in rows):
+            columns = [("Top 1%", "sim_top_one_pct"), ("Top 2%", "sim_top_two_pct"),
+                       ("Top 5%", "sim_top_five_pct"), ("First %", "sim_win_rate"), ("Mean pts", "sim_mean")]
+            start = table.columnCount()
+            table.setColumnCount(start + len(columns))
+            for col, (label, key) in enumerate(columns, start):
+                table.setHorizontalHeaderItem(col, QtWidgets.QTableWidgetItem(label))
+                for row, lineup in enumerate(visible):
+                    m = getattr(lineup, "sim_metrics", {}) or {}
+                    text = f"{float(m[key]):.2f}" if key in m and m.get("sim_scenarios") else "—"
+                    item = QtWidgets.QTableWidgetItem(text)
+                    item.setToolTip(finish_tooltip(lineup))
+                    table.setItem(row, col, item)
+        combo, previous, following = getattr(self, "_" + kind + "_pages")
+        combo.blockSignals(True)
+        combo.clear()
+        for offset in range(0, len(rows), 150):
+            combo.addItem(f"{offset + 1:,}–{min(offset + 150, len(rows)):,} of {len(rows):,}")
+        combo.setCurrentIndex(page if rows else -1)
+        combo.blockSignals(False)
+        previous.setEnabled(page > 0)
+        following.setEnabled((page + 1) * 150 < len(rows))
+        self._sync_saved_checkboxes(kind)
+
+    def _populate_showdown_lineups(self, lineups: List[Dict[str, Any]], page: int = 0) -> None:
+        self.last_showdown = ranked_lineups(lineups or [])
+        self._showdown_page = page
+        visible = self.last_showdown[page * 150:(page + 1) * 150]
         has_sim = any(getattr(lu, "sim_metrics", {}).get("sim_scenarios", 0) for lu in self.last_showdown)
         self.tbl_sd.setColumnCount(8 if has_sim else 7)
         self.tbl_sd.setHorizontalHeaderLabels(["Save", "CPT", "FLEX", "FLEX", "FLEX", "FLEX", "FLEX"] + (["SIM Edge"] if has_sim else []))
         self.tbl_sd.setRowCount(0)
-        self.tbl_sd.setRowCount(len(self.last_showdown))
+        self.tbl_sd.setRowCount(len(visible))
 
         total = max(1, len(self.last_showdown))
         self._build_progress.setRange(0, total)
         self._build_progress.setVisible(True)
         self._build_eta.setVisible(True)
 
-        for i, lu in enumerate(self.last_showdown):
+        for i, lu in enumerate(visible):
             cpt = lu.get("Captain")
             flex = sorted(lu.get("Flex", []), key=lambda x: x.get("FlexSalary", 0.0), reverse=True)
 
             chk = QtWidgets.QCheckBox()
-            chk.stateChanged.connect(lambda state, row=i: self._sd_checkbox_changed(row, state))
+            chk.stateChanged.connect(lambda state, row=page * 150 + i: self._sd_checkbox_changed(row, state))
             self.tbl_sd.setCellWidget(i, 0, chk)
 
             captain_item = QtWidgets.QTableWidgetItem(self._display_name(cpt))
@@ -6493,7 +6588,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self._build_eta.setText(f"Rendering {i + 1:,}/{total:,}")
             QtWidgets.QApplication.processEvents()
 
-    def _populate_classic_lineups(self, lineups: List[List[Dict[str, Any]]], sport: str) -> None:
+        self._finish_result_page("showdown", visible)
+
+    def _populate_classic_lineups(self, lineups: List[List[Dict[str, Any]]], sport: str, page: int = 0) -> None:
         # Defensive UI guard: never display/save lineups with unfilled slots.
         # This also protects exports if tight Max% caps produce edge cases.
         valid_lineups: List[List[Dict[str, Any]]] = []
@@ -6520,7 +6617,12 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception:
             pass
 
+        if any(finish_rank(lu)[0] for lu in valid_lineups):
+            valid_lineups = ranked_lineups(valid_lineups)
         self.last_classic = valid_lineups
+        self._classic_page = page
+        self._classic_result_sport = sport
+        visible = self.last_classic[page * 150:(page + 1) * 150]
         slots = get_roster_slots_for_sport(sport)
         has_sim_edge = any(bool(getattr(lineup, "sim_metrics", None)) for lineup in self.last_classic)
         headers = ["Save"] + slots + ["TotalSal", "SIM Edge" if has_sim_edge else "Grade"]
@@ -6528,16 +6630,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tbl_cl.setHorizontalHeaderLabels(headers)
         self._fit_lineup_table_columns(self.tbl_cl)
         self.tbl_cl.setRowCount(0)
-        self.tbl_cl.setRowCount(len(self.last_classic))
+        self.tbl_cl.setRowCount(len(visible))
 
         total = max(1, len(self.last_classic))
         self._build_progress.setRange(0, total)
         self._build_progress.setVisible(True)
         self._build_eta.setVisible(True)
 
-        for i, lu in enumerate(self.last_classic):
+        for i, lu in enumerate(visible):
             chk = QtWidgets.QCheckBox()
-            chk.stateChanged.connect(lambda state, row=i: self._cl_checkbox_changed(row, state))
+            chk.stateChanged.connect(lambda state, row=page * 150 + i: self._cl_checkbox_changed(row, state))
             self.tbl_cl.setCellWidget(i, 0, chk)
 
             cells = self._classic_display_cells(lu, sport)
@@ -6634,6 +6736,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._build_progress.setValue(i + 1)
             self._build_eta.setText(f"Rendering {i + 1:,}/{total:,}")
             QtWidgets.QApplication.processEvents()
+
+        self._finish_result_page("classic", visible)
 
     def _lineup_quality_summary(self, lineups: List[Any], sport: str, kind: str) -> str:
         try:
@@ -6804,7 +6908,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     else f"Built {built} of {requested}"
                 )
                 self.status.showMessage(f"{result} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}{comparison_note}{timing_note}", 12000)
-            self._record_build_diagnostic(payload, displayed_count=built)
+            self._record_build_diagnostic(payload, displayed_count=min(150, built))
             self._lineup_space_phase = ""
             self._update_readiness_badge()
             self._update_lineup_space_dashboard()
@@ -7313,6 +7417,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if state == QtCore.Qt.Checked:
             if lu not in self.saved_showdown:
                 self.saved_showdown.append(lu)
+                self._order_saved_from_current_build("showdown")
             self.action_show_saved_portfolio.setChecked(True)
         else:
             if lu in self.saved_showdown:
@@ -7326,11 +7431,22 @@ class MainWindow(QtWidgets.QMainWindow):
         if state == QtCore.Qt.Checked:
             if lu not in self.saved_classic:
                 self.saved_classic.append(lu)
+                self._order_saved_from_current_build("classic")
             self.action_show_saved_portfolio.setChecked(True)
         else:
             if lu in self.saved_classic:
                 self.saved_classic.remove(lu)
         self._refresh_saved_tables()
+
+    def _order_saved_from_current_build(self, kind):
+        generated = self.last_showdown if kind == "showdown" else self.last_classic
+        saved = self.saved_showdown if kind == "showdown" else self.saved_classic
+        order = {id(lineup): index for index, lineup in enumerate(generated)}
+        positions = [i for i, lineup in enumerate(saved) if id(lineup) in order]
+        current = sorted((saved[i] for i in positions), key=lambda lineup: order[id(lineup)])
+        # Keep older builds in their existing slots: their SIMs are not comparable.
+        for index, lineup in zip(positions, current):
+            saved[index] = lineup
 
     def on_sd_save_all(self) -> None:
         for r in range(self.tbl_sd.rowCount()):
@@ -7370,7 +7486,8 @@ class MainWindow(QtWidgets.QMainWindow):
         generated = self.last_showdown if kind_l == "showdown" else self.last_classic
         saved = self.saved_showdown if kind_l == "showdown" else self.saved_classic
         saved_ids = {id(lineup) for lineup in saved}
-        for row, lineup in enumerate(generated):
+        offset = getattr(self, "_" + kind_l + "_page", 0) * 150
+        for row, lineup in enumerate(generated[offset:offset + 150]):
             widget = table.cellWidget(row, 0)
             if not isinstance(widget, QtWidgets.QCheckBox):
                 continue

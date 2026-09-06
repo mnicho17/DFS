@@ -123,7 +123,7 @@ class ComputeSettingsTests(unittest.TestCase):
                     combo = dialog.findChild(QtWidgets.QComboBox, "deepProfile")
                     for name, profile in DEEP_PROFILES.items():
                         combo.setCurrentText(name)
-                        for key in normalize_deep_settings(profile):
+                        for key in ("minutes", "candidates", "shortlist", "field", "seeds", "screening"):
                             spin = dialog.findChild(QtWidgets.QSpinBox, "deep_" + key)
                             assertions.append(spin.value() == profile[key] and not spin.isEnabled())
                         assertions.append(dialog.findChild(QtWidgets.QSpinBox, "deep_validation").value() == profile["scenarios"])

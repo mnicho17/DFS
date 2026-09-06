@@ -421,6 +421,7 @@ def create_build_diagnostic(
             "deep_time_limit_seconds": max(0.0, _number(timing.get("deep_time_limit_seconds"))),
             "deep_time_limit_reached": bool(timing.get("time_limit_reached")),
             "deep_options": dict(timing.get("deep_options") or {}),
+            "style_candidate_counts": dict(timing.get("style_candidate_counts") or {}),
             "validation_top_overlap_pct": (
                 _number(timing.get("validation_top_overlap_pct"))
                 if timing.get("validation_top_overlap_pct") is not None
@@ -547,6 +548,11 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     ])
     if deep_mode:
         options = sim.get("deep_options") or {}
+        lines.append("- Search styles: " + ("All five styles (shared budget)" if options.get("all_styles") else "Selected style"))
+        if sim.get("style_candidate_counts"):
+            lines.append("- Style candidates before deduplication: " + "; ".join(f"{name} {int(count):,}" for name, count in sim["style_candidate_counts"].items()))
+        lines.append("- Output selection: " + str(options.get("selection_mode") or "Portfolio selection"))
+        lines.append("- Display order: top-1%, top-2%, top-5%, first-place rate, then mean points (descending)")
         def pool_limit(key):
             return f"{_integer(options.get(key)):,}" if options.get(key) else "Auto"
         lines.append(

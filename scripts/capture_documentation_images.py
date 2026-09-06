@@ -636,10 +636,40 @@ def capture_deep_compute(output_dir: Path, showdown: bool = False) -> None:
             def capture_dialog():
                 dialog = app.activeModalWidget()
                 dialog.findChild(QtWidgets.QComboBox, "deepProfile").setCurrentText("Thorough — 20 min cap")
+                dialog.findChild(QtWidgets.QCheckBox, "deepAllStyles").setChecked(True)
+                dialog.findChild(QtWidgets.QComboBox, "deepSelectionMode").setCurrentText("Individual ranking")
                 save_widget(dialog, output_dir / (prefix + "deep-compute-settings.png"))
                 dialog.reject()
             QtCore.QTimer.singleShot(100, capture_dialog)
             window._edit_deep_compute_settings()
+            # Illustrative finish rates on legal synthetic fixtures; no user data.
+            from test_showdown_performance import _showdown_players
+            from optimizers import ShowdownOptimizer, ShowdownLineup
+            if showdown:
+                rows = ShowdownOptimizer(_showdown_players()).build_lineups(450)
+                rows = [ShowdownLineup(lu["Captain"], lu["Flex"]) for lu in rows]
+            else:
+                rows = MultiSportClassicOptimizer(representative_players(), sport="NFL").build_lineups(450)
+                rows = [SimLineup(lu) for lu in rows]
+            for index, lu in enumerate(rows):
+                rate = 8.0 - index / 100.0
+                lu.sim_metrics = dict(sim_scenarios=10000, sim_field_lineups=4000,
+                    sim_top_one_pct=rate, sim_top_two_pct=rate + 3,
+                    sim_top_five_pct=rate + 10, sim_win_rate=rate / 10,
+                    sim_mean=100 + rate, sim_edge=80 + rate)
+            window.tabs_workspace_controls.setVisible(False)
+            window.tabs_lineups.setCurrentIndex(0 if showdown else 1)
+            if showdown:
+                window.spin_sd.setValue(450)
+                window._populate_showdown_lineups(rows)
+            else:
+                window.spin_cl.setValue(450)
+                window._populate_classic_lineups(rows, "NFL")
+            kind = "showdown" if showdown else "classic"
+            getattr(window, "_" + kind + "_pages")[0].setCurrentIndex(1)
+            window.resize(1800, 900)
+            app.processEvents()
+            save_widget(window.tabs_lineups, output_dir / (prefix + "ranked-results.png"))
             window.close()
 
 

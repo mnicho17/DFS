@@ -178,6 +178,9 @@ def _uniqueness_keys(lineup: Any, kind: str) -> set[str]:
     return keys
 
 
+from lineup_ranking import finish_rank
+
+
 def select_portfolio(
     candidates: Iterable[Any],
     requested: int,
@@ -188,6 +191,7 @@ def select_portfolio(
     refinement_passes: int = 0,
     refinement_stop_callback: Optional[Any] = None,
     refinement_polish_duplication: bool = False,
+    individual_ranking: bool = False,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
@@ -196,6 +200,9 @@ def select_portfolio(
     satisfy it. Lineup uniqueness relaxes one player at a time only when needed so
     an aggressive setting cannot freeze or crash a large build.
     """
+    if individual_ranking:
+        refinement_passes = 0
+        refinement_polish_duplication = False
     requested = max(1, int(requested or 1))
     normalized = normalize_rules(rules)
     kind = str(kind or "classic").lower()
@@ -237,7 +244,7 @@ def select_portfolio(
     max_total = {key: _max_count(player.get("MaxPct"), requested) for key, player in player_lookup.items()}
     min_cpt = {key: _min_count(player.get("MinCptPct"), requested) for key, player in player_lookup.items()}
     max_cpt = {key: _max_count(player.get("MaxCptPct"), requested) for key, player in player_lookup.items()}
-    auto_guardrails = kind == "showdown" and normalized["balance_ownership"]
+    auto_guardrails = kind == "showdown" and normalized["balance_ownership"] and not individual_ranking
     if requested <= 20:
         auto_total_pct, auto_cpt_pct = 80.0, 35.0
     elif requested < 100:
@@ -418,6 +425,8 @@ def select_portfolio(
         return True
 
     def score(lineup: Any) -> float:
+        if individual_ranking:
+            return finish_rank(lineup)
         meta = candidate_meta[id(lineup)]
         keys = meta["keys"]
         teams = meta["teams"]
@@ -840,6 +849,10 @@ def select_portfolio(
             f"Built {len(selected)} of {requested} requested lineups; hard exposure, group, team, or game limits exhausted the feasible candidate pool."
         )
 
+    if auto_relaxations:
+        warnings.append(f"Automatic Showdown exposure guardrails were relaxed {auto_relaxations} times to fill the requested portfolio; displayed starting caps are not final limits.")
+    if individual_ranking:
+        warnings.append("Individual ranking uses simulated finish rates subject to explicit portfolio rules; automatic diversification and refinement are off. Minimum exposures are reported, not prioritized.")
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
     report["effective_min_unique"] = current_min_unique
     report["refinement_swaps"] = refinement_swaps

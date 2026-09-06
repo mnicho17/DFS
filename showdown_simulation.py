@@ -6,6 +6,7 @@ import time
 from array import array
 from collections import Counter
 
+from lineup_ranking import search_jobs, ranked_lineups, finish_rank
 from compute_settings import deep_candidate_budget, deep_search_seeds
 from game_day_safety import UNAVAILABLE_STATUSES, _status
 from nfl_simulation import _scenario_outcomes, _quantile, player_key
@@ -106,6 +107,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     hits = [[set() for _ in candidates] for _ in range(3)]
     sums = [0.0] * len(candidates)
     returns = [0.0] * len(candidates)
+    top_twos = [0] * len(candidates)
     cashes, busts = [0] * len(candidates), [0] * len(candidates)
     values = [{} for _ in candidates]
     scripts = Counter()
@@ -124,6 +126,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
             for group, threshold in zip(hits, (top1, top5, ranked[-1])):
                 if score >= threshold:
                     group[i].add(scenario)
+            top_twos[i] += score >= ranked[int(.98 * (len(ranked) - 1))]
             cashes[i] += score >= cash
             busts[i] += score < bust
             value = 16.0 if score >= ranked[-1] else 6.0 + (pct - .99) * 200 if score >= top1 else 1.5 + (pct - .95) * 75 if score >= top5 else .2 if score >= cash else -1.0
@@ -137,6 +140,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     for i, lineup in enumerate(candidates):
         base = dict(getattr(lineup, "sim_metrics", {}) or {})
         base.update(sim_scenarios=completed, sim_field_lineups=len(field),
+                    sim_top_two_pct=top_twos[i] / max(1, completed) * 100,
                     sim_top_one_pct=len(hits[0][i]) / max(1, completed) * 100,
                     sim_top_five_pct=len(hits[1][i]) / max(1, completed) * 100,
                     sim_win_rate=len(hits[2][i]) / max(1, completed) * 100,
@@ -184,16 +188,21 @@ def run_deep_showdown(worker, shortlist_fn):
     requested = max(0, worker.num_lineups - len(retained))
     budget = deep_candidate_budget(max(1, requested), options, False) if requested else 0
     bank = {}
+    style_counts = {}
     seeds = deep_search_seeds(options["seeds"])
-    for index, seed in enumerate(seeds):
+    jobs = search_jobs(seeds, worker.build_style, options["all_styles"])
+    generation_end = start + limit * .38
+    for index, (style, seed) in enumerate(jobs):
         if not requested or stop(start + limit * .38):
             break
-        target = math.ceil((budget - len(bank)) / (len(seeds) - index))
+        target = math.ceil((budget - len(bank)) / (len(jobs) - index))
+        job_end = time.perf_counter() + max(0, generation_end - time.perf_counter()) / (len(jobs) - index)
         optimizer = ShowdownOptimizer(players, salary_cap=worker.salary_cap, seed=seed,
-            own_mode=worker.own_mode, own_weight=worker.own_weight, build_style=worker.build_style)
+            own_mode=worker.own_mode, own_weight=worker.own_weight, build_style=style)
         rows = optimizer.build_lineups(num_lineups=target,
-            cancel_callback=lambda: stop(start + limit * .38),
-            progress_callback=lambda done, total, text: worker.progress.emit(len(bank) + done, budget, f"Phase 1 of 4 - Showdown explore seed {index + 1}/{len(seeds)}"))
+            cancel_callback=lambda: stop(job_end),
+            progress_callback=lambda done, total, text: worker.progress.emit(len(bank) + done, budget, f"Phase 1 of 4 - Showdown {style} search {index + 1}/{len(jobs)}"))
+        style_counts[style] = style_counts.get(style, 0) + len(rows)
         for lu in attach_showdown_metrics(rows, worker.salary_cap):
             key = showdown_signature(lu)
             if key not in retained_keys:
@@ -214,9 +223,9 @@ def run_deep_showdown(worker, shortlist_fn):
             progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 2 of 4 - " + c))
         deep["screening_scenarios"] = coarse["report"]["scenarios"]
         if deep["screening_scenarios"]:
-            short = shortlist_fn(coarse["lineups"], max(worker.num_lineups, options["shortlist"] or 900), reserved_signatures=retained_keys)
+            short = shortlist_fn(coarse["lineups"], max(worker.num_lineups, options["shortlist"] or 900), reserved_signatures=retained_keys, individual_ranking=options["selection_mode"] == "Individual ranking")
             sim_report = coarse["report"]
-            rank = lambda lu: (lu.sim_metrics.get("sim_edge", 0), lu.sim_metrics.get("sim_top_one_pct", 0), showdown_signature(lu))
+            rank = finish_rank
             top = {showdown_signature(lu) for lu in sorted(short, key=rank, reverse=True)[:worker.num_lineups]}
             validation_end = deadline - min(60, limit * .20)
             if not stop(validation_end):
@@ -239,7 +248,9 @@ def run_deep_showdown(worker, shortlist_fn):
     worker.progress.emit(0, worker.num_lineups, "Phase 4 of 4 - selecting and refining Showdown portfolio")
     selected = select_portfolio(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
         retained_lineups=retained, refinement_passes=256,
-        refinement_stop_callback=lambda: stop(deadline), refinement_polish_duplication=True)
+        refinement_stop_callback=lambda: stop(deadline), refinement_polish_duplication=True,
+        individual_ranking=options["selection_mode"] == "Individual ranking")
+    selected["lineups"] = ranked_lineups(selected["lineups"])
     for key in ("refinement_swaps", "duplication_refinement_swaps", "refinement_attempts", "refinement_seconds", "refinement_stop_reason"):
         deep[key] = selected["report"].get(key, "completed" if key.endswith("reason") else 0)
     deep["time_remaining_seconds"] = max(0, deadline - time.perf_counter())
@@ -247,7 +258,7 @@ def run_deep_showdown(worker, shortlist_fn):
     if not deep["validation_scenarios"]:
         selected["report"].setdefault("warnings", []).append("Deep Showdown did not complete independent validation; returning the best available stage.")
     sim_report["deep_build"] = dict(deep)
-    timing = dict(deep, deep_options=dict(options), deep_time_limit_seconds=limit,
+    timing = dict(deep, style_candidate_counts=style_counts, deep_options=dict(options), deep_time_limit_seconds=limit,
         compute_mode="Deep", generation_seconds=generation_seconds, simulation_seconds=simulation_seconds,
         selection_seconds=time.perf_counter() - selection_start, total_seconds=time.perf_counter() - start,
         candidate_target=budget, optimizer_candidate_target=budget, candidate_count=generated,
