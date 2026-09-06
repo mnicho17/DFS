@@ -634,6 +634,7 @@ def capture_deep_compute(output_dir: Path) -> None:
             save_widget(window.tabs_workspace_controls, output_dir / "deep-build.png")
             def capture_dialog():
                 dialog = app.activeModalWidget()
+                dialog.findChild(QtWidgets.QComboBox, "deepProfile").setCurrentText("Thorough — 20 min cap")
                 save_widget(dialog, output_dir / "deep-compute-settings.png")
                 dialog.reject()
             QtCore.QTimer.singleShot(100, capture_dialog)

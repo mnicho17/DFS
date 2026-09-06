@@ -6,6 +6,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt5 import QtCore, QtWidgets
 from compute_settings import normalize_deep_settings, deep_candidate_budget, deep_search_seeds
+from compute_settings import DEEP_PROFILES, matching_deep_profile, estimate_acer_runtime
 from build_recipes import dump_recipes_json, load_recipes_json
 from main_window import MainWindow, LineupBuildWorker
 from optimizers import MultiSportClassicOptimizer
@@ -95,6 +96,57 @@ class ComputeSettingsTests(unittest.TestCase):
         self.assertEqual(timing["deep_time_limit_seconds"], 1800)
         self.assertEqual(timing["deep_options"]["candidates"], 12000)
         self.assertLessEqual(timing["shortlist_count"], 8)
+
+    def test_runtime_estimates_reproduce_measured_workloads_and_mark_extrapolation(self):
+        balanced = DEEP_PROFILES["Balanced — 15 min cap"]
+        runtime = estimate_acer_runtime(balanced, balanced["scenarios"])
+        self.assertAlmostEqual(runtime["seconds"], 574.70, places=2)
+        self.assertFalse(runtime["extrapolated"])
+        thorough = DEEP_PROFILES["Thorough — 20 min cap"]
+        self.assertAlmostEqual(estimate_acer_runtime(thorough, 10000)["seconds"], 790.28, places=2)
+        maximum = DEEP_PROFILES["Maximum — 60 min cap"]
+        self.assertTrue(estimate_acer_runtime(maximum, 10000)["extrapolated"])
+        capped = estimate_acer_runtime(dict(maximum, minutes=5), 10000)
+        self.assertTrue(capped["budget_limited"])
+        self.assertEqual(capped["seconds"], 300)
+
+    def test_tier_sets_all_controls_custom_retains_values_and_cancel_discards(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = QtCore.QSettings(os.path.join(directory, "settings.ini"), QtCore.QSettings.IniFormat)
+            with mock.patch("main_window.QtCore.QSettings", return_value=settings):
+                window = MainWindow()
+                before = dict(window.deep_compute_settings)
+                scenarios_before = window.spin_nfl_sim_scenarios.value()
+                assertions = []
+                def choose_then_cancel():
+                    dialog = self.app.activeModalWidget()
+                    combo = dialog.findChild(QtWidgets.QComboBox, "deepProfile")
+                    for name, profile in DEEP_PROFILES.items():
+                        combo.setCurrentText(name)
+                        for key in normalize_deep_settings(profile):
+                            spin = dialog.findChild(QtWidgets.QSpinBox, "deep_" + key)
+                            assertions.append(spin.value() == profile[key] and not spin.isEnabled())
+                        assertions.append(dialog.findChild(QtWidgets.QSpinBox, "deep_validation").value() == profile["scenarios"])
+                    combo.setCurrentText("Custom")
+                    assertions.append(dialog.findChild(QtWidgets.QSpinBox, "deep_candidates").value() == 20000)
+                    assertions.append(dialog.findChild(QtWidgets.QSpinBox, "deep_candidates").isEnabled())
+                    dialog.reject()
+                QtCore.QTimer.singleShot(0, choose_then_cancel)
+                window._edit_deep_compute_settings()
+                self.assertTrue(all(assertions))
+                self.assertEqual(window.deep_compute_settings, before)
+                self.assertEqual(window.spin_nfl_sim_scenarios.value(), scenarios_before)
+                def choose_then_accept():
+                    dialog = self.app.activeModalWidget()
+                    dialog.findChild(QtWidgets.QComboBox, "deepProfile").setCurrentText("Thorough — 20 min cap")
+                    dialog.accept()
+                QtCore.QTimer.singleShot(0, choose_then_accept)
+                window._edit_deep_compute_settings()
+                second = MainWindow()
+                self.assertEqual(matching_deep_profile(second.deep_compute_settings, second.spin_nfl_sim_scenarios.value()), "Thorough — 20 min cap")
+                self.assertEqual(second._current_build_recipe()["nfl_sim_scenarios"], 10000)
+                window.close()
+                second.close()
 
 
 if __name__ == "__main__":

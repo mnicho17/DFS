@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from compute_settings import DEEP_CONTROLS, normalize_deep_settings, deep_candidate_budget, deep_search_seeds
+from compute_settings import DEEP_PROFILES, matching_deep_profile, estimate_acer_runtime, normalize_validation_scenarios
 
 
 class SortKeyItem(QtWidgets.QTableWidgetItem):
@@ -3307,7 +3308,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spin_nfl_sim_scenarios.setObjectName("nflSimScenarios")
         self.spin_nfl_sim_scenarios.setRange(250, 10000)
         self.spin_nfl_sim_scenarios.setSingleStep(250)
-        self.spin_nfl_sim_scenarios.setValue(750)
+        self.spin_nfl_sim_scenarios.setValue(normalize_validation_scenarios(
+            self.app_settings.value("build/validation_scenarios", 750)
+        ))
+        self.spin_nfl_sim_scenarios.valueChanged.connect(
+            lambda value: self.app_settings.setValue("build/validation_scenarios", value)
+        )
         self.spin_nfl_sim_scenarios.setToolTip(
             "More scenarios stabilize SIM Edge estimates but take longer. 750 is the Fast default.\n"
             "Deep uses this as a minimum and independently validates with at least 2,500 scenarios."
@@ -3347,6 +3353,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.btn_deep_compute.clicked.connect(self._edit_deep_compute_settings)
         self.combo_nfl_compute_mode.currentTextChanged.connect(self._update_deep_compute_button)
         self.chk_nfl_contest_sim.toggled.connect(self._update_deep_compute_button)
+        self.spin_nfl_sim_scenarios.valueChanged.connect(self._update_deep_compute_button)
         self._update_deep_compute_button()
 
         row2.addStretch(1)
@@ -4313,20 +4320,29 @@ class MainWindow(QtWidgets.QMainWindow):
             self.chk_nfl_contest_sim.isChecked()
             and self.combo_nfl_compute_mode.currentText().startswith("Deep")
         )
-        self.btn_deep_compute.setText(f"Compute settings ({self.deep_compute_settings['minutes']} min)…")
+        profile = matching_deep_profile(self.deep_compute_settings, self.spin_nfl_sim_scenarios.value())
+        label = profile.split(" — ")[0]
+        self.btn_deep_compute.setText(f"Compute: {label} ({self.deep_compute_settings['minutes']} min)…")
 
     def _edit_deep_compute_settings(self) -> None:
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle("Deep compute settings — NFL Classic")
+        dialog.setMinimumWidth(640)
         layout = QtWidgets.QFormLayout(dialog)
         note = QtWidgets.QLabel(
             "Time is a maximum, not a required duration. Builds may finish early.\n"
             "Candidate pools contain lineups; player eligibility rules stay active.\n"
             "Auto preserves the original pool sizes. Larger pools use more time and memory.\n"
-            "Set validation scenarios in Build Strategy (up to 10,000)."
+            "Choose a tier to set all counts, or Custom to edit them."
         )
         note.setWordWrap(True)
+        note.setMinimumHeight(note.fontMetrics().lineSpacing() * 5)
         layout.addRow(note)
+        profile_combo = QtWidgets.QComboBox(dialog)
+        profile_combo.setObjectName("deepProfile")
+        profile_combo.addItems(list(DEEP_PROFILES) + ["Custom"])
+        profile_combo.setCurrentText(matching_deep_profile(self.deep_compute_settings, self.spin_nfl_sim_scenarios.value()))
+        layout.addRow("Compute tier", profile_combo)
         controls = {}
         for key, (label, default, low, high, step) in DEEP_CONTROLS.items():
             spin = QtWidgets.QSpinBox(dialog)
@@ -4339,18 +4355,63 @@ class MainWindow(QtWidgets.QMainWindow):
             spin.setValue(self.deep_compute_settings[key])
             controls[key] = spin
             layout.addRow(label, spin)
+        validation = QtWidgets.QSpinBox(dialog)
+        validation.setObjectName("deep_validation")
+        validation.setRange(250, 10000)
+        validation.setSingleStep(250)
+        validation.setGroupSeparatorShown(True)
+        validation.setValue(self.spin_nfl_sim_scenarios.value())
+        layout.addRow("Validation scenarios (min. 2,500)", validation)
+        estimate = QtWidgets.QLabel(dialog)
+        estimate.setObjectName("deepRuntimeEstimate")
+        estimate.setWordWrap(True)
+        estimate.setMinimumWidth(480)
+        estimate.setMinimumHeight(estimate.fontMetrics().lineSpacing() * 6)
+        layout.addRow(estimate)
+
+        def refresh_estimate():
+            options = {key: spin.value() for key, spin in controls.items()}
+            runtime = estimate_acer_runtime(options, validation.value())
+            qualifier = "Extrapolated" if runtime["extrapolated"] else "Based on measured workloads"
+            limited = " The time cap may stop work before the pools are exhausted." if runtime["budget_limited"] else ""
+            estimate.setText(
+                f"Acer reference: roughly {runtime['low_minutes']}–{runtime['high_minutes']} minutes. "
+                f"{qualifier}; 150 NFL Classic lineups, similar slate, no contest payout profile.\n"
+                "Planning range, not a guarantee. Other hardware, slate sizes, rules and search paths can differ."
+                + limited
+            )
+
+        def apply_profile(name):
+            profile = DEEP_PROFILES.get(name)
+            if profile:
+                for key, spin in controls.items():
+                    spin.setValue(profile[key])
+                validation.setValue(profile["scenarios"])
+            for spin in list(controls.values()) + [validation]:
+                spin.setEnabled(profile is None)
+            refresh_estimate()
+
+        # Selecting Custom retains the current tier values for easy adjustment.
+        profile_combo.currentTextChanged.connect(apply_profile)
+        for spin in list(controls.values()) + [validation]:
+            spin.valueChanged.connect(refresh_estimate)
+        apply_profile(profile_combo.currentText())
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
             | QtWidgets.QDialogButtonBox.RestoreDefaults, parent=dialog,
         )
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
-        buttons.button(QtWidgets.QDialogButtonBox.RestoreDefaults).clicked.connect(
-            lambda: [controls[key].setValue(spec[1]) for key, spec in DEEP_CONTROLS.items()]
-        )
+        def restore_defaults():
+            profile_combo.setCurrentText("Custom")
+            for key, spec in DEEP_CONTROLS.items():
+                controls[key].setValue(spec[1])
+            validation.setValue(750)
+        buttons.button(QtWidgets.QDialogButtonBox.RestoreDefaults).clicked.connect(restore_defaults)
         layout.addRow(buttons)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             self.deep_compute_settings = normalize_deep_settings({key: spin.value() for key, spin in controls.items()})
+            self.spin_nfl_sim_scenarios.setValue(validation.value())
             self.app_settings.setValue("build/deep_compute_json", json.dumps(self.deep_compute_settings))
             self._update_deep_compute_button()
 

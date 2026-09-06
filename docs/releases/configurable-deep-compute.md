@@ -5,3 +5,7 @@
 - Preserve Auto pool sizes and five-minute defaults; persist compute settings and include them in recipes and diagnostic reports.
 - Preserve player eligibility, portfolio constraints, cancellation, and early stopping.
 - No remote worker service or GPU acceleration is added. Run builds directly on the dedicated machine through remote desktop.
+
+- Add Baseline, Balanced, Thorough, Extended, Maximum, and Custom tiers, including validation scenarios.
+- Show live Acer-reference runtime ranges based on four completed 150-lineup runs, with wider uncertainty for unmeasured workloads.
+- Persist the main validation scenario setting; selecting Custom retains the tier values.
