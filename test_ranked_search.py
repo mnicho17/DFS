@@ -64,9 +64,10 @@ class RankedSearchTests(unittest.TestCase):
                 optimizer = MultiSportClassicOptimizer(players, sport='NFL') if kind == 'classic' else ShowdownOptimizer(players)
                 bank = optimizer.build_lineups(20)
                 self.assertGreaterEqual(len(bank), 5)
-                styles, sim_calls = [], []
+                styles, sim_calls, exclusions = [], [], []
                 def build(opt, **kwargs):
                     styles.append(opt.build_style)
+                    exclusions.append(set(kwargs.get('exact_excluded_signatures' if kind == 'classic' else 'excluded_signatures') or []))
                     return bank[BUILD_STYLES.index(opt.build_style):BUILD_STYLES.index(opt.build_style)+1]
                 def sim(candidates, pool, **kwargs):
                     sim_calls.append((list(candidates), kwargs))
@@ -89,6 +90,8 @@ class RankedSearchTests(unittest.TestCase):
                     worker.run()
                 self.assertFalse(errors, errors)
                 self.assertEqual(set(styles), set(BUILD_STYLES))
+                self.assertFalse(exclusions[0])
+                self.assertTrue(exclusions[1])
                 self.assertEqual(len(sim_calls), 2)
                 self.assertNotEqual(sim_calls[0][1]['seed'], sim_calls[1][1]['seed'])
                 self.assertEqual(len(sim_calls[0][0]), 5)

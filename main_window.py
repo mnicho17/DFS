@@ -398,6 +398,7 @@ def _deep_candidate_quality(lineup: Any) -> Tuple[float, float, float, float, Tu
     )
 
 
+from compute_settings import deep_phase_fractions
 from lineup_ranking import search_jobs, ranked_lineups, finish_rank, finish_tooltip
 
 
@@ -571,12 +572,13 @@ class LineupBuildWorker(QtCore.QObject):
                 build_started + self.deep_time_limit_seconds
                 if deep_build else float("inf")
             )
+            generation_fraction, screening_fraction = deep_phase_fractions(self.deep_options)
             generation_deadline = (
-                build_started + self.deep_time_limit_seconds * 0.38
+                build_started + self.deep_time_limit_seconds * generation_fraction
                 if deep_build else float("inf")
             )
             screening_deadline = (
-                build_started + self.deep_time_limit_seconds * 0.58
+                build_started + self.deep_time_limit_seconds * screening_fraction
                 if deep_build else float("inf")
             )
             selection_reserve = (
@@ -797,6 +799,7 @@ class LineupBuildWorker(QtCore.QObject):
                     lineups = []
                     seeds = deep_search_seeds(self.deep_options["seeds"])
                     jobs = search_jobs(seeds, self.build_style, self.deep_options["all_styles"])
+                    optimizer_seen = set(retained_signatures_for_build)
                     remaining_optimizer = candidate_target
                     completed_optimizer = 0
                     for batch_index, (batch_style, seed) in enumerate(jobs):
@@ -825,8 +828,16 @@ class LineupBuildWorker(QtCore.QObject):
                             ),
                             cancel_callback=lambda: generation_should_stop() or time.perf_counter() >= batch_deadline,
                             excluded_signatures=retained_signatures_for_build,
+                            exact_excluded_signatures=optimizer_seen,
                             minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
                         )
+                        fresh = []
+                        for lu in batch_lineups:
+                            signature = tuple(sorted(player_key(p) for p in lu))
+                            if signature not in optimizer_seen:
+                                optimizer_seen.add(signature)
+                                fresh.append(lu)
+                        batch_lineups = fresh
                         style_counts[batch_style] = style_counts.get(batch_style, 0) + len(batch_lineups)
                         lineups.extend(batch_lineups)
                         completed_optimizer += len(batch_lineups)
@@ -1296,6 +1307,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "deep_time_limit_seconds": self.deep_time_limit_seconds if deep_build else 0.0,
                 "deep_options": dict(self.deep_options) if deep_build else {},
                 "style_candidate_counts": dict(style_counts),
+                "generation_allocation_seconds": self.deep_time_limit_seconds * generation_fraction if deep_build else 0,
                 "screening_scenarios": int(deep_report.get("screening_scenarios", 0) or 0),
                 "validation_scenarios": int(deep_report.get("validation_scenarios", 0) or 0),
                 "shortlist_count": int(deep_report.get("shortlist_count", 0) or 0),
@@ -4413,7 +4425,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addRow(estimate)
 
         def refresh_estimate():
-            if self._contest_mode() == "showdown" or all_styles.isChecked() or max(self.spin_cl.value(), self.spin_sd.value()) > 150:
+            if self._contest_mode() == "showdown" or all_styles.isChecked() or selection.currentText() == "Individual ranking" or max(self.spin_cl.value(), self.spin_sd.value()) > 150:
                 estimate.setText(
                     "This workload is not calibrated yet. These tiers set resource ceilings; "
                     "Classic Acer timing estimates do not apply.\n"
@@ -4442,6 +4454,7 @@ class MainWindow(QtWidgets.QMainWindow):
             refresh_estimate()
 
         # Selecting Custom retains the current tier values for easy adjustment.
+        selection.currentTextChanged.connect(refresh_estimate)
         all_styles.toggled.connect(refresh_estimate)
         profile_combo.currentTextChanged.connect(apply_profile)
         for spin in list(controls.values()) + [validation]:

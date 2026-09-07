@@ -7,7 +7,7 @@ from array import array
 from collections import Counter
 
 from lineup_ranking import search_jobs, ranked_lineups, finish_rank
-from compute_settings import deep_candidate_budget, deep_search_seeds
+from compute_settings import deep_candidate_budget, deep_search_seeds, deep_phase_fractions
 from game_day_safety import UNAVAILABLE_STATUSES, _status
 from nfl_simulation import _scenario_outcomes, _quantile, player_key
 from optimizers import (ShowdownOptimizer, ShowdownLineup, attach_showdown_metrics,
@@ -191,15 +191,18 @@ def run_deep_showdown(worker, shortlist_fn):
     style_counts = {}
     seeds = deep_search_seeds(options["seeds"])
     jobs = search_jobs(seeds, worker.build_style, options["all_styles"])
-    generation_end = start + limit * .38
+    generation_fraction, screening_fraction = deep_phase_fractions(options)
+    generation_end = start + limit * generation_fraction
+    exclusions = {(sig[0][4:], tuple(sig[1:])) for sig in retained_keys}
     for index, (style, seed) in enumerate(jobs):
-        if not requested or stop(start + limit * .38):
+        if not requested or len(bank) >= budget or stop(generation_end):
             break
         target = math.ceil((budget - len(bank)) / (len(jobs) - index))
         job_end = time.perf_counter() + max(0, generation_end - time.perf_counter()) / (len(jobs) - index)
         optimizer = ShowdownOptimizer(players, salary_cap=worker.salary_cap, seed=seed,
             own_mode=worker.own_mode, own_weight=worker.own_weight, build_style=style)
         rows = optimizer.build_lineups(num_lineups=target,
+            excluded_signatures=exclusions,
             cancel_callback=lambda: stop(job_end),
             progress_callback=lambda done, total, text: worker.progress.emit(len(bank) + done, budget, f"Phase 1 of 4 - Showdown {style} search {index + 1}/{len(jobs)}"))
         style_counts[style] = style_counts.get(style, 0) + len(rows)
@@ -207,6 +210,7 @@ def run_deep_showdown(worker, shortlist_fn):
             key = showdown_signature(lu)
             if key not in retained_keys:
                 bank.setdefault(key, lu)
+                exclusions.add((key[0][4:], tuple(key[1:])))
     generated = len(bank)
     generation_seconds = time.perf_counter() - start
     sim_start = time.perf_counter()
@@ -215,11 +219,11 @@ def run_deep_showdown(worker, shortlist_fn):
     deep = {"enabled": True, "time_limit_seconds": limit, "screening_scenarios": 0,
             "validation_scenarios": 0, "shortlist_count": 0, "validation_top_overlap_pct": None,
             "candidate_bank_count": generated, "validation_time_limit_reached": False}
-    if lineups and not stop(start + limit * .58):
+    if lineups and not stop(start + limit * screening_fraction):
         coarse = simulate_showdown(retained + lineups, players,
             scenarios=min(options["screening"], max(250, worker.sim_scenarios)),
             field_lineup_count=min(1600, options["field"] or 1200), salary_cap=worker.salary_cap, seed=73129,
-            cancel_callback=lambda: stop(start + limit * .58),
+            cancel_callback=lambda: stop(start + limit * screening_fraction),
             progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 2 of 4 - " + c))
         deep["screening_scenarios"] = coarse["report"]["scenarios"]
         if deep["screening_scenarios"]:
@@ -258,7 +262,8 @@ def run_deep_showdown(worker, shortlist_fn):
     if not deep["validation_scenarios"]:
         selected["report"].setdefault("warnings", []).append("Deep Showdown did not complete independent validation; returning the best available stage.")
     sim_report["deep_build"] = dict(deep)
-    timing = dict(deep, style_candidate_counts=style_counts, deep_options=dict(options), deep_time_limit_seconds=limit,
+    timing = dict(deep, generation_allocation_seconds=limit * generation_fraction,
+        style_candidate_counts=style_counts, deep_options=dict(options), deep_time_limit_seconds=limit,
         compute_mode="Deep", generation_seconds=generation_seconds, simulation_seconds=simulation_seconds,
         selection_seconds=time.perf_counter() - selection_start, total_seconds=time.perf_counter() - start,
         candidate_target=budget, optimizer_candidate_target=budget, candidate_count=generated,

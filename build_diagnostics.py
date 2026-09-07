@@ -8,6 +8,8 @@ reproducible. They never include salary-file paths or API keys.
 
 import datetime as _dt
 import json
+import re
+from ranked_diagnostics import ranked_group_summaries, format_ranked_groups
 import math
 import os
 import sys
@@ -45,6 +47,15 @@ def _aggregate_warning(value: Any) -> str:
     lower = text.casefold()
     if not text:
         return ""
+    if lower.startswith("individual ranking uses simulated finish rates"):
+        return ""  # Selection-mode information is not a failed rule.
+    relaxation = re.match(r"Automatic Showdown exposure guardrails were relaxed (\d+) times", text)
+    if relaxation:
+        return f"Automatic Showdown exposure caps were raised {relaxation.group(1)} times to fill the output; the listed caps are starting limits."
+    if "did not complete independent validation" in lower:
+        return "Independent validation did not complete; results use the best available simulation stage."
+    if lower.startswith("built ") and "requested lineups" in lower:
+        return "Fewer lineups were selected than requested because the available pool or configured rules prevented filling the output."
     if "captain exposure" in lower:
         return "A player Captain exposure constraint was not met."
     if "total exposure" in lower or "player exposure" in lower:
@@ -56,6 +67,9 @@ def _aggregate_warning(value: Any) -> str:
     if "group" in lower:
         return "A player-group rule was not satisfied."
     if "minimum unique" in lower:
+        relaxed = re.search(r"relaxed to (\d+)", lower)
+        if relaxed:
+            return f"Minimum uniqueness was reduced to {relaxed.group(1)} to fill the requested output."
         return "Minimum uniqueness was relaxed to finish the portfolio."
     return "A portfolio or simulation rule could not be fully satisfied."
 
@@ -356,6 +370,7 @@ def create_build_diagnostic(
                 portfolio.get("automatic_showdown_guardrails") or {}
             ),
         },
+        "ranked_groups": ranked_group_summaries(lineups, contest_type, salary_cap, salary_strategy),
         "exposures": exposure_summary,
         "lineup_details": lineup_details,
         "lineup_details_total": len(list(lineups or [])),
@@ -422,6 +437,7 @@ def create_build_diagnostic(
             "deep_time_limit_reached": bool(timing.get("time_limit_reached")),
             "deep_options": dict(timing.get("deep_options") or {}),
             "style_candidate_counts": dict(timing.get("style_candidate_counts") or {}),
+            "generation_allocation_seconds": _number(timing.get("generation_allocation_seconds")),
             "validation_top_overlap_pct": (
                 _number(timing.get("validation_top_overlap_pct"))
                 if timing.get("validation_top_overlap_pct") is not None
@@ -548,6 +564,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     ])
     if deep_mode:
         options = sim.get("deep_options") or {}
+        if sim.get("generation_allocation_seconds"):
+            lines.append(f"- Generation time allowance: {_number(sim['generation_allocation_seconds']) / 60:g} min; remaining phases have reserved time")
         lines.append("- Search styles: " + ("All five styles (shared budget)" if options.get("all_styles") else "Selected style"))
         if sim.get("style_candidate_counts"):
             lines.append("- Style candidates before deduplication: " + "; ".join(f"{name} {int(count):,}" for name, count in sim["style_candidate_counts"].items()))
@@ -684,6 +702,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in warnings)
     else:
         lines.append("- None")
+    lines.extend(format_ranked_groups(record.get("ranked_groups") or []))
     if is_showdown and exposures.get("total"):
         selected_count = max(1, _integer(candidates.get("selected")))
         lines.extend(["", "Full portfolio exposures"])
@@ -738,7 +757,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     lines.extend(["", (
         "Privacy: This report includes lineup names and strategy inputs for troubleshooting; "
         "it excludes file paths and API keys."
-        if lineup_details else
+        if lineup_details or record.get("ranked_groups") else
         "Privacy: This report contains aggregate settings and counts only; no players, "
         "lineups, file paths, or API keys."
     )])
@@ -830,4 +849,3 @@ def format_build_comparison(first: Mapping[str, Any], second: Mapping[str, Any])
         "Privacy: This comparison contains aggregate settings and counts only; no players, lineups, file paths, or API keys.",
     ])
     return "\n".join(lines)
-

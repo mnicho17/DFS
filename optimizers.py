@@ -752,6 +752,7 @@ class ShowdownOptimizer:
         *,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         cancel_callback: Optional[Callable[[], bool]] = None,
+        excluded_signatures: Optional[Iterable[Tuple[str, Tuple[str, ...]]]] = None,
     ) -> List[Dict[str, Any]]:
         if not self.players:
             return []
@@ -784,12 +785,14 @@ class ShowdownOptimizer:
         # Rebuilding a CBC model once per lineup becomes progressively slower as
         # no-good constraints accumulate. Use a randomized candidate portfolio
         # for larger requests; small requests retain the exact solver.
-        if num_lineups > 20:
+        excluded = set(excluded_signatures or [])
+        if num_lineups > 20 or excluded:
             logger.info("Using fast showdown portfolio builder for %d lineups.", num_lineups)
             return self._build_lineups_fast(
                 num_lineups=num_lineups,
                 progress_callback=progress_callback,
                 cancel_callback=cancel_callback,
+                excluded_signatures=excluded,
             )
 
         if HAS_PULP:
@@ -1067,6 +1070,7 @@ class ShowdownOptimizer:
         num_lineups: int,
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         cancel_callback: Optional[Callable[[], bool]] = None,
+        excluded_signatures: Optional[Iterable[Tuple[str, Tuple[str, ...]]]] = None,
     ) -> List[Dict[str, Any]]:
         """Build a large unique showdown portfolio without one CBC solve per lineup.
 
@@ -1089,7 +1093,7 @@ class ShowdownOptimizer:
         cap_cpt, cap_flex = _build_showdown_cap_maps(players, num_lineups)
         used_cpt: Dict[str, int] = {}
         used_flex: Dict[str, int] = {}
-        used_signatures: set[Tuple[str, Tuple[str, ...]]] = set()
+        used_signatures: set[Tuple[str, Tuple[str, ...]]] = set(excluded_signatures or [])
         out: List[Dict[str, Any]] = []
 
         own_s = _own_sign(self.own_mode)
@@ -2089,6 +2093,7 @@ class MultiSportClassicOptimizer:
         cancel_callback: Optional[Callable[[], bool]] = None,
         excluded_signatures: Optional[Iterable[Tuple[str, ...]]] = None,
         minimum_unique: Optional[int] = None,
+        exact_excluded_signatures: Optional[Iterable[Tuple[str, ...]]] = None,
     ) -> List[List[Dict[str, Any]]]:
         # Use the same strategy-aware builder for every Classic sport. NFL used to
         # delegate to the legacy ClassicOptimizer here, silently dropping the UI's
@@ -2112,12 +2117,13 @@ class MultiSportClassicOptimizer:
             cancel_callback=cancel_callback,
             excluded_signatures=excluded_signatures,
             minimum_unique=minimum_unique,
+            exact_excluded_signatures=exact_excluded_signatures,
         )
         if lineups:
             logger.info("%s fast strategic build returned %d/%d lineups.", self.sport, len(lineups), num_lineups)
             return lineups
 
-        if HAS_PULP and len(self.players) <= 120 and num_lineups <= 20:
+        if HAS_PULP and len(self.players) <= 120 and num_lineups <= 20 and not excluded_signatures and not exact_excluded_signatures:
             logger.info("%s fast build returned no lineups; trying small-slate PuLP fallback.", self.sport)
             return self._build_lineups_pulp(num_lineups=num_lineups)
 
@@ -2456,6 +2462,7 @@ class MultiSportClassicOptimizer:
         cancel_callback: Optional[Callable[[], bool]] = None,
         excluded_signatures: Optional[Iterable[Tuple[str, ...]]] = None,
         minimum_unique: Optional[int] = None,
+        exact_excluded_signatures: Optional[Iterable[Tuple[str, ...]]] = None,
     ) -> List[List[Dict[str, Any]]]:
         """Fast strategic builder with salary-floor priority.
 
@@ -2464,6 +2471,7 @@ class MultiSportClassicOptimizer:
         impossible. This avoids the previous behavior where valid but very cheap
         $30k MLB lineups could be accepted too early.
         """
+        exact_excluded = {tuple(sorted(sig)) for sig in (exact_excluded_signatures or [])}
         accepted: List[List[Dict[str, Any]]] = []
         used_sigs: set[Tuple[str, ...]] = {
             tuple(sorted(str(key) for key in signature if str(key)))
@@ -2590,6 +2598,8 @@ class MultiSportClassicOptimizer:
             return chosen
 
         def too_similar(sig: Tuple[str, ...], min_unique: int) -> bool:
+            if sig in exact_excluded:
+                return True
             if min_unique <= 1:
                 return sig in used_sigs
             sset = set(sig)

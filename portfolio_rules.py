@@ -297,6 +297,9 @@ def select_portfolio(
         )
         if pairwise_unique:
             report = portfolio_report(pool, normalized, kind=kind, requested=requested)
+            if individual_ranking:
+                report.update(refinement_stop_reason="disabled in individual ranking",
+                              refinement_seconds=0.0, refinement_swaps=0, refinement_attempts=0)
             if len(pool) < requested:
                 warning = (
                     f"Built {len(pool)} of {requested} requested lineups; "
@@ -851,15 +854,15 @@ def select_portfolio(
 
     if auto_relaxations:
         warnings.append(f"Automatic Showdown exposure guardrails were relaxed {auto_relaxations} times to fill the requested portfolio; displayed starting caps are not final limits.")
-    if individual_ranking:
-        warnings.append("Individual ranking uses simulated finish rates subject to explicit portfolio rules; automatic diversification and refinement are off. Minimum exposures are reported, not prioritized.")
+    if not refinement_passes:
+        refinement_stop_reason = "disabled in individual ranking" if individual_ranking else "disabled"
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
     report["effective_min_unique"] = current_min_unique
     report["refinement_swaps"] = refinement_swaps
     report["duplication_refinement_swaps"] = duplication_refinement_swaps
     report["refinement_attempts"] = refinement_attempts
     report["refinement_stop_reason"] = refinement_stop_reason
-    report["refinement_seconds"] = max(0.0, time.perf_counter() - refinement_started)
+    report["refinement_seconds"] = max(0.0, time.perf_counter() - refinement_started) if refinement_passes else 0.0
     report["automatic_showdown_guardrails"] = (
         {
             "total_player_pct": auto_total_pct,
@@ -1135,4 +1138,3 @@ def _report_text(report: Dict[str, Any]) -> str:
 def format_portfolio_report_text(report: Dict[str, Any]) -> str:
     """Refresh the readable summary after callers add aggregate warnings."""
     return _report_text(report)
-

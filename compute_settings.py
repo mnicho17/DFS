@@ -34,6 +34,12 @@ def deep_candidate_budget(requested, options, alternate_sources=True):
     return max(requested, options["candidates"] or default)
 
 
+def deep_phase_fractions(options):
+    """Reserve SIM time while assigning more exploration time to individual mode."""
+    individual = normalize_deep_settings(options)["selection_mode"] == "Individual ranking"
+    return (0.60, 0.78) if individual else (0.38, 0.58)
+
+
 def deep_search_seeds(count):
     original = (1337, 4241, 7919, 12007)
     return original + tuple(12007 + 7919 * i for i in range(1, max(4, min(32, count)) - 3))
