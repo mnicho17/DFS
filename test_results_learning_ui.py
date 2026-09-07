@@ -828,6 +828,13 @@ class ResultsLearningUITests(unittest.TestCase):
     def test_deep_worker_keeps_best_completed_stage_under_a_short_time_budget(self):
         progress = []
         finished = []
+        clock = [0.0]
+
+        def record_progress(done, total, text):
+            progress.append(text)
+            # Expire after real screening results exist, independent of CPU speed.
+            if "Phase 2 of 4" in text and done > 0:
+                clock[0] = 5.0
         worker = LineupBuildWorker(
             _fixture_players(),
             kind="classic",
@@ -848,12 +855,15 @@ class ResultsLearningUITests(unittest.TestCase):
             sim_scenarios=250,
             compute_mode="Deep (up to 5 min)",
             deep_time_limit_seconds=4.0,
+            deep_options={"candidates": 100, "shortlist": 50, "field": 100},
         )
-        worker.progress.connect(lambda done, total, text: progress.append(text))
+        worker.progress.connect(record_progress)
         worker.finished.connect(finished.append)
 
-        worker.run()
+        with mock.patch("main_window.time.perf_counter", side_effect=lambda: clock[0]):
+            worker.run()
 
+        self.assertEqual(clock[0], 5.0)
         self.assertTrue(finished)
         payload = finished[0]
         timing = payload["timing_report"]
