@@ -3154,7 +3154,13 @@ class PortfolioInsightsDialog(QtWidgets.QDialog):
         self.accept()
 
 
-class MainWindow(QtWidgets.QMainWindow):
+from snapshot_ui import SnapshotActions
+from build_snapshots import save_snapshot, freshness_text
+from build_diagnostics import build_history_path
+import copy
+
+
+class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("DFS Optimizer")
@@ -3616,6 +3622,11 @@ class MainWindow(QtWidgets.QMainWindow):
         settings_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         settings_menu = QtWidgets.QMenu(settings_button)
         settings_menu.addSection("Data")
+        settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)
+        settings_menu.addAction("Load Build Snapshot...", self.on_load_snapshot)
+        settings_menu.addAction("Data Freshness...", self.on_data_freshness)
+        self.lbl_snapshot_data = QtWidgets.QLabel('Live inputs')
+        command_layout.addWidget(self.lbl_snapshot_data)
         settings_menu.addAction("Results and Learning", self.on_results_learning)
         settings_menu.addSection("Build Recipes")
         save_recipe_action = settings_menu.addAction("Save Current Recipe...", self.on_save_build_recipe)
@@ -4299,6 +4310,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._active_contest_profile_name = selected
 
     def _active_contest_profile(self) -> Optional[Dict[str, Any]]:
+        if getattr(self, '_snapshot_replay', False):
+            return copy.deepcopy(self._snapshot_contest_data) or None
         name = str(getattr(self, "_active_contest_profile_name", "") or "").strip()
         if not name:
             return None
@@ -4316,6 +4329,8 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if dialog.changed:
             self._store_contest_profiles(dialog.profiles, dialog.active_name)
+        if getattr(self, '_snapshot_replay', False):
+            self._snapshot_contest_data = copy.deepcopy(dialog.profiles.get(dialog.active_name) or {})
         if dialog.active_name:
             self.chk_nfl_contest_sim.setChecked(True)
             profile = dict(dialog.profiles.get(dialog.active_name) or {})
@@ -5374,6 +5389,8 @@ class MainWindow(QtWidgets.QMainWindow):
             logger.info("Loading CSV: %s", path)
             self._load_step(progress, 5, "Reading DraftKings CSV…")
             self.players = read_players_csv(path)
+            self._snapshot_replay = False
+            self._refresh_snapshot_label()
             self.last_showdown = []
             self.last_classic = []
             self.last_portfolio_report = {}
@@ -5681,7 +5698,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
     def on_slate_readiness(self) -> None:
-        if self.players and self._current_sport() == "NFL":
+        if self.players and self._current_sport() == "NFL" and not getattr(self, '_snapshot_replay', False):
             stale = not self._last_live_check_epoch or (time.time() - self._last_live_check_epoch) > 15 * 60
             if stale:
                 try:
@@ -5696,6 +5713,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _record_live_check(self, summary: Dict[str, Any]) -> None:
         had_previous = bool(self.last_live_check_summary)
         self.last_live_check_summary = dict(summary or {})
+        self._refresh_snapshot_label()
         sleeper_ok = summary.get("sleeper_state") == "ok"
         if sleeper_ok:
             self._last_live_check_epoch = time.time()
@@ -5736,6 +5754,8 @@ class MainWindow(QtWidgets.QMainWindow):
         ]
 
     def _run_live_nfl_check(self, *, show_dialog: bool, full_context: bool) -> Dict[str, Any]:
+        self._snapshot_replay = False
+        self._refresh_snapshot_label()
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         try:
             if full_context:
@@ -5773,6 +5793,8 @@ class MainWindow(QtWidgets.QMainWindow):
         return summary
 
     def _ensure_live_nfl_before_build(self) -> bool:
+        if getattr(self, '_snapshot_replay', False):
+            return True  # Explicit offline replay; existing build rules still apply.
         if self._current_sport() != "NFL":
             return True
         stale = not self._last_live_check_epoch or (time.time() - self._last_live_check_epoch) > 15 * 60
@@ -6354,7 +6376,7 @@ class MainWindow(QtWidgets.QMainWindow):
         field_calibration: Dict[str, Any] = {}
         if str(sport or "").strip().upper() == "NFL" and kind != "showdown" and sim_enabled:
             try:
-                field_calibration = load_nfl_field_calibration(field_preset)
+                field_calibration = self._snapshot_calibration()
             except Exception:
                 logger.exception("NFL field calibration could not be loaded; using baseline preset")
 
@@ -6373,6 +6395,17 @@ class MainWindow(QtWidgets.QMainWindow):
         retained = list(retained_lineups or [])[:max(0, int(num))]
         replacement_count = max(0, int(num) - len(retained))
         repairing = bool(str(repair_source or "").strip())
+        snapshot = None
+        if str(sport or '').upper() == 'NFL' and not repairing:
+            try:
+                snapshot = self._capture_snapshot(calibration=field_calibration, contest=contest_profile or {})
+                snapshot['inputs']['recipe']['requested_lineups'] = int(num)
+                from build_snapshots import fingerprint
+                snapshot['input_id'] = fingerprint(snapshot['inputs'])
+                save_snapshot(os.path.join(os.path.dirname(build_history_path()), 'snapshots', snapshot['input_id'] + '.json'), snapshot)
+            except Exception:
+                logger.exception('Build snapshot could not be saved')
+                snapshot = None
         self._active_build_context = {
             "sport": str(sport or "NFL").strip().upper(),
             "kind": str(kind or "classic").strip().lower(),
@@ -6396,6 +6429,8 @@ class MainWindow(QtWidgets.QMainWindow):
             "repair_source": str(repair_source or ""),
             "retained_count": len(retained),
             "replacement_count": replacement_count,
+            "input_id": snapshot['input_id'] if snapshot else '',
+            "data_freshness": freshness_text(self.last_live_check_summary, getattr(self, '_snapshot_replay', False)),
         }
 
         label_sport = sport if kind != "showdown" else "Showdown"
@@ -6421,7 +6456,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._build_thread = QtCore.QThread(self)
         self._build_worker = LineupBuildWorker(
-            list(self.players),
+            copy.deepcopy(self.players),
             kind=kind,
             sport=sport,
             num_lineups=num,

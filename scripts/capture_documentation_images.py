@@ -673,13 +673,42 @@ def capture_deep_compute(output_dir: Path, showdown: bool = False) -> None:
             window.close()
 
 
+def capture_snapshot_controls(output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    if sys.platform == 'win32':
+        QtGui.QFontDatabase.addApplicationFont('C:/Windows/Fonts/segoeui.ttf')
+        app.setFont(QtGui.QFont('Segoe UI', 10))
+    app.setStyle('Fusion')
+    app.setStyleSheet(DARK_QSS)
+    with tempfile.TemporaryDirectory() as folder:
+        previous = os.environ.get('DFS_OPTIMIZER_DATA_DIR')
+        os.environ['DFS_OPTIMIZER_DATA_DIR'] = folder
+        try:
+            window = MainWindow()
+            button = window.findChild(QtWidgets.QToolButton, 'workspaceSettingsButton')
+            menu = button.menu()
+            menu.popup(QtCore.QPoint(100, 100))
+            app.processEvents()
+            save_widget(menu, output_dir / 'snapshot-settings.png')
+            menu.close()
+            window.close()
+        finally:
+            if previous is None:
+                os.environ.pop('DFS_OPTIMIZER_DATA_DIR', None)
+            else:
+                os.environ['DFS_OPTIMIZER_DATA_DIR'] = previous
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots"), default="all")
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    if args.only == "showdown-deep":
+    if args.only == 'snapshots':
+        capture_snapshot_controls(output_dir)
+    elif args.only == "showdown-deep":
         capture_deep_compute(output_dir, showdown=True)
     elif args.only == "deep-compute":
         capture_deep_compute(output_dir)

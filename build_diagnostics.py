@@ -302,6 +302,8 @@ def create_build_diagnostic(
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
     diagnostic = {
         "schema_version": 4,
+        "input_id": str(context.get('input_id') or ''),
+        "data_freshness": str(context.get('data_freshness') or ''),
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
         "sport": str(context.get("sport") or "NFL").strip().upper(),
@@ -514,6 +516,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
 
     lines = [
         "DFS Optimizer Build Report",
+        f"Input ID: {record.get('input_id') or 'not recorded'}",
+        f"Data: {record.get('data_freshness') or 'freshness not recorded'}",
         f"Run: {_created_label(record.get('created_at'))}",
         f"Status: {str(record.get('status') or 'completed').title()}",
         "",
@@ -795,6 +799,9 @@ def format_build_comparison(first: Mapping[str, Any], second: Mapping[str, Any])
 
     lines = [
         "DFS Optimizer Build Comparison",
+        ('Matching build inputs' if earlier.get('input_id') == later.get('input_id') else 'Different build inputs')
+        if earlier.get('input_id') and later.get('input_id') else 'Input comparison unavailable for older reports',
+        'Matching inputs do not guarantee identical timing-limited searches or real-world accuracy.',
         f"A: {_created_label(earlier.get('created_at'))}",
         f"B: {_created_label(later.get('created_at'))}",
         "",
