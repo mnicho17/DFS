@@ -47,12 +47,21 @@ def active_showdown_players(players):
     teams = sorted({str(p.get("Team") or "").strip().upper() for p in pool})
     if len(teams) != 2 or not all(teams):
         raise ValueError("NFL Showdown Deep requires exactly two teams from one game.")
-    games = {str(p.get("GameInfo") or "").split()[0] for p in pool if p.get("GameInfo")}
+    games = {str(p.get(key) or "").strip().upper().split()[0]
+             for p in pool for key in ("GameKey", "GameInfo")
+             if str(p.get(key) or "").strip()}
     if len(games) > 1:
         raise ValueError("NFL Showdown Deep requires one game.")
     for p in pool:
+        p["Team"] = str(p["Team"]).strip().upper()
+        expected_opponent = next(team for team in teams if team != p["Team"])
+        opponent = str(p.get("Opponent") or "").strip().upper()
+        if opponent and opponent != expected_opponent:
+            raise ValueError("Showdown opponent information conflicts with the two slate teams.")
+        p["Opponent"] = expected_opponent
+        p["GameKey"] = next(iter(games)) if games else "@".join(teams)
         if not p.get("GameInfo"):
-            p["GameInfo"] = "@".join(teams)
+            p["GameInfo"] = p["GameKey"]
     return pool
 
 

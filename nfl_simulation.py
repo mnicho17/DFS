@@ -174,9 +174,9 @@ def _salary(player: Dict[str, Any]) -> float:
 
 def _projection(player: Dict[str, Any]) -> float:
     base = _number(player.get("FlexProjection"), 0.0)
-    boost = _number(player.get("_PortfolioCandidateBoost"), 0.0)
     team_pct = _number(player.get("TeamAdjPct"), 0.0)
-    return max(0.0, base * max(0.05, 1.0 + team_pct / 100.0) + boost)
+    # Exposure preferences influence optimizer search, not scoring or opponents.
+    return max(0.0, base * max(0.05, 1.0 + team_pct / 100.0))
 
 
 def _status(player: Dict[str, Any]) -> str:
