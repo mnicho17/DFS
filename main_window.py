@@ -5784,7 +5784,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         status_text = f"Players {matched}/{total}" if sleeper_ok else "Player status unavailable"
         checked = time.strftime("%I:%M %p").lstrip("0")
         self.lbl_live_data.setText(
-            f"Live data {checked} • {status_text} • {flags} unavailable flags • "
+            f"Live data {checked} • {status_text} • Usage {summary.get('usage_state', 'unknown')} • {flags} unavailable flags • "
             f"{promotions} next-up boosts • {changes} changes"
         )
         details = [
@@ -6103,18 +6103,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._own_eta.setText(f"{done:,}/{total:,} • {eta_str}")
 
     def _on_own_sim_finished(self, own_map: Dict[str, float]) -> None:
-        tot = (own_map or {}).get("total", {})
-        cpt = (own_map or {}).get("cpt", {})
-        flx = (own_map or {}).get("flex", {})
-        meta = (own_map or {}).get("meta", {}) or {}
-        eligible_keys = set(meta.get("eligible_keys") or [])
-        for p in self.players:
-            k = _pkey(p)
-            p["ProjOwnPct"] = float(tot.get(k, 0.0) or 0.0)
-            p["ProjCptOwnPct"] = float(cpt.get(k, 0.0) or 0.0)
-            p["ProjFlexOwnPct"] = float(flx.get(k, 0.0) or 0.0)
-            if eligible_keys:
-                p["NFLFieldEligible"] = k in eligible_keys
+        from nfl_pipeline import apply_ownership
+        apply_ownership(self.players, own_map or {})
+        meta = (own_map or {}).get('meta', {}) or {}
         self._own_progress.setVisible(False)
         self._own_eta.setVisible(False)
         self._refresh_players_table()

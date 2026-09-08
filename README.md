@@ -277,3 +277,5 @@ Duplicate entries count every sampled opponent; bootstrap field copies are not a
 ### NFL projection sources
 
 Historical PPG is now separate from supplied forecasts. NFL Classic and Showdown honor manual overrides and imported projections before using automatic role-and-usage workload estimates, then historical estimates. Double-click BaseProj or AdjProj to edit a forecast; inspect the source beside the selected player. Read [projection sources and limitations](docs/USER_GUIDE.md#projection-sources-and-players-without-nfl-history). Reload the salary CSV to use the new handling; old snapshots preserve their original inputs.
+
+NFL usage now uses the current weekly-statistics endpoint. Workload-v2 preserves historical player differences when usage is missing. The [shared server preparation command](docs/USER_GUIDE.md#shared-server-preparation) generates projections and ownership through the desktop code, with source hashes for reproducibility.

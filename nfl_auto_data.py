@@ -30,7 +30,7 @@ logger = logging.getLogger("dfs.nfl_auto")
 SLEEPER_PLAYERS_URL = "https://api.sleeper.app/v1/players/nfl"
 NFLVERSE_PLAYER_STATS_URL = (
     "https://github.com/nflverse/nflverse-data/releases/download/"
-    "player_stats/player_stats_{season}.csv.gz"
+    "stats_player/stats_player_week_{season}.csv"
 )
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
@@ -185,12 +185,16 @@ def _fetch_nflverse_season_rows(season: int, timeout_sec: int = 15) -> List[Dict
         if payload[:2] == b"\x1f\x8b":
             payload = gzip.decompress(payload)
         reader = csv.DictReader(io.StringIO(payload.decode("utf-8-sig", errors="replace")))
+        if not {'season', 'week'}.issubset(set(reader.fieldnames or [])):
+            raise ValueError('Weekly player statistics schema is missing season/week')
         rows = []
         for row in reader:
             season_type = str(row.get("season_type") or "REG").strip().upper()
             if season_type not in ("REG", "REGULAR"):
                 continue
             if int(_to_float(row.get("season"), season)) != int(season):
+                continue
+            if int(_to_float(row.get('week'), 0)) <= 0:
                 continue
             rows.append(dict(row))
         return rows
@@ -871,6 +875,8 @@ def apply_auto_nfl_context(
 
         role_label, role_score = _role_context(player, sleeper)
         usage = usage_index.get((name, team)) or usage_index.get((name, "")) or {}
+        player['NFLUsageState'] = ('matched' if usage else 'no_player_match') if usage_index else 'unavailable'
+        player['NFLUsageCheckedAt'] = checked_at
         if usage:
             usage_matches += 1
         usage_score = _to_float(usage.get("score"), 0.0)
@@ -932,6 +938,10 @@ def apply_auto_nfl_context(
         "locked_conflicts": sum(1 for player in players if player.get("LiveStatusConflict")),
         "replacement_promotions": replacement_promotions,
         "usage": usage_matches,
+        "usage_state": ('ok' if usage_matches else 'no_player_matches') if usage_index else 'unavailable',
+        "usage_rows": len(usage_rows or []),
+        "usage_checked_at": checked_at,
+        "usage_url": NFLVERSE_PLAYER_STATS_URL.format(season=usage_season or target_season),
         "weather_games": len(weather_index),
         "usage_season": usage_season,
         "odds_state": odds_result.get("state"),
@@ -1049,6 +1059,10 @@ def refresh_live_nfl_data(
         "sleeper": sleeper_matches,
         "sleeper_state": "ok" if sleeper_data is not None else "unavailable",
         "status_changes": len(changes),
+        "usage_state": 'retained' if any(_to_float(p.get('NFLUsageGames')) > 0 for p in players) else 'unavailable',
+        "usage": sum(_to_float(p.get('NFLUsageGames')) > 0 for p in players),
+        "usage_season": next((p.get('NFLUsageSeason') for p in players if p.get('NFLUsageSeason')), None),
+        "usage_checked_at": next((p.get('NFLUsageCheckedAt') for p in players if p.get('NFLUsageCheckedAt')), None),
         "changes": changes,
         "status_flags": sum(1 for player in players if _is_out_status(player.get("InjuryStatus"), player.get("NFLRosterStatus"), player.get("NFLActive"))),
         "locked_conflicts": sum(1 for player in players if player.get("LiveStatusConflict")),

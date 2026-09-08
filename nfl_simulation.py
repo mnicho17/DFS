@@ -891,7 +891,7 @@ def _scenario_outcomes(
         for team in teams
     }
 
-    from nfl_workload import sample_workloads, points as workload_points
+    from nfl_workload import sample_workloads, forecast as workload_points
     sampled_workloads = sample_workloads(rng, players)
     outcomes: Dict[str, float] = {}
     for player in players:

@@ -65,5 +65,5 @@ def freshness_text(summary, replay=False):
     checked = summary.get('checked_at') or 'unknown'
     status = summary.get('sleeper_state') or 'unknown'
     odds = summary.get('odds_state') or 'unknown'
-    return f'{mode}. Last recorded check: {checked}. Player source: {status}; odds: {odds}.'
-
+    usage = summary.get('usage_state') or 'unknown'
+    return f'{mode}. Last recorded check: {checked}. Player source: {status}; usage: {usage} (season {summary.get("usage_season") or "unknown"}, matches {summary.get("usage", "unknown")}); odds: {odds}.'

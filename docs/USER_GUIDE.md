@@ -446,7 +446,7 @@ Priority is manual override, imported forecast, automatic workload estimate, his
 
 Select a player to see the source and expected workload in the right-hand inspector. Hover over BaseProj or AdjProj for details. Double-click either column to enter an optional manual forecast; submit a blank value to clear it. Overrides survive live refreshes and snapshot saves. Rebuild after changes; loading a new CSV replaces that slate's overrides.
 
-### Automatic workload model (workload-v1)
+### Automatic workload model (workload-v2)
 
 This initial model uses explicit heuristic assumptions, not fitted predictions. Each team starts with 34 passing attempts, 26 carries and 32 targets. Carry shares are QB 12%, RB 85%, WR 3%; target shares are RB 20%, WR 58%, TE 22%. Within positions, depth shares are QB 100/0/0, RB 62/28/10, WR 40/30/20/10 and TE 70/25/5 percent. Five percent is reserved; missing positions/roles leave additional unassigned workload. Duplicate depth ranks are normalized to respect budgets. Unknown roles receive no invented starting workload.
 
@@ -454,10 +454,26 @@ Recent per-game attempts, carries and targets blend into role shares with weight
 
 Position efficiency assumptions (yards per carry / catch probability / yards per catch) are QB 4.5/0/0, RB 4.2/0.75/7.5, WR 4.5/0.63/12 and TE 4/0.70/10. Passing uses 7 yards/attempt, 4.5% TDs/attempt and 2.5% interceptions/attempt; rushing uses 2.8% TDs/carry and receiving 5.5% TDs/catch. These are configurable-in-code priors, not measured player statistics. Expected points use base [DraftKings scoring](https://dknetwork.draftkings.com/2025/08/27/nfl-dfs-beginners-guide-draftkings/); yardage bonuses and fumbles are omitted from this initial projection model.
 
-Both Classic and Showdown SIMs perturb opportunity weights from 0.65 to 1.35 and renormalize against shared position budgets plus unused reserves. Existing scoring/game-script variability remains in place. This is not a play-by-play simulation: QB passing and receiver production are correlated but not reconciled event by event. Imported/manual forecasts keep their supplied scoring means. The model is not calibrated and may replace positive historical averages as well as rookie zeros; review changed rankings on a new snapshot.
+Both Classic and Showdown SIMs perturb opportunity weights from 0.65 to 1.35 and renormalize against shared position budgets plus unused reserves. Existing scoring/game-script variability remains in place. This is not a play-by-play simulation: QB passing and receiver production are correlated but not reconciled event by event. Imported/manual forecasts keep their supplied scoring means. The model is not calibrated. For positive historical PPG, version 2 blends 75% history / 25% workload when no usage games match; workload weight increases by games/16 to a maximum of 50%. Players without positive history use the workload estimate. The same blend is applied in simulations, so workload variation changes only its own component. This preserves individual evidence without treating PPG as a true forward forecast. Version-1 snapshots keep their original formula. Review changed rankings on a new snapshot.
 
 Snapshots store model version, expected workload, team budgets, rates, efficiencies, role, recent usage and source. Preserve the pre-contest snapshot for later evaluation against results. No automatic fitting from uploaded outcomes is introduced in this update; contest fantasy-point results alone may not include the carries/targets needed to evaluate workload components.
 
 Old snapshots replay their original projections without guessing their provenance. To adopt the new handling, reload the original salary CSV and save a new snapshot. An old snapshot can also receive an explicit manual override. Do not compare changed-input rankings as an identical-input replay.
 
 ![Projection source shown beside the selected player](images/projection-sources.png)
+
+## Shared server preparation
+
+The nflverse source uses `stats_player/stats_player_week_{season}.csv`, with one prior-season fallback. Live-data/report freshness now distinguishes usage availability, match count and season from depth-chart availability. A quick status refresh labels previously loaded usage as retained; it does not download statistics again. Reload the salary CSV for a full data refresh.
+
+Run the following from the updated test-branch checkout, using the server Python environment (install the app requirements there if needed):
+
+```powershell
+C:\DFS_Server\.venv\Scripts\python.exe scripts/prepare_nfl_server.py C:\DFS_Server\data\incoming\DKSalaries.csv --mode classic --ownership-sims 1000 --output C:\DFS_Server\data\players\shared-v2-first --parquet
+```
+
+Choose a new output directory for every run. This command uses the desktop CSV parser, enrichment, role-pool builder, and Recalc Own% (Sim) worker. Both formats use the same ownership-field assignment function. For Showdown use `--mode showdown`, adding `--template-sim` only to match that desktop option. Qt is a library dependency, but no window is opened.
+
+Outputs include enriched players and role pool in JSON (and optional Parquet), enrichment status, and preparation metadata with source-file hashes. Parquet requires pandas/pyarrow, as used by the server jobs; nested model fields are JSON strings there and native objects in the JSON outputs. Matching code, inputs and options is necessary for comparisons; randomized ownership runs need not be identical. Ownership is estimated, not observed contest ownership.
+
+The original `C:\DFS_Server\app_src` main checkout may contain local changes. This update does not overwrite it or existing server jobs. Use the updated feature checkout for this preparation command; do not keep feeding an older prepared pool to the brute-force generator. Inspect usage status, projection sources and ownership before scaling up.

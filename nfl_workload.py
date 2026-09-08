@@ -2,7 +2,7 @@
 import math
 from collections import defaultdict
 
-VERSION = 'workload-v1'
+VERSION = 'workload-v2'
 TEAM_BUDGET = {'attempts': 34.0, 'carries': 26.0, 'targets': 32.0}
 POSITION_SHARE = {
     'attempts': {'QB': 1.0},
@@ -88,7 +88,21 @@ def prepare_workloads(players):
                 p['NFLWorkload']['budgets'][metric] = budget
         for p in active:
             if sum(p['NFLWorkload'][m] for m in TEAM_BUDGET) > 0:
-                p['WorkloadProjection'] = round(points(p['NFLWorkload']), 4)
+                w = p['NFLWorkload']
+                history = n(p.get('HistoricalPPG'))
+                # History is an imperfect anchor, not a forward forecast. Without
+                # player usage, generic role priors must not erase that evidence.
+                weight = .25 + min(.25, n(p.get('NFLUsageGames')) / 16) if history > 0 else 1.0
+                w['history_anchor'] = history
+                w['workload_weight'] = weight
+                w['raw_workload_points'] = points(w)
+                w['assumptions'] += f' Historical PPG anchor weight {1-weight:.0%}; workload weight {weight:.0%}. Heuristic blend, not fitted.'
+                p['WorkloadProjection'] = round(forecast(w), 4)
+
+
+def forecast(workload):
+    weight = workload.get('workload_weight', 1.0)
+    return points(workload) * weight + n(workload.get('history_anchor')) * (1 - weight)
 
 
 def sample_workloads(rng, players):
@@ -99,7 +113,7 @@ def sample_workloads(rng, players):
     sampled = {}
     for p in players:
         w = p.get('NFLWorkload')
-        if w and w.get('version') == VERSION:
+        if w and w.get('version') in {'workload-v1', VERSION}:
             groups[(w['team'], w['position'])].append(p)
             sampled[id(p)] = dict(w)
     for roster in groups.values():
