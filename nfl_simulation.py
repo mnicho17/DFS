@@ -1246,6 +1246,7 @@ def simulate_nfl_contest(
         cancel_callback=cancel_callback,
         field_config=config,
     )
+    field_used_fallback = not bool(field_lineups)
     if not field_lineups:
         # A tiny or heavily locked fixture can still be graded against candidates.
         field_lineups = [list(lineup) for lineup in candidate_lists]
@@ -1265,6 +1266,9 @@ def simulate_nfl_contest(
         for key, count in field_appearances.items()
     }
     generated_field_summary = _summarize_generated_field(field_lineups)
+    from field_diagnostics import summarize_field
+    field_diagnostic = summarize_field(field_lineups, role_pool, salary_cap=salary_cap,
+                                      fallback=field_used_fallback)
 
     scenario_count = max(1, int(scenarios or 1))
     rng = random.Random(seed)
@@ -1530,6 +1534,7 @@ def simulate_nfl_contest(
             "learned_field_model": bool(config.get("learned")),
             "learned_entries": int(config.get("learned_entries", 0) or 0),
             "field_comparison": field_comparison,
+            "field_diagnostic": field_diagnostic,
             "field_model_preset_comparison": field_model_preset_comparison,
             "contest_aware": bool(contest_profile),
             "contest_profile": dict(contest_profile or {}),

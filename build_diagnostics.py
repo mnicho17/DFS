@@ -304,6 +304,7 @@ def create_build_diagnostic(
         "schema_version": 4,
         "input_id": str(context.get('input_id') or ''),
         "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
+        "field_diagnostic": dict(sim.get('field_diagnostic') or {}),
         "data_freshness": str(context.get('data_freshness') or ''),
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
@@ -709,6 +710,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in warnings)
     else:
         lines.append("- None")
+    from field_diagnostics import format_field
+    lines.extend(format_field(record.get('field_diagnostic') or {}))
     lines.extend(format_ranked_groups(record.get("ranked_groups") or []))
     if is_showdown and exposures.get("total"):
         selected_count = max(1, _integer(candidates.get("selected")))
@@ -764,7 +767,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     lines.extend(["", (
         "Privacy: This report includes lineup names and strategy inputs for troubleshooting; "
         "it excludes file paths and API keys."
-        if lineup_details or record.get("ranked_groups") else
+        if lineup_details or record.get("ranked_groups") or record.get('field_diagnostic') else
         "Privacy: This report contains aggregate settings and counts only; no players, "
         "lineups, file paths, or API keys."
     )])

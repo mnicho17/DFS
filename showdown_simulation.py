@@ -174,7 +174,9 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         lu.sim_top_hits, lu.sim_top_five_hits, lu.sim_win_hits = (group[i] for group in hits)
         lu.sim_scenario_values = values[i]
         result.append(lu)
+    from field_diagnostics import summarize_field
     return {"lineups": result, "report": {
+        "field_diagnostic": summarize_field(field, pool, showdown=True, salary_cap=salary_cap),
         "scenarios": completed, "field_lineups": len(field), "opponent_field_samples": 3,
         "model": "showdown-shared-outcomes-v1", "field_preset": "Showdown ownership sample",
         "payout_model": "payout-shape-proxy-v1", "contest_aware": False,
