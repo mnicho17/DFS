@@ -891,6 +891,8 @@ def _scenario_outcomes(
         for team in teams
     }
 
+    from nfl_workload import sample_workloads, points as workload_points
+    sampled_workloads = sample_workloads(rng, players)
     outcomes: Dict[str, float] = {}
     for player in players:
         pos = _position(player)
@@ -916,6 +918,10 @@ def _scenario_outcomes(
             z = -0.20 * game_z + 0.18 * rush_z - 0.38 * opp_env + math.sqrt(0.783) * idio
 
         mean = max(0.10, _projection(player))
+        if player.get('ProjectionSource') == 'Automatic workload estimate' and id(player) in sampled_workloads:
+            baseline = _number(player.get('WorkloadProjection'), 0.0)
+            if baseline > 0:
+                mean *= workload_points(sampled_workloads[id(player)]) / baseline
         cv = _player_volatility_cv(player)
         if pos == "DST":
             score = max(-4.0, mean + max(3.0, mean * cv) * z)

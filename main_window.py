@@ -4843,7 +4843,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             f"{team} · {position} · ${salary:,}\n"
             f"Projection {projection:.2f} · Own {ownership:.1f}%\n"
             f"Source: {player.get('ProjectionSource', 'Legacy / unknown')}\n"
-            f"{status} · {tags}\n{exposure_text}"
+            + (f"{player['NFLWorkload']['attempts']:.1f} att · {player['NFLWorkload']['carries']:.1f} rush · {player['NFLWorkload']['targets']:.1f} tgt\n"
+               if player.get('ProjectionSource') == 'Automatic workload estimate' and player.get('NFLWorkload') else '')
+            +
+            (exposure_text if player.get('ProjectionSource') == 'Automatic workload estimate'
+             else f"{status} · {tags}\n{exposure_text}")
         )
 
     # ---------------- Tag model ----------------

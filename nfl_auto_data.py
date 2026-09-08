@@ -773,6 +773,8 @@ def apply_context_adjustment(
 ) -> float:
     """Apply component scores to a player and return the capped total."""
     raw = float(usage) + float(matchup) + float(role) + float(weather) + float(vegas)
+    if player.get('ProjectionSource') == 'Automatic workload estimate':
+        raw = float(matchup) + float(weather) + float(vegas)
     adjustment = _clamp(raw, -MAX_NFL_ADJUSTMENT, MAX_NFL_ADJUSTMENT)
     from projection_sources import resolve_projection
     resolve_projection(player)
@@ -894,6 +896,8 @@ def apply_auto_nfl_context(
             player["NFLVegas"] = 0.0
             player["NFLVegasState"] = "unmatched" if odds_result.get("state") == "ok" else str(odds_result.get("state") or "unavailable")
         player["NFLUsage"] = _usage_display(usage)
+        for metric in ('attempts', 'carries', 'targets'):
+            player['NFLRecent' + metric.title()] = _to_float(usage.get(metric), 0.0)
         player["NFLUsageGames"] = int(_to_float(usage.get("games"), 0))
         player["NFLUsageSeason"] = usage_season
         player["NFLUsageScore"] = usage_score
