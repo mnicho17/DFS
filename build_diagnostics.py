@@ -261,6 +261,9 @@ def create_build_diagnostic(
         }
 
     warnings: List[str] = []
+    projection_reviews = _integer(context.get('projection_review_count'))
+    if projection_reviews:
+        warnings.append(f'{projection_reviews} player inputs use estimates or lack a forecast. Review Base projection sources before relying on rankings.')
     for source in (portfolio.get("warnings") or [], sim.get("warnings") or []):
         items = [source] if isinstance(source, str) else source
         for item in items:

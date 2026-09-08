@@ -700,13 +700,43 @@ def capture_snapshot_controls(output_dir: Path) -> None:
                 os.environ['DFS_OPTIMIZER_DATA_DIR'] = previous
 
 
+def capture_projection_controls(output_dir: Path) -> None:
+    from projection_sources import initialize_projection
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    if sys.platform == 'win32':
+        QtGui.QFontDatabase.addApplicationFont('C:/Windows/Fonts/segoeui.ttf')
+        app.setFont(QtGui.QFont('Segoe UI', 10))
+    app.setStyle('Fusion')
+    app.setStyleSheet(DARK_QSS)
+    with tempfile.TemporaryDirectory() as folder:
+        from unittest.mock import patch
+        with patch.dict(os.environ, {'DFS_OPTIMIZER_DATA_DIR': folder}):
+            window = MainWindow()
+            window.resize(1500, 940)
+            window.combo_sport.setCurrentText('NFL')
+            window.players = representative_players()
+            for p in window.players:
+                initialize_projection(p, historical=p['BaseProjection'])
+            from nfl_auto_data import _reapply_context_adjustments
+            _reapply_context_adjustments(window.players)
+            window._refresh_players_table()
+            window.tbl_players.selectRow(0)
+            window.show()
+            app.processEvents()
+            save_widget(window, output_dir / 'projection-sources.png')
+            window.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections"), default="all")
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    if args.only == 'snapshots':
+    if args.only == 'projections':
+        capture_projection_controls(output_dir)
+    elif args.only == 'snapshots':
         capture_snapshot_controls(output_dir)
     elif args.only == "showdown-deep":
         capture_deep_compute(output_dir, showdown=True)

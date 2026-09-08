@@ -2,6 +2,7 @@
 import re
 import csv
 from typing import List, Dict, Any
+from projection_sources import initialize_projection, number
 
 
 def _canon_field(name: str) -> str:
@@ -28,7 +29,9 @@ def _canon_field(name: str) -> str:
         return "Game Info"
     if "salary" in base:
         return "Salary"
-    if base in ("projection", "proj", "avgpointspergame", "fppg", "fantasy points", "fpts"):
+    if base in ("avgpointspergame", "avg points per game", "fppg", "historical ppg"):
+        return "HistoricalPPG"
+    if base in ("projection", "proj", "projected points", "fantasy points", "fpts"):
         return "Projection"
     if base in ("status", "injury", "injury status", "player status"):
         return "Status"
@@ -148,6 +151,8 @@ def read_players_csv(path: str) -> List[Dict[str, Any]]:
                 **game_ctx,
                 "Salary": salary,
                 "Projection": projection,
+                "ImportedProjection": number(row.get("Projection")),
+                "HistoricalPPG": number(row.get("HistoricalPPG")),
                 "ID": pid,
                 "NamePlusID": name_plus_id,
             }
@@ -187,6 +192,7 @@ def read_players_csv(path: str) -> List[Dict[str, Any]]:
             "CptID": (cpt.get("ID") or ""),
             "CptNamePlusID": (cpt.get("NamePlusID") or ""),
         })
+        initialize_projection(players[-1], flex.get("HistoricalPPG"), flex.get("ImportedProjection"))
 
     if not players:
         raise ValueError("No players found. Ensure the CSV includes FLEX rows (and CPT rows for proper CPT pricing).")

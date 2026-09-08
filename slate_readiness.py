@@ -240,15 +240,20 @@ def audit_slate(
         projection_count = sum(_number(player.get("FlexProjection"), 0.0) > 0 for player in eligible)
         projection_pct = projection_count / max(1, len(eligible)) * 100.0
         projection_status = "pass" if projection_pct >= 90.0 else ("review" if projection_pct >= 70.0 else "block")
+        weak = [p for p in eligible if p.get('ProjectionNeedsReview') or (
+            sport_u == 'NFL' and 0 < _number(p.get('NFLDepthOrder')) <= 2
+            and _number(p.get('FlexProjection')) < 3)]
+        if weak and projection_status == 'pass':
+            projection_status = 'review'
         checks.append(_check(
             "projections", "Projections", projection_status,
-            f"Positive projections for {projection_count}/{len(eligible)} eligible players ({projection_pct:.0f}%).",
-            "Add projections or remove non-starters before generation." if projection_status != "pass" else "",
+            f"Positive projections for {projection_count}/{len(eligible)} eligible players ({projection_pct:.0f}%); {len(weak)} estimates or role/projection concerns.",
+            "Review projection sources. Import forward forecasts or double-click a player's Base projection to override." if projection_status != "pass" else "",
             weight=2.0,
             details={
                 "player_names": [
                     str(player.get("Name") or "") for player in eligible
-                    if _number(player.get("FlexProjection"), 0.0) <= 0
+                    if _number(player.get("FlexProjection"), 0.0) <= 0 or player in weak
                 ],
             },
         ))

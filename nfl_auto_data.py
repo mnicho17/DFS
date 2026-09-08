@@ -592,6 +592,8 @@ def _apply_replacement_roles(players: List[Dict[str, Any]]) -> int:
 
 def _reapply_context_adjustments(players: List[Dict[str, Any]]) -> None:
     """Recalculate projections after cross-player replacement roles are known."""
+    from projection_sources import prepare_nfl_projections
+    prepare_nfl_projections(players)
     for player in players or []:
         apply_context_adjustment(
             player,
@@ -772,6 +774,12 @@ def apply_context_adjustment(
     """Apply component scores to a player and return the capped total."""
     raw = float(usage) + float(matchup) + float(role) + float(weather) + float(vegas)
     adjustment = _clamp(raw, -MAX_NFL_ADJUSTMENT, MAX_NFL_ADJUSTMENT)
+    from projection_sources import resolve_projection
+    resolve_projection(player)
+    if player.get('ProjectionSource') in {'Manual override', 'Imported forecast', 'Missing forecast'}:
+        # Forecasts already express expected points; never double-adjust them.
+        # Missing history must not masquerade as a forecast from a tiny role bump.
+        adjustment = 0.0
     base = _to_float(player.get("BaseProjection"), _to_float(player.get("FlexProjection"), 0.0))
     player["BaseProjection"] = base
     player["NFLAdjRaw"] = raw

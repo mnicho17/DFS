@@ -3883,6 +3883,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         player_area.setStretchFactor(0, 1)
         player_area.setStretchFactor(1, 0)
         self.tbl_players.itemSelectionChanged.connect(self._update_player_inspector)
+        self.tbl_players.cellDoubleClicked.connect(self._edit_player_projection)
         left_layout.addWidget(player_area, 2)
 
         # Bottom tabs
@@ -4735,6 +4736,46 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         header = self.tbl_players.horizontalHeader()
         menu.exec_(header.mapToGlobal(point))
 
+    def _edit_player_projection(self, row, column) -> None:
+        if column not in (5, 6) or self._current_sport() != 'NFL':
+            return
+        if self._snapshot_busy():
+            self.status.showMessage('Wait for the current calculation before editing forecasts.', 5000)
+            return
+        from projection_sources import number, resolve_projection
+        rows = self._get_selected_player_rows()
+        if len(rows) != 1:
+            return
+        player = self.players[rows[0]]
+        text, accepted = QtWidgets.QInputDialog.getText(
+            self, 'Player forecast',
+            f"{player.get('Name')}: expected FLEX points (Captain uses 1.5x).\n"
+            'Enter a nonnegative number. Leave blank to clear your override.',
+            text=str(player.get('ManualProjection', '')),
+        )
+        if not accepted:
+            return
+        value = number(text)
+        if text.strip() and value is None:
+            QtWidgets.QMessageBox.warning(self, 'Invalid forecast', 'Enter a finite, nonnegative number.')
+            return
+        if not player.get('ProjectionInputsVersion'):
+            # Preserve an old snapshot baseline without relabeling it as history.
+            player.setdefault('LegacyProjection', player.get('BaseProjection', player.get('FlexProjection', 0)))
+        player['ManualProjection'] = value
+        if value is None and not player.get('ProjectionInputsVersion'):
+            player.pop('ManualProjection', None)
+            player['BaseProjection'] = player.get('LegacyProjection', 0)
+            player['FlexProjection'] = player['BaseProjection']
+            player['CptProjection'] = 1.5 * player['BaseProjection']
+            player.pop('ProjectionSource', None)
+        else:
+            resolve_projection(player)
+        from nfl_auto_data import _reapply_context_adjustments
+        _reapply_context_adjustments(self.players)
+        self._refresh_players_table()
+        self.status.showMessage('Forecast updated. Rebuild lineups to use it; save a new snapshot to preserve it.', 8000)
+
     def _update_player_inspector(self) -> None:
         if not hasattr(self, "lbl_player_inspector_title"):
             return
@@ -4801,6 +4842,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.lbl_player_inspector_meta.setText(
             f"{team} · {position} · ${salary:,}\n"
             f"Projection {projection:.2f} · Own {ownership:.1f}%\n"
+            f"Source: {player.get('ProjectionSource', 'Legacy / unknown')}\n"
             f"{status} · {tags}\n{exposure_text}"
         )
 
@@ -6145,10 +6187,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             base_proj = float(p.get("BaseProjection", proj) or 0.0)
             base_item = SortKeyItem(f"{base_proj:.2f}")
+            from projection_sources import projection_note
+            base_item.setToolTip(projection_note(p))
+            if p.get('ProjectionNeedsReview'):
+                base_item.setForeground(QtGui.QColor('#f0b45b'))
             base_item.setData(QtCore.Qt.UserRole, float(base_proj))
             self.tbl_players.setItem(r, 5, base_item)
 
             proj_item = SortKeyItem(f"{proj:.2f}")
+            proj_item.setToolTip(projection_note(p))
             proj_item.setData(QtCore.Qt.UserRole, float(proj))
             self.tbl_players.setItem(r, 6, proj_item)
 
@@ -6444,6 +6491,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "replacement_count": replacement_count,
             "input_id": snapshot['input_id'] if snapshot else '',
             "data_freshness": freshness_text(self.last_live_check_summary, getattr(self, '_snapshot_replay', False)),
+            "projection_review_count": sum(bool(p.get('ProjectionNeedsReview')) for p in self.players),
         }
 
         label_sport = sport if kind != "showdown" else "Showdown"

@@ -437,3 +437,19 @@ NFL Classic and Showdown build reports describe the actual base opponent sample 
 The report lists the most sampled players and the largest absolute differences between recorded ownership percentages and sampled exposure. Missing inputs remain unknown, distinct from zero; zero-use players in the sampling pool are included. Ownership guides conditional sampling and is not an enforced marginal target. Slot-specific inputs may fall back to total ownership or projections. These diagnostics do not adjust field generation, scoring, or rankings and are not measured contest outcomes.
 
 Duplicate entries count every sampled opponent; bootstrap field copies are not added to these counts. Showdown Captain swaps are distinct entries. If Classic cannot generate a field and uses candidate lineups as fallback opponents, the report discloses this limitation. Reports containing these diagnostics include player names in their privacy notice. The ranking audit uses a separate field; this section describes the primary simulation, not that audit or a later joint payout validation.
+
+## Projection sources and players without NFL history
+
+NFL Classic and Showdown now separate DraftKings historical PPG from forward forecasts. Load a salary CSV with an optional `Projection`, `Proj`, or `Projected Points` column to supply expected FLEX points; `AvgPointsPerGame` and `FPPG` remain historical values. A supplied zero is respected. Blank, negative, or non-finite forecasts are treated as missing. Captain points always use 1.5 times the FLEX forecast, even if the CSV contains a separate Captain projection.
+
+Priority is manual override, imported forecast, positive historical average estimate, comparable-player estimate, then missing forecast. Imported and manual forecasts are not adjusted again by NFL context; historical and comparable estimates retain the existing context adjustments. Team adjustments and lineup rules remain separate user preferences.
+
+Select a player to see the source in the right-hand inspector. Hover over BaseProj or AdjProj for historical PPG and estimate details. Double-click either projection column to enter a manual forecast; submit a blank value to clear it. Overrides survive live NFL refreshes and snapshot saves. Editing is unavailable during a calculation. Rebuild after changing forecasts; existing results still represent their original inputs. Loading a new CSV replaces that slate's overrides.
+
+For a player with missing/zero historical PPG, a known depth order of 1 or 2, and an available QB/RB/WR/TE role, the fallback requires at least two other same-position players with positive historical PPG, salary of at least $3,000, and depth order 1–3. Each peer's PPG is scaled by the player's salary divided by the peer salary, limited to 0.5–1.5; the median becomes the base estimate. Historical peers are not restricted to healthy players, because their historical production is the reference. The estimate is recomputed on refresh; unknown roles, unavailable players, and insufficient peers receive no fallback.
+
+This is an **uncalibrated salary/role proxy**, not a carries-and-targets model or a professional forecast. It can be weak on small slates and does not automatically correct low positive historical averages for promoted veterans. Replace it with a credible supplied forecast when possible. Slate Readiness flags estimates and prominent roles below three projected points; build reports count inputs needing review. A positive projection alone no longer implies reliable data.
+
+Old snapshots replay their original projections without guessing their provenance. To adopt the new handling, reload the original salary CSV and save a new snapshot. An old snapshot can also receive an explicit manual override. Do not compare changed-input rankings as an identical-input replay.
+
+![Projection source shown beside the selected player](images/projection-sources.png)

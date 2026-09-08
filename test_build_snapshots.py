@@ -93,6 +93,32 @@ class BuildSnapshotTests(unittest.TestCase):
         self.assertIn('Matching build inputs', format_build_comparison({'input_id': 'a'}, {'input_id': 'a'}))
         self.assertIn('Different build inputs', format_build_comparison({'input_id': 'a'}, {'input_id': 'b'}))
 
+    def test_projection_override_sorted_table_and_replay_both_contests(self):
+        from projection_sources import initialize_projection
+        from PyQt5 import QtCore
+        for kind, fixture in [('classic', _fixture_players), ('showdown', _showdown_players)]:
+            window = MainWindow()
+            try:
+                window.combo_sport.setCurrentText('NFL')
+                window.tabs_lineups.setCurrentIndex(0 if kind == 'showdown' else 1)
+                window.players = fixture()
+                for p in window.players:
+                    initialize_projection(p, historical=0, imported=10)
+                window._refresh_players_table()
+                window.tbl_players.sortItems(0, QtCore.Qt.DescendingOrder)
+                window.tbl_players.selectRow(0)
+                selected = window.players[window._get_selected_player_rows()[0]]
+                with mock.patch('main_window.QtWidgets.QInputDialog.getText', return_value=('17.5', True)):
+                    window._edit_player_projection(0, 5)
+                self.assertEqual(selected['FlexProjection'], 17.5)
+                self.assertEqual(sum(p.get('ManualProjection') == 17.5 for p in window.players), 1)
+                snapshot = window._capture_snapshot(calibration={}, contest={})
+                window._restore_snapshot(snapshot)
+                self.assertEqual(snapshot['inputs'], window._capture_snapshot()['inputs'])
+                self.assertTrue(any(p.get('ProjectionSource') == 'Manual override' for p in window.players))
+            finally:
+                window.close()
+
 
 if __name__ == '__main__':
     unittest.main()
