@@ -303,6 +303,7 @@ def create_build_diagnostic(
     diagnostic = {
         "schema_version": 4,
         "input_id": str(context.get('input_id') or ''),
+        "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
         "data_freshness": str(context.get('data_freshness') or ''),
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
@@ -624,6 +625,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.append("- Scenario model: game scripts, role-aware player ranges, and guarded rare ceiling outcomes")
     if deep_mode:
         stop_reason = str(sim.get("refinement_stop_reason") or "").strip()
+        from ranking_stability import format_stability
+        lines.extend(format_stability(record.get('ranking_audit') or {}))
         time_remaining = max(0.0, _number(sim.get("time_remaining_seconds")))
         if sim.get("deep_time_limit_reached"):
             deep_status = "time budget used"

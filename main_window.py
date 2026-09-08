@@ -1103,6 +1103,19 @@ class LineupBuildWorker(QtCore.QObject):
                     deep_report["validation_time_limit_reached"] = bool(
                         time.perf_counter() >= validation_deadline
                     )
+                    from ranking_stability import audit_ranking
+                    audit_candidates = list(sim_result.get('lineups') or [])
+                    if deep_report.get('validation_scenarios', 0) >= 1000:
+                        deep_report['ranking_audit'] = audit_ranking(
+                            audit_candidates,
+                            lambda stop: simulate_nfl_contest(audit_candidates, build_players,
+                                scenarios=2000, field_lineup_count=validation_field_count,
+                                salary_cap=self.salary_cap, seed=481516, field_config=field_config,
+                                cancel_callback=stop,
+                                progress_callback=lambda a,b,c: self.progress.emit(a,b,'Phase 3 of 4 - Ranking audit: ' + c)),
+                            _lineup_signature, deadline=validation_deadline, cancelled=self._cancel_event.is_set)
+                    else:
+                        deep_report['ranking_audit'] = {'status': 'skipped', 'reason': 'independent validation unavailable', 'scenarios': 0}
                 else:
                     field_count = max(600, min(2400, build_request * 8))
                     self.progress.emit(0, self.sim_scenarios, f"Phase 2 of {total_phases} - preparing NFL contest simulation")

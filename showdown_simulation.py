@@ -254,6 +254,16 @@ def run_deep_showdown(worker, shortlist_fn):
                     deep["validation_top_overlap_pct"] = len(top & other) / max(1, len(top)) * 100
                 deep["validation_time_limit_reached"] = time.perf_counter() >= validation_end
             deep["shortlist_count"] = len(short)
+            from ranking_stability import audit_ranking
+            if deep.get('validation_scenarios', 0) >= 1000:
+                deep['ranking_audit'] = audit_ranking(short,
+                    lambda audit_stop: simulate_showdown(short, players, scenarios=2000,
+                        field_lineup_count=options['field'] or 2700, salary_cap=worker.salary_cap,
+                        seed=481516, cancel_callback=audit_stop,
+                        progress_callback=lambda a,b,c: worker.progress.emit(a,b,'Phase 3 of 4 - Ranking audit: ' + c)),
+                    showdown_signature, deadline=validation_end, cancelled=worker._cancel_event.is_set)
+            else:
+                deep['ranking_audit'] = {'status': 'skipped', 'reason': 'independent validation unavailable', 'scenarios': 0}
             retained = [lu for lu in short if showdown_signature(lu) in retained_keys]
             lineups = [lu for lu in short if showdown_signature(lu) not in retained_keys]
     simulation_seconds = time.perf_counter() - sim_start
