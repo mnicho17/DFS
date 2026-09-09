@@ -33,15 +33,16 @@ def _clip(x, low, high):
     return max(low, min(high, x))
 
 
-def sample_game(rng, teams, environments, game_z, targets, defense_targets):
+def sample_game(rng, teams, environments, game_z, targets, defense_targets, kicking=None):
     """One shared possession budget, mutually exclusive drive endings per team.
 
     Targets influence event rates, not a guaranteed marginal fantasy mean.
     All constants are explicit starting assumptions awaiting outcome calibration.
     """
+    kicking = kicking or {}
     drives = int(_clip(round(11 + .45 * game_z + rng.gauss(0, 1.1)), 8, 16))
     events = {t:dict(drives=drives, offensive_touchdowns=0, extra_points=0,
-                     field_goals=[], sacks=0, takeaways=0, defensive_touchdowns=0) for t in teams}
+                     field_goals=[], field_goal_attempts=0, sacks=0, takeaways=0, defensive_touchdowns=0) for t in teams}
     for team in teams:
         other = next(t for t in teams if t != team)
         e, defense = events[team], events[other]
@@ -51,6 +52,12 @@ def sample_game(rng, teams, environments, game_z, targets, defense_targets):
         td_p = _clip(.23 + .055 * form + .015 * game_z - .025 * strength, .07, .48)
         # Higher kicker targets shift empty possessions into FG opportunities.
         fg_p = _clip((targets.get(team, 8) - 2.5) / (11 * 3.65) + .012 * form, .025, .32)
+        model = kicking.get(team)
+        if model:
+            # Attempts and accuracy are distinct. Expected PAT opportunities
+            # inform team TD frequency, including a small return-TD allowance.
+            td_p = _clip(model['xpa']/11 - .012 + .035*form + .01*game_z, 0, .50)
+            fg_p = _clip(model['fga']/11 + .012*form, 0, 1-turnover_p-td_p)
         for _ in range(drives):
             # A sack need not end a drive. At most three recorded per possession.
             defense['sacks'] += sum(rng.random() < _clip(.075 + .04 * strength - .012 * form, .02, .16) for _ in range(3))
@@ -62,11 +69,14 @@ def sample_game(rng, teams, environments, game_z, targets, defense_targets):
             elif roll < turnover_p + td_p:
                 e['offensive_touchdowns'] += 1
             elif roll < turnover_p + td_p + fg_p:
-                # Made FG distance mix; misses are folded into empty possessions.
-                e['field_goals'].append(rng.choices((32, 45, 53), (.50, .30, .20))[0])
+                e['field_goal_attempts'] += 1
+                if not model or rng.random() < model['fg_rate']:
+                    mix = model['made_distance_mix'] if model else (.50,.30,.20)
+                    e['field_goals'].append(rng.choices((32, 45, 53), mix)[0])
     for team in teams:
         e = events[team]
-        e['extra_points'] = sum(rng.random() < .95 for _ in range(e['offensive_touchdowns'] + e['defensive_touchdowns']))
+        rate = kicking.get(team,{}).get('xp_rate',.95)
+        e['extra_points'] = sum(rng.random() < rate for _ in range(e['offensive_touchdowns'] + e['defensive_touchdowns']))
     return events
 
 
@@ -86,7 +96,7 @@ def specialist_outcomes(rng, players, outcomes, game_factor, team_environment):
         if len(teams) != 2:
             continue  # Incomplete fixture retains the legacy draw.
         form = dict(team_environment)
-        targets, defenses = {}, {}
+        targets, defenses, kicking = {}, {}, {}
         for team in teams:
             offense = [p for p in pool if _team(p)==team and _position(p) in {'QB','RB','WR','TE'} and _projection(p)>0]
             expected = sum(_projection(p) for p in offense)
@@ -97,7 +107,16 @@ def specialist_outcomes(rng, players, outcomes, game_factor, team_environment):
                 values = [_projection(p) for p in pool if _team(p)==team and _position(p)==pos]
                 if values:
                     target[team] = max(values)
-        events = sample_game(event_rng, teams, form, game_factor.get(game, 0), targets, defenses)
+            kickers = [p for p in pool if _team(p)==team and _position(p)=='K']
+            if kickers:
+                starter=max(kickers,key=lambda p:(_projection(p),player_key(p)))
+                if starter.get('ProjectionSource')=='Automatic kicker opportunities' and starter.get('NFLKickerOpportunities'):
+                    kicking[team]=dict(starter['NFLKickerOpportunities'])
+                    baseline=float(starter.get('KickerProjection') or 0)
+                    factor=_projection(starter)/baseline if baseline>0 else 1.
+                    for metric in ('fga','xpa'):
+                        kicking[team][metric]*=factor
+        events = sample_game(event_rng, teams, form, game_factor.get(game, 0), targets, defenses, kicking)
         for p in pool:
             team = _team(p)
             if team not in events:

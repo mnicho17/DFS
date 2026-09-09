@@ -4845,8 +4845,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             f"Source: {player.get('ProjectionSource', 'Legacy / unknown')}\n"
             + (f"{player['NFLWorkload']['attempts']:.1f} att · {player['NFLWorkload']['carries']:.1f} rush · {player['NFLWorkload']['targets']:.1f} tgt\n"
                if player.get('ProjectionSource') == 'Automatic workload estimate' and player.get('NFLWorkload') else '')
+            + (f"{player['NFLKickerOpportunities']['fga']:.2f} FG att · {player['NFLKickerOpportunities']['xpa']:.2f} XP att\n"
+               if player.get('ProjectionSource') == 'Automatic kicker opportunities' and player.get('NFLKickerOpportunities') else '')
             +
-            (exposure_text if player.get('ProjectionSource') == 'Automatic workload estimate'
+            (exposure_text if player.get('ProjectionSource') in {'Automatic workload estimate', 'Automatic kicker opportunities'}
              else f"{status} · {tags}\n{exposure_text}")
         )
 

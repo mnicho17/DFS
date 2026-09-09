@@ -389,6 +389,7 @@ def create_build_diagnostic(
             ),
             "game_script_mix": dict(joint.get("game_script_mix") or sim.get("game_script_mix") or {}),
             "volatility_model": str(joint.get("volatility_model") or sim.get("volatility_model") or ""),
+            "kicker_opportunity_count": _integer(sim.get("kicker_opportunity_count")),
             "specialist_model": str(joint.get("specialist_model") or sim.get("specialist_model") or ""),
             "rare_event_model": str(joint.get("rare_event_model") or sim.get("rare_event_model") or ""),
             "average_edge": _number(sim_summary.get("average_edge")) if sim_summary else None,
@@ -626,6 +627,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             f"expected payout ${_number(sim.get('average_expected_payout')):,.2f} • "
             f"expected profit ${_number(sim.get('average_expected_profit')):+,.2f} per entry"
         )
+    if sim.get("kicker_opportunity_count"):
+        lines.append(f"- Kicker opportunity forecasts: {sim['kicker_opportunity_count']} players use weekly attempts, accuracy and distance data (experimental)")
     if sim.get("specialist_model"):
         lines.append("- Specialist scoring: shared possession events (experimental); K/DST projections guide event rates, not guaranteed SIM means")
         lines.append("- Specialist limits: offense remains projection-based; event rates await historical calibration")

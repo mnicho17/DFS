@@ -40,7 +40,7 @@ def prepare_nfl_slate(csv_path, *, mode='classic', ownership_sims=1000, template
     pool = build_nfl_role_pool(players) if mode == 'classic' else [p for p in players if available(p)]
     root = Path(__file__).resolve().parent
     hashes = {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in
-              ('data_io.py', 'nfl_auto_data.py', 'nfl_workload.py', 'projection_sources.py', 'nfl_simulation.py', 'nfl_specialists.py', 'main_window.py', 'nfl_pipeline.py')}
+              ('data_io.py', 'nfl_auto_data.py', 'nfl_workload.py', 'projection_sources.py', 'nfl_simulation.py', 'nfl_specialists.py', 'nfl_kickers.py', 'main_window.py', 'nfl_pipeline.py')}
     return dict(players=players, role_pool=pool, summary=summary,
                 preparation=dict(mode=mode, ownership_sims=ownership_sims, template_sim=template_sim,
                                  source_hashes=hashes, ownership_total=sum(result['total'].values())))

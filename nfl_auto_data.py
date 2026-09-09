@@ -782,7 +782,7 @@ def apply_context_adjustment(
     adjustment = _clamp(raw, -MAX_NFL_ADJUSTMENT, MAX_NFL_ADJUSTMENT)
     from projection_sources import resolve_projection
     resolve_projection(player)
-    if player.get('ProjectionSource') in {'Manual override', 'Imported forecast', 'Missing forecast'}:
+    if player.get('ProjectionSource') in {'Manual override', 'Imported forecast', 'Missing forecast', 'Automatic kicker opportunities'}:
         # Forecasts already express expected points; never double-adjust them.
         # Missing history must not masquerade as a forecast from a tiny role bump.
         adjustment = 0.0
@@ -846,6 +846,8 @@ def apply_auto_nfl_context(
 
     sleeper_index = _sleeper_index(sleeper_data or {})
     usage_index = _build_usage_index(usage_rows or [])
+    from nfl_kickers import build_kicking_index, attach_kicking_history
+    kicking_index = build_kicking_index(usage_rows or [], usage_season)
     matchup_index = _build_matchup_index(usage_rows or [])
     weather_index = {str(key).strip().upper(): dict(value) for key, value in (weather_by_game or {}).items()}
     odds_index = {str(key).strip().upper(): dict(value) for key, value in (odds_by_game or {}).items()}
@@ -906,6 +908,7 @@ def apply_auto_nfl_context(
             player['NFLRecent' + metric.title()] = _to_float(usage.get(metric), 0.0)
         player["NFLUsageGames"] = int(_to_float(usage.get("games"), 0))
         player["NFLUsageSeason"] = usage_season
+        attach_kicking_history(player, kicking_index)
         player["NFLUsageScore"] = usage_score
         player["NFLMatchupScore"] = matchup_score
         player["NFLRole"] = role_label
@@ -1084,6 +1087,7 @@ def clear_nfl_context(players: List[Dict[str, Any]]) -> None:
         player["FlexProjection"] = base
         player["CptProjection"] = 1.5 * base
         for key in (
+            "NFLKickingHistory", "NFLKickerOpportunities", "KickerProjection",
             "NFLAdjRaw", "NFLAdjScore", "NFLUsage", "NFLUsageGames", "NFLUsageSeason",
             "NFLUsageScore", "NFLMatchupScore", "NFLRole", "NFLRoleScore",
             "NFLRoleBase", "NFLRoleBaseScore", "NFLReplacementBoost", "NFLReplacementFor",
