@@ -180,7 +180,8 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         "scenarios": completed, "field_lineups": len(field), "opponent_field_samples": 3,
         "model": "showdown-shared-outcomes-v1", "field_preset": "Showdown ownership sample",
         "payout_model": "payout-shape-proxy-v1", "contest_aware": False,
-        "volatility_model": "role-aware-player-volatility-v1", "rare_event_model": "guardrailed-breakout-tails-v1",
+        "specialist_model": "shared-specialist-events-v1",
+            "volatility_model": "role-aware-player-volatility-v1", "rare_event_model": "guardrailed-breakout-tails-v1",
         "game_script_mix": {k: v / max(1, sum(scripts.values())) * 100 for k, v in scripts.items()},
     }}
 

@@ -279,3 +279,8 @@ Duplicate entries count every sampled opponent; bootstrap field copies are not a
 Historical PPG is now separate from supplied forecasts. NFL Classic and Showdown honor manual overrides and imported projections before using automatic role-and-usage workload estimates, then historical estimates. Double-click BaseProj or AdjProj to edit a forecast; inspect the source beside the selected player. Read [projection sources and limitations](docs/USER_GUIDE.md#projection-sources-and-players-without-nfl-history). Reload the salary CSV to use the new handling; old snapshots preserve their original inputs.
 
 NFL usage now uses the current weekly-statistics endpoint. Workload-v2 preserves historical player differences when usage is missing. The [shared server preparation command](docs/USER_GUIDE.md#shared-server-preparation) generates projections and ownership through the desktop code, with source hashes for reproducibility.
+
+
+### Shared specialist event scoring
+
+Classic and Showdown now share experimental possession events for K/DST scoring, with common field goals, touchdowns, extra points and opposing points allowed. Reports disclose uncalibrated event rates and the distinction between input projections and resulting SIM means. Offensive-player scoring remains projection-based; this is not a complete game ledger. See the user guide for assumptions and omitted events.

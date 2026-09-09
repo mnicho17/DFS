@@ -796,6 +796,7 @@ def _scenario_outcomes(
     players: Sequence[Dict[str, Any]],
     *,
     script_counter: Optional[Counter[str]] = None,
+    specialist_model: str = 'events',
 ) -> Dict[str, float]:
     # Sorted inputs make seeded builds reproducible across separate app runs;
     # set iteration order varies with Python's per-process hash seed.
@@ -937,6 +938,11 @@ def _scenario_outcomes(
                 score *= 1.35 + 0.55 * rng.random()
             score = min(score, mean * 6.0 + 20.0)
         outcomes[player_key(player)] = score
+    if specialist_model == 'events':
+        from nfl_specialists import specialist_outcomes
+        outcomes.update(specialist_outcomes(rng, players, outcomes, game_factor, team_environment))
+    elif specialist_model != 'legacy':
+        raise ValueError('Unknown specialist model')
     return outcomes
 
 
@@ -1549,6 +1555,7 @@ def simulate_nfl_contest(
                 label: count / max(1, sum(script_counts.values())) * 100.0
                 for label, count in sorted(script_counts.items())
             },
+            "specialist_model": "shared-specialist-events-v1",
             "volatility_model": "role-aware-player-volatility-v1",
             "rare_event_model": "guardrailed-breakout-tails-v1",
             "payout_model": "exact-rank-tie-split-v1" if contest_profile else "payout-shape-proxy-v1",
@@ -1793,7 +1800,8 @@ def simulate_nfl_portfolio_contest(
             label: count / script_total * 100.0
             for label, count in sorted(script_counts.items())
         },
-        "volatility_model": "role-aware-player-volatility-v1",
+        "specialist_model": "shared-specialist-events-v1",
+            "volatility_model": "role-aware-player-volatility-v1",
         "rare_event_model": "guardrailed-breakout-tails-v1",
     }
     return {"lineups": wrapped, "report": report}

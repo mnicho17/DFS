@@ -477,3 +477,16 @@ Choose a new output directory for every run. This command uses the desktop CSV p
 Outputs include enriched players and role pool in JSON (and optional Parquet), enrichment status, and preparation metadata with source-file hashes. Parquet requires pandas/pyarrow, as used by the server jobs; nested model fields are JSON strings there and native objects in the JSON outputs. Matching code, inputs and options is necessary for comparisons; randomized ownership runs need not be identical. Ownership is estimated, not observed contest ownership.
 
 The original `C:\DFS_Server\app_src` main checkout may contain local changes. This update does not overwrite it or existing server jobs. Use the updated feature checkout for this preparation command; do not keep feeding an older prepared pool to the brute-force generator. Inspect usage status, projection sources and ownership before scaling up.
+
+
+## Shared defense and kicker events
+
+NFL Classic and Showdown SIMs now use experimental shared possession events for defense and kicker points. A made field goal gives the kicker 3/4/5 fantasy points by distance and adds three real points to the opposing defense's points allowed. Offensive touchdowns and extra points use the same ledger; defensive return touchdowns do not count against the offense's DST, but their extra points do. Sacks, takeaways and return touchdowns produce integer DST points. Captain scoring remains 1.5 times the same FLEX outcome. Multiple listed kickers do not each receive a full team's opportunities; the highest-projected kicker receives the team's simulated kicks.
+
+This replaces continuous specialist tails, not offensive-player scoring. Team form combines the existing game environment with aggregate sampled offensive performance. It is not a complete play-by-play model: individual offensive touchdowns and turnovers are not reconciled to the event ledger. Safeties, blocked kicks, special-teams return touchdowns and two-point tries are omitted in this first version. No new exposure caps are imposed.
+
+K/DST input projections guide event rates; they are **not guaranteed simulated means**, including imported/manual values. Reports label the model experimental. A replay retains its input ID but can change across model versions. Preserve older exports when comparing results.
+
+Initial uncalibrated assumptions: 8–16 possessions per team (center 11), a 12% base takeaway probability per possession, a 23% touchdown probability, 10% return-TD probability conditional on a takeaway, three sack opportunities per possession at 7.5% each, and 95% extra-point conversion. Shared game/team conditions and defense projections adjust these probabilities within bounds. Kicker projections adjust made-field-goal frequency, with a 50/30/20 split across under-40, 40–49 and 50+ yards. Missed field goals are included in empty possessions. Full formulas and bounds are in nfl_specialists.py. These priors await historical calibration and are not claims about a specific upcoming game.
+
+DraftKings scoring references: https://dknetwork.draftkings.com/2025/08/27/nfl-dfs-beginners-guide-draftkings/ and https://support.draftkings.com/dk/en-us/game-style-showdowns-overview?id=kb_article_view&sysparm_article=KB0010694 .
