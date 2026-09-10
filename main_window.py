@@ -7773,14 +7773,14 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         inspector_scroll.setObjectName("playerInspectorScroll")
         inspector_scroll.setWidgetResizable(True)
         inspector_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
-        inspector_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        inspector_scroll.setMinimumWidth(290)
+        inspector_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        inspector_scroll.setMinimumWidth(320)
         inspector_scroll.setMaximumWidth(350)
         inspector_scroll.setWidget(self.player_inspector)
 
         player_area.addWidget(inspector_scroll)
 
-        player_area.setSizes([690, 310])
+        player_area.setSizes([690, 330])
 
         player_area.setStretchFactor(0, 1)
 
