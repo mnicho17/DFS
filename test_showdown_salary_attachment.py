@@ -55,3 +55,43 @@ class ShowdownSalaryAttachmentTests(unittest.TestCase):
         b='CPT Bravo FLEX Alpha FLEX Charlie FLEX Delta FLEX Echo FLEX Foxtrot'
         self.assertNotEqual(_field_roster_signature(a),_field_roster_signature(b))
         self.assertIn('@cpt:alpha',_field_roster_signature(a))
+
+    def test_submitted_entry_results_are_linked_once_with_captain_identity(self):
+        from learning_db import record_export, generate_learning_report
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            standings, salary = self.fixture(root)
+            db = str(root / 'personal.sqlite')
+            with standings.open(newline='', encoding='utf-8') as handle:
+                result_rows = list(csv.reader(handle))
+            with standings.open('w', newline='', encoding='utf-8') as handle:
+                csv.writer(handle).writerows([result_rows[0] + ['FPTS']] + [r + ['12.5'] for r in result_rows[1:]])
+            players = read_players_csv(str(salary))
+            with salary.open(newline='', encoding='utf-8') as handle:
+                salary_rows = list(csv.reader(handle))
+            headers = ['Entry ID','Contest Name','Contest ID','Entry Fee','CPT'] + ['FLEX'] * 5
+            entries = []
+            lineups = []
+            rosters = []
+            for captain in (0, 1):
+                ids = [str(20000 + captain)] + [str(10000+j) for j in range(6) if j != captain]
+                entries.append([str(1000+captain),'NFL Showdown 150-Max','123','0.50']+ids)
+                lineups.append({'Captain': players[captain], 'Flex': [p for j,p in enumerate(players) if j != captain]})
+                rosters.append(ids)
+            # Third row names the wrong Captain for this actual entry; reject it.
+            entries.append(['1002','NFL Showdown 150-Max','123','0.50'] + rosters[1])
+            with salary.open('w', newline='', encoding='utf-8') as handle:
+                csv.writer(handle).writerows([headers] + entries + salary_rows[1:])
+            record_export(kind='showdown', sport='NFL', lineups=lineups, rows=rosters,
+                          salary_cap=50000, export_path='test.csv', validation={}, db_path=db)
+            import_historical_result_csvs([str(standings)], db_path=db, archive_files=False)
+            result = attach_salary_csv_to_latest_field(str(salary), db_path=db)
+            self.assertEqual(result['personal_results_added'], 2)
+            self.assertEqual(result['personal_results_matched'], 2)
+            again = attach_salary_csv_to_latest_field(str(salary), db_path=db)
+            self.assertEqual(again['personal_results_added'], 0)
+            with closing(sqlite3.connect(db)) as conn:
+                rows = conn.execute('select actual_points, roi, winnings, matched_lineup_id from historical_results order by actual_points desc').fetchall()
+                self.assertEqual([r[0] for r in rows], [100,99])
+                self.assertTrue(all(r[1] is None and r[2] is None for r in rows))
+                self.assertEqual(len({r[3] for r in rows}), 2)

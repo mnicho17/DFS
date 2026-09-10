@@ -853,6 +853,8 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
             )
         else:
             lines.append("- No imported result has matched an exported lineup yet.")
+            if imported_rows:
+                lines.append("- Results are saved, but prediction comparisons require the original export history from the device that generated these lineups.")
 
         lines.extend(["", "Projection calibration"])
         if actual:
@@ -870,7 +872,7 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
         else:
             lines.append("- Export lineups, then import DraftKings results to measure projection accuracy.")
 
-        lines.extend(["", "NFL SIM validation"])
+        lines.extend(["", "NFL Classic SIM validation"])
         if sim_rows:
             lines.append(f"- Matched NFL SIM entries: {len(sim_rows)}")
             if sim_top_one_pred and sim_top_one_actual:
@@ -909,6 +911,10 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
             lines.append("- Generate and export NFL Classic SIM lineups, then import DraftKings results to validate the model.")
 
         lines.extend(["", "Contest field learning"])
+        if any(_safe_int(row[16], 0) == 6 for row in field_rows):
+            lines.append("- Showdown fields are included below; Classic calibration and Classic SIM comparisons exclude them.")
+        if field_rows and not imported_rows:
+            lines.append("- Field summaries contain no personal outcomes. Attach the matching DKEntries file with entry IDs and its salary table to link submitted results.")
         if field_rows:
             preset_text = ", ".join(
                 f"{name}: {count}" for name, count in field_presets.most_common()
@@ -1003,7 +1009,7 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
                 if field_presets.get(preset_name, 0) <= 0:
                     continue
                 calibration = load_nfl_field_calibration(preset_name, db_path=path)
-                lines.append(f"- {calibration['message']}")
+                lines.append(f"- Classic calibration: {calibration['message']}")
             if field_presets.get("Unclassified", 0):
                 lines.append(
                     "- Unclassified fields remain report-only; include Single Entry, 3-Max, 20-Max, or 150-Max in the contest/file name to enable preset learning."
@@ -1014,7 +1020,7 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
             )
             lines.append("- Personal entry-history files remain useful for results, but are not treated as opponent fields.")
 
-        lines.extend(["", "Real Field vs latest NFL SIM"])
+        lines.extend(["", "Real Field vs latest NFL Classic SIM"])
         if latest_sim_comparison:
             real = dict(latest_sim_comparison.get("real") or {})
             simulated = dict(latest_sim_comparison.get("simulated") or {})
@@ -2592,6 +2598,82 @@ def import_historical_result_csvs(
         conn.close()
 
 
+def _attach_entry_results(conn, entries_path, standings_path, import_id, metadata,
+                          field_size, cancel_callback=None):
+    """Join only explicit DK entry IDs; never assume an opponent's roster is ours."""
+    entries = {}
+    with open(entries_path, newline='', encoding='utf-8-sig') as handle:
+        reader = csv.reader(handle)
+        headers = [_canon_result_col(h) for h in next(reader, [])]
+        if 'entry_id' not in headers:
+            return 0
+        id_index = headers.index('entry_id')
+        slots = [i for i, h in enumerate(headers) if h in
+                 {'cpt','captain','flex','qb','rb','wr','te','dst'}]
+        captain = next((i for i in slots if headers[i] in {'cpt','captain'}), None)
+        for cells in reader:
+            if len(cells) <= id_index or not cells[id_index].strip().isdigit():
+                continue
+            ids = [_normalize_roster_token(cells[i]) for i in slots if i < len(cells)]
+            if len(ids) not in (6, 9) or not all(ids):
+                continue
+            expected = []
+            for i in slots:
+                if i >= len(cells):
+                    break
+                key = _normalize_roster_token(cells[i])
+                prefix = '@cpt:' if i == captain else ''
+                player = metadata.get(prefix + key)
+                if not player:
+                    break
+                expected.append(prefix + _normalize_roster_token(player['name']))
+            if len(expected) != len(ids):
+                continue
+            row = dict(zip(headers, cells))
+            entries[cells[id_index].strip()] = (ids, tuple(sorted(expected)), row)
+    if not entries:
+        return 0
+    found = 0
+    with open(standings_path, newline='', encoding='utf-8-sig') as handle:
+        for index, raw in enumerate(csv.DictReader(handle), 1):
+            if index % 1000 == 0 and cancel_callback and cancel_callback():
+                raise _ImportCancelled()
+            row = {}
+            for key, value in raw.items():
+                row.setdefault(_canon_result_col(key), value)  # Entry Points precede side-table FPTS.
+            entry_id = str(row.get('entry_id') or '').strip()
+            entry = entries.get(entry_id)
+            if not entry:
+                continue
+            ids, expected, entry_row = entry
+            if _field_roster_signature(str(row.get('lineup') or '')) != expected:
+                continue  # Edited entry file or different contest: do not misattribute scores.
+            rank = _parse_rank(row.get('rank'))
+            if rank <= 0 or not str(row.get('actual_points') or '').strip():
+                continue
+            result_id = str(uuid.uuid5(uuid.NAMESPACE_URL, 'dk-entry:' + str(import_id) + ':' + entry_id))
+            fee_text = str(entry_row.get('entry_fee') or '').strip()
+            fee = _money_to_float(fee_text) if fee_text else None
+            percentile = max(0.0, min(100.0, 100 * (1 - (rank - 1) / max(1, field_size))))
+            cursor = conn.execute(
+                """INSERT OR IGNORE INTO historical_results
+                (result_id, import_id, source_file, row_index, sport, contest_name,
+                 entry_name, entry_fee, actual_points, rank_text, lineup_tokens_json,
+                 raw_json, field_size, percentile, top_one_pct)
+                VALUES (?, ?, ?, ?, 'NFL', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (result_id, import_id, os.path.basename(standings_path), index,
+                 entry_row.get('contest_name') or '', row.get('entry_name') or '', fee,
+                 _safe_float(row['actual_points']), str(rank), json.dumps(ids),
+                 json.dumps(dict(row, entry_link_source='matching DKEntries entry ID and roster'), default=str),
+                 field_size, percentile, int(rank <= max(1, math.ceil(field_size * .01)))))
+            if cursor.rowcount:
+                found += 1
+                for slot_index, token in enumerate(ids, 1):
+                    conn.execute('INSERT INTO historical_result_players (hist_player_id,result_id,token,slot_index) VALUES (?,?,?,?)',
+                                 (str(uuid.uuid4()), result_id, token, slot_index))
+    return found
+
+
 def attach_salary_csv_to_latest_field(
     salary_path: str,
     *,
@@ -2707,6 +2789,10 @@ def attach_salary_csv_to_latest_field(
                 metadata_override=metadata,
                 replace_field_id=str(field_id),
             )
+            personal_rows = _attach_entry_results(
+                conn, salary_path, standings_path, str(import_id), metadata,
+                _safe_int(preflight.get('field_size'), 0), cancel_callback)
+        matching = match_historical_results(conn, import_ids=[str(import_id)])
         refreshed = conn.execute(
             """
             SELECT metadata_coverage_pct, avg_salary, salary_p10,
@@ -2717,6 +2803,8 @@ def attach_salary_csv_to_latest_field(
         ).fetchone()
         return {
             "attached": True,
+            "personal_results_added": personal_rows,
+            "personal_results_matched": matching['matched'],
             "cancelled": False,
             "contest_name": contest_name,
             "field_preset": preset,
@@ -2732,7 +2820,9 @@ def attach_salary_csv_to_latest_field(
             "entries": int(summary.get("entries", 0) or 0),
             "message": (
                 f"Attached matching salaries to {contest_name}: {match_pct:.1f}% player match and "
-                f"{_safe_float(refreshed[0]):.1f}% lineup-slot coverage."
+                f"{_safe_float(refreshed[0]):.1f}% lineup-slot coverage. "
+                f"Added {personal_rows} submitted-entry results; {matching['matched']} newly matched to saved exports. "
+                "Winnings remain unknown unless supplied in a results import."
             ),
         }
     except _ImportCancelled:
