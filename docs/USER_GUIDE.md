@@ -548,7 +548,7 @@ The app can compare exact exported rosters with DraftKings standings or contest-
 
 4. Choose **Import DraftKings Results** and select the file.
 
-5. For complete NFL standings, choose **Attach Matching Salaries** and select the DraftKings salary CSV from that exact historical slate.
+5. For complete NFL Classic or Showdown standings, choose **Attach Matching Salaries** and select the DKSalaries CSV or DKEntries CSV containing its embedded player salary table from that exact historical slate. Showdown Captain and FLEX prices and lineup identities remain distinct. An entry-only file without a player salary table is not sufficient. Attachment applies to the latest eligible complete field; Showdown fields do not train the Classic construction calibration.
 
 6. Review the match rate, ROI, cash rate, finish percentile, projection error, and guarded breakdowns.
 

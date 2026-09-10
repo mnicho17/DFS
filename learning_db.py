@@ -1347,6 +1347,15 @@ def _roster_signature(tokens: List[Any]) -> tuple[str, ...]:
     return tuple(sorted(token for token in normalized if token))
 
 
+def _field_roster_signature(lineup_text):
+    """Captain-aware field identity; Classic retains its original signature."""
+    tokens = _extract_lineup_tokens({'lineup': lineup_text})
+    if re.match(r'^\s*(?:CPT|CAPTAIN)\s+', lineup_text, re.I) and len(tokens)==6:
+        return tuple(sorted(['@cpt:' + _normalize_roster_token(tokens[0])] +
+                            [_normalize_roster_token(t) for t in tokens[1:]]))
+    return _roster_signature(tokens)
+
+
 def _extract_lineup_tokens(row: Dict[str, Any]) -> List[str]:
     """Extract likely DK player IDs from a result/entry row.
 
@@ -1721,14 +1730,14 @@ def _player_metadata_lookup(conn: sqlite3.Connection) -> Dict[str, Dict[str, Any
     rows = conn.execute(
         """
         SELECT lp.player_id, lp.player_key, lp.name, lp.team, lp.opponent,
-               lp.position, lp.salary, lp.ownership
+               lp.position, lp.salary, lp.ownership, lp.slot
         FROM lineup_players lp
         JOIN lineups l ON l.lineup_id=lp.lineup_id
         JOIN exports e ON e.export_id=l.export_id
         ORDER BY e.created_at DESC, l.lineup_index ASC
         """
     ).fetchall()
-    for player_id, player_key_value, name, team, opponent, position, salary, ownership in rows:
+    for player_id, player_key_value, name, team, opponent, position, salary, ownership, slot in rows:
         meta = {
             "name": str(name or ""),
             "team": str(team or "").strip().upper(),
@@ -1744,7 +1753,7 @@ def _player_metadata_lookup(conn: sqlite3.Connection) -> Dict[str, Dict[str, Any
         }
         for key in keys:
             if key:
-                lookup.setdefault(key, meta)
+                lookup.setdefault(("@cpt:" + key) if str(slot).upper()=="CPT" else key, meta)
     return lookup
 
 
@@ -2064,6 +2073,7 @@ def _preflight_complete_field_csv(
         contest_col = source_by_canon.get("contest_name")
         field_size_col = source_by_canon.get("field_size")
         player_col = source_by_canon.get("player")
+        slot_col = next((h for h in headers if str(h).strip().lower()=="roster position"), None)
         drafted_col = source_by_canon.get("%drafted") or source_by_canon.get("drafted")
         if not rank_col or not lineup_col or not (entry_col or entry_id_col):
             return result
@@ -2109,6 +2119,8 @@ def _preflight_complete_field_csv(
                     max_entry_limit = max(max_entry_limit, _safe_int(match, 0))
             if player_col and drafted_col:
                 player_name = _normalize_roster_token(raw.get(player_col))
+                if slot_col and str(raw.get(slot_col) or "").upper() in {"CPT","CAPTAIN"}:
+                    player_name = "@cpt:" + player_name
                 drafted = str(raw.get(drafted_col, "") or "").strip().rstrip("%")
                 if player_name and drafted:
                     value = _safe_float(drafted, -1.0)
@@ -2210,7 +2222,7 @@ def _stream_complete_field_summary(
             if not lineup_text:
                 continue
             tokens = _extract_lineup_tokens({"lineup": lineup_text})
-            signature = _roster_signature(tokens)
+            signature = _field_roster_signature(lineup_text)
             if not signature:
                 continue
             roster_sizes[len(signature)] += 1
@@ -2599,10 +2611,11 @@ def attach_salary_csv_to_latest_field(
         target = conn.execute(
             """
             SELECT cfs.field_id, cfs.import_id, hi.source_path, cfs.contest_name,
-                   cfs.field_preset
+                   cfs.field_preset, cfs.roster_size
             FROM contest_field_summaries cfs
             JOIN historical_imports hi ON hi.import_id=cfs.import_id
-            WHERE cfs.sport='NFL' AND cfs.roster_size=9
+            WHERE (cfs.sport='NFL' AND cfs.roster_size=9)
+               OR (cfs.sport IN ('NFL','UNKNOWN') AND cfs.roster_size=6)
             ORDER BY cfs.created_at DESC
             LIMIT 1
             """
@@ -2611,9 +2624,9 @@ def attach_salary_csv_to_latest_field(
             return {
                 "attached": False,
                 "cancelled": False,
-                "message": "Import a complete NFL Classic standings file before attaching salaries.",
+                "message": "Import a complete NFL Classic or Showdown standings file before attaching salaries.",
             }
-        field_id, import_id, standings_path, contest_name, preset = target
+        field_id, import_id, standings_path, contest_name, preset, roster_size = target
         if not standings_path or not os.path.isfile(standings_path):
             return {
                 "attached": False,
@@ -2623,6 +2636,11 @@ def attach_salary_csv_to_latest_field(
         if progress_callback:
             progress_callback(0, 0, "Reading matching DraftKings salaries")
         players = read_players_csv(salary_path)
+        if not players:
+            return dict(attached=False, cancelled=False, message='No players were found in the salary table. Select the matching salary CSV or DKEntries file with its player table.')
+        if roster_size == 6 and (len({p.get('Team') for p in players}) != 2 or
+                not all(str(p.get('Position','')).upper() in {'QB','RB','WR','TE','K','DST','D/ST'} for p in players)):
+            return dict(attached=False, cancelled=False, message='Showdown attachment requires a two-team NFL salary table for the same game.')
         metadata: Dict[str, Dict[str, Any]] = {}
         for player in players:
             meta = {
@@ -2639,12 +2657,24 @@ def attach_salary_csv_to_latest_field(
                 key = _normalize_roster_token(value)
                 if key:
                     metadata[key] = meta
+            if roster_size == 6:
+                cpt = dict(meta, salary=_safe_float(player.get('CptSalary'), 0.0))
+                for value in (player.get('CptID'), player.get('CptNamePlusID'), player.get('Name')):
+                    key = _normalize_roster_token(value)
+                    if key and cpt['salary'] > 0:
+                        metadata['@cpt:' + key] = cpt
         preflight = _preflight_complete_field_csv(
             standings_path,
             progress_callback=progress_callback,
             cancel_callback=cancel_callback,
         )
+        if not preflight.get('complete'):
+            return dict(attached=False, cancelled=False, message='The original standings file is no longer a complete field; no changes made.')
         source_players = set((preflight.get("source_ownership") or {}).keys())
+        if not source_players:
+            with open(standings_path, newline='', encoding='utf-8-sig') as handle:
+                for row in csv.DictReader(handle):
+                    source_players.update(_field_roster_signature(str(row.get('Lineup') or row.get('lineup') or '')))
         matched_players = sum(1 for key in source_players if key in metadata)
         match_pct = matched_players / max(1, len(source_players)) * 100.0
         if source_players and match_pct < minimum_match_pct:
@@ -2661,6 +2691,9 @@ def attach_salary_csv_to_latest_field(
                     "The field was left unchanged because this appears to be a different slate."
                 ),
             }
+        if not source_players:
+            return dict(attached=False, cancelled=False, message='No field player identities were available to verify this salary file.')
+        preflight['sport'] = 'NFL'
         if cancel_callback and cancel_callback():
             raise _ImportCancelled()
         with conn:

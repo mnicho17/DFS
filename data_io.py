@@ -104,6 +104,29 @@ def _parse_game_context(game_info: Any, team: Any) -> Dict[str, str]:
     }
 
 
+def _salary_rows(handle):
+    """Read standalone salaries or the salary table embedded in DKEntries."""
+    reader = csv.reader(handle)
+    headers = None
+    offset = 0
+    for index, cells in enumerate(reader):
+        canon = [_canon_field(c) for c in cells]
+        if index == 0 and ('Name' in canon or 'Name + ID' in canon):
+            headers = cells
+            break
+        if 'Salary' in canon and 'Name' in canon and 'ID' in canon and 'Position' in canon:
+            offset = canon.index('Position')
+            headers = cells[offset:]
+            break
+        if index >= 100:
+            break
+    if not headers:
+        raise ValueError('No player salary table found. Select the matching DKSalaries CSV or a DKEntries file containing its player salary table.')
+    for cells in reader:
+        values = cells[offset:offset+len(headers)]
+        yield dict(zip(headers, values))
+
+
 def read_players_csv(path: str) -> List[Dict[str, Any]]:
     """
     Read a DK Showdown/Classic-style CSV and return a list of unified player
@@ -113,9 +136,7 @@ def read_players_csv(path: str) -> List[Dict[str, Any]]:
     cpt_rows: Dict[str, Dict[str, Any]] = {}
 
     with open(path, "r", newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        if not reader.fieldnames:
-            raise ValueError("CSV appears to be empty.")
+        reader = _salary_rows(f)
         for raw in reader:
             if not raw:
                 continue
