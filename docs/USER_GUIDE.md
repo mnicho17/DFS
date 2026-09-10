@@ -1014,3 +1014,10 @@ For tonight: update, reload the original salary CSV, allow player context and ow
 Complete standings are summarized without storing every opponent as a personal result. In Results & Learning, attach the matching DKEntries file that contains both entry IDs and the embedded salary table. The app joins those entry IDs to the standings, verifies the actual roster (including Captain), and stores those submitted scores and ranks once. Repeating attachment does not duplicate results. A standalone salary file supplies metadata only. Entry Points remain separate from the side-table player FPTS column.
 
 Prediction comparisons require the original saved lineup export on this device. If results import but exact matches remain zero, use the original generating device and its history; do not regenerate forecasts after the game to create a backtest. Missing winnings remain unknown. The Classic calibration and real-field SIM comparison sections exclude Showdown; importing a Showdown field does not increment the Classic training counter. No automatic projection training is added.
+
+
+### Selected-player controls
+
+The selected-player panel groups lineup status, portfolio exposure, and team adjustments with consistent two-column buttons. Minimum exposure controls are on the left and maximum controls on the right. When the player area is short, scroll within the panel to reach the lower actions; controls retain their spacing and remain readable.
+
+![Selected-player controls](images/player-controls.png)
