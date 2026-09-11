@@ -386,7 +386,7 @@ def build_entry_safety_report(
             current = _current_player(player, current_lookup)
             name = str(current.get("Name") or player.get("Name") or _identity(player) or "Unknown")
             player_status = _status(current)
-            if player_status in UNAVAILABLE_STATUSES or bool(current.get("LiveStatusConflict")):
+            if player_status in UNAVAILABLE_STATUSES or bool(current.get("LiveStatusConflict")) or current.get("NFLQBEligible") is False:
                 unavailable_names.append(name)
                 unavailable_indexes.append(index)
             elif player_status in REVIEW_STATUSES:

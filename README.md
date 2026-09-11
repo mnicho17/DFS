@@ -601,3 +601,6 @@ Identical player-score tables across contests indicate shared outcomes; the coun
 In **Results & Learning**, choose or create a folder with **Choose folder**. The location is saved on this computer. Store downloaded standings there, then click **Import New Results**. The app scans that folder and subfolders, ignores non-result CSVs, and imports contents it has not already saved. Identical contents are skipped even after a rename; moved files refresh their audit location. Your saved username identifies your entries. An unavailable USB drive is reported without changing saved results.
 
 The scan runs only when clicked. Keep **Import DraftKings Results** for selecting individual files or reprocessing an existing field after changing your username. File-content identity prevents duplicate imports of identical files; changed contents are treated as a new import.
+
+
+Long Search now supports checkpointed NFL Classic/Showdown candidate libraries, 1–12 hour sessions, and fresh Deep scoring after loading. NFL builds exclude unverified/backup QBs unless the next quarterback is confirmed eligible. New quick ownership uses roster exposure units. See the user guide for controls and limits.

@@ -271,7 +271,7 @@ def _player_projection_context(p: Dict[str, Any], slot: str) -> tuple[float, flo
             "NFLAdjScore", "NFLUsageScore", "NFLMatchupScore", "NFLRoleScore",
             "NFLWeatherScore", "NFLVegas", "NFLNotes", "MLBAdjScore", "MLBRecentForm",
             "MLBMatchup", "MLBBallpark", "MLBWeather", "MLBVegas", "MLBNotes",
-            "TeamAdjPct", "ProjectionSource", "HistoricalPPG", "ImportedProjection",
+            "TeamAdjPct", "OwnershipSource", "OwnershipUnits", "ProjectionSource", "HistoricalPPG", "ImportedProjection",
             "WorkloadProjection", "NFLWorkload", "KickerProjection", "NFLKickerOpportunities",
         )
         if p.get(key) not in (None, "")

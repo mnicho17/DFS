@@ -22,7 +22,7 @@ def _fixture_players():
         for team, opp in [(away, home), (home, away)]:
             players.append({
                 "Name": f"{team} QB", "Team": team, "Opponent": opp,
-                "GameKey": game, "GameInfo": game, "Position": "QB",
+                "GameKey": game, "GameInfo": game, "Position": "QB", "NFLDepthOrder": 1,
                 "FlexSalary": 6500 + (pid % 5) * 100,
                 "FlexProjection": 20 + (pid % 4), "FlexID": str(pid),
             })

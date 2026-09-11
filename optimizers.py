@@ -739,7 +739,10 @@ class ShowdownOptimizer:
         own_weight: float = 0.0,
         build_style: str = "Strategic",
     ):
-        self.players = [p for p in players if _salary(p) > 0 or _cpt_salary(p) > 0]
+        from nfl_eligibility import eligible_players
+        allowed_qb_keys = {_pkey(p) for p in eligible_players(players)}
+        players = [p for p in players if _pkey(p) in allowed_qb_keys]
+        self.players = [p for p in players if p.get("NFLQBEligible") is not False and (_salary(p) > 0 or _cpt_salary(p) > 0)]
         self.salary_cap = float(salary_cap)
         self.rng = random.Random(seed)
         self.own_mode = own_mode
@@ -1471,7 +1474,7 @@ class ClassicOptimizer:
         own_mode: str = "Balanced",
         own_weight: float = 0.0,
     ):
-        self.players = [p for p in players if _salary(p) > 0 and str(p.get("Position", "")).strip()]
+        self.players = [p for p in players if p.get("NFLQBEligible") is not False and _salary(p) > 0 and str(p.get("Position", "")).strip()]
         self.salary_cap = float(salary_cap)
         self.rng = random.Random(seed)
         self.own_mode = own_mode
@@ -2076,8 +2079,12 @@ class MultiSportClassicOptimizer:
         salary_strategy: str = "Near Cap",
     ):
         self.sport = (sport or "NFL").strip().upper()
+        if self.sport == "NFL":
+            from nfl_eligibility import eligible_players
+            allowed_qb_keys = {_pkey(p) for p in eligible_players(players)}
+            players = [p for p in players if _pkey(p) in allowed_qb_keys]
         self.slots = get_roster_slots_for_sport(self.sport)
-        self.players = [p for p in players if _salary(p) > 0 and str(p.get("Position", "")).strip()]
+        self.players = [p for p in players if p.get("NFLQBEligible") is not False and _salary(p) > 0 and str(p.get("Position", "")).strip()]
         self.salary_cap = float(salary_cap)
         self.rng = random.Random(seed)
         self.own_mode = own_mode

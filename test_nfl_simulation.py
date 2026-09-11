@@ -63,8 +63,8 @@ class NFLSimulationTests(unittest.TestCase):
             for player in required_pool
             if player["Team"] == "BUF" and player["Position"] == "QB"
         }
-        self.assertEqual(len(required_buf_ids), 2)
-        self.assertIn("backup", required_buf_ids)
+        self.assertEqual(len(required_buf_ids), 1)
+        self.assertNotIn("backup", required_buf_ids)
 
     def test_field_generator_counts_only_complete_near_cap_lineups(self):
         players = _fixture_players()

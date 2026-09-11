@@ -8,6 +8,34 @@ from learning_db import load_nfl_field_calibration
 
 
 class SnapshotActions:
+    def on_long_search(self):
+        if self._snapshot_busy():
+            self.status.showMessage('Wait for the current build to finish.',5000)
+            return
+        from long_search_ui import LongSearchDialog
+        LongSearchDialog(self).exec_()
+
+    def on_load_candidate_library(self):
+        if self._snapshot_busy():
+            return
+        path,_=QtWidgets.QFileDialog.getOpenFileName(self,'Load Candidate Library','','Candidate library (*.dfslib)')
+        if not path:return
+        try:
+            from candidate_library import load_candidates
+            recipe=self._current_build_recipe()
+            _,report=load_candidates(path,self.players,kind=self._contest_mode(),
+                salary_cap=float(recipe.get('salary_cap') or 50000),salary_strategy=recipe.get('salary_strategy','Near Cap'),rules=self._portfolio_rules())
+            self._candidate_library=path
+            self.status.showMessage(f"Library loaded: {report['accepted']:,} eligible candidates. Choose Deep with SIM enabled, then Build. Current inputs will be used.",15000)
+            self.lbl_snapshot_data.setText(f"Candidate library loaded: {report['accepted']:,} candidates — Deep required")
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self,'Library Not Loaded',str(exc))
+
+    def on_clear_candidate_library(self):
+        self._candidate_library=''
+        self._refresh_snapshot_label()
+        self.status.showMessage('Candidate library cleared. Next build generates fresh candidates.',6000)
+
     def _snapshot_busy(self):
         for name in ('_build_thread', '_own_thread'):
             thread = getattr(self, name, None)
@@ -95,7 +123,7 @@ class SnapshotActions:
     def _refresh_snapshot_label(self):
         if hasattr(self, 'lbl_snapshot_data'):
             replay = getattr(self, '_snapshot_replay', False)
-            self.lbl_snapshot_data.setText('Snapshot replay' if replay else 'Live inputs')
+            self.lbl_snapshot_data.setText(('Snapshot replay' if replay else 'Live inputs') + (' | Candidate library loaded — Deep required' if getattr(self, '_candidate_library', '') else ''))
             self.lbl_snapshot_data.setToolTip(freshness_text(self.last_live_check_summary, replay))
 
     def on_data_freshness(self):

@@ -109,6 +109,8 @@ def build_results_audit(conn, username=''):
         player_errors = defaultdict(list)
         player_sources = defaultdict(set)
         ownership_pairs = []
+        ownership_sources = set()
+        ownership_units = set()
         seen = set()
         for row in matched:
             if row[3] in seen:
@@ -122,6 +124,8 @@ def build_results_audit(conn, username=''):
                     player_errors[key].append((float(projection),scores[key]))
                 if own is not None and key in ownership:
                     ownership_pairs.append((key,float(own),ownership[key]))
+                    ownership_sources.add(str(context.get("OwnershipSource") or "not recorded"))
+                    ownership_units.add(str(context.get("OwnershipUnits") or "not recorded"))
         if player_errors:
             lines.append('  Largest player forecast misses (Captain and FLEX kept separate):')
             ranked = sorted(player_errors.items(),key=lambda kv:abs(statistics.mean(v[1]-v[0] for v in kv[1])),reverse=True)
@@ -135,6 +139,7 @@ def build_results_audit(conn, username=''):
             unique = {(k,p,a) for k,p,a in ownership_pairs}
             stored = [x[1] for x in unique];actual = [x[2] for x in unique]
             lines.append(f'  Recorded ownership values: range {min(stored):.2f}–{max(stored):.2f}; median {statistics.median(stored):.2f}. Corresponding field median {statistics.median(actual):.2f}%.')
+            lines.append('  Ownership sources: ' + ', '.join(sorted(ownership_sources)) + '; units: ' + ', '.join(sorted(ownership_units)) + '.')
             lines.append('  Ownership units are not recorded in older exports. Low stored values can indicate sampling weights; do not automatically rescale or treat this as confirmed ownership calibration.')
         if not matched:
             lines.append('  Player forecast audit unavailable: no matching original exports. Scores and observed ownership remain usable.')

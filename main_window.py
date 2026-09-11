@@ -92,6 +92,9 @@ class OwnershipSimWorker(QtCore.QObject):
 
         self.mode = mode  # 'classic' or 'showdown'
 
+        if sport == "NFL":
+            from nfl_eligibility import eligible_players, apply_qb_eligibility
+            self.players = eligible_players(apply_qb_eligibility([dict(p) for p in players]), reject_locks=False)
         self.num_sims = max(1, int(num_sims))
 
         self.salary_cap = float(salary_cap or 50000.0)
@@ -1027,6 +1030,7 @@ class LineupBuildWorker(QtCore.QObject):
         retained_lineups: Optional[List[Any]] = None,
 
         repair_source: str = "",
+        candidate_library: str = "",
 
     ):
 
@@ -1081,6 +1085,9 @@ class LineupBuildWorker(QtCore.QObject):
         self.retained_lineups = list(retained_lineups or [])[:self.num_lineups]
 
         self.repair_source = str(repair_source or "")
+        self.candidate_library = candidate_library
+        self.library_candidates = []
+        self.library_report = {}
 
         self._cancel_event = threading.Event()
 
@@ -1100,6 +1107,21 @@ class LineupBuildWorker(QtCore.QObject):
 
         try:
 
+            if self.candidate_library:
+                if self.retained_lineups:
+                    raise ValueError("Clear the candidate library before repairing an existing portfolio.")
+                if self.sport != "NFL" or not self.sim_enabled or not self.compute_mode.casefold().startswith("deep"):
+                    raise ValueError("Candidate libraries require NFL Deep with SIM enabled.")
+                from candidate_library import load_candidates
+                self.library_candidates, self.library_report = load_candidates(self.candidate_library,
+                    self.players, kind=self.kind, salary_cap=self.salary_cap,
+                    salary_strategy=self.salary_strategy, rules=self.portfolio_rules)
+                self.progress.emit(0, len(self.library_candidates),
+                    f"Library: {len(self.library_candidates):,} candidates accepted; {self.library_report['rejected']:,} rejected")
+            if self.sport == "NFL":
+                from nfl_eligibility import eligible_players, apply_qb_eligibility
+                self.players = apply_qb_eligibility([dict(p) for p in self.players])
+                eligible_players(self.players)
             build_started = time.perf_counter()
 
             deep_requested = self.compute_mode.casefold().startswith("deep")
@@ -1518,7 +1540,7 @@ class LineupBuildWorker(QtCore.QObject):
 
                 player["_PortfolioCptCandidateBoost"] = min(14.0, min_cpt * 0.12) + (3.0 if key in required_group_keys else 0.0)
 
-            if use_role_pool:
+            if use_role_pool and not self.library_candidates:
 
                 build_players = build_nfl_role_pool(
 
@@ -1532,167 +1554,18 @@ class LineupBuildWorker(QtCore.QObject):
 
             style_counts = {}
 
-            if self.kind == "showdown":
-
-                opt = ShowdownOptimizer(
-
-                    build_players,
-
-                    salary_cap=self.salary_cap,
-
-                    own_mode=self.own_mode,
-
-                    own_weight=self.own_weight,
-
-                    build_style=self.build_style,
-
-                )
-
-                lineups = opt.build_lineups(
-
-                    num_lineups=candidate_target,
-
-                    progress_callback=lambda done, total, text: self.progress.emit(
-
-                        (
-
-                            min(candidate_budget, int(done * candidate_target / max(1, total)))
-
-                            if use_nfl_sim
-
-                            else min(build_request, int(done * build_request / max(1, total)))
-
-                        ),
-
-                        candidate_budget if use_nfl_sim else build_request,
-
-                        f"Phase 1 of {total_phases} - generating portfolio candidates",
-
-                    ),
-
-                    cancel_callback=self._cancel_event.is_set,
-
-                )
-
-                lineups = attach_showdown_metrics(lineups, self.salary_cap)
-
+            if self.library_candidates:
+                lineups = list(self.library_candidates)
+                candidate_target = len(lineups)
+                candidate_budget = len(lineups)
+                ownership_candidate_target = 0
+                scenario_candidate_target = 0
             else:
+                if self.kind == "showdown":
 
-                retained_signatures_for_build = [
-
-                    tuple(sorted(player_key(player) for player in lineup))
-
-                    for lineup in self.retained_lineups
-
-                ]
-
-                if deep_build:
-
-                    # Independent seeds expose different QB stacks, bring-backs,
-
-                    # salary shapes, and value combinations.  Batching also keeps
-
-                    # the generator's pairwise uniqueness work bounded.
-
-                    lineups = []
-
-                    seeds = deep_search_seeds(self.deep_options["seeds"])
-
-                    jobs = search_jobs(seeds, self.build_style, self.deep_options["all_styles"])
-
-                    optimizer_seen = set(retained_signatures_for_build)
-
-                    remaining_optimizer = candidate_target
-
-                    completed_optimizer = 0
-
-                    for batch_index, (batch_style, seed) in enumerate(jobs):
-
-                        if remaining_optimizer <= 0 or generation_should_stop():
-
-                            break
-
-                        batches_left = len(jobs) - batch_index
-
-                        batch_deadline = time.perf_counter() + max(0, generation_deadline - time.perf_counter()) / batches_left
-
-                        batch_target = int(math.ceil(remaining_optimizer / max(1, batches_left)))
-
-                        opt = MultiSportClassicOptimizer(
-
-                            build_players,
-
-                            sport=self.sport,
-
-                            salary_cap=self.salary_cap,
-
-                            seed=seed,
-
-                            own_mode=self.own_mode,
-
-                            own_weight=self.own_weight,
-
-                            build_style=batch_style,
-
-                            mlb_stack_pref=self.mlb_stack_pref,
-
-                            salary_strategy=self.salary_strategy,
-
-                        )
-
-                        batch_lineups = opt.build_lineups(
-
-                            num_lineups=batch_target,
-
-                            progress_callback=lambda done, total, text, offset=completed_optimizer: self.progress.emit(
-
-                                min(candidate_budget, offset + int(done)),
-
-                                candidate_budget,
-
-                                f"Phase 1 of {total_phases} - Deep {batch_style} search {batch_index + 1}/{len(jobs)}",
-
-                            ),
-
-                            cancel_callback=lambda: generation_should_stop() or time.perf_counter() >= batch_deadline,
-
-                            excluded_signatures=retained_signatures_for_build,
-
-                            exact_excluded_signatures=optimizer_seen,
-
-                            minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
-
-                        )
-
-                        fresh = []
-
-                        for lu in batch_lineups:
-
-                            signature = tuple(sorted(player_key(p) for p in lu))
-
-                            if signature not in optimizer_seen:
-
-                                optimizer_seen.add(signature)
-
-                                fresh.append(lu)
-
-                        batch_lineups = fresh
-
-                        style_counts[batch_style] = style_counts.get(batch_style, 0) + len(batch_lineups)
-
-                        lineups.extend(batch_lineups)
-
-                        completed_optimizer += len(batch_lineups)
-
-                        remaining_optimizer = max(0, candidate_target - completed_optimizer)
-
-                else:
-
-                    opt = MultiSportClassicOptimizer(
+                    opt = ShowdownOptimizer(
 
                         build_players,
-
-                        sport=self.sport,
 
                         salary_cap=self.salary_cap,
 
@@ -1701,10 +1574,6 @@ class LineupBuildWorker(QtCore.QObject):
                         own_weight=self.own_weight,
 
                         build_style=self.build_style,
-
-                        mlb_stack_pref=self.mlb_stack_pref,
-
-                        salary_strategy=self.salary_strategy,
 
                     )
 
@@ -1726,21 +1595,181 @@ class LineupBuildWorker(QtCore.QObject):
 
                             candidate_budget if use_nfl_sim else build_request,
 
-                            f"Phase 1 of {total_phases} - {text}",
+                            f"Phase 1 of {total_phases} - generating portfolio candidates",
 
                         ),
 
                         cancel_callback=self._cancel_event.is_set,
 
-                        excluded_signatures=retained_signatures_for_build,
-
-                        minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
-
                     )
+
+                    lineups = attach_showdown_metrics(lineups, self.salary_cap)
+
+                else:
+
+                    retained_signatures_for_build = [
+
+                        tuple(sorted(player_key(player) for player in lineup))
+
+                        for lineup in self.retained_lineups
+
+                    ]
+
+                    if deep_build:
+
+                        # Independent seeds expose different QB stacks, bring-backs,
+
+                        # salary shapes, and value combinations.  Batching also keeps
+
+                        # the generator's pairwise uniqueness work bounded.
+
+                        lineups = []
+
+                        seeds = deep_search_seeds(self.deep_options["seeds"])
+
+                        jobs = search_jobs(seeds, self.build_style, self.deep_options["all_styles"])
+
+                        optimizer_seen = set(retained_signatures_for_build)
+
+                        remaining_optimizer = candidate_target
+
+                        completed_optimizer = 0
+
+                        for batch_index, (batch_style, seed) in enumerate(jobs):
+
+                            if remaining_optimizer <= 0 or generation_should_stop():
+
+                                break
+
+                            batches_left = len(jobs) - batch_index
+
+                            batch_deadline = time.perf_counter() + max(0, generation_deadline - time.perf_counter()) / batches_left
+
+                            batch_target = int(math.ceil(remaining_optimizer / max(1, batches_left)))
+
+                            opt = MultiSportClassicOptimizer(
+
+                                build_players,
+
+                                sport=self.sport,
+
+                                salary_cap=self.salary_cap,
+
+                                seed=seed,
+
+                                own_mode=self.own_mode,
+
+                                own_weight=self.own_weight,
+
+                                build_style=batch_style,
+
+                                mlb_stack_pref=self.mlb_stack_pref,
+
+                                salary_strategy=self.salary_strategy,
+
+                            )
+
+                            batch_lineups = opt.build_lineups(
+
+                                num_lineups=batch_target,
+
+                                progress_callback=lambda done, total, text, offset=completed_optimizer: self.progress.emit(
+
+                                    min(candidate_budget, offset + int(done)),
+
+                                    candidate_budget,
+
+                                    f"Phase 1 of {total_phases} - Deep {batch_style} search {batch_index + 1}/{len(jobs)}",
+
+                                ),
+
+                                cancel_callback=lambda: generation_should_stop() or time.perf_counter() >= batch_deadline,
+
+                                excluded_signatures=retained_signatures_for_build,
+
+                                exact_excluded_signatures=optimizer_seen,
+
+                                minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
+
+                            )
+
+                            fresh = []
+
+                            for lu in batch_lineups:
+
+                                signature = tuple(sorted(player_key(p) for p in lu))
+
+                                if signature not in optimizer_seen:
+
+                                    optimizer_seen.add(signature)
+
+                                    fresh.append(lu)
+
+                            batch_lineups = fresh
+
+                            style_counts[batch_style] = style_counts.get(batch_style, 0) + len(batch_lineups)
+
+                            lineups.extend(batch_lineups)
+
+                            completed_optimizer += len(batch_lineups)
+
+                            remaining_optimizer = max(0, candidate_target - completed_optimizer)
+
+                    else:
+
+                        opt = MultiSportClassicOptimizer(
+
+                            build_players,
+
+                            sport=self.sport,
+
+                            salary_cap=self.salary_cap,
+
+                            own_mode=self.own_mode,
+
+                            own_weight=self.own_weight,
+
+                            build_style=self.build_style,
+
+                            mlb_stack_pref=self.mlb_stack_pref,
+
+                            salary_strategy=self.salary_strategy,
+
+                        )
+
+                        lineups = opt.build_lineups(
+
+                            num_lineups=candidate_target,
+
+                            progress_callback=lambda done, total, text: self.progress.emit(
+
+                                (
+
+                                    min(candidate_budget, int(done * candidate_target / max(1, total)))
+
+                                    if use_nfl_sim
+
+                                    else min(build_request, int(done * build_request / max(1, total)))
+
+                                ),
+
+                                candidate_budget if use_nfl_sim else build_request,
+
+                                f"Phase 1 of {total_phases} - {text}",
+
+                            ),
+
+                            cancel_callback=self._cancel_event.is_set,
+
+                            excluded_signatures=retained_signatures_for_build,
+
+                            minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
+
+                        )
 
             generation_seconds = time.perf_counter() - build_started
 
-            sim_report: Dict[str, Any] = {}
+            sim_report: Dict[str, Any] = {"candidate_library": self.library_report}
 
             scenario_candidate_report: Dict[str, Any] = {}
 
@@ -2592,6 +2621,7 @@ class LineupBuildWorker(QtCore.QObject):
 
             )
 
+            sim_report["candidate_library"] = dict(self.library_report)
             timing_report = {
 
                 "generation_seconds": max(0.0, generation_seconds),
@@ -7328,6 +7358,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         settings_menu.addSection("Data")
 
+        settings_menu.addAction("Long Search / Resume...", self.on_long_search)
+        settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
+        settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)
 
         settings_menu.addAction("Load Build Snapshot...", self.on_load_snapshot)
@@ -12065,94 +12098,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def _estimate_ownership_quick(self, *, mode: str) -> Dict[str, Dict[str, float]]:
-
-        """Fast ownership estimate used immediately after CSV load.
-
-
-
-        This is a heuristic (not a Monte Carlo). The full sim, when run, overwrites these values.
-
-        Returns:
-
-            {"total": {key:pct}, "cpt": {key:pct}, "flex": {key:pct}}
-
-        """
-
-        players = [p for p in (self.players or []) if float(p.get("FlexSalary", 0) or 0) > 0]
-
-        if not players:
-
-            return {"total": {}, "cpt": {}, "flex": {}}
-
-
-
-        # Base weights: projection + value nudge
-
-        scores: List[float] = []
-
-        keys: List[str] = []
-
-        for p in players:
-
-            sal = float(p.get("FlexSalary", 0.0) or 0.0)
-
-            proj = float(p.get("FlexProjection", 0.0) or 0.0)
-
-            val = (proj / (sal / 1000.0)) if sal > 0 else 0.0
-
-            s = proj + 0.35 * val
-
-            s = max(0.0, s)
-
-            scores.append(s + 1e-6)  # keep >0
-
-            keys.append(_pkey(p))
-
-
-
-        total_sum = float(sum(scores) or 1.0)
-
-        total_pct = {k: (w / total_sum) * 100.0 for k, w in zip(keys, scores)}
-
-
-
-        if mode.strip().lower() != "showdown":
-
-            # Classic doesn't use CPT/FLEX split; keep those blank.
-
-            return {"total": total_pct, "cpt": {}, "flex": total_pct}
-
-
-
-        # For showdown: CPT ownership is typically more concentrated than FLEX.
-
-        # We sharpen the same base weights with a power transform for CPT.
-
-        pow_cpt = 1.35
-
-        cpt_raw = [w ** pow_cpt for w in scores]
-
-        cpt_sum = float(sum(cpt_raw) or 1.0)
-
-        cpt_pct = {k: (w / cpt_sum) * 100.0 for k, w in zip(keys, cpt_raw)}
-
-
-
-        # FLEX ownership tends to be flatter; we slightly soften (sqrt-ish).
-
-        pow_flex = 0.85
-
-        flex_raw = [w ** pow_flex for w in scores]
-
-        flex_sum = float(sum(flex_raw) or 1.0)
-
-        flex_pct = {k: (w / flex_sum) * 100.0 for k, w in zip(keys, flex_raw)}
-
-
-
-        return {"total": total_pct, "cpt": cpt_pct, "flex": flex_pct}
-
-
+        from ownership_estimates import quick_ownership
+        return quick_ownership(self.players, mode=mode, sport=self._current_sport())
 
     def recalc_ownership_quick(self) -> None:
 
@@ -12174,6 +12121,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             k = _pkey(p)
 
+            p["OwnershipSource"] = "Quick roster-slot estimate"
+            p["OwnershipUnits"] = "percent_of_entries"
             p["ProjOwnPct"] = float(tot.get(k, 0.0) or 0.0)
 
             p["ProjCptOwnPct"] = float(cpt.get(k, 0.0) or 0.0)
@@ -12389,6 +12338,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             proj = float(p.get("FlexProjection", 0.0) or 0.0)
 
             tag_txt = self._tags_to_text(p)
+            if p.get("NFLQBEligible") is False:
+                tag_txt = (tag_txt + " | QB excluded").strip(" |")
 
 
 
@@ -12411,6 +12362,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
                 f"Roster: {str(p.get('NFLRosterStatus') or 'Unknown')}",
 
                 f"Depth: {str(p.get('NFLDepthPosition') or '')}{int(float(p.get('NFLDepthOrder', 0) or 0)) or ''}",
+                str(p.get("NFLQBReason") or ""),
 
                 f"Practice: {str(p.get('NFLPractice') or 'Not reported')}",
 
@@ -13146,6 +13098,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             retained_lineups=retained,
 
+            candidate_library=getattr(self, "_candidate_library", ""),
             repair_source=repair_source,
 
         )

@@ -1050,3 +1050,70 @@ In **Results & Learning**, choose or create a folder with **Choose folder**. The
 The scan runs only when clicked. Keep **Import DraftKings Results** for selecting individual files or reprocessing an existing field after changing your username. File-content identity prevents duplicate imports of identical files; changed contents are treated as a new import.
 
 ![Saved results folder](images/results-folder.png)
+
+
+### Longer Acer searches and candidate libraries
+
+In the settings menu, choose **Long Search / Resume...**. Start with a freshly
+imported NFL slate and updated depth charts/ownership. Choose **New library**,
+then 1, 2, 4, 8 or 12 hours and **Start / Resume**. This works for both NFL Classic
+and Showdown. The time is a search allowance, not a promise that every possible
+lineup will be examined. The current limit is 100,000 unique candidates.
+
+All five build styles run in batches of up to 200 lineups with different seeds.
+Completed batches are saved transactionally in one `.dfslib` file, including
+complete roster identities, Captain identity, the original player snapshot,
+settings and source-code fingerprint. Duplicate rosters are stored once. Keep
+one search running per library. The default location is `history/candidates`, so
+an existing backup of the whole `history` folder includes the library.
+
+Keep the app open and the computer awake while searching. **Pause and save**
+finishes the current step and saves its candidates. Closing the dialog first
+requests a pause; close it after the status says the search stopped. A power
+failure loses at most the unfinished batch. **Open existing** resumes using the
+original inputs and the next batch seed. After changing inputs or updating the
+app, start a new library; existing libraries can still be loaded for fresh scoring.
+
+To use the search, load the matching slate, refresh player data and ownership,
+then choose **Load Candidate Library...**. Select **Deep**, enable NFL SIM and
+click Build. Current injuries, QB eligibility, fades, locks, groups and salaries
+are checked again; exposure and uniqueness rules are applied during selection.
+Candidates are screened and the shortlist is simulated again using current
+projections. No old SIM score is reused. The build report shows accepted and
+rejected library counts. **Clear Candidate Library** returns to ordinary generation.
+Clear it before repairing an existing portfolio. Different slate IDs/game dates
+are rejected rather than matched by player name alone.
+
+The long search expands candidate discovery; it does not run an overnight final
+outcome ranking or automatically train the forecast model. Final simulation still
+uses the selected Deep limits and shortlist. Larger libraries can need more
+screening time; the 100,000-candidate limit has not been benchmarked on the Acer.
+This is CPU work, and running multiple searches at once competes for memory and
+CPU time. All scoring remains conditional on the model and input quality.
+
+For a Python-based unattended session, the same engine is available as
+`scripts/long_search.py LIBRARY.dfslib --snapshot SNAPSHOT.json --hours 4`.
+For subsequent resumes omit `--snapshot`. Ctrl+C preserves completed batches.
+This command does not schedule jobs or prevent Windows sleep.
+
+![Long Search controls](images/long-search.png)
+
+### Quarterback eligibility and ownership units
+
+NFL Classic and Showdown builds exclude backup quarterbacks while the verified
+QB1 is available. A questionable or doubtful label alone does not promote a
+backup. When QB1 is confirmed unavailable, only the next verified active
+quarterback is eligible; earlier depth slots must be accounted for. Missing or
+conflicting depth-chart information is treated as unverified, and that quarterback
+is excluded. Refresh live data rather than relying on salary or historical PPG to
+identify a starter. A lock cannot override this rule. The player table shows
+**QB excluded**, with the reason in the player details. Rotation RB/WR/TE players
+are not subject to this quarterback-only rule.
+
+New quick ownership estimates reflect roster exposure rather than weights that
+sum to 100 across the entire pool. For a sufficiently populated NFL pool, Classic
+estimates sum to 900%; Showdown sums to 600% (100% Captain and 500% FLEX), with each
+player's combined exposure capped at 100%. These are heuristic estimates, not
+observed field ownership; use Recalc Own% (Sim) for lineup-based estimates.
+New exports record ownership source and percentage units. Historical exports
+remain unchanged, and older unlabelled values must not be retrospectively rescaled.

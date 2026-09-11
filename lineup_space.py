@@ -40,6 +40,7 @@ def _position_tokens(player: Mapping[str, Any]) -> list[str]:
 def _base_eligible(player: Mapping[str, Any]) -> bool:
     return (
         _number(player.get("FlexSalary"), 0.0) > 0
+        and player.get("NFLQBEligible") is not False
         and not bool(player.get("FadeFlex"))
         and _status(player) not in INACTIVE_STATUSES
     )

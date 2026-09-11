@@ -222,6 +222,7 @@ def _player_volatility_cv(player: Dict[str, Any]) -> float:
 def _is_active(player: Dict[str, Any]) -> bool:
     return (
         _salary(player) > 0
+        and player.get("NFLQBEligible") is not False
         and bool(_position(player))
         and not bool(player.get("FadeFlex"))
         and _status(player) not in INACTIVE_STATUSES
@@ -258,6 +259,8 @@ def build_nfl_role_pool(
     preserved for lineup generation.
     """
 
+    from nfl_eligibility import eligible_players
+    players = eligible_players(list(players), reject_locks=preserve_locks)
     grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
     preserve_keys = {str(key) for key in preserve_player_keys if str(key)}
     preserved: List[Dict[str, Any]] = []

@@ -61,7 +61,10 @@ class PipelineTests(unittest.TestCase):
                     for i, p in enumerate(players):
                         writer.writerow([p['Name'],p['Position'],p['Team'],p['FlexSalary'],p['FlexProjection'],i+1,p.get('GameKey', '')])
                 prepared = prepare_nfl_slate(path, mode=mode, ownership_sims=20,
-                    context=dict(fetch_external=False, usage_rows=[], weather_by_game={}))
+                    context=dict(fetch_external=False, usage_rows=[], weather_by_game={},
+                        sleeper_data={str(i):dict(full_name=p['Name'],team=p['Team'],position=p['Position'],
+                            depth_chart_order=1 if p['Position']=='QB' else 2,active=True)
+                            for i,p in enumerate(players)}))
                 self.assertEqual(prepared['summary']['usage_state'], 'unavailable')
                 self.assertAlmostEqual(sum(p['ProjOwnPct'] for p in prepared['players']), 900 if mode == 'classic' else 600)
                 self.assertTrue(prepared['preparation']['source_hashes'])
