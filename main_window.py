@@ -3716,6 +3716,15 @@ class ResultsImportWorker(QtCore.QObject):
 
             )
 
+            if not result.get("cancelled"):
+                from performance_review import analyze_saved_results
+                try:
+                    review = analyze_saved_results(username=self.username,
+                        cancelled=self._cancel_event.is_set,
+                        progress=lambda text: self.progress.emit(0, 0, text))
+                    result["analysis_message"] = review["message"]
+                except Exception as exc:
+                    result.setdefault("errors", []).append("Results saved; analysis needs retry: " + str(exc))
             self.finished.emit(result)
 
         except Exception:
@@ -3844,6 +3853,22 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
 
+        analysis_row = QtWidgets.QHBoxLayout()
+        self.analyze_button = QtWidgets.QPushButton("Analyze Saved Results")
+        self.analyze_button.setObjectName("analyzeSavedResults")
+        self.analyze_button.clicked.connect(lambda: self.start_performance_review(False))
+        analysis_row.addWidget(self.analyze_button)
+        self.stats_season = QtWidgets.QSpinBox()
+        self.stats_season.setRange(2000, QtCore.QDate.currentDate().year())
+        self.stats_season.setValue(QtCore.QDate.currentDate().year())
+        self.stats_season.setPrefix("Season ")
+        analysis_row.addWidget(self.stats_season)
+        self.stats_button = QtWidgets.QPushButton("Refresh Free NFL Stats")
+        self.stats_button.setObjectName("refreshFreeNFLStats")
+        self.stats_button.clicked.connect(lambda: self.start_performance_review(True))
+        analysis_row.addWidget(self.stats_button)
+        layout.addLayout(analysis_row)
+
         self.summary = QtWidgets.QLabel("")
 
         self.summary.setObjectName("learningSummary")
@@ -3959,6 +3984,26 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.refresh_report()
 
 
+
+    def start_performance_review(self, stats=False):
+        if self._import_thread is not None and self._import_thread.isRunning():
+            return
+        from performance_review_ui import PerformanceReviewWorker
+        self.import_progress.setRange(0,0)
+        self.import_progress.setVisible(True)
+        self.import_cancel.setVisible(True)
+        self.import_cancel.setEnabled(True)
+        self.import_status_label.setVisible(True)
+        self.import_status_label.setText("Preparing analysis...")
+        for control in (self.import_button,self.import_new_button,self.attach_salary_button,self.refresh_button):
+            control.setEnabled(False)
+        worker=PerformanceReviewWorker(self.username_edit.text().strip(),self.stats_season.value() if stats else None)
+        self._start_background_import(worker,self._on_performance_review_finished)
+
+    def _on_performance_review_finished(self, result):
+        self._finish_import_ui()
+        self.refresh_report()
+        QtWidgets.QMessageBox.information(self,"Analysis complete",result.get("message","Analysis finished."))
 
     def _save_username(self) -> None:
         self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())

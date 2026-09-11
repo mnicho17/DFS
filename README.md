@@ -604,3 +604,6 @@ The scan runs only when clicked. Keep **Import DraftKings Results** for selectin
 
 
 Long Search now supports checkpointed NFL Classic/Showdown candidate libraries, 1–12 hour sessions, and fresh Deep scoring after loading. NFL builds exclude unverified/backup QBs unless the next quarterback is confirmed eligible. New quick ownership uses roster exposure units. See the user guide for controls and limits.
+
+
+Results & Learning adds cached Construction & Scenario Review for NFL Classic/Showdown and player performance histories. Analyze Saved Results uses matching history/snapshots; Refresh Free NFL Stats caches the selected and previous regular seasons from nflverse, with PPR and DraftKings scores kept separate. See the guide for coverage and date limitations.

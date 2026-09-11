@@ -1109,6 +1109,8 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
 
         from results_audit import build_results_audit
         lines.extend(build_results_audit(conn, username=username))
+        from performance_review import review_report
+        lines.extend(review_report(conn, username=username))
         return {
             "text": "\n".join(lines), "db_path": path, "export_count": export_count,
             "exported_lineups": exported_lineups, "historical_rows": imported_rows,

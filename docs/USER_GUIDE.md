@@ -1117,3 +1117,72 @@ player's combined exposure capped at 100%. These are heuristic estimates, not
 observed field ownership; use Recalc Own% (Sim) for lineup-based estimates.
 New exports record ownership source and percentage units. Historical exports
 remain unchanged, and older unlabelled values must not be retrospectively rescaled.
+
+
+### Construction review and player performance history
+
+Results & Learning now analyzes new imports automatically. For previously saved
+files, click **Analyze Saved Results**. The analysis runs in the background and
+can be cancelled; completed contest reviews remain saved. Unchanged files and
+metadata are skipped on later analyses. Cached reviews and player scores remain
+available if an original CSV is moved; reimport it to update its location.
+
+The report compares the full field, top 5%, top 1%, winners and your username's
+entries. It includes duplication, average salary, average slot ownership,
+Showdown Captain positions/team splits/QB pairings/specialists, and Classic QB
+stacks, opposing skill players, secondary opposing pairs and FLEX positions.
+Rank cutoffs include ties, so a top-1% cohort can contain more than exactly 1% of
+entries. These overlapping groups are not independent samples.
+
+Construction denominators include only fully covered lineups. Team, position and
+salary metadata comes from exports matched to that contest or consensus among
+NFL snapshots with matching game dates and coverage of the results player table.
+Snapshot date matching relies on the results filename, so those dates remain
+unverified. Conflicting metadata is omitted. The app does not apply today's slate
+salaries to old results. Coverage is printed for each group: a low-coverage sample
+may not represent the entire field or its winners.
+
+Original saved SIM expectations are compared with actual top-1%/top-5% finishes
+and saved ceilings for unique matched lineups, for both NFL formats. This is a
+descriptive check, not proof of historical calibration. Multiple contests from
+one game share outcomes. Standings scores alone cannot establish whether a game
+was a blowout or passing/rushing script; no scenario probabilities or lineup
+strategy weights are automatically fitted.
+
+**Player performance history** stores base-slot DraftKings scores from the results
+side table. Captain scores are not additional observations. Dated records are
+collapsed to one player/date observation across contests; conflicting values are
+excluded. Dates parsed from filenames are explicitly unverified. Undated records
+remain stored but are omitted from chronological averages. Missing player rows
+are not treated as zero scores. Imported-result averages cover only the games
+represented in your files, not necessarily an entire NFL season.
+
+The report shows imported season averages, the last three available dated
+observations, earlier observations, and saved forecast bias. Forecast comparisons
+use the earliest matched export per player/date, normalizing Captain forecasts to
+base scoring. Export timing is not verified as pre-lock. It never invents old
+predictions or changes the original exports.
+
+Choose a **Season**, then click **Refresh Free NFL Stats** to download and locally
+cache that regular season and the previous one from nflverse. No subscription,
+API key, or screen scraping is required. Downloads are explicit, not a scheduled
+background monitor. Weekly player IDs prevent repeated refreshes from adding
+extra games; refreshes upsert statistical corrections. Failed or empty downloads
+preserve the existing cache and disclose its status and check time.
+
+For QB/RB/WR/TE, these source records show **PPR fantasy points**, recent carries and targets,
+with season, last-three-observed-game and earlier-game averages. PPR scores are
+not DraftKings scores and are never pooled with contest DK observations or used
+directly as a DK projection error. With imported results, the report focuses on
+those player names; otherwise it previews 30 player-season records. Stat rows
+can change after corrections, and absence from the source is not a zero-game score.
+The full source rows and provenance stay in the local history database and are
+included in a backup of the history folder.
+
+Source documentation: [nflverse weekly player statistics](https://nflreadr.nflverse.com/reference/load_player_stats)
+and [update schedule](https://nflreadr.nflverse.com/articles/nflverse_data_schedule.html).
+Player/team statistics normally update after game days; these are not guaranteed
+live scores. **Copy Report** includes the construction, SIM and player-history
+sections along with their sample sizes and limitations.
+
+![Results analysis and free statistics controls](images/performance-review.png)
