@@ -1152,7 +1152,8 @@ strategy weights are automatically fitted.
 **Player performance history** stores base-slot DraftKings scores from the results
 side table. Captain scores are not additional observations. Dated records are
 collapsed to one player/date observation across contests; conflicting values are
-excluded. Dates parsed from filenames are explicitly unverified. Undated records
+excluded. Dates parsed from filenames are explicitly unverified. January/February dates are assigned to the previous NFL season; imported DK records
+do not distinguish playoffs. Undated records
 remain stored but are omitted from chronological averages. Missing player rows
 are not treated as zero scores. Imported-result averages cover only the games
 represented in your files, not necessarily an entire NFL season.

@@ -269,6 +269,11 @@ def review_report(conn,username=''):
     return lines
 
 
+def nfl_season(date):
+    value=dt.date.fromisoformat(date)
+    return value.year-1 if value.month<=2 else value.year
+
+
 def player_history_report(conn):
     lines=['','Player performance history']
     observed=defaultdict(list);undated=0;conflicts=0
@@ -281,9 +286,9 @@ def player_history_report(conn):
         if len(points)!=1:conflicts+=1;continue
         observed[name].append((date,next(iter(points))))
     lines.append(f'- Contest DK scores: {sum(map(len,observed.values()))} deduplicated player/date observations; {undated} undated rows excluded from chronological averages; {conflicts} conflicting player/date groups excluded.')
-    lines.append('- Contest dates come from filenames and are unverified. Same-day entries and Captain appearances are not extra games; missing appearances are not zero scores.')
+    lines.append('- Contest dates come from filenames and are unverified; January/February belong to the previous NFL season. Imported DK results do not separate playoffs. Same-day entries and Captain appearances are not extra games; missing appearances are not zero scores.')
     for name,rows in sorted(observed.items(),key=lambda pair:(-len(pair[1]),pair[0]))[:15]:
-        rows.sort();season=rows[-1][0][:4];season_rows=[v for d,v in rows if d[:4]==season];recent=season_rows[-3:];older=season_rows[:-3]
+        rows.sort();season=nfl_season(rows[-1][0]);season_rows=[v for d,v in rows if nfl_season(d)==season];recent=season_rows[-3:];older=season_rows[:-3]
         old=f'{statistics.mean(older):.2f} ({len(older)})' if older else 'not enough earlier observations'
         lines.append(f'  {name}: {season} imported DK average {statistics.mean(season_rows):.2f} ({len(season_rows)} dates); last {len(recent)} {statistics.mean(recent):.2f}; earlier {old}.')
     for season,checked,status in conn.execute('SELECT season,checked_at,status FROM seasonal_stats_status ORDER BY season DESC'):
@@ -324,7 +329,7 @@ def player_history_report(conn):
     if errors:
         lines.append('- Saved forecast bias by player (actual minus forecast, Captain normalized; earliest matched export per date; pre-lock timing unverified):')
         for name,rows in sorted(errors.items(),key=lambda x:abs(statistics.mean(v[1] for v in x[1])),reverse=True)[:15]:
-            rows.sort();year=rows[-1][0][:4];rows=[v for v in rows if v[0][:4]==year];recent=rows[-3:];older=rows[:-3]
+            rows.sort();year=nfl_season(rows[-1][0]);rows=[v for v in rows if nfl_season(v[0])==year];recent=rows[-3:];older=rows[:-3]
             earlier=f"{statistics.mean(v[1] for v in older):+.2f} ({len(older)} dates)" if older else 'insufficient earlier data'
             lines.append(f"  {name} {year}: average bias {statistics.mean(v[1] for v in rows):+.2f}; last {len(recent)} {statistics.mean(v[1] for v in recent):+.2f}; earlier {earlier}.")
     lines.append('- PPR and DK averages are never pooled. These are observed-game averages, not full-season totals or predictive validation. Projection mismatches use the original forecasts in Results audit.')

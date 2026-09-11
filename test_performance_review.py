@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from learning_db import record_export,import_historical_result_csvs,generate_learning_report
-from performance_review import (analyze_saved_results,refresh_season_stats,construction,snapshot_metadata,result_date)
+from performance_review import (analyze_saved_results,refresh_season_stats,construction,snapshot_metadata,result_date,nfl_season)
 from test_learning_results import _showdown_lineup
 from build_snapshots import create_snapshot,save_snapshot
 
@@ -84,3 +84,8 @@ class PerformanceReviewTests(unittest.TestCase):
             self.assertNotIn('example player',snapshot_metadata(tmp,'2026-09-10',{'example player'}))
             self.assertEqual(result_date('2026-09-10.csv'),'2026-09-10')
             self.assertEqual(result_date('contest-193391004.csv'),'')
+
+    def test_nfl_season_crosses_the_calendar_boundary(self):
+        self.assertEqual(nfl_season('2026-09-10'),2026)
+        self.assertEqual(nfl_season('2027-01-10'),2026)
+        self.assertEqual(nfl_season('2027-02-10'),2026)

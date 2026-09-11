@@ -3860,7 +3860,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         analysis_row.addWidget(self.analyze_button)
         self.stats_season = QtWidgets.QSpinBox()
         self.stats_season.setRange(2000, QtCore.QDate.currentDate().year())
-        self.stats_season.setValue(QtCore.QDate.currentDate().year())
+        self.stats_season.setValue(QtCore.QDate.currentDate().year() - (1 if QtCore.QDate.currentDate().month() <= 2 else 0))
         self.stats_season.setPrefix("Season ")
         analysis_row.addWidget(self.stats_season)
         self.stats_button = QtWidgets.QPushButton("Refresh Free NFL Stats")
