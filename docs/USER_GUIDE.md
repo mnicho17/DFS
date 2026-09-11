@@ -1187,3 +1187,12 @@ live scores. **Copy Report** includes the construction, SIM and player-history
 sections along with their sample sizes and limitations.
 
 ![Results analysis and free statistics controls](images/performance-review.png)
+
+
+## Cross-contest scores and quarterback build diagnostics
+
+**Results & Learning** now includes **Cross-contest score reconciliation** in **Copy Report**. After Analyze Saved Results has populated the cache, the report compares overlapping player names in contests with the same filename-derived date. It lists base-score conflicts, players present in only one file, and Captain/regular-slot score differences separately. Extra or missing Captain rows can explain different table fingerprints even when all shared scores agree. Dates and shared names do not verify identical games. Differences above 0.02 DK points are reported; no scores are overwritten. Missing original files leave cached base-score comparisons available.
+
+New NFL Classic SIM and Deep Showdown **Build Reports** include **Quarterback construction through the build**. Each available stage lists counts and percentages for zero, one, two or more QBs, plus average simulated top-1% rates where available. Generated bank means the eligible deduplicated bank after generation filters, including a loaded Long Search library and retained lineups. The shortlist uses screening results; independent SIM uses fresh validation results. Selected output follows ranking or portfolio selection and applicable rules. Captain counts once. Classic normally requires exactly one QB.
+
+To investigate a Showdown imbalance, replay the same saved snapshot with the same settings and copy the new Build Report. A high two-QB share in the generated bank points toward candidate supply; a rise after screening/validation points toward simulated ranking; a rise at selection can reflect portfolio rules or selection objectives. These are diagnostic clues, not proof of a model defect. Missing stages were not completed or do not apply. Older build reports cannot reconstruct discarded candidates. No construction targets, forecast weights or simulation probabilities are changed by these diagnostics.

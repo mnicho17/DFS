@@ -96,6 +96,13 @@ class RankedSearchTests(unittest.TestCase):
                 self.assertNotEqual(sim_calls[0][1]['seed'], sim_calls[1][1]['seed'])
                 self.assertEqual(len(sim_calls[0][0]), 5)
                 self.assertEqual(len(results[0]['lineups']), 3)
+                stages = results[0]['sim_report']['quarterback_pipeline']
+                self.assertEqual(stages['generated']['total'], 5)
+                self.assertEqual(stages['shortlisted']['total'], 5)
+                self.assertEqual(stages['validated']['total'], 5)
+                self.assertEqual(stages['selected']['total'], 3)
+                for stage in stages.values():
+                    self.assertEqual(sum(group['count'] for group in stage['groups'].values()), stage['total'])
                 self.assertEqual(results[0]['portfolio_report']['refinement_swaps'], 0)
 
     def test_sim_finish_bands_are_nested_for_both_contests(self):

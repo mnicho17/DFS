@@ -607,3 +607,6 @@ Long Search now supports checkpointed NFL Classic/Showdown candidate libraries, 
 
 
 Results & Learning adds cached Construction & Scenario Review for NFL Classic/Showdown and player performance histories. Analyze Saved Results uses matching history/snapshots; Refresh Free NFL Stats caches the selected and previous regular seasons from nflverse, with PPR and DraftKings scores kept separate. See the guide for coverage and date limitations.
+
+
+Results reports reconcile overlapping same-date player scores across contests, distinguishing missing Captain rows from score conflicts. New NFL SIM build reports track QB counts through generation, screening, independent simulation and selection. These diagnostics do not change projections or lineups.

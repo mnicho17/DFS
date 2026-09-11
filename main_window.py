@@ -1985,6 +1985,8 @@ class LineupBuildWorker(QtCore.QObject):
 
                         lineups = near_cap
 
+                from pipeline_audit import quarterback_mix
+                qb_stages = {"generated": quarterback_mix(lineups + self.retained_lineups)}
                 generation_seconds = time.perf_counter() - build_started
 
                 simulation_started = time.perf_counter()
@@ -2087,6 +2089,7 @@ class LineupBuildWorker(QtCore.QObject):
 
                         )
 
+                        qb_stages["shortlisted"] = quarterback_mix(shortlist_all, scored=True)
                         coarse_by_signature = {
 
                             _lineup_signature(lineup): lineup for lineup in shortlist_all
@@ -2204,6 +2207,7 @@ class LineupBuildWorker(QtCore.QObject):
                         if deep_report["validation_scenarios"] > 0:
 
                             sim_result = validation_result
+                            qb_stages["validated"] = quarterback_mix(validation_result.get("lineups") or [], scored=True)
 
                             if coarse_top_signatures:
 
@@ -2332,6 +2336,7 @@ class LineupBuildWorker(QtCore.QObject):
                     ]
 
                 sim_report = dict(sim_result.get("report") or {})
+                sim_report["quarterback_pipeline"] = qb_stages
 
                 if deep_build:
 
@@ -2585,6 +2590,8 @@ class LineupBuildWorker(QtCore.QObject):
 
                 )
 
+                if "quarterback_pipeline" in sim_report:
+                    sim_report["quarterback_pipeline"]["selected"] = quarterback_mix(lineups, scored=True)
                 sim_report["candidate_sources"] = {
 
                     "generated": dict(source_additions),

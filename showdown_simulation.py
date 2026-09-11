@@ -230,6 +230,8 @@ def run_deep_showdown(worker, shortlist_fn):
             if key not in retained_keys:
                 bank.setdefault(key, lu)
                 exclusions.add((key[0][4:], tuple(key[1:])))
+    from pipeline_audit import quarterback_mix
+    qb_stages = {"generated": quarterback_mix(list(bank.values()) + retained)}
     generated = len(bank)
     generation_seconds = time.perf_counter() - start
     sim_start = time.perf_counter()
@@ -247,6 +249,7 @@ def run_deep_showdown(worker, shortlist_fn):
         deep["screening_scenarios"] = coarse["report"]["scenarios"]
         if deep["screening_scenarios"]:
             short = shortlist_fn(coarse["lineups"], max(worker.num_lineups, options["shortlist"] or 900), reserved_signatures=retained_keys, individual_ranking=options["selection_mode"] == "Individual ranking")
+            qb_stages["shortlisted"] = quarterback_mix(short, scored=True)
             sim_report = coarse["report"]
             rank = finish_rank
             top = {showdown_signature(lu) for lu in sorted(short, key=rank, reverse=True)[:worker.num_lineups]}
@@ -258,6 +261,7 @@ def run_deep_showdown(worker, shortlist_fn):
                     progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 3 of 4 - " + c))
                 if validated["report"]["scenarios"]:
                     short = validated["lineups"]
+                    qb_stages["validated"] = quarterback_mix(short, scored=True)
                     sim_report = validated["report"]
                     deep["validation_scenarios"] = sim_report["scenarios"]
                     other = {showdown_signature(lu) for lu in sorted(short, key=rank, reverse=True)[:worker.num_lineups]}
@@ -290,6 +294,8 @@ def run_deep_showdown(worker, shortlist_fn):
     deep["time_limit_reached"] = time.perf_counter() >= deadline
     if not deep["validation_scenarios"]:
         selected["report"].setdefault("warnings", []).append("Deep Showdown did not complete independent validation; returning the best available stage.")
+    qb_stages["selected"] = quarterback_mix(selected["lineups"], scored=True)
+    sim_report["quarterback_pipeline"] = qb_stages
     sim_report["candidate_library"] = getattr(worker, "library_report", {})
     sim_report["deep_build"] = dict(deep)
     timing = dict(deep, generation_allocation_seconds=limit * generation_fraction,
@@ -303,3 +309,4 @@ def run_deep_showdown(worker, shortlist_fn):
         "requested": worker.num_lineups, "cancelled": worker._cancel_event.is_set(),
         "portfolio_report": selected["report"], "candidate_count": generated,
         "sim_report": sim_report, "timing_report": timing, "repair_source": worker.repair_source}
+

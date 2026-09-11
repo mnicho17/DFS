@@ -412,6 +412,7 @@ def create_build_diagnostic(
             "top_one_scenarios_covered": max(0, _integer(sim_summary.get("top_one_scenarios_covered"))),
             "generated_sources": aggregate_counts(candidate_sources.get("generated")),
             "selected_sources": aggregate_counts(candidate_sources.get("selected")),
+            "quarterback_pipeline": dict(sim.get("quarterback_pipeline") or {}),
             "screening_scenarios": max(0, _integer(timing.get("screening_scenarios"))),
             "validation_scenarios": max(0, _integer(timing.get("validation_scenarios"))),
             "portfolio_simulation_scenarios": max(
@@ -724,6 +725,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in warnings)
     else:
         lines.append("- None")
+    from pipeline_audit import format_quarterback_pipeline
+    lines.extend(format_quarterback_pipeline(sim.get("quarterback_pipeline") or {}))
     from field_diagnostics import format_field
     lines.extend(format_field(record.get('field_diagnostic') or {}))
     lines.extend(format_ranked_groups(record.get("ranked_groups") or []))
@@ -876,3 +879,4 @@ def format_build_comparison(first: Mapping[str, Any], second: Mapping[str, Any])
         "Privacy: This comparison contains aggregate settings and counts only; no players, lineups, file paths, or API keys.",
     ])
     return "\n".join(lines)
+

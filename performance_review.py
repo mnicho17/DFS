@@ -265,6 +265,8 @@ def review_report(conn,username=''):
             if ceilings:parts.append(f"above saved SIM ceiling {sum(v[3]>v[2] for v in ceilings)}/{len(ceilings)}")
             lines.append('  '+name+': '+'; '.join(parts))
         lines.append('- These selected-lineup comparisons share game outcomes and do not justify fitting probabilities from a single slate.')
+    from score_reconciliation import reconciliation_report
+    lines += reconciliation_report(conn)
     lines += player_history_report(conn)
     return lines
 
