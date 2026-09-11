@@ -1039,3 +1039,5 @@ Results & Learning now appends a diagnostic audit automatically. **Copy Report**
 Identical player-score tables across contests indicate shared outcomes; the count is a proxy, not a verified game count. Repeated player appearances are not independent observations. Older exports may lack forecast provenance and ownership units; low saved ownership alone does not prove a normalization bug. New exports preserve forecast source and workload/kicker context for future audits. No forecasts are regenerated and no model weights change automatically. Copied reports contain player names, username and aggregate results, but omit file paths, entry IDs and API keys.
 
 ![Results audit and Copy Report](images/results-audit.png)
+
+The same audit supports **NFL Classic and Showdown**. Classic checks all nine roster slots against player scores; Showdown also checks Captain scoring separately. Reimporting an identical standings file after moving or renaming it refreshes its readable location without duplicating results.

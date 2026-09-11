@@ -25,6 +25,11 @@ class ResultsAuditTests(unittest.TestCase):
             self.assertIn('Largest player forecast misses',text)
             self.assertIn('Ownership units are not recorded',text)
             self.assertNotIn(str(path),text)
+            renamed = path.with_name('renamed NFL standings.csv')
+            path.rename(renamed)
+            import_historical_result_csvs([str(renamed)],username='Example_User',db_path=db,archive_files=False)
+            path = renamed
+            self.assertIn('1 checked, 0 mismatches',generate_learning_report(db_path=db,username='Example_User')['text'])
             # A corrupt Captain score must flag both consistency checks.
             text_csv=path.read_text(encoding='utf-8').replace(',CPT,5,15',',CPT,5,16')
             path.write_text(text_csv,encoding='utf-8')
@@ -33,3 +38,25 @@ class ResultsAuditTests(unittest.TestCase):
             self.assertIn('1 player pairs checked; 1 differ',text)
             path.unlink()
             self.assertIn('Original standings unavailable',generate_learning_report(db_path=db,username='Example_User')['text'])
+
+    def test_classic_nine_player_results_audit_and_name_matching(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db=str(Path(tmp)/'classic.sqlite');path=Path(tmp)/'NFL Classic 20-Max.csv'
+            names=['Alpha One','Bravo Two','Charlie Three','Delta Four','Echo Five','Foxtrot Six','Golf Seven','Hotel Eight','India Nine']
+            positions=['QB','RB','RB','WR','WR','WR','TE','RB','DST']
+            players=[{'Name':name,'Team':'BUF' if i<5 else 'NE','Position':positions[i],'FlexID':str(10000+i),'FlexSalary':5000,'FlexProjection':10,'BaseProjection':10,'ProjOwnPct':20,'ProjectionSource':'Imported projection'} for i,name in enumerate(names)]
+            record_export(kind='classic',sport='NFL',lineups=[players],rows=[[p['FlexID'] for p in players]],salary_cap=50000,export_path='classic.csv',validation={},db_path=db)
+            lineup=' '.join(slot+' '+name for slot,name in zip(['QB','RB','RB','WR','WR','WR','TE','FLEX','DST'],names))
+            with path.open('w',newline='',encoding='utf-8') as f:
+                w=csv.writer(f);w.writerow(['Rank','EntryId','EntryName','Points','Lineup','Player','Roster Position','%Drafted','FPTS'])
+                for i in range(30):
+                    side=[names[i],positions[i],20,5] if i<9 else ['','','','']
+                    w.writerow([i+1,1000+i,'Example_User (1/2)' if i<2 else 'Other',45,lineup]+side)
+            result=import_historical_result_csvs([str(path)],username='Example_User',db_path=db,archive_files=False)
+            self.assertEqual(result['personal_results_added'],2)
+            self.assertEqual(result['matched_rows'],2)
+            audit=generate_learning_report(db_path=db,username='Example_User')['text'].split('Results audit',1)[1]
+            self.assertIn('2 checked, 0 mismatches',audit)
+            self.assertNotIn('Captain actual scoring:',audit)
+            self.assertIn('MAE 45.00',audit)
+            self.assertIn('source Imported projection',audit)

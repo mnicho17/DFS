@@ -2506,6 +2506,9 @@ def import_historical_result_csvs(
                     (file_hash,),
                 ).fetchone()
                 if existing:
+                    # The content hash matches: keep the current readable location for audits.
+                    with conn:
+                        conn.execute('UPDATE historical_imports SET source_path=? WHERE import_id=?', (path, existing[0]))
                     if username and existing[1] == 'field_only':
                         preflight = _preflight_complete_field_csv(path, cancel_callback=cancel_callback)
                         with conn:
