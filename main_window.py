@@ -2246,6 +2246,10 @@ class LineupBuildWorker(QtCore.QObject):
                     audit_candidates = list(sim_result.get('lineups') or [])
 
                     if deep_report.get('validation_scenarios', 0) >= 1000:
+                        from repeatability import capture_bank
+                        deep_report['ranking_bank'] = capture_bank(audit_candidates, build_players,
+                            kind='classic', salary_cap=self.salary_cap, field_count=validation_field_count,
+                            field_config=field_config, input_id=getattr(self, 'build_input_id', ''))
 
                         deep_report['ranking_audit'] = audit_ranking(
 
@@ -7414,6 +7418,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         settings_menu.addSection("Data")
 
         settings_menu.addAction("Long Search / Resume...", self.on_long_search)
+        settings_menu.addAction("Ranking Repeatability...", self.on_ranking_repeatability)
         settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
         settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)
@@ -13117,6 +13122,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         )
 
         self._build_worker.moveToThread(self._build_thread)
+        self._build_worker.build_input_id = snapshot['input_id'] if snapshot else ''
 
 
 

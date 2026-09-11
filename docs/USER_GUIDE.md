@@ -1224,6 +1224,18 @@ Choose **Settings > Show Build Controls** if the controls are folded away. The *
 Ownership sampling count, the Showdown ownership-template option and the ownership-estimate action now live in **Data and Learning > Ownership estimates**. Ownership preference and influence remain in Build because they affect candidate construction. Existing saved recipes and snapshots retain their underlying settings.
 # Projection and usage coverage
 
+## Ranking repeatability
+
+After updating, complete an NFL Deep build to automatically save its independently validated shortlist under `history/ranking-banks`. This captures the candidates before output selection, including Captain identities, original ranking metrics, player inputs and opponent configuration. Saving failure does not discard the build; its report indicates whether the bank was saved. Existing snapshots cannot recover earlier shortlists, and replaying a snapshot under new code may generate a different set.
+
+Open **Settings > Ranking Repeatability**, choose the saved bank, and run 2–10 batches with 2,000, 5,000 or 10,000 scenarios each. The default is five batches of 5,000. Each batch generates fresh opponents and player outcomes for the identical candidate set. Keep the app open; allow several minutes per batch. Cancel stops work and retains statistics from completed batches only. Repeating the same settings deliberately uses the same seed sequence; it is not another independent experiment.
+
+The report shows average and range of top-1% rates, best/worst ranks, and top-50/150 batch counts. The screen lists 20 average-rate leaders and 10 unstable original leaders; **Copy Report** copies the displayed report. Full per-lineup statistics save automatically as CSV and JSON alongside the text report in `history/ranking-checks`. Groups are capped by bank size. Exact ties preserve saved order, and boundary ties are disclosed. No automatic stable/unstable cutoff is asserted.
+
+This is a sampling-sensitivity diagnostic, not historical validation or a new portfolio optimizer. It does not alter the app's selected lineups, exports, forecasts or model weights. Classic and Showdown share this workflow; Showdown preserves Captain scoring. Banks from another simulation code version are rejected so a code change cannot masquerade as sampling variation. Reports contain player names; banks contain the frozen player inputs. Include both folders in local backups.
+
+![Ranking repeatability controls](images/ranking-repeatability.png)
+
 Classic's compact pool prioritizes verified starter/rotation depth slots before unknown-depth fallbacks. Unknown-depth players with forecasts can still fill gaps; no depth slot is invented. Players explicitly labeled Missing forecast are excluded from automatic NFL selection in Classic and Showdown. A locked player with that label requires a refresh or supplied forecast before building. Valid zero overrides and depth-based rookie estimates remain supported, as do older inputs with unknown provenance. Exclusion is a data-quality decision, not a claim that a player cannot play.
 
 NFL Classic and Deep Showdown build reports describe projection sources and usage evidence for the actual eligible build pool. Automatic workload estimates, historical averages, imported forecasts, manual overrides and genuinely missing forecasts are counted separately. A missing usage record is not an observed zero; an estimate is still a forecast with limitations.

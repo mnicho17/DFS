@@ -8,6 +8,13 @@ from learning_db import load_nfl_field_calibration
 
 
 class SnapshotActions:
+    def on_ranking_repeatability(self):
+        if self._snapshot_busy():
+            self.status.showMessage('Wait for the current build to finish.',5000)
+            return
+        from repeatability_ui import RepeatabilityDialog
+        RepeatabilityDialog(self).exec_()
+
     def on_long_search(self):
         if self._snapshot_busy():
             self.status.showMessage('Wait for the current build to finish.',5000)

@@ -616,3 +616,6 @@ Deep Showdown now samples opponents with a documented experimental salary-spendi
 
 
 Build controls now use one Compute profile picker. Search & output groups Deep search/selection choices, resource numbers stay collapsed for presets, and ownership-data controls live in Data and Learning. Settings > Show Build Controls reveals the panel. Existing recipe settings remain supported.
+# Ranking repeatability
+
+NFL Deep builds now save the validated shortlist automatically. Open **Settings > Ranking Repeatability** to compare that same set across fresh scenario/opponent batches. Copy the summary or use the automatic CSV/JSON/text exports in `history/ranking-checks`. This diagnoses sampling sensitivity without changing selected lineups. A new Deep build is required to capture a bank; older snapshots do not contain the shortlist. See the [user guide](docs/USER_GUIDE.md#ranking-repeatability).

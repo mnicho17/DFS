@@ -280,6 +280,10 @@ def run_deep_showdown(worker, shortlist_fn):
             deep["shortlist_count"] = len(short)
             from ranking_stability import audit_ranking
             if deep.get('validation_scenarios', 0) >= 1000:
+                from repeatability import capture_bank
+                deep['ranking_bank'] = capture_bank(short, players, kind='showdown',
+                    salary_cap=worker.salary_cap, field_count=options['field'] or 2700,
+                    input_id=getattr(worker, 'build_input_id', ''))
                 deep['ranking_audit'] = audit_ranking(short,
                     lambda audit_stop: simulate_showdown(short, players, scenarios=2000,
                         field_lineup_count=options['field'] or 2700, salary_cap=worker.salary_cap,
