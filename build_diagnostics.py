@@ -323,6 +323,8 @@ def create_build_diagnostic(
             "eligible": max(0, _integer(space.get("eligible"))),
             "omitted": max(0, _integer(space.get("omitted"))),
             "locked": max(0, _integer(space.get("locked"))),
+            "captain_locked": max(0, _integer(space.get("captain_locked"))),
+            "flex_locked": max(0, _integer(space.get("flex_locked"))),
             "structural_combinations": max(0, _integer(space.get("structural_combinations"))),
             "exact": bool(space.get("exact")),
             "explanation": str(space.get("explanation") or ""),
@@ -544,6 +546,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     ]
     if str(pool.get("explanation") or "").strip():
         lines.append(f"- Note: {str(pool.get('explanation')).strip()}")
+    if is_showdown:
+        lines.append(f"- Slot locks: Captain {_integer(pool.get('captain_locked'))}; FLEX {_integer(pool.get('flex_locked'))}.")
     if deep_mode:
         lines.append(
             f"- Deep shortlist: {_integer(candidates.get('shortlisted')):,} candidates after "

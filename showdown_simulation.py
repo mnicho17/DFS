@@ -69,7 +69,17 @@ def active_showdown_players(players):
     return pool
 
 
-def generate_showdown_field(players, count, *, salary_cap=50000, seed=0, cancel_callback=None):
+def generate_showdown_field(players, count, *, salary_cap=50000, seed=0, cancel_callback=None, model='salary-bands-v1'):
+    if model == 'legacy':
+        return _generate_showdown_field_legacy(players, count, salary_cap=salary_cap, seed=seed, cancel_callback=cancel_callback)
+    if model != 'salary-bands-v1':
+        raise ValueError('Unknown Showdown field model')
+    from showdown_field import sample_field
+    pool = active_showdown_players([dict(p, LockCpt=False, LockFlex=False) for p in players])
+    return sample_field(pool, count, salary_cap=salary_cap, seed=seed, cancel_callback=cancel_callback)
+
+
+def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0, cancel_callback=None):
     """Sample legal opponent entries independently of the user's locks and fades.
 
     Slot-specific ownership drives weighted draws; projections are the fallback.
@@ -102,13 +112,13 @@ def generate_showdown_field(players, count, *, salary_cap=50000, seed=0, cancel_
 
 
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
-                      seed=90210, cancel_callback=None, progress_callback=None):
+                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1'):
     if not candidates:
         return {"lineups": [], "report": {"scenarios": 0, "field_lineups": 0}}
     pool = active_showdown_players(players)
     for lineup in candidates:
         validate_showdown_lineup(lineup, pool, salary_cap)
-    field = generate_showdown_field(pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback)
+    field = generate_showdown_field(pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback, model=field_model)
     if not field:
         return {"lineups": list(candidates), "report": {"scenarios": 0, "field_lineups": 0}}
     # Three bootstrap fields share outcomes within each scenario, as in Classic.

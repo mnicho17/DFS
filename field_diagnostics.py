@@ -44,10 +44,13 @@ def summarize_field(entries, players, *, showdown=False, salary_cap=50000, fallb
         values = []
         for key, player in known.items():
             supplied = number(player.get(field))
+            units = str(player.get('OwnershipUnits') or 'unknown')
+            comparable = supplied is not None and units == 'percent_of_entries'
             observed = 100 * counter[key] / n
             values.append(dict(label=f"{player.get('Name', key)} [{player.get('Team', '')} {player.get('Position', '')}]",
                                count=counter[key], sampled_pct=round(observed, 3), input_pct=supplied,
-                               gap_pp=round(observed-supplied, 3) if supplied is not None else None))
+                               input_units=units, input_source=str(player.get('OwnershipSource') or 'not recorded'),
+                               gap_pp=round(observed-supplied, 3) if comparable else None))
         return sorted(values, key=lambda r: (-(abs(r['gap_pp']) if r['gap_pp'] is not None else -1), r['label']))
     return dict(available=True, entries=n, unique_entries=len(signatures),
                 repeated_entry_pct=round(100 * (n-len(signatures)) / n, 2),
@@ -60,7 +63,8 @@ def summarize_field(entries, players, *, showdown=False, salary_cap=50000, fallb
                 ownership=rows(total, 'ProjOwnPct'),
                 captain_ownership=rows(captain, 'ProjCptOwnPct') if showdown else [],
                 flex_ownership=rows(flex, 'ProjFlexOwnPct') if showdown else [],
-                ownership_sum_pct=round(100*sum(total.values())/n, 3), showdown=showdown)
+                ownership_sum_pct=round(100*sum(total.values())/n, 3), showdown=showdown,
+                sampling=dict(getattr(entries, 'diagnostic', {}) or {}))
 
 
 def format_field(report):
@@ -74,6 +78,11 @@ def format_field(report):
              f"- Sampled total ownership sums to {report['ownership_sum_pct']:.1f}% across players."]
     if report['showdown']:
         lines.append(f"- Both defenses: {report['both_defenses_pct']:.1f}%; three-plus kickers/defenses: {report['three_specialists_pct']:.1f}%")
+    sampling=report.get('sampling') or {}
+    if sampling:
+        lines.append(f"- Field model: {sampling['model']}; experimental salary-spending prior, not learned from results.")
+        lines.append('- Salary bands (target / sampled entries): ' + '; '.join(f"{key}: {target} / {sampling.get('salary_band_counts',{}).get(key,0)}" for key,target in sampling.get('salary_band_targets',{}).items()))
+        lines.append(f"- Salary-band fallback entries: {sampling.get('fallback_entries',0)}; requested field {sampling['requested']:,}, returned {report['entries']:,}. Shortages and cancellation can change the mix.")
     if report['candidate_fallback']:
         lines.append('- Field generation failed; candidates were used as fallback opponents. This is not an independently generated field.')
     for key, label in [('ownership', 'Total'), ('captain_ownership', 'Captain'), ('flex_ownership', 'FLEX')]:
@@ -83,10 +92,14 @@ def format_field(report):
         supplied = [r for r in rows if r['input_pct'] is not None]
         leaders = sorted(rows, key=lambda r: (-r['sampled_pct'], r['label']))[:5]
         lines.append(f'- {label} most sampled: ' + '; '.join(f"{r['label']} {r['sampled_pct']:.2f}%" for r in leaders))
-        lines.append(f'- {label} ownership: {len(supplied)}/{len(rows)} players have recorded inputs. Largest absolute differences:')
-        for row in supplied[:5]:
+        comparable = [r for r in supplied if r.get('input_units') == 'percent_of_entries' and r.get('gap_pp') is not None]
+        unverified = [r for r in supplied if r not in comparable]
+        lines.append(f'- {label} ownership: {len(supplied)}/{len(rows)} recorded inputs; {len(comparable)} explicitly in percent-of-entries units.')
+        for row in comparable[:5]:
             lines.append(f"  - {row['label']}: input {row['input_pct']:.2f}%; sampled {row['sampled_pct']:.2f}%; difference {row['gap_pp']:+.2f} percentage points")
+        for row in sorted(unverified, key=lambda r:-r['sampled_pct'])[:5]:
+            lines.append(f"  - {row['label']}: stored weight {row['input_pct']:.2f} (units unverified); sampled {row['sampled_pct']:.2f}%; percentage-point comparison unavailable.")
         if not supplied:
             lines.append('  - No recorded ownership inputs to compare.')
-    lines.append('- Ownership inputs are sampling weights, not guaranteed field exposures. Missing slot inputs can use total-ownership or projection fallbacks. These are simulated entries, not actual contest results; bootstrap copies are not counted again.')
+    lines.append('- Sampling uses relative ownership weights, not guaranteed exposures. Legacy units are not inferred or rescaled. Missing slot inputs can use total-ownership or projection fallbacks. These are simulated entries, not actual contest results; bootstrap copies are not counted again. Duplicate rates depend on sample size and are not directly comparable with a full tournament.')
     return lines

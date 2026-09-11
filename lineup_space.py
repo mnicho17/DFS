@@ -185,7 +185,7 @@ def calculate_lineup_space(
         exact = False
         explanation = "Upper bound before position assignment, salary, and strategy rules."
 
-    locked_count = sum(bool(player.get("LockFlex")) for player in eligible)
+    locked_count = sum(bool(player.get("LockFlex")) or (mode_l == "showdown" and bool(player.get("LockCpt"))) for player in eligible)
     return {
         "sport": sport_u,
         "mode": mode_l,
@@ -193,6 +193,8 @@ def calculate_lineup_space(
         "eligible": len(eligible),
         "omitted": max(0, loaded - len(eligible)),
         "locked": locked_count,
+        "captain_locked": sum(bool(p.get("LockCpt")) for p in eligible) if mode_l == "showdown" else 0,
+        "flex_locked": sum(bool(p.get("LockFlex")) for p in eligible),
         "roster_size": roster_size,
         "structural_combinations": int(count),
         "compact_combinations": format_compact_count(int(count)),

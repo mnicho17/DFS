@@ -5,7 +5,7 @@ from optimizers import ShowdownLineup
 
 def player(name, team, pos, own=None):
     return dict(Name=name, Team=team, Position=pos, FlexID=name, FlexSalary=5000,
-                CptSalary=7500, FlexProjection=10, ProjOwnPct=own)
+                CptSalary=7500, FlexProjection=10, ProjOwnPct=own, OwnershipUnits='percent_of_entries')
 
 
 class FieldDiagnosticsTests(unittest.TestCase):

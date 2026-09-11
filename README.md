@@ -610,3 +610,6 @@ Results & Learning adds cached Construction & Scenario Review for NFL Classic/Sh
 
 
 Results reports reconcile overlapping same-date player scores across contests, distinguishing missing Captain rows from score conflicts. New NFL SIM build reports track QB counts through generation, screening, independent simulation and selection. These diagnostics do not change projections or lineups.
+
+
+Deep Showdown now samples opponents with a documented experimental salary-spending distribution. Build reports show target/actual salary bands, fallback entries and explicit Captain/FLEX locks. Ownership percentage-point comparisons require recorded percent-of-entries units; old snapshots retain their original weights. See the guide for a frozen-candidate comparison command and limitations.
