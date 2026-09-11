@@ -3650,12 +3650,13 @@ class ResultsImportWorker(QtCore.QObject):
 
 
 
-    def __init__(self, paths: List[str], username: str = ""):
+    def __init__(self, paths: List[str], username: str = "", folder: str = ""):
 
         super().__init__()
 
         self.paths = list(paths or [])
         self.username = username
+        self.folder = folder
 
         self._cancel_event = threading.Event()
 
@@ -3673,9 +3674,10 @@ class ResultsImportWorker(QtCore.QObject):
 
         try:
 
-            result = import_historical_result_csvs(
-
-                self.paths,
+            from learning_db import import_results_folder
+            importer = import_results_folder if self.folder else import_historical_result_csvs
+            result = importer(
+                self.folder or self.paths,
                 username=self.username,
 
                 progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
@@ -3792,6 +3794,22 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         save_username.clicked.connect(self._save_username)
         username_row.addWidget(save_username)
         layout.addLayout(username_row)
+        folder_row = QtWidgets.QHBoxLayout()
+        folder_row.addWidget(QtWidgets.QLabel("Results folder"))
+        self.results_folder = QtWidgets.QLineEdit(str(self.learning_settings.value("learning/results_folder", "") or ""))
+        self.results_folder.setObjectName("resultsFolderPath")
+        self.results_folder.setReadOnly(True)
+        self.results_folder.setPlaceholderText("Choose a folder for downloaded results")
+        folder_row.addWidget(self.results_folder, 1)
+        choose_folder = QtWidgets.QPushButton("Choose folder")
+        choose_folder.clicked.connect(self.choose_results_folder)
+        folder_row.addWidget(choose_folder)
+        self.import_new_button = QtWidgets.QPushButton("Import New Results")
+        self.import_new_button.setObjectName("importNewResultsButton")
+        self.import_new_button.clicked.connect(self.import_new_results)
+        folder_row.addWidget(self.import_new_button)
+        layout.addLayout(folder_row)
+
 
 
 
@@ -3954,6 +3972,19 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
 
+    def choose_results_folder(self) -> None:
+        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Choose results folder", self.results_folder.text())
+        if folder:
+            self.results_folder.setText(folder)
+            self.learning_settings.setValue("learning/results_folder", folder)
+            self.learning_settings.sync()
+
+    def import_new_results(self) -> None:
+        if not self.results_folder.text():
+            self.choose_results_folder()
+        if self.results_folder.text():
+            self._begin_results_import([], folder=self.results_folder.text())
+
     def import_results(self) -> None:
 
         if self._import_thread is not None and self._import_thread.isRunning():
@@ -3975,8 +4006,13 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if not paths:
 
             return
-        self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())
+        self._begin_results_import(paths)
 
+    def _begin_results_import(self, paths, folder="") -> None:
+        if self._import_thread is not None and self._import_thread.isRunning():
+            return
+        self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())
+        self.import_new_button.setEnabled(False)
         self.import_button.setEnabled(False)
 
         self.attach_salary_button.setEnabled(False)
@@ -3999,7 +4035,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         self._start_background_import(
 
-            ResultsImportWorker(paths, username=self.username_edit.text().strip()),
+            ResultsImportWorker(paths, username=self.username_edit.text().strip(), folder=folder),
 
             self._on_import_finished,
 
@@ -4118,6 +4154,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def _finish_import_ui(self) -> None:
+        self.import_new_button.setEnabled(True)
 
         self.import_button.setEnabled(True)
 
@@ -4201,6 +4238,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             if result.get("username") and not result.get("personal_results_added"):
                 message += "\nNo new personal entries were added. They may already be saved, or the username may not occur in this file."
 
+            if result.get("folder_scan"):
+                message += f"\nNon-result CSV files ignored: {int(result.get('ignored_csv_files', 0))}"
             if result.get("errors"):
 
                 message += "\n\nSome files could not be imported:\n" + "\n".join(result["errors"])

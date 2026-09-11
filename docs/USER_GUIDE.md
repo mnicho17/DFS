@@ -1041,3 +1041,12 @@ Identical player-score tables across contests indicate shared outcomes; the coun
 ![Results audit and Copy Report](images/results-audit.png)
 
 The same audit supports **NFL Classic and Showdown**. Classic checks all nine roster slots against player scores; Showdown also checks Captain scoring separately. Reimporting an identical standings file after moving or renaming it refreshes its readable location without duplicating results.
+
+
+### Results folder
+
+In **Results & Learning**, choose or create a folder with **Choose folder**. The location is saved on this computer. Store downloaded standings there, then click **Import New Results**. The app scans that folder and subfolders, ignores non-result CSVs, and imports contents it has not already saved. Identical contents are skipped even after a rename; moved files refresh their audit location. Your saved username identifies your entries. An unavailable USB drive is reported without changing saved results.
+
+The scan runs only when clicked. Keep **Import DraftKings Results** for selecting individual files or reprocessing an existing field after changing your username. File-content identity prevents duplicate imports of identical files; changed contents are treated as a new import.
+
+![Saved results folder](images/results-folder.png)

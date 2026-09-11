@@ -2464,6 +2464,7 @@ def import_historical_result_csvs(
     *,
     db_path: Optional[str] = None,
     username: str = "",
+    skip_existing: bool = False,
     archive_files: bool = True,
     progress_callback: Optional[Any] = None,
     cancel_callback: Optional[Any] = None,
@@ -2509,7 +2510,7 @@ def import_historical_result_csvs(
                     # The content hash matches: keep the current readable location for audits.
                     with conn:
                         conn.execute('UPDATE historical_imports SET source_path=? WHERE import_id=?', (path, existing[0]))
-                    if username and existing[1] == 'field_only':
+                    if username and existing[1] == 'field_only' and not skip_existing:
                         preflight = _preflight_complete_field_csv(path, cancel_callback=cancel_callback)
                         with conn:
                             personal_added += _import_username_entries(conn, path, existing[0], username, preflight, cancel_callback)
@@ -3363,3 +3364,42 @@ def _generate_legacy_learning_report(*, db_path: Optional[str] = None) -> Dict[s
         }
     finally:
         conn.close()
+
+
+def import_results_folder(folder, *, username='', db_path=None, archive_files=True,
+                          progress_callback=None, cancel_callback=None):
+    """Import new result CSV contents from a chosen folder and its subfolders."""
+    if not os.path.isdir(folder):
+        raise ValueError('The results folder is unavailable. Connect the drive or choose another folder.')
+    paths = []
+    ignored = 0
+    errors = []
+    for root, dirs, files in os.walk(folder, followlinks=False):
+        dirs.sort()
+        for name in sorted(files):
+            if cancel_callback and cancel_callback():
+                return {'cancelled': True, 'files_imported': 0, 'rows_imported': 0, 'errors': errors}
+            if not name.lower().endswith('.csv'):
+                continue
+            path = os.path.join(root, name)
+            if progress_callback:
+                progress_callback(0,0,'Scanning results folder: '+name)
+            try:
+                with open(path,newline='',encoding='utf-8-sig') as handle:
+                    headers = {_canon_result_col(h) for h in next(csv.reader(handle),[])}
+                if 'entry_name' not in headers and 'entry_id' not in headers:
+                    ignored += 1
+                    continue
+                if not headers.intersection({'rank','actual_points','winnings'}):
+                    ignored += 1
+                    continue
+                paths.append(path)
+            except (OSError,UnicodeError,csv.Error) as exc:
+                errors.append(name+': '+str(exc))
+    result = import_historical_result_csvs(paths,username=username,db_path=db_path,
+        archive_files=archive_files,progress_callback=progress_callback,
+        cancel_callback=cancel_callback,skip_existing=True)
+    result['errors'] = errors + result.get('errors',[])
+    result['ignored_csv_files'] = ignored
+    result['folder_scan'] = True
+    return result
