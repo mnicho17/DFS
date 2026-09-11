@@ -1021,3 +1021,12 @@ Prediction comparisons require the original saved lineup export on this device. 
 The selected-player panel groups lineup status, portfolio exposure, and team adjustments with consistent two-column buttons. Minimum exposure controls are on the left and maximum controls on the right. When the player area is short, scroll within the panel to reach the lower actions; controls retain their spacing and remain readable.
 
 ![Selected-player controls](images/player-controls.png)
+
+
+### One-file results and username
+
+Open **Results & Learning**, enter your **DraftKings username**, and choose **Save username**. The setting stays on this computer and is not included in shared source code. Import the complete contest standings CSV to identify your submitted entries by exact username (case-insensitive, ignoring the trailing entry counter), save their scores and ranks, and compare your regular-slot and Captain exposure with the observed field. No salary or entry-upload file is required for these comparisons.
+
+If you previously imported the same file without a username, save your username and import it again; the field and personal entries are not duplicated. Different username spellings are not guessed. **Optional Salaries** adds salary/construction detail when desired. Forecast validation still requires original saved forecasts; winnings/cash rate require payout data. This update stores empirical results and ownership comparisons; it does not automatically retrain projections or tune Showdown from a single contest.
+
+![Saved username and single-file results import](images/username-results.png)

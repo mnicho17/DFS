@@ -3650,11 +3650,12 @@ class ResultsImportWorker(QtCore.QObject):
 
 
 
-    def __init__(self, paths: List[str]):
+    def __init__(self, paths: List[str], username: str = ""):
 
         super().__init__()
 
         self.paths = list(paths or [])
+        self.username = username
 
         self._cancel_event = threading.Event()
 
@@ -3675,6 +3676,7 @@ class ResultsImportWorker(QtCore.QObject):
             result = import_historical_result_csvs(
 
                 self.paths,
+                username=self.username,
 
                 progress_callback=lambda done, total, text: self.progress.emit(done, total, text),
 
@@ -3769,20 +3771,28 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
         intro = QtWidgets.QLabel(
-
-            "Import DraftKings contest standings or contest-history CSV files. "
-
-            "The app matches exact rosters to lineups exported from this app and can summarize "
-
-            "complete NFL fields. Attach the matching salary file for salary and construction detail; "
-
-            "all data stays local."
-
+            "Upload contest standings to analyze lineups and field ownership. "
+            "Save your DraftKings username to identify your entries automatically. "
+            "Salary files are optional; prediction comparisons use original saved forecasts. All data stays local."
         )
 
         intro.setWordWrap(True)
 
         layout.addWidget(intro)
+        self.learning_settings = QtCore.QSettings("DFS Optimizer", "DFS Optimizer")
+        username_row = QtWidgets.QHBoxLayout()
+        username_row.addWidget(QtWidgets.QLabel("DraftKings username"))
+        self.username_edit = QtWidgets.QLineEdit(str(self.learning_settings.value("learning/dk_username", "") or ""))
+        self.username_edit.setObjectName("draftKingsUsername")
+        self.username_edit.setPlaceholderText("Your username, without the entry counter")
+        self.username_edit.setMaxLength(100)
+        username_row.addWidget(self.username_edit, 1)
+        save_username = QtWidgets.QPushButton("Save username")
+        save_username.setObjectName("saveDraftKingsUsername")
+        save_username.clicked.connect(self._save_username)
+        username_row.addWidget(save_username)
+        layout.addLayout(username_row)
+
 
 
 
@@ -3818,7 +3828,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
 
-        self.attach_salary_button = QtWidgets.QPushButton("Attach Matching Salaries")
+        self.attach_salary_button = QtWidgets.QPushButton("Optional Salaries")
 
         self.attach_salary_button.setObjectName("attachFieldSalaryButton")
 
@@ -3896,11 +3906,16 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
 
+    def _save_username(self) -> None:
+        self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())
+        self.learning_settings.sync()
+        self.refresh_report()
+
     def refresh_report(self) -> None:
 
         try:
 
-            payload = generate_learning_report()
+            payload = generate_learning_report(username=self.username_edit.text().strip())
 
             roi = payload.get("roi_pct")
 
@@ -3908,6 +3923,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
             self.summary.setText(
 
+                f"{int(payload.get('personal_results_count', 0)):,} your results  |  "
                 f"{int(payload.get('exported_lineups', 0)):,} exported lineups  |  "
 
                 f"{int(payload.get('matched_rows', 0)):,} matched results  |  "
@@ -3953,6 +3969,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if not paths:
 
             return
+        self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())
 
         self.import_button.setEnabled(False)
 
@@ -3976,7 +3993,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         self._start_background_import(
 
-            ResultsImportWorker(paths),
+            ResultsImportWorker(paths, username=self.username_edit.text().strip()),
 
             self._on_import_finished,
 
@@ -4158,7 +4175,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
                 f"{int(result.get('files_imported', 0)):,} file(s).\n\n"
 
-                f"Exact lineup matches: {int(result.get('matched_rows', 0)):,}\n"
+                f"Your results added: {int(result.get('personal_results_added', 0)):,}\n"
+                f"Exact saved-forecast matches: {int(result.get('matched_rows', 0)):,}\n"
 
                 f"Unmatched personal entries: {int(result.get('unmatched_rows', 0)):,}\n"
 
@@ -4173,16 +4191,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
                 message += f"\nAlready imported files skipped: {int(result.get('duplicates_skipped', 0)):,}"
 
             if int(result.get("field_only_files", 0)):
-
-                message += (
-
-                    "\n\nComplete standings were summarized as opponent-field data without "
-
-                    "creating a result record for every opponent entry. Import personal contest "
-
-                    "history separately when you want exact results matched to your exports."
-
-                )
+                message += "\n\nThe full field was summarized. Your username identifies personal entries; saved forecasts are needed only for prediction comparisons."
+            if result.get("username") and not result.get("personal_results_added"):
+                message += "\nNo new personal entries were added. They may already be saved, or the username may not occur in this file."
 
             if result.get("errors"):
 

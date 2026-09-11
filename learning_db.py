@@ -617,7 +617,7 @@ def _render_breakdown(
     return lines
 
 
-def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]:
+def generate_learning_report(*, db_path: Optional[str] = None, username: str = "") -> Dict[str, Any]:
     """Build conservative, local-only outcome and projection calibration reporting."""
     path = db_path or history_db_path()
     conn = _connect(path)
@@ -829,9 +829,39 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
             f"- Result files imported: {imported_files}",
             f"- Result entries imported: {imported_rows}",
             f"- Exact lineup matches: {matched_rows} entries / {matched_lineups} unique lineups ({match_rate:.1f}%)",
-            f"- Outcome confidence: {outcome_confidence}",
+            f"- Forecast validation confidence: {outcome_confidence}",
             "- All history stays on this computer.", "", "Contest performance",
         ]
+        own_rows = []
+        if username:
+            for entry_name, points, rank, percentile, top_one, raw, import_id in cur.execute(
+                    'SELECT entry_name,actual_points,rank_text,percentile,top_one_pct,raw_json,import_id FROM historical_results'):
+                if _dk_username(entry_name) == _dk_username(username):
+                    own_rows.append((points,rank,percentile,top_one,json.loads(raw or '{}'),import_id))
+            lines.append(f"- Username: {username.strip()} | submitted results: {len(own_rows)} (export history not required).")
+            if own_rows:
+                points = [float(x[0]) for x in own_rows if x[0] is not None]
+                ranks = [_parse_rank(x[1]) for x in own_rows if _parse_rank(x[1]) > 0]
+                if points:
+                    lines.append(f"- Your average score: {statistics.mean(points):.2f}; best score: {max(points):.2f}; best rank: {min(ranks):,}.")
+                lines.append("- Winnings and cash rate need payout data; ownership and scores alone do not establish profit.")
+                # Compare entry exposure with the observed field for each imported contest.
+                for import_id in dict.fromkeys(x[5] for x in own_rows):
+                    subset = [x for x in own_rows if x[5] == import_id]
+                    counts = Counter(token for x in subset for token in _field_roster_signature(str(x[4].get('lineup') or '')))
+                    field = cur.execute('SELECT ownership_json,contest_name FROM contest_field_summaries WHERE import_id=? LIMIT 1',(import_id,)).fetchone()
+                    if field:
+                        ownership = json.loads(field[0] or '{}')
+                        lines.append(f"- Your ownership vs field: {field[1]} ({len(subset)} entries; Captain separate)")
+                        for captain_only in (False, True):
+                            leaders = [(token,count) for token,count in counts.most_common() if token.startswith('@cpt:') == captain_only][:5]
+                            if leaders:
+                                lines.append("  Captain exposure:" if captain_only else "  FLEX / regular-slot exposure:")
+                            for token,count in leaders:
+                                value = ownership.get(token)
+                                field_text = f"{float(value):.1f}%" if isinstance(value,(float,int)) else 'unavailable'
+                                label = token.replace('@cpt:', 'Captain: ')
+                                lines.append(f"  - {label}: yours {count/len(subset)*100:.1f}% | field {field_text}")
         if outcome_rows:
             if roi_values:
                 lines.append(f"- Entry fees: {_fmt_money(stake)} | winnings: {_fmt_money(winnings)} | net: {_fmt_money(net)}")
@@ -1079,6 +1109,7 @@ def generate_learning_report(*, db_path: Optional[str] = None) -> Dict[str, Any]
         return {
             "text": "\n".join(lines), "db_path": path, "export_count": export_count,
             "exported_lineups": exported_lineups, "historical_rows": imported_rows,
+            "personal_results_count": len(own_rows),
             "matched_rows": matched_rows, "matched_lineups": matched_lineups,
             "match_rate": match_rate, "net": net, "roi_pct": roi_pct,
             "cash_rate": statistics.mean(cash_values) if cash_values else None,
@@ -1973,10 +2004,10 @@ def match_historical_results(
     id_lookup: Dict[tuple[str, ...], tuple[str, str]] = {}
     name_lookup: Dict[tuple[str, ...], tuple[str, str]] = {}
     player_names_by_lineup: Dict[str, List[str]] = {}
-    for lineup_id, name in conn.execute(
-        "SELECT lineup_id, name FROM lineup_players ORDER BY lineup_id, slot"
+    for lineup_id, name, slot in conn.execute(
+        "SELECT lineup_id, name, slot FROM lineup_players ORDER BY lineup_id, slot"
     ).fetchall():
-        player_names_by_lineup.setdefault(str(lineup_id), []).append(str(name or ""))
+        player_names_by_lineup.setdefault(str(lineup_id), []).append(("@cpt:" if str(slot).upper()=="CPT" else "") + _normalize_roster_token(name))
     for lineup_id, export_id, roster_json in lineup_rows:
         try:
             roster_ids = json.loads(roster_json or "[]")
@@ -1986,11 +2017,11 @@ def match_historical_results(
         if id_sig:
             id_lookup.setdefault(id_sig, (lineup_id, export_id))
         player_names = player_names_by_lineup.get(str(lineup_id), [])
-        name_sig = _roster_signature(player_names)
+        name_sig = tuple(sorted(player_names))
         if name_sig:
             name_lookup.setdefault(name_sig, (lineup_id, export_id))
 
-    sql = "SELECT result_id, lineup_tokens_json FROM historical_results WHERE matched_lineup_id IS NULL"
+    sql = "SELECT result_id, lineup_tokens_json, raw_json FROM historical_results WHERE matched_lineup_id IS NULL"
     params: List[Any] = []
     if import_ids:
         placeholders = ",".join("?" for _ in import_ids)
@@ -2002,7 +2033,7 @@ def match_historical_results(
         params.extend(result_ids)
     result_rows = conn.execute(sql, params).fetchall()
     matched = 0
-    for result_id, lineup_json in result_rows:
+    for result_id, lineup_json, raw_json in result_rows:
         try:
             tokens = json.loads(lineup_json or "[]")
         except Exception:
@@ -2016,6 +2047,10 @@ def match_historical_results(
             target = id_lookup.get(signature)
             method = "player_ids"
         if target is None:
+            raw = json.loads(raw_json or '{}')
+            lineup_text = str(raw.get('lineup') or '')
+            if re.match(r'^\s*(?:CPT|CAPTAIN)\s+', lineup_text, re.I):
+                signature = _field_roster_signature(lineup_text)
             target = name_lookup.get(signature)
             method = "player_names"
         if target is None:
@@ -2374,10 +2409,58 @@ def _stream_complete_field_summary(
     }
 
 
+def _dk_username(value):
+    # Strip only DraftKings' trailing entry counter, never punctuation in a username.
+    return re.sub(r"\s+\(\d+\s*/\s*\d+\)\s*$", "", str(value or "").strip()).casefold()
+
+
+def _import_username_entries(conn, path, import_id, username, preflight, cancel_callback=None):
+    username = _dk_username(username)
+    if not username:
+        return 0
+    field_size = _safe_int(preflight.get('field_size'), 0)
+    found = 0
+    with open(path, newline='', encoding='utf-8-sig') as handle:
+        for index, raw in enumerate(csv.DictReader(handle), 1):
+            if index % 1000 == 0 and cancel_callback and cancel_callback():
+                raise _ImportCancelled()
+            row = {}
+            for key, value in raw.items():
+                row.setdefault(_canon_result_col(key), value)
+            if _dk_username(row.get('entry_name')) != username:
+                continue
+            entry_id = str(row.get('entry_id') or '').strip()
+            rank = _parse_rank(row.get('rank'))
+            lineup = str(row.get('lineup') or '')
+            if not entry_id or rank <= 0 or not lineup or not str(row.get('actual_points') or '').strip():
+                continue
+            result_id = str(uuid.uuid5(uuid.NAMESPACE_URL, 'dk-entry:' + str(import_id) + ':' + entry_id))
+            tokens = _extract_lineup_tokens({'lineup': lineup})
+            row['owner_username'] = username
+            row['entry_link_source'] = 'exact DraftKings username'
+            cursor = conn.execute(
+                """INSERT OR IGNORE INTO historical_results
+                (result_id,import_id,source_file,row_index,sport,contest_name,entry_name,
+                 actual_points,rank_text,lineup_tokens_json,raw_json,field_size,percentile,top_one_pct)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (result_id,import_id,os.path.basename(path),index,preflight.get('sport') or 'UNKNOWN',
+                 os.path.basename(path),row['entry_name'],_safe_float(row['actual_points']),str(rank),
+                 json.dumps(tokens),json.dumps(row,default=str),field_size,
+                 max(0.,min(100.,100*(1-(rank-1)/max(1,field_size)))),
+                 int(rank <= max(1,math.ceil(field_size*.01)))))
+            found += cursor.rowcount
+            if cursor.rowcount:
+                for slot, token in enumerate(tokens, 1):
+                    conn.execute('INSERT INTO historical_result_players (hist_player_id,result_id,token,slot_index) VALUES (?,?,?,?)',
+                                 (str(uuid.uuid4()),result_id,token,slot))
+    return found
+
+
 def import_historical_result_csvs(
     paths: List[str],
     *,
     db_path: Optional[str] = None,
+    username: str = "",
     archive_files: bool = True,
     progress_callback: Optional[Any] = None,
     cancel_callback: Optional[Any] = None,
@@ -2392,6 +2475,7 @@ def import_historical_result_csvs(
     files = [p for p in (paths or []) if p and os.path.isfile(p) and p.lower().endswith(".csv")]
     folders = history_folder_structure() if archive_files else {}
     conn = _connect(db_path)
+    personal_added = 0
     total_rows = 0
     total_files = 0
     sports: Dict[str, int] = {}
@@ -2414,10 +2498,16 @@ def import_historical_result_csvs(
             sport_for_file = "UNKNOWN"
             try:
                 file_hash = _file_sha256(path)
-                if conn.execute(
-                    "SELECT 1 FROM historical_imports WHERE file_sha256=? AND notes IN ('ok', 'field_only') LIMIT 1",
+                existing = conn.execute(
+                    "SELECT import_id, notes FROM historical_imports WHERE file_sha256=? AND notes IN ('ok', 'field_only') LIMIT 1",
                     (file_hash,),
-                ).fetchone():
+                ).fetchone()
+                if existing:
+                    if username and existing[1] == 'field_only':
+                        preflight = _preflight_complete_field_csv(path, cancel_callback=cancel_callback)
+                        with conn:
+                            personal_added += _import_username_entries(conn, path, existing[0], username, preflight, cancel_callback)
+                        imported_import_ids.append(existing[0])
                     duplicates_skipped += 1
                     continue
                 preflight = _preflight_complete_field_csv(
@@ -2448,6 +2538,10 @@ def import_historical_result_csvs(
                                 import_id,
                             ),
                         )
+                    if username:
+                        with conn:
+                            personal_added += _import_username_entries(conn, path, import_id, username, preflight, cancel_callback)
+                        imported_import_ids.append(import_id)
                     total_files += 1
                     field_only_files += 1
                     source_rows = _safe_int(field_analysis.get("source_rows"), 0)
@@ -2580,6 +2674,8 @@ def import_historical_result_csvs(
         )
         return {
             "files_imported": total_files,
+            "personal_results_added": personal_added,
+            "username": _dk_username(username),
             "rows_imported": total_rows,
             "sports": sports,
             "errors": errors,

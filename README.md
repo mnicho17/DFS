@@ -580,3 +580,10 @@ Classic and Showdown now share experimental possession events for K/DST scoring,
 
 Matched kickers now receive explicit attempts/accuracy/distance/XP forecasts from weekly records, with documented shrinkage and context. Components drive shared specialist events. Source details and report counts are visible; manual/imported forecasts and missing-data fallbacks are preserved. Reload the salary CSV to adopt this model; old snapshots retain their recorded inputs. See the guide for uncalibrated assumptions and tonight’s validation sequence.
 
+
+
+### One-file results and username
+
+Open **Results & Learning**, enter your **DraftKings username**, and choose **Save username**. The setting stays on this computer and is not included in shared source code. Import the complete contest standings CSV to identify your submitted entries by exact username (case-insensitive, ignoring the trailing entry counter), save their scores and ranks, and compare your regular-slot and Captain exposure with the observed field. No salary or entry-upload file is required for these comparisons.
+
+If you previously imported the same file without a username, save your username and import it again; the field and personal entries are not duplicated. Different username spellings are not guessed. **Optional Salaries** adds salary/construction detail when desired. Forecast validation still requires original saved forecasts; winnings/cash rate require payout data. This update stores empirical results and ownership comparisons; it does not automatically retrain projections or tune Showdown from a single contest.
