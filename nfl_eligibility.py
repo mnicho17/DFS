@@ -57,4 +57,10 @@ def eligible_players(players, *, reject_locks=True):
         locked = [p for p in excluded if p.get('LockFlex') or p.get('LockCpt')]
         if locked:
             raise ValueError('A locked quarterback is not eligible: ' + ', '.join(str(p.get('Name')) for p in locked))
-    return [p for p in players if p.get('NFLQBEligible') is not False]
+    missing = [p for p in players if p.get('ProjectionSource') == 'Missing forecast']
+    if reject_locks:
+        locked = [p for p in missing if p.get('LockFlex') or p.get('LockCpt')]
+        if locked:
+            raise ValueError('A locked player needs a forecast: ' + ', '.join(str(p.get('Name')) for p in locked) + '. Refresh player data or supply a projection.')
+    return [p for p in players if p.get('NFLQBEligible') is not False
+            and p.get('ProjectionSource') != 'Missing forecast']

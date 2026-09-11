@@ -231,13 +231,15 @@ def _is_active(player: Dict[str, Any]) -> bool:
 
 def _role_rank(player: Dict[str, Any]) -> Tuple[float, ...]:
     depth = int(_number(player.get("NFLDepthOrder"), 0.0))
-    # Depth 1 is authoritative. Unknown depth sits between 1 and 2 so a partial
-    # data match cannot incorrectly promote a known backup over an obvious DK starter.
+    # Verified rotation slots precede unknown depth. Unknown players with a
+    # forecast remain fallback options ahead of documented deep reserves.
     primary_depth = 1.0 if depth == 1 else 0.0
-    depth_rank = -float(depth) if depth > 0 else -1.5
+    rotation = 1.0 if 0 < depth <= ROLE_LIMITS.get(_position(player), 1) else 0.0
+    depth_rank = -float(depth) if depth > 0 else -0.5
     return (
         1.0 if player.get("LockFlex") else 0.0,
         primary_depth,
+        rotation,
         depth_rank,
         _number(player.get("NFLRoleScore"), 0.0),
         _projection(player),
