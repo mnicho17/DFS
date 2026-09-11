@@ -313,6 +313,7 @@ def create_build_diagnostic(
         "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
         "ranking_bank": dict((sim.get('deep_build') or {}).get('ranking_bank') or {}),
         "field_diagnostic": dict(sim.get('field_diagnostic') or {}),
+        "ownership_leverage": dict(sim.get('ownership_leverage') or {}),
         "projection_coverage": coverage,
         "data_freshness": str(context.get('data_freshness') or ''),
         "created_at": _now_iso(),
@@ -745,6 +746,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     from projection_coverage import format_projection_coverage
     lines.extend(format_projection_coverage(record.get('projection_coverage') or {}))
     lines.extend(format_field(record.get('field_diagnostic') or {}))
+    from ownership_strategy import format_leverage
+    lines.extend(format_leverage(record.get('ownership_leverage') or {}))
     lines.extend(format_ranked_groups(record.get("ranked_groups") or []))
     if is_showdown and exposures.get("total"):
         selected_count = max(1, _integer(candidates.get("selected")))

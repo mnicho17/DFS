@@ -111,14 +111,28 @@ def build_results_audit(conn, username=''):
         ownership_pairs = []
         ownership_sources = set()
         ownership_units = set()
+        accuracy = {}
+        showdown_ownership = any(k.startswith('@cpt:') for k in ownership)
         seen = set()
-        for row in matched:
+        for row in sorted(matched,key=lambda r:(str(r[7] or '9999'),str(r[3]))):
             if row[3] in seen:
                 continue
             seen.add(row[3])
             for name,slot,projection,own,context_json in conn.execute('SELECT name,slot,projection,ownership,context_json FROM lineup_players WHERE lineup_id=?',(row[3],)):
                 key = ('@cpt:' if str(slot).upper()=='CPT' else '') + _normalize_roster_token(name)
                 context = json.loads(context_json or '{}')
+                expected_slot = 'Captain' if key.startswith('@cpt:') else 'FLEX' if showdown_ownership else 'Total'
+                forecast = context.get('OwnershipForecast')
+                if context.get('OwnershipSlot') is None and not showdown_ownership:
+                    forecast = own
+                try:
+                    forecast = float(forecast)
+                    if (context.get('OwnershipUnits')=='percent_of_entries' and key in ownership
+                        and 0<=forecast<=100 and (context.get('OwnershipSlot',expected_slot)==expected_slot)):
+                        accuracy.setdefault(key,dict(player=key.replace('@cpt:','Captain: '),slot=expected_slot,
+                            predicted=forecast,actual=ownership[key],source=context.get('OwnershipSource') or 'Not recorded'))
+                except (TypeError,ValueError):
+                    pass
                 player_sources[key].add(str(context.get('ProjectionSource') or 'not recorded'))
                 if projection is not None and key in scores:
                     player_errors[key].append((float(projection),scores[key]))
@@ -135,6 +149,8 @@ def build_results_audit(conn, username=''):
                 sources=', '.join(sorted(player_sources[key]))
                 lines.append(f'    {label}: forecast {forecast:.2f}, actual {actual:.2f}, error {actual-forecast:+.2f}; {len(values)} saved lineup appearances; source {sources}.')
             lines.append('  Player appearances reuse the same game outcome; they are not independent observations.')
+        from ownership_strategy import accuracy_lines
+        lines.extend(accuracy_lines(accuracy,len(ownership)))
         if ownership_pairs:
             unique = {(k,p,a) for k,p,a in ownership_pairs}
             stored = [x[1] for x in unique];actual = [x[2] for x in unique]

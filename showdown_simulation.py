@@ -310,6 +310,9 @@ def run_deep_showdown(worker, shortlist_fn):
         selected["report"].setdefault("warnings", []).append("Deep Showdown did not complete independent validation; returning the best available stage.")
     qb_stages["selected"] = quarterback_mix(selected["lineups"], scored=True)
     sim_report["quarterback_pipeline"] = qb_stages
+    from ownership_strategy import leverage_report
+    sim_report['ownership_leverage'] = leverage_report(retained+lineups,selected['lineups'],players,
+        sim_report.get('field_diagnostic') or {},showdown=True)
     sim_report["candidate_library"] = getattr(worker, "library_report", {})
     from projection_coverage import summarize_projection_coverage
     sim_report["projection_coverage"] = summarize_projection_coverage(players)

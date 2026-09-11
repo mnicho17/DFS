@@ -480,6 +480,9 @@ def record_export(
                 for slot, p in _lineup_players(kind, lineup, sport):
                     player_id = str(p.get("CptID") if slot == "CPT" else p.get("FlexID") or "").strip()
                     adjusted_projection, base_projection, context_adjustment, context = _player_projection_context(p, slot)
+                    ownership_field = 'ProjCptOwnPct' if slot == 'CPT' else 'ProjFlexOwnPct' if kind == 'showdown' else 'ProjOwnPct'
+                    context['OwnershipSlot'] = 'Captain' if slot == 'CPT' else 'FLEX' if kind == 'showdown' else 'Total'
+                    context['OwnershipForecast'] = p.get(ownership_field)
                     conn.execute(
                         """
                         INSERT INTO lineup_players (
@@ -504,7 +507,7 @@ def record_export(
                             base_projection,
                             context_adjustment,
                             json.dumps(context, default=str),
-                            _safe_float(p.get("ProjCptOwnPct") if slot == "CPT" else p.get("ProjOwnPct")),
+                            None if p.get(ownership_field) is None else _safe_float(p.get(ownership_field)),
                             _safe_int(p.get("BattingOrder"), 0),
                             1 if bool(p.get("ConfirmedLineup")) else 0,
                             str(p.get("InjuryStatus", "") or ""),

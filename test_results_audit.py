@@ -11,6 +11,8 @@ class ResultsAuditTests(unittest.TestCase):
             db=str(Path(tmp)/'history.sqlite');path=Path(tmp)/'NFL Showdown 20-Max.csv'
             lineup=_showdown_lineup();players=[lineup['Captain']]+lineup['Flex']
             names=[p['Name'] for p in players]
+            for p in players:
+                p.update(ProjOwnPct=40,ProjFlexOwnPct=30,ProjCptOwnPct=10,OwnershipUnits='percent_of_entries',OwnershipSource='Test forecast')
             record_export(kind='showdown',sport='NFL',lineups=[lineup],rows=_export_rows(),salary_cap=50000,export_path='test.csv',validation={},db_path=db)
             with path.open('w',newline='',encoding='utf-8') as f:
                 w=csv.writer(f);w.writerow(['Rank','EntryId','EntryName','Points','Lineup','Player','Roster Position','%Drafted','FPTS'])
@@ -24,6 +26,8 @@ class ResultsAuditTests(unittest.TestCase):
             self.assertIn('1 player pairs checked; 0 differ',text)
             self.assertIn('Largest player forecast misses',text)
             self.assertIn('Ownership units are not recorded',text)
+            self.assertIn('Captain: 1 unique players; MAE 5.00 pp',text)
+            self.assertIn('FLEX: 5 unique players; MAE 20.00 pp',text)
             self.assertNotIn(str(path),text)
             renamed = path.with_name('renamed NFL standings.csv')
             path.rename(renamed)
@@ -45,6 +49,7 @@ class ResultsAuditTests(unittest.TestCase):
             names=['Alpha One','Bravo Two','Charlie Three','Delta Four','Echo Five','Foxtrot Six','Golf Seven','Hotel Eight','India Nine']
             positions=['QB','RB','RB','WR','WR','WR','TE','RB','DST']
             players=[{'Name':name,'Team':'BUF' if i<5 else 'NE','Position':positions[i],'FlexID':str(10000+i),'FlexSalary':5000,'FlexProjection':10,'BaseProjection':10,'ProjOwnPct':20,'ProjectionSource':'Imported projection'} for i,name in enumerate(names)]
+            for p in players:p.update(OwnershipUnits='percent_of_entries',OwnershipSource='Test forecast')
             record_export(kind='classic',sport='NFL',lineups=[players],rows=[[p['FlexID'] for p in players]],salary_cap=50000,export_path='classic.csv',validation={},db_path=db)
             lineup=' '.join(slot+' '+name for slot,name in zip(['QB','RB','RB','WR','WR','WR','TE','FLEX','DST'],names))
             with path.open('w',newline='',encoding='utf-8') as f:
@@ -57,6 +62,7 @@ class ResultsAuditTests(unittest.TestCase):
             self.assertEqual(result['matched_rows'],2)
             audit=generate_learning_report(db_path=db,username='Example_User')['text'].split('Results audit',1)[1]
             self.assertIn('2 checked, 0 mismatches',audit)
+            self.assertIn('Total: 9 unique players; MAE 0.00 pp',audit)
             self.assertNotIn('Captain actual scoring:',audit)
             self.assertIn('MAE 45.00',audit)
             self.assertIn('source Imported projection',audit)

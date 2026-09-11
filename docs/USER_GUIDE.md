@@ -1224,6 +1224,18 @@ Choose **Settings > Show Build Controls** if the controls are folded away. The *
 Ownership sampling count, the Showdown ownership-template option and the ownership-estimate action now live in **Data and Learning > Ownership estimates**. Ownership preference and influence remain in Build because they affect candidate construction. Existing saved recipes and snapshots retain their underlying settings.
 # Projection and usage coverage
 
+## Ownership and leverage
+
+**Settings > Ownership & Leverage** opens a sortable comparison for the latest NFL simulated build. Field % is the recorded ownership forecast; Sampled % is the actual opponent sample; Contender % is exposure among the top 150 independently scored candidates (or the entire smaller bank). Difference is contender minus projected field ownership, in percentage points. Your % uses all selected outputs, even when only 150 are displayed. Classic has total ownership; Showdown keeps Captain and FLEX separate. Missing or unverified ownership stays unknown, distinct from zero. Copy Report includes the largest positive and negative gaps; the full table is saved with the build diagnostic.
+
+These gaps depend on the generated candidate pool, player projections and opponent model. They are not optimal-lineup probabilities or automatic recommended exposures. Confidence remains uncalibrated until historical evidence supports a stronger statement. Review salary, role, upside and uncertainty before setting player exposure limits. This feature does not automatically fade popular players or alter personal limits.
+
+Opponent generation may use two additional feedback passes when complete, explicit percentage ownership sums approximately to legal roster-slot totals. Draw weights are adjusted, new legal fields generated, and the field with the lowest player/slot mean absolute ownership error retained. Player forecasts are unchanged; duplicates are not manufactured to force targets. Salary, roster and existing construction rules still apply, but the mix can vary. Targets may be infeasible, and sampling may consume additional build time. Build reports show before/after error or the reason matching was skipped. Lower matching error is not proof of ownership forecast accuracy.
+
+Results & Learning separately compares ownership forecasts from the earliest matched saved export per player/slot with actual imported ownership. It reports unique-player MAE and bias (forecast minus actual), coverage and largest errors per contest/slot. Pre-lock timing is not verified. Repeated entries count once; contests from one slate are not independent validation. New Showdown exports store FLEX ownership separately from total ownership. Legacy ambiguous FLEX values and unverified units are excluded; no old forecasts are fabricated. Original export history is needed for this forecast comparison, although one-file standings analysis still works without it. No results-driven model tuning is applied.
+
+![Ownership and leverage comparison](images/ownership-leverage.png)
+
 ## Ranking repeatability
 
 After updating, complete an NFL Deep build to automatically save its independently validated shortlist under `history/ranking-banks`. This captures the candidates before output selection, including Captain identities, original ranking metrics, player inputs and opponent configuration. Saving failure does not discard the build; its report indicates whether the bank was saved. Existing snapshots cannot recover earlier shortlists, and replaying a snapshot under new code may generate a different set.

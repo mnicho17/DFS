@@ -517,7 +517,20 @@ def _build_field_lineup(
     return lineup
 
 
-def generate_nfl_field_lineups(
+def generate_nfl_field_lineups(players, count, *, match_ownership=True, **kwargs):
+    entries, pool = _generate_nfl_field_lineups(players, count, **kwargs)
+    if not match_ownership or kwargs.get('candidate_mode') or kwargs.get('unique'):
+        return entries, pool
+    from ownership_strategy import fit_field
+    base_seed = kwargs.get('seed', 20260809)
+    entries = fit_field(entries, pool,
+        lambda adjusted, attempt: _generate_nfl_field_lineups(adjusted, count,
+            **dict(kwargs, seed=base_seed+attempt*104729))[0],
+        cancelled=kwargs.get('cancel_callback') or (lambda: False))
+    return entries, pool
+
+
+def _generate_nfl_field_lineups(
     players: Sequence[Dict[str, Any]],
     count: int,
     *,
@@ -554,7 +567,7 @@ def generate_nfl_field_lineups(
             ownership = max(0.05, _number(player.get("ProjOwnPct"), 0.0))
             ownership_exponent = _number(config.get("ownership_exponent"), 0.55)
             weight *= ownership ** max(0.05, min(1.25, ownership_exponent))
-        precomputed_weights[id(player)] = max(1e-9, weight)
+        precomputed_weights[id(player)] = max(1e-9, weight * _number(player.get('_FieldOwnWeight'), 1.0))
     rng = random.Random(seed)
     lineups: List[List[Dict[str, Any]]] = []
     signatures: set[Tuple[str, ...]] = set()
@@ -767,6 +780,7 @@ def simulate_nfl_field_ownership(
     lineups, role_pool = generate_nfl_field_lineups(
         players,
         num_lineups,
+        match_ownership=False,
         salary_cap=salary_cap,
         min_salary=max(0.0, salary_cap - 1000.0),
         progress_callback=progress_callback,

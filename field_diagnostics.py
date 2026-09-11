@@ -47,7 +47,7 @@ def summarize_field(entries, players, *, showdown=False, salary_cap=50000, fallb
             units = str(player.get('OwnershipUnits') or 'unknown')
             comparable = supplied is not None and units == 'percent_of_entries'
             observed = 100 * counter[key] / n
-            values.append(dict(label=f"{player.get('Name', key)} [{player.get('Team', '')} {player.get('Position', '')}]",
+            values.append(dict(player_key=key,label=f"{player.get('Name', key)} [{player.get('Team', '')} {player.get('Position', '')}]",
                                count=counter[key], sampled_pct=round(observed, 3), input_pct=supplied,
                                input_units=units, input_source=str(player.get('OwnershipSource') or 'not recorded'),
                                gap_pp=round(observed-supplied, 3) if comparable else None))
@@ -64,7 +64,8 @@ def summarize_field(entries, players, *, showdown=False, salary_cap=50000, fallb
                 captain_ownership=rows(captain, 'ProjCptOwnPct') if showdown else [],
                 flex_ownership=rows(flex, 'ProjFlexOwnPct') if showdown else [],
                 ownership_sum_pct=round(100*sum(total.values())/n, 3), showdown=showdown,
-                sampling=dict(getattr(entries, 'diagnostic', {}) or {}))
+                sampling=dict(getattr(entries, 'diagnostic', {}) or {}),
+                ownership_fit=dict(getattr(entries, 'ownership_fit', {}) or {}))
 
 
 def format_field(report):
@@ -85,6 +86,11 @@ def format_field(report):
         lines.append(f"- Salary-band fallback entries: {sampling.get('fallback_entries',0)}; requested field {sampling['requested']:,}, returned {report['entries']:,}. Shortages and cancellation can change the mix.")
     if report['candidate_fallback']:
         lines.append('- Field generation failed; candidates were used as fallback opponents. This is not an independently generated field.')
+    fit=report.get('ownership_fit') or {}
+    if fit.get('status')=='completed':
+        lines.append(f"- Ownership matching: MAE {fit['before_mae_pp']:.2f} → {fit['after_mae_pp']:.2f} pp; {fit['passes']} feedback passes. Legal field with lowest error retained; targets are not guaranteed. This is matching to forecasts, not historical accuracy.")
+    elif fit:
+        lines.append('- Ownership matching skipped: '+fit.get('reason','unavailable')+'.')
     for key, label in [('ownership', 'Total'), ('captain_ownership', 'Captain'), ('flex_ownership', 'FLEX')]:
         rows = report[key]
         if not rows:

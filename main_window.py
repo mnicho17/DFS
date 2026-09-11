@@ -2596,6 +2596,10 @@ class LineupBuildWorker(QtCore.QObject):
 
                 if "quarterback_pipeline" in sim_report:
                     sim_report["quarterback_pipeline"]["selected"] = quarterback_mix(lineups, scored=True)
+                if use_nfl_sim:
+                    from ownership_strategy import leverage_report
+                    sim_report['ownership_leverage'] = leverage_report(sim_result.get('lineups') or [],lineups,
+                        build_players,sim_report.get('field_diagnostic') or {})
                 sim_report["candidate_sources"] = {
 
                     "generated": dict(source_additions),
@@ -7419,6 +7423,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         settings_menu.addAction("Long Search / Resume...", self.on_long_search)
         settings_menu.addAction("Ranking Repeatability...", self.on_ranking_repeatability)
+        settings_menu.addAction("Ownership & Leverage...", self.on_ownership_leverage)
         settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
         settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)

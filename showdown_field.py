@@ -13,6 +13,14 @@ class OpponentField(list):
 
 
 def sample_field(pool, count, *, salary_cap=50000, seed=0, cancel_callback=None):
+    from ownership_strategy import fit_field
+    original = _sample_field(pool,count,salary_cap=salary_cap,seed=seed,cancel_callback=cancel_callback)
+    return fit_field(original,pool,
+        lambda adjusted,attempt:_sample_field(adjusted,count,salary_cap=salary_cap,seed=seed+attempt*104729,cancel_callback=cancel_callback),
+        showdown=True,cancelled=cancel_callback or (lambda:False))
+
+
+def _sample_field(pool, count, *, salary_cap=50000, seed=0, cancel_callback=None):
     count = max(0, int(count)); rng = random.Random(seed)
     field = OpponentField()
     field.diagnostic = dict(model=MODEL, requested=count, attempts=0, fallback_entries=0,
@@ -22,7 +30,8 @@ def sample_field(pool, count, *, salary_cap=50000, seed=0, cancel_callback=None)
     def weights(fn):
         values = [max(0, fn(p)) for p in pool]
         return [max(.05, x) for x in values] if any(values) else [max(.1, float(p.get('FlexProjection') or 0))**1.3 for p in pool]
-    cweights = weights(_showdown_cpt_own); fweights = weights(_showdown_flex_own)
+    cweights = [w*float(p.get('_FieldCptWeight',1)) for w,p in zip(weights(_showdown_cpt_own),pool)]
+    fweights = [w*float(p.get('_FieldFlexWeight',1)) for w,p in zip(weights(_showdown_flex_own),pool)]
     captains = [i for i,p in enumerate(pool) if _cpt_salary(p)>0]
     if not captains:
         return field
