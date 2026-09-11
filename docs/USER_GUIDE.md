@@ -1030,3 +1030,12 @@ Open **Results & Learning**, enter your **DraftKings username**, and choose **Sa
 If you previously imported the same file without a username, save your username and import it again; the field and personal entries are not duplicated. Different username spellings are not guessed. **Optional Salaries** adds salary/construction detail when desired. Forecast validation still requires original saved forecasts; winnings/cash rate require payout data. This update stores empirical results and ownership comparisons; it does not automatically retrain projections or tune Showdown from a single contest.
 
 ![Saved username and single-file results import](images/username-results.png)
+
+
+### Results audit and Copy Report
+
+Results & Learning now appends a diagnostic audit automatically. **Copy Report** copies the complete displayed text, including per-contest match counts, up to five unmatched rosters, lineup score reconciliation, Captain/FLEX scoring consistency, player forecast misses, saved ownership ranges, and available export version/timestamps. Keep the original standings file accessible for its player FPTS side table. Missing files or fields are reported rather than guessed.
+
+Identical player-score tables across contests indicate shared outcomes; the count is a proxy, not a verified game count. Repeated player appearances are not independent observations. Older exports may lack forecast provenance and ownership units; low saved ownership alone does not prove a normalization bug. New exports preserve forecast source and workload/kicker context for future audits. No forecasts are regenerated and no model weights change automatically. Copied reports contain player names, username and aggregate results, but omit file paths, entry IDs and API keys.
+
+![Results audit and Copy Report](images/results-audit.png)

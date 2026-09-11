@@ -271,7 +271,8 @@ def _player_projection_context(p: Dict[str, Any], slot: str) -> tuple[float, flo
             "NFLAdjScore", "NFLUsageScore", "NFLMatchupScore", "NFLRoleScore",
             "NFLWeatherScore", "NFLVegas", "NFLNotes", "MLBAdjScore", "MLBRecentForm",
             "MLBMatchup", "MLBBallpark", "MLBWeather", "MLBVegas", "MLBNotes",
-            "TeamAdjPct",
+            "TeamAdjPct", "ProjectionSource", "HistoricalPPG", "ImportedProjection",
+            "WorkloadProjection", "NFLWorkload", "KickerProjection", "NFLKickerOpportunities",
         )
         if p.get(key) not in (None, "")
     }
@@ -1106,6 +1107,8 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
         if imported_rows and matched_rows < imported_rows:
             lines.append("- Unmatched rows usually mean the final submitted lineup differed from the app export or the file lacks a parseable lineup.")
 
+        from results_audit import build_results_audit
+        lines.extend(build_results_audit(conn, username=username))
         return {
             "text": "\n".join(lines), "db_path": path, "export_count": export_count,
             "exported_lineups": exported_lineups, "historical_rows": imported_rows,

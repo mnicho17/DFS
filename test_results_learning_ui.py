@@ -36,6 +36,10 @@ class ResultsLearningUITests(unittest.TestCase):
     def test_dialog_starts_with_local_empty_state(self):
         dialog = ResultsLearningDialog()
         self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "importResultsButton"))
+        copy_button = dialog.findChild(QtWidgets.QPushButton, "copyLearningReportButton")
+        self.assertIsNotNone(copy_button)
+        copy_button.click()
+        self.assertEqual(QtWidgets.QApplication.clipboard().text(), dialog.report.toPlainText())
         self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "attachFieldSalaryButton"))
         self.assertIsNotNone(dialog.findChild(QtWidgets.QProgressBar, "resultsImportProgress"))
         self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "cancelResultsImportButton"))

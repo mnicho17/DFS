@@ -3802,7 +3802,13 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         self.summary.setWordWrap(True)
 
-        layout.addWidget(self.summary)
+        summary_row = QtWidgets.QHBoxLayout()
+        summary_row.addWidget(self.summary, 1)
+        copy_report = QtWidgets.QPushButton("Copy Report")
+        copy_report.setObjectName("copyLearningReportButton")
+        copy_report.clicked.connect(lambda: QtWidgets.QApplication.clipboard().setText(self.report.toPlainText()))
+        summary_row.addWidget(copy_report)
+        layout.addLayout(summary_row)
 
 
 
