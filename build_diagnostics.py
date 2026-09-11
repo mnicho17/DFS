@@ -262,7 +262,10 @@ def create_build_diagnostic(
 
     warnings: List[str] = []
     projection_reviews = _integer(context.get('projection_review_count'))
-    if projection_reviews:
+    coverage = dict(sim.get('projection_coverage') or {})
+    if coverage.get('missing_count'):
+        warnings.append(f"{coverage['missing_count']} eligible players have missing or invalid forecasts. See Projection and usage coverage.")
+    elif projection_reviews and not coverage:
         warnings.append(f'{projection_reviews} player inputs use estimates or lack a forecast. Review Base projection sources before relying on rankings.')
     for source in (portfolio.get("warnings") or [], sim.get("warnings") or []):
         items = [source] if isinstance(source, str) else source
@@ -309,6 +312,7 @@ def create_build_diagnostic(
         "candidate_library": dict(sim.get("candidate_library") or {}),
         "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
         "field_diagnostic": dict(sim.get('field_diagnostic') or {}),
+        "projection_coverage": coverage,
         "data_freshness": str(context.get('data_freshness') or ''),
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
@@ -732,6 +736,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     from pipeline_audit import format_quarterback_pipeline
     lines.extend(format_quarterback_pipeline(sim.get("quarterback_pipeline") or {}))
     from field_diagnostics import format_field
+    from projection_coverage import format_projection_coverage
+    lines.extend(format_projection_coverage(record.get('projection_coverage') or {}))
     lines.extend(format_field(record.get('field_diagnostic') or {}))
     lines.extend(format_ranked_groups(record.get("ranked_groups") or []))
     if is_showdown and exposures.get("total"):
@@ -788,7 +794,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     lines.extend(["", (
         "Privacy: This report includes lineup names and strategy inputs for troubleshooting; "
         "it excludes file paths and API keys."
-        if lineup_details or record.get("ranked_groups") or record.get('field_diagnostic') else
+        if lineup_details or record.get("ranked_groups") or record.get('field_diagnostic') or record.get('projection_coverage') else
         "Privacy: This report contains aggregate settings and counts only; no players, "
         "lineups, file paths, or API keys."
     )])

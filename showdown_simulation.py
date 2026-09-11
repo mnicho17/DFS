@@ -307,6 +307,8 @@ def run_deep_showdown(worker, shortlist_fn):
     qb_stages["selected"] = quarterback_mix(selected["lineups"], scored=True)
     sim_report["quarterback_pipeline"] = qb_stages
     sim_report["candidate_library"] = getattr(worker, "library_report", {})
+    from projection_coverage import summarize_projection_coverage
+    sim_report["projection_coverage"] = summarize_projection_coverage(players)
     sim_report["deep_build"] = dict(deep)
     timing = dict(deep, generation_allocation_seconds=limit * generation_fraction,
         style_candidate_counts=style_counts, deep_options=dict(options), deep_time_limit_seconds=limit,

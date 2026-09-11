@@ -2629,6 +2629,9 @@ class LineupBuildWorker(QtCore.QObject):
             )
 
             sim_report["candidate_library"] = dict(self.library_report)
+            if self.sport == "NFL":
+                from projection_coverage import summarize_projection_coverage
+                sim_report["projection_coverage"] = summarize_projection_coverage(build_players)
             timing_report = {
 
                 "generation_seconds": max(0.0, generation_seconds),

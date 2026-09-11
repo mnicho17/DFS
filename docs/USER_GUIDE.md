@@ -1222,3 +1222,10 @@ Choose **Settings > Show Build Controls** if the controls are folded away. The *
 **Search & output** groups all-style search and Individual ranking/Portfolio selection. Preset resource counts are collapsed and read-only; use Show resource details to inspect them, or Custom to edit them. The main summary shows the active scope, selection method, time ceiling and validation count. When all five styles are searched, the single Build style selector is disabled and labeled accordingly. Named time profiles do not choose a build style or a portfolio strategy for you.
 
 Ownership sampling count, the Showdown ownership-template option and the ownership-estimate action now live in **Data and Learning > Ownership estimates**. Ownership preference and influence remain in Build because they affect candidate construction. Existing saved recipes and snapshots retain their underlying settings.
+# Projection and usage coverage
+
+NFL Classic and Deep Showdown build reports describe projection sources and usage evidence for the actual eligible build pool. Automatic workload estimates, historical averages, imported forecasts, manual overrides and genuinely missing forecasts are counted separately. A missing usage record is not an observed zero; an estimate is still a forecast with limitations.
+
+Fresh NFL loading now checks the prior season separately for players missing from a partial current-season statistics file. Current-season records take precedence, including zero opportunities. Prior-season usage remains labeled and receives the existing reduced historical weighting. Kickers retain their separate opportunity-history path. Manual and imported forecasts still take precedence. This is a coverage correction, not results-driven training.
+
+Reload the salary CSV to adopt fresh evidence. Saved snapshot replay preserves its original inputs. Source counts do not prove accuracy, and missing source data can still leave a player on role-based or historical-average estimates.

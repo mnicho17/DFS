@@ -810,6 +810,7 @@ def apply_auto_nfl_context(
     sleeper_data: Optional[Mapping[str, Any]] = None,
     usage_rows: Optional[Sequence[Mapping[str, Any]]] = None,
     usage_season: Optional[int] = None,
+    prior_usage_rows: Optional[Sequence[Mapping[str, Any]]] = None,
     weather_by_game: Optional[Mapping[str, Mapping[str, Any]]] = None,
     odds_by_game: Optional[Mapping[str, Mapping[str, Any]]] = None,
     fetch_external: bool = True,
@@ -826,8 +827,11 @@ def apply_auto_nfl_context(
     target_season = int(season or _slate_season(players))
     if fetch_external and sleeper_data is None:
         sleeper_data = fetch_sleeper_players()
-    if fetch_external and usage_rows is None:
+    auto_usage = fetch_external and usage_rows is None
+    if auto_usage:
         usage_rows, usage_season = fetch_recent_usage_with_fallback(target_season)
+        if usage_season == target_season and prior_usage_rows is None:
+            prior_usage_rows = _fetch_nflverse_season_rows(target_season - 1)
     if fetch_external and weather_by_game is None:
         weather_by_game = _fetch_weather_for_games(players)
     if odds_by_game is None:
@@ -846,8 +850,10 @@ def apply_auto_nfl_context(
 
     sleeper_index = _sleeper_index(sleeper_data or {})
     usage_index = _build_usage_index(usage_rows or [])
+    prior_index = _build_usage_index(prior_usage_rows or []) if usage_season == target_season else {}
     from nfl_kickers import build_kicking_index, attach_kicking_history
     kicking_index = build_kicking_index(usage_rows or [], usage_season)
+    prior_kicking_index = build_kicking_index(prior_usage_rows or [], target_season - 1) if usage_season == target_season else {}
     matchup_index = _build_matchup_index(usage_rows or [])
     weather_index = {str(key).strip().upper(): dict(value) for key, value in (weather_by_game or {}).items()}
     odds_index = {str(key).strip().upper(): dict(value) for key, value in (odds_by_game or {}).items()}
@@ -877,7 +883,14 @@ def apply_auto_nfl_context(
 
         role_label, role_score = _role_context(player, sleeper)
         usage = usage_index.get((name, team)) or usage_index.get((name, "")) or {}
-        player['NFLUsageState'] = ('matched' if usage else 'no_player_match') if usage_index else 'unavailable'
+        player_usage_season = usage_season
+        if not usage:
+            usage = prior_index.get((name, team)) or prior_index.get((name, "")) or {}
+            if usage:
+                player_usage_season = target_season - 1
+        player['NFLUsageState'] = ('matched' if usage else 'no_player_match') if usage_index or prior_index else 'unavailable'
+        player['NFLUsageSource'] = ('current_season' if player_usage_season == target_season else 'prior_season') if usage else 'unavailable'
+        player['NFLUsageSourceURL'] = NFLVERSE_PLAYER_STATS_URL.format(season=player_usage_season) if usage else ''
         player['NFLUsageCheckedAt'] = checked_at
         if usage:
             usage_matches += 1
@@ -907,8 +920,10 @@ def apply_auto_nfl_context(
         for metric in ('attempts', 'carries', 'targets'):
             player['NFLRecent' + metric.title()] = _to_float(usage.get(metric), 0.0)
         player["NFLUsageGames"] = int(_to_float(usage.get("games"), 0))
-        player["NFLUsageSeason"] = usage_season
+        player["NFLUsageSeason"] = player_usage_season if usage else None
         attach_kicking_history(player, kicking_index)
+        if not player.get('NFLKickingHistory'):
+            attach_kicking_history(player, prior_kicking_index)
         player["NFLUsageScore"] = usage_score
         player["NFLMatchupScore"] = matchup_score
         player["NFLRole"] = role_label
@@ -943,7 +958,9 @@ def apply_auto_nfl_context(
         "locked_conflicts": sum(1 for player in players if player.get("LiveStatusConflict")),
         "replacement_promotions": replacement_promotions,
         "usage": usage_matches,
-        "usage_state": ('ok' if usage_matches else 'no_player_matches') if usage_index else 'unavailable',
+        "usage_current_matches": sum(p.get('NFLUsageSource') == 'current_season' for p in players),
+        "usage_prior_matches": sum(p.get('NFLUsageSource') == 'prior_season' for p in players),
+        "usage_state": ('ok' if usage_matches else 'no_player_matches') if usage_index or prior_index else 'unavailable',
         "usage_rows": len(usage_rows or []),
         "usage_checked_at": checked_at,
         "usage_url": NFLVERSE_PLAYER_STATS_URL.format(season=usage_season or target_season),
@@ -1068,6 +1085,8 @@ def refresh_live_nfl_data(
         "status_changes": len(changes),
         "usage_state": 'retained' if any(_to_float(p.get('NFLUsageGames')) > 0 for p in players) else 'unavailable',
         "usage": sum(_to_float(p.get('NFLUsageGames')) > 0 for p in players),
+        "usage_current_matches": sum(p.get('NFLUsageSource') == 'current_season' for p in players),
+        "usage_prior_matches": sum(p.get('NFLUsageSource') == 'prior_season' for p in players),
         "usage_season": next((p.get('NFLUsageSeason') for p in players if p.get('NFLUsageSeason')), None),
         "usage_checked_at": next((p.get('NFLUsageCheckedAt') for p in players if p.get('NFLUsageCheckedAt')), None),
         "changes": changes,
@@ -1093,6 +1112,7 @@ def clear_nfl_context(players: List[Dict[str, Any]]) -> None:
         for key in (
             "NFLKickingHistory", "NFLKickerOpportunities", "KickerProjection",
             "NFLAdjRaw", "NFLAdjScore", "NFLUsage", "NFLUsageGames", "NFLUsageSeason",
+            "NFLUsageSource", "NFLUsageSourceURL", "NFLUsageState", "NFLUsageCheckedAt",
             "NFLUsageScore", "NFLMatchupScore", "NFLRole", "NFLRoleScore",
             "NFLRoleBase", "NFLRoleBaseScore", "NFLReplacementBoost", "NFLReplacementFor",
             "NFLDepthPosition", "NFLDepthOrder", "NFLPractice", "NFLWeatherScore",
@@ -1104,4 +1124,6 @@ def clear_nfl_context(players: List[Dict[str, Any]]) -> None:
             "LiveStatusChanged", "LiveStatusConflict",
         ):
             player.pop(key, None)
+
+
 

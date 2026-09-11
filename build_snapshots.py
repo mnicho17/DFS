@@ -66,4 +66,6 @@ def freshness_text(summary, replay=False):
     status = summary.get('sleeper_state') or 'unknown'
     odds = summary.get('odds_state') or 'unknown'
     usage = summary.get('usage_state') or 'unknown'
-    return f'{mode}. Last recorded check: {checked}. Player source: {status}; usage: {usage} (season {summary.get("usage_season") or "unknown"}, matches {summary.get("usage", "unknown")}); odds: {odds}.'
+    evidence = (f'current {summary["usage_current_matches"]}, prior {summary.get("usage_prior_matches",0)}'
+                if 'usage_current_matches' in summary else f'season {summary.get("usage_season") or "unknown"}, matches {summary.get("usage", "unknown")}')
+    return f'{mode}. Last recorded check: {checked}. Player source: {status}; usage: {usage} ({evidence}); odds: {odds}.'
