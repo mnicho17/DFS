@@ -288,7 +288,7 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(window.tabs_workspace_controls.count(), 3)
         self.assertEqual(
             [window.tabs_workspace_controls.tabText(i) for i in range(3)],
-            ["Build Strategy", "Portfolio Rules", "Data and Learning"],
+            ["Build", "Portfolio Rules", "Data and Learning"],
         )
         self.assertTrue(window.tabs_workspace_controls.isHidden())
         self.assertIn("Strategic", window.lbl_workspace_summary.text())

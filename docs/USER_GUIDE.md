@@ -46,7 +46,7 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 
 3. Choose **Showdown** or **Classic** and set the lineup count. If you saved a setup earlier, choose **Settings > Apply or Delete Recipes** first.
 
-4. Review **Build Strategy** and **Portfolio Rules**.
+4. Review **Build** and **Portfolio Rules**.
 
 5. For NFL Classic, turn on **NFL SIM Edge** when you want field-based tournament scoring.
 
@@ -68,7 +68,7 @@ The pictured examples use representative NFL data. Player names, projections, ow
 
 
 
-The detailed Build Strategy, Portfolio Rules, and Data and Learning controls are folded away at startup so the player pool and generated lineups get most of the window. The quiet recipe summary beside the sport shows the active build style, salary approach, and, when applicable, SIM depth and contest preset. Choose **Settings > Show Build Controls** to change the detailed recipe. Choose **Settings > Show Saved Portfolio** to hide or restore the saved-lineup panel.
+The detailed Build, Portfolio Rules, and Data and Learning controls are folded away at startup so the player pool and generated lineups get most of the window. The quiet recipe summary beside the sport shows the active build style, salary approach, and, when applicable, SIM depth and contest preset. Choose **Settings > Show Build Controls** to change the detailed recipe. Choose **Settings > Show Saved Portfolio** to hide or restore the saved-lineup panel.
 
 
 
@@ -184,11 +184,11 @@ Reopen Slate Readiness after generation. The portfolio check then compares salar
 
 
 
-## 6. Build Strategy
+## 6. Build
 
 
 
-The **Build Strategy** tab controls how candidates are created and ranked. Available choices vary by sport and contest type.
+The **Build** tab controls how candidates are created and ranked. Available choices vary by sport and contest type.
 
 
 
@@ -370,15 +370,15 @@ Large candidate pools, NFL simulation, and restrictive portfolio rules take more
 
 
 
-![Deep Build control in the NFL Classic Build Strategy tab](images/deep-build.png)
+![Deep Build control in the NFL Classic Build tab](images/build-controls.png)
 
 
 
-Choose **Compute settings** for longer builds. The default remains five minutes, with Auto pools and four search seeds. You can choose 1–60 minutes, up to 20,000 candidate lineups, a 2,000-lineup validation shortlist, 10,000 sampled validation opponents, 4–32 search seeds, and 250–1,000 screening scenarios. The main Scenarios control allows up to 10,000 validation scenarios; Deep uses at least 2,500. Screening uses the smaller of its configured count and the main scenario setting, with a minimum of 250. Its opponent field stays smaller than the validation field.
+Choose a **Compute profile** in **Build**, then **Search & output** for search scope, selection mode and optional resource details. Fast remains the startup default; named Deep profiles apply their listed counts together. You can choose 1–60 minutes, up to 20,000 candidate lineups, a 2,000-lineup validation shortlist, 10,000 sampled validation opponents, 4–32 search seeds, and 250–1,000 screening scenarios. The Custom profile allows up to 10,000 validation scenarios; Deep uses at least 2,500. Screening uses the smaller of its configured count and the validation scenario setting, with a minimum of 250. Its opponent field stays smaller than the validation field.
 
 
 
-![Deep compute settings](images/deep-compute-settings.png)
+![Deep compute settings](images/deep-profile-controls.png)
 
 
 
@@ -668,7 +668,7 @@ Build diagnostics contain aggregate settings, timing, counts, and generalized wa
 
 
 
-In **Build Strategy → Deep → Compute settings**, choose a tier to set every resource control, including validation scenarios. Choose **Custom** to edit the current tier's values. OK saves the changes; Cancel leaves the active settings unchanged. Tier selection is recovered from its saved values, and recipes include those values. Changing the main Scenarios control can turn a preset into Custom.
+In **Build → Compute profile**, choose a Deep tier to set every resource control, including validation scenarios. **Search & output** contains search scope and output selection. Resource numbers are collapsed for presets; **Show resource details** reveals their read-only values. Choose **Custom** to edit the current tier's values. OK saves the changes; Cancel leaves the active settings unchanged. Tier selection is recovered from its saved values, and recipes include those values. Choosing Custom opens the resource editor; changes to those values can identify the profile as Custom.
 
 
 
@@ -704,7 +704,7 @@ The time cap does not force the app to keep running. A 60-minute tier can finish
 
 
 
-Load a one-game NFL Showdown slate, enable **Showdown Deep SIM**, select **Deep (custom budget)**, and choose a compute tier. Start with **Baseline**. The tier sets candidate count, shortlist, sampled opponents, search seeds, screening/validation scenarios, and the time cap. Showdown timings are not yet calibrated; the dialog does not show Classic's Acer estimates.
+Load a one-game NFL Showdown slate and choose a Deep tier in **Build > Compute profile**. Start with **Baseline**. The tier sets candidate count, shortlist, sampled opponents, search seeds, screening/validation scenarios, and the time cap. Showdown timings are not yet calibrated; the dialog does not show Classic's Acer estimates.
 
 
 
@@ -736,7 +736,7 @@ This version uses a generic tournament payout proxy and relative candidate metri
 
 
 
-For NFL Classic or NFL Showdown, enable SIM, choose **Deep**, and open **Compute settings**. Select **Search all five build styles** to share the tier's candidate and time budgets across Strategic, Balanced, Contrarian, Chalk, and Randomized. Each style uses the configured search seeds. Each search receives a share of the remaining generation time so one style cannot consume the whole generation phase. Identical entries are removed before screening; a different Showdown Captain remains a different entry. The report lists actual style candidate counts before deduplication. Locks, fades and player eligibility remain active; ownership preference remains a separate setting.
+For NFL Classic or NFL Showdown, choose a Deep profile and open **Search & output**. Select **Search all five build styles** to share the tier's candidate and time budgets across Strategic, Balanced, Contrarian, Chalk, and Randomized. Each style uses the configured search seeds. Each search receives a share of the remaining generation time so one style cannot consume the whole generation phase. Identical entries are removed before screening; a different Showdown Captain remains a different entry. The report lists actual style candidate counts before deduplication. Locks, fades and player eligibility remain active; ownership preference remains a separate setting.
 
 
 
@@ -1213,3 +1213,12 @@ python scripts/compare_showdown_fields.py "snapshot.json" --bank "comparison-ban
 ```
 
 On one frozen Rams–49ers input, 681 diagnostic candidates and 2,000 shared scenarios produced mean opponent salaries of $45,945 versus $49,067. The top-150 average top-1% rate changed from 9.90% to 4.57%; two-QB lineups changed from 109 to 105 of 150. Candidate mean scores were identical. This shows sensitivity to opponent construction, not improved predictive accuracy or a calibrated two-QB rate. The new prior still needs testing across independent slates; observed winners are not used to tune this comparison.
+
+
+## Simplified build controls
+
+Choose **Settings > Show Build Controls** if the controls are folded away. The **Build** tab has one **Compute profile** selector: Fast, Baseline, Balanced, Thorough, Extended, Maximum and Custom. Choosing a Deep profile enables SIM and applies its counts together while preserving search scope, output selection and portfolio rules. Custom opens the resource editor with current values. Fast retains the existing Fast settings; NFL Classic can still enable its optional SIM and change its scenario count.
+
+**Search & output** groups all-style search and Individual ranking/Portfolio selection. Preset resource counts are collapsed and read-only; use Show resource details to inspect them, or Custom to edit them. The main summary shows the active scope, selection method, time ceiling and validation count. When all five styles are searched, the single Build style selector is disabled and labeled accordingly. Named time profiles do not choose a build style or a portfolio strategy for you.
+
+Ownership sampling count, the Showdown ownership-template option and the ownership-estimate action now live in **Data and Learning > Ownership estimates**. Ownership preference and influence remain in Build because they affect candidate construction. Existing saved recipes and snapshots retain their underlying settings.

@@ -7577,57 +7577,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         strategy_grid.setVerticalSpacing(6)
 
-        strategy_grid.addWidget(QtWidgets.QLabel("Build style"), 0, 0)
+        from build_controls_ui import setup_build_controls
+        setup_build_controls(self, strategy_panel, strategy_grid)
 
-        strategy_grid.addWidget(self.combo_build_style, 0, 1)
-
-        strategy_grid.addWidget(QtWidgets.QLabel("Ownership mode"), 0, 2)
-
-        strategy_grid.addWidget(self.combo_build_own_mode, 0, 3)
-
-        strategy_grid.addWidget(QtWidgets.QLabel("Weight"), 1, 0)
-
-        strategy_grid.addWidget(self.spin_build_own_weight, 1, 1)
-
-        strategy_grid.addWidget(QtWidgets.QLabel("Salary use"), 1, 2)
-
-        strategy_grid.addWidget(self.combo_salary_strategy, 1, 3)
-
-        strategy_grid.addWidget(QtWidgets.QLabel("Ownership sims"), 2, 0)
-
-        strategy_grid.addWidget(self.spin_own_sims, 2, 1)
-
-        strategy_grid.addWidget(self.chk_sd_template_sim, 2, 2)
-
-        strategy_grid.addWidget(btn_own_sim, 2, 3)
-
-        self.lbl_mlb_stack_pref = QtWidgets.QLabel("MLB stack")
-
-        strategy_grid.addWidget(self.lbl_mlb_stack_pref, 3, 0)
-
-        strategy_grid.addWidget(self.combo_mlb_stack_pref, 3, 1)
-
-        strategy_grid.addWidget(self.lbl_field_preset, 3, 2)
-
-        strategy_grid.addWidget(self.combo_field_preset, 3, 3)
-
-        strategy_grid.addWidget(self.chk_nfl_contest_sim, 3, 4)
-
-        self.lbl_nfl_scenarios = QtWidgets.QLabel("Scenarios")
-
-        strategy_grid.addWidget(self.lbl_nfl_scenarios, 3, 5)
-
-        strategy_grid.addWidget(self.spin_nfl_sim_scenarios, 3, 6)
-
-        strategy_grid.addWidget(self.lbl_nfl_compute_mode, 4, 4)
-
-        strategy_grid.addWidget(self.combo_nfl_compute_mode, 4, 5, 1, 2)
-
-        strategy_grid.addWidget(self.btn_deep_compute, 4, 2, 1, 2)
-
-        strategy_grid.setColumnStretch(7, 1)
-
-        self.tabs_workspace_controls.addTab(strategy_panel, "Build Strategy")
+        self.tabs_workspace_controls.addTab(strategy_panel, "Build")
 
 
 
@@ -7695,6 +7648,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         data_grid.addWidget(btn_clear_order, 3, 1)
 
+        ownership_group = QtWidgets.QGroupBox("Ownership estimates")
+        ownership_layout = QtWidgets.QFormLayout(ownership_group)
+        ownership_layout.addRow("Sampling count", self.spin_own_sims)
+        ownership_layout.addRow(self.chk_sd_template_sim)
+        ownership_layout.addRow(btn_own_sim)
+        data_grid.addWidget(ownership_group, 0, 2, 4, 1)
         data_grid.setColumnStretch(3, 1)
 
         btn_clear_team_adj.setVisible(True)
@@ -8954,35 +8913,24 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.btn_deep_compute.setToolTip("Search: " + ("All five styles" if search else "Selected style") + "\nOutput: " + self.deep_compute_settings["selection_mode"])
 
         self.btn_deep_compute.setText(f"Compute: {label}{search} ({self.deep_compute_settings['minutes']} min)…")
+        from build_controls_ui import sync_build_controls
+        sync_build_controls(self)
 
 
 
-    def _edit_deep_compute_settings(self) -> None:
+    def _edit_deep_compute_settings(self, custom=False) -> None:
 
         dialog = QtWidgets.QDialog(self)
 
         dialog.setWindowTitle("Deep compute settings — NFL " + ("Showdown" if self._contest_mode() == "showdown" else "Classic"))
 
-        dialog.setMinimumWidth(640)
+        dialog.setMinimumWidth(590)
 
         layout = QtWidgets.QFormLayout(dialog)
+        layout.setSpacing(10)
 
-        note = QtWidgets.QLabel(
-
-            "Time is a maximum, not a required duration. Builds may finish early.\n"
-
-            "Candidate pools contain lineups; player eligibility rules stay active.\n"
-
-            "Auto preserves the original pool sizes. Larger pools use more time and memory.\n"
-
-            "Choose a tier to set all counts, or Custom to edit them."
-
-        )
-
+        note = QtWidgets.QLabel("Choose how broadly to search and how to select the output. The profile sets a maximum time; builds can finish early.")
         note.setWordWrap(True)
-
-        note.setMinimumHeight(note.fontMetrics().lineSpacing() * 5)
-
         layout.addRow(note)
 
         profile_combo = QtWidgets.QComboBox(dialog)
@@ -8991,7 +8939,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         profile_combo.addItems(list(DEEP_PROFILES) + ["Custom"])
 
-        profile_combo.setCurrentText(matching_deep_profile(self.deep_compute_settings, self.spin_nfl_sim_scenarios.value()))
+        profile_combo.setCurrentText("Custom" if custom else matching_deep_profile(self.deep_compute_settings, self.spin_nfl_sim_scenarios.value()))
 
         layout.addRow("Compute tier", profile_combo)
 
@@ -9017,6 +8965,14 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         layout.addRow("Output selection", selection)
 
+        details_toggle = QtWidgets.QCheckBox("Show resource details", dialog)
+        details_toggle.setObjectName("deepResourceDetailsToggle")
+        details = QtWidgets.QGroupBox("Resource limits", dialog)
+        details.setObjectName("deepResourceDetails")
+        custom_layout = QtWidgets.QFormLayout(details)
+        details_toggle.toggled.connect(details.setVisible)
+        layout.addRow(details_toggle)
+        layout.addRow(details)
         controls = {}
 
         for key, (label, default, low, high, step) in DEEP_CONTROLS.items():
@@ -9039,7 +8995,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             controls[key] = spin
 
-            layout.addRow(label, spin)
+            custom_layout.addRow(label, spin)
 
         validation = QtWidgets.QSpinBox(dialog)
 
@@ -9053,7 +9009,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         validation.setValue(self.spin_nfl_sim_scenarios.value())
 
-        layout.addRow("Validation scenarios (min. 2,500)", validation)
+        custom_layout.addRow("Validation scenarios (min. 2,500)", validation)
 
         estimate = QtWidgets.QLabel(dialog)
 
@@ -9123,6 +9079,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 spin.setEnabled(profile is None)
 
+            details_toggle.setChecked(profile is None)
+            details.setVisible(profile is None)
             refresh_estimate()
 
 
@@ -16712,4 +16670,3 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             for col, txt in enumerate(cells):
 
                 self.tbl_saved_cl.setItem(row, col, QtWidgets.QTableWidgetItem(txt))
-
