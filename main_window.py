@@ -7424,6 +7424,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         settings_menu.addAction("Long Search / Resume...", self.on_long_search)
         settings_menu.addAction("Ranking Repeatability...", self.on_ranking_repeatability)
         settings_menu.addAction("Ownership & Leverage...", self.on_ownership_leverage)
+        settings_menu.addAction("Ownership Sensitivity...", self.on_ownership_sensitivity)
         settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
         settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)

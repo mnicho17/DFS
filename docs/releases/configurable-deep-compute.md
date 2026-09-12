@@ -1,5 +1,9 @@
 # Configurable Deep compute (test branch)
 
+### Paired ownership sensitivity
+
+Settings > Ownership Sensitivity evaluates fixed Classic and Showdown candidate banks against baseline, higher ownership for saved favorites, and concentrated ownership. Scoring inputs are separated from opponent ownership, with matching outcome seeds per batch. Classic position totals and Showdown Captain/FLEX totals and player caps are preserved. Actual targets and sampled-field mismatch are reported. Defaults run three batches of three profiles at 5,000 scenarios; incomplete batches are excluded. Candidate/score guards reject invalid comparisons. Copy Report and automatic JSON/CSV/text include per-candidate results, target changes, seeds and field diagnostics. Older banks may be used because every baseline is recalculated under current code; strict Ranking Repeatability compatibility is unchanged. No selected outputs, exposure limits or forecasts are modified. This tests hypothetical ownership assumptions, not historical accuracy. Guide and controls screenshot included.
+
 - Add 1–60 minute NFL Classic Deep budgets and configurable candidate, shortlist, opponent-field, screening, and search-seed counts.
 - Raise the scenario control to 10,000 while preserving the Deep validation minimum.
 - Preserve Auto pool sizes and five-minute defaults; persist compute settings and include them in recipes and diagnostic reports.

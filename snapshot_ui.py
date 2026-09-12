@@ -8,6 +8,13 @@ from learning_db import load_nfl_field_calibration
 
 
 class SnapshotActions:
+    def on_ownership_sensitivity(self):
+        if self._snapshot_busy():
+            self.status.showMessage('Wait for the current build to finish.',5000)
+            return
+        from ownership_sensitivity_ui import SensitivityDialog
+        SensitivityDialog(self).exec_()
+
     def on_ownership_leverage(self):
         from ownership_ui import OwnershipDialog
         OwnershipDialog(self,getattr(self,'last_sim_report',{}).get('ownership_leverage') or {}).exec_()

@@ -4,6 +4,8 @@
 
 A Windows desktop lineup optimizer for DraftKings NFL, MLB, NBA, NHL, and WNBA slates.
 
+NFL Classic and Showdown support **Settings > Ownership Sensitivity**: compare a saved Deep bank against baseline, higher ownership for favorites, and concentrated ownership, with paired player outcomes. Defaults run three batches of three profiles at 5,000 scenarios each. Reports save automatically and include Copy Report. See the [ownership sensitivity guide](docs/USER_GUIDE.md#ownership-sensitivity).
+
 
 
 ## User documentation

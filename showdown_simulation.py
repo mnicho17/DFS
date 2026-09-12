@@ -112,13 +112,14 @@ def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0,
 
 
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
-                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1'):
+                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None):
     if not candidates:
         return {"lineups": [], "report": {"scenarios": 0, "field_lineups": 0}}
     pool = active_showdown_players(players)
     for lineup in candidates:
         validate_showdown_lineup(lineup, pool, salary_cap)
-    field = generate_showdown_field(pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback, model=field_model)
+    field_pool = active_showdown_players(opponent_players) if opponent_players is not None else pool
+    field = generate_showdown_field(field_pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback, model=field_model)
     if not field:
         return {"lineups": list(candidates), "report": {"scenarios": 0, "field_lineups": 0}}
     # Three bootstrap fields share outcomes within each scenario, as in Classic.
@@ -190,7 +191,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         result.append(lu)
     from field_diagnostics import summarize_field
     return {"lineups": result, "report": {
-        "field_diagnostic": summarize_field(field, pool, showdown=True, salary_cap=salary_cap),
+        "field_diagnostic": summarize_field(field, field_pool, showdown=True, salary_cap=salary_cap),
         "scenarios": completed, "field_lineups": len(field), "opponent_field_samples": 3,
         "model": "showdown-shared-outcomes-v1", "field_preset": "Showdown ownership sample",
         "payout_model": "payout-shape-proxy-v1", "contest_aware": False,

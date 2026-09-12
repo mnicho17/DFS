@@ -1233,6 +1233,7 @@ def simulate_nfl_contest(
     field_size: Optional[int] = None,
     field_config: Optional[Dict[str, Any]] = None,
     seed: int = 90210,
+    opponent_players: Optional[Sequence[Dict[str, Any]]] = None,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     cancel_callback: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
@@ -1270,7 +1271,7 @@ def simulate_nfl_contest(
         salary_cap * _number(config.get("min_salary_pct"), 0.98),
     )
     field_lineups, role_pool = generate_nfl_field_lineups(
-        players,
+        opponent_players if opponent_players is not None else players,
         field_lineup_count,
         salary_cap=salary_cap,
         seed=seed + 1,
@@ -1278,6 +1279,9 @@ def simulate_nfl_contest(
         field_config=config,
     )
     field_used_fallback = not bool(field_lineups)
+    field_input_pool = role_pool
+    if opponent_players is not None:
+        role_pool = build_nfl_role_pool(players, preserve_locks=False)
     if not field_lineups:
         # A tiny or heavily locked fixture can still be graded against candidates.
         field_lineups = [list(lineup) for lineup in candidate_lists]
@@ -1298,7 +1302,7 @@ def simulate_nfl_contest(
     }
     generated_field_summary = _summarize_generated_field(field_lineups)
     from field_diagnostics import summarize_field
-    field_diagnostic = summarize_field(field_lineups, role_pool, salary_cap=salary_cap,
+    field_diagnostic = summarize_field(field_lineups, field_input_pool, salary_cap=salary_cap,
                                       fallback=field_used_fallback)
 
     scenario_count = max(1, int(scenarios or 1))

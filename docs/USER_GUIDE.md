@@ -1238,6 +1238,8 @@ Results & Learning separately compares ownership forecasts from the earliest mat
 
 ## Ranking repeatability
 
+For hypothetical ownership changes, use **Ownership Sensitivity** below. It recalculates every profile, including baseline, and can reuse older candidate banks. Ranking Repeatability still requires matching simulation code.
+
 After updating, complete an NFL Deep build to automatically save its independently validated shortlist under `history/ranking-banks`. This captures the candidates before output selection, including Captain identities, original ranking metrics, player inputs and opponent configuration. Saving failure does not discard the build; its report indicates whether the bank was saved. Existing snapshots cannot recover earlier shortlists, and replaying a snapshot under new code may generate a different set.
 
 Open **Settings > Ranking Repeatability**, choose the saved bank, and run 2–10 batches with 2,000, 5,000 or 10,000 scenarios each. The default is five batches of 5,000. Each batch generates fresh opponents and player outcomes for the identical candidate set. Keep the app open; allow several minutes per batch. Cancel stops work and retains statistics from completed batches only. Repeating the same settings deliberately uses the same seed sequence; it is not another independent experiment.
@@ -1255,3 +1257,23 @@ NFL Classic and Deep Showdown build reports describe projection sources and usag
 Fresh NFL loading now checks the prior season separately for players missing from a partial current-season statistics file. Current-season records take precedence, including zero opportunities. Prior-season usage remains labeled and receives the existing reduced historical weighting. Kickers retain their separate opportunity-history path. Manual and imported forecasts still take precedence. This is a coverage correction, not results-driven training.
 
 Reload the salary CSV to adopt fresh evidence. Saved snapshot replay preserves its original inputs. Source counts do not prove accuracy, and missing source data can still leave a player on role-based or historical-average estimates.
+
+## Ownership sensitivity
+
+Open **Settings > Ownership Sensitivity** and select a saved Deep bank. Both NFL Classic and Showdown are supported. Older banks with complete explicit ownership percentages can be used without another build: baseline and both alternatives are recalculated under the current model. Saved ranks label candidates; old SIM rates are not compared with new ones. The saved top150 identifies favorites for the stress test only.
+
+Every batch runs three profiles:
+
+- **Baseline:** the bank's original ownership targets.
+- **Higher ownership for favorites:** up to five players per slot with positive saved-contender-minus-field gaps receive additional raw ownership weight equal to the greater of five percentage points or their original ownership. Redistribution can reduce their final increase; the report shows actual targets.
+- **Concentrated field:** raise ownership weights to power 1.35 before redistribution, concentrating ownership around popular players.
+
+Classic preserves each position's original ownership total. Showdown preserves 100% Captain and 500% FLEX separately, with combined player exposure capped at 100%. Salary and roster constraints remain in force; target ownership is approximate and realized constructions can change. The report shows actual field mismatch, salary and duplication counts.
+
+Default **3 batches × 3 profiles × 5,000 scenarios** runs nine simulations. Choose 1–5 batches and 2,000, 5,000 or 10,000 scenarios per profile. The window displays total work; allow several minutes per profile depending on bank size and hardware. Keep the app open. Cancel retains only complete three-profile batches. Repeating identical settings uses identical seeds. The saved bank is read-only; selected lineups and exposure limits are unchanged.
+
+Scoring inputs, candidate identities and outcome seeds stay fixed within each batch; only opponent ownership inputs change. A changed candidate identity or mean candidate score rejects the comparison. Reports show current baseline leaders, alternative top1 rates, percentage-point changes, rank ranges and top150 batch counts. Exact rank ties preserve bank order; banks smaller than 150 use the whole bank. Sample roster matches are not full-contest duplicate predictions; zero matches do not establish uniqueness.
+
+**Copy Report** copies the displayed analysis. Full candidate/profile/batch results, bank and model IDs, target changes, seeds and field diagnostics save as JSON, CSV and text under `history/ownership-checks`. Back up that folder and `history/ranking-banks`. Reports include player names but omit account settings and source paths. These are hypothetical model stress tests, not calibrated ownership forecasts, historical validation or automatic strategy recommendations.
+
+![Ownership sensitivity controls](images/ownership-sensitivity.png)
