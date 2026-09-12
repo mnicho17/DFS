@@ -112,7 +112,7 @@ def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0,
 
 
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
-                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None):
+                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None):
     if not candidates:
         return {"lineups": [], "report": {"scenarios": 0, "field_lineups": 0}}
     pool = active_showdown_players(players)
@@ -140,6 +140,8 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         if cancel_callback and cancel_callback():
             break
         outcomes = _scenario_outcomes(rng, pool, script_counter=scripts)
+        if outcome_transform is not None:
+            outcomes = outcome_transform(outcomes)
         ranked = sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
         top1, top5, cash, bust = [ranked[int(q * (len(ranked) - 1))] for q in (0.99, 0.95, 0.8, 0.4)]
         for i, lineup in enumerate(candidates):
@@ -190,8 +192,10 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         lu.sim_scenario_values = values[i]
         result.append(lu)
     from field_diagnostics import summarize_field
+    from build_snapshots import fingerprint
     return {"lineups": result, "report": {
         "field_diagnostic": summarize_field(field, field_pool, showdown=True, salary_cap=salary_cap),
+        "sensitivity_field_id": fingerprint([showdown_signature(lu) for lu in field]) if outcome_transform is not None else None,
         "scenarios": completed, "field_lineups": len(field), "opponent_field_samples": 3,
         "model": "showdown-shared-outcomes-v1", "field_preset": "Showdown ownership sample",
         "payout_model": "payout-shape-proxy-v1", "contest_aware": False,

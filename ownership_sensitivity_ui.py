@@ -23,6 +23,7 @@ class SensitivityWorker(QtCore.QObject):
 
 
 class SensitivityDialog(RepeatabilityDialog):
+    worker_type=SensitivityWorker
     def __init__(self,parent=None):
         super().__init__(parent);self.setWindowTitle('Ownership Sensitivity')
         self.findChildren(QtWidgets.QLabel)[0].setText('Compare baseline, higher ownership for saved favorites, and a concentrated field. Each batch runs all three profiles with identical scoring inputs and seeds. Allow several minutes per profile. Older candidate banks can be re-evaluated; all baselines are recalculated. Reports save under history/ownership-checks.')
@@ -48,7 +49,7 @@ class SensitivityDialog(RepeatabilityDialog):
         self.review_button.clicked.connect(lambda:open_review(self))
         self.text.setPlainText('Three hypothetical ownership profiles per batch. Original lineups and forecasts remain unchanged.' if self.bank.count() else 'No saved candidate bank found. Complete an NFL Deep build first.')
     def begin(self):
-        self.thread=QtCore.QThread(self);self.worker=SensitivityWorker(self.bank.currentData(),self.batches.value(),self.scenarios.currentData())
+        self.thread=QtCore.QThread(self);self.worker=self.worker_type(self.bank.currentData(),self.batches.value(),self.scenarios.currentData())
         self.worker.moveToThread(self.thread);self.thread.started.connect(self.worker.run)
         self.worker.progress.connect(self.text.setPlainText);self.worker.finished.connect(self.text.setPlainText)
         self.worker.finished.connect(self.thread.quit);self.worker.finished.connect(self.worker.deleteLater)

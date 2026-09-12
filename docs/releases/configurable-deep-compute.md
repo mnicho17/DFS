@@ -1,5 +1,9 @@
 # Configurable Deep compute (test branch)
 
+### Projection sensitivity
+
+Classic and Showdown saved banks now support baseline, 15% lower production for the five most-used skill players, and mean-preserving 0.75/1.25x outcome variation for explicit rookies or limited/missing recorded usage. These are scoring stress assumptions, not fitted workload corrections. Identical opponent roster and pre-stress outcome fingerprints enforce paired comparisons. Transformed player scores apply equally to candidates and opponents, preserving Captain 1.5x scoring. No touch redistribution or specialist/game-script recalculation is claimed. Full target reasons, player-mean changes, per-lineup batch scores and evidence save automatically; Copy Report and sortable review are available. Separate projection columns can coexist with ownership columns through the renamed Comparisons menu, without claiming a joint stress. Old reports remain historical reviews; current-model matching is required for live attachments. Guide and inspected controls screenshot updated.
+
 ### Ownership comparison tables
 
 Completed ownership reports now reopen as sortable full-bank tables without another simulation. Classic and Showdown result tables can attach baseline, lowest tested rate, drop and observed rank bounds through Ownership > Load comparison. Full saved player inputs and Captain identity must match; changed inputs display unknown, and historical model reports are review-only. Numeric sorting spans every output page, preserves saved identities, and leaves unknowns last. Best first and Clear comparison restore normal SIM order. Existing saved report formats remain supported through their matching integrity-checked candidate bank. Documentation and inspected table screenshot included.

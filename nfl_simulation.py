@@ -1234,6 +1234,7 @@ def simulate_nfl_contest(
     field_config: Optional[Dict[str, Any]] = None,
     seed: int = 90210,
     opponent_players: Optional[Sequence[Dict[str, Any]]] = None,
+    outcome_transform: Optional[Callable] = None,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     cancel_callback: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
@@ -1304,6 +1305,7 @@ def simulate_nfl_contest(
     from field_diagnostics import summarize_field
     field_diagnostic = summarize_field(field_lineups, field_input_pool, salary_cap=salary_cap,
                                       fallback=field_used_fallback)
+    from build_snapshots import fingerprint
 
     scenario_count = max(1, int(scenarios or 1))
     rng = random.Random(seed)
@@ -1327,6 +1329,8 @@ def simulate_nfl_contest(
         if cancel_callback and cancel_callback():
             break
         outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
+        if outcome_transform is not None:
+            outcomes = outcome_transform(outcomes)
         active_field_keys = opponent_field_banks[scenario_index % len(opponent_field_banks)]
         field_scores = sorted(
             sum(outcomes.get(key, 0.0) for key in signature)
@@ -1570,6 +1574,7 @@ def simulate_nfl_contest(
             "learned_entries": int(config.get("learned_entries", 0) or 0),
             "field_comparison": field_comparison,
             "field_diagnostic": field_diagnostic,
+            "sensitivity_field_id": fingerprint(field_keys) if outcome_transform is not None else None,
             "field_model_preset_comparison": field_model_preset_comparison,
             "contest_aware": bool(contest_profile),
             "contest_profile": dict(contest_profile or {}),

@@ -10,7 +10,7 @@ NFL Classic and Showdown support **Settings > Ownership Sensitivity**: compare a
 
 ## User documentation
 
-Completed ownership sensitivity reports can be reopened as sortable tables. Use **Settings > Ownership Sensitivity > View saved comparison**, or **Ownership… > Load comparison** beside the Classic/Showdown output table to add comparison columns to exact matching player inputs. No new simulation is required.
+Completed sensitivity reports can be reopened as sortable tables. Use **Settings > Ownership Sensitivity > View saved comparison**, or **Comparisons… > Load ownership comparison** beside the Classic/Showdown output table to attach exact matching player inputs. **Settings > Projection Sensitivity** adds explicit lower-production and limited-history outcome stresses on the same saved banks, with separate projection comparison columns and automatic reports.
 
 
 
