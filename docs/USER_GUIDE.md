@@ -1270,7 +1270,7 @@ Every batch runs three profiles:
 
 Classic preserves each position's original ownership total. Showdown preserves 100% Captain and 500% FLEX separately, with combined player exposure capped at 100%. Salary and roster constraints remain in force; target ownership is approximate and realized constructions can change. The report shows actual field mismatch, salary and duplication counts.
 
-Default **3 batches × 3 profiles × 5,000 scenarios** runs nine simulations. Choose 1–5 batches and 2,000, 5,000 or 10,000 scenarios per profile. The window displays total work; allow several minutes per profile depending on bank size and hardware. Keep the app open. Cancel retains only complete three-profile batches. Repeating identical settings uses identical seeds. The saved bank is read-only; selected lineups and exposure limits are unchanged.
+Default **3 batches × 3 profiles × 5,000 scenarios** runs nine simulations. Choose 1–5 batches and 2,000, 5,000 or 10,000 scenarios per profile. The window displays total work; allow several minutes per profile depending on bank size and hardware. Keep the app open. Cancel retains only complete all-profile batches. Repeating identical settings uses identical seeds. The saved bank is read-only; selected lineups and exposure limits are unchanged.
 
 Scoring inputs, candidate identities and outcome seeds stay fixed within each batch; only opponent ownership inputs change. A changed candidate identity or mean candidate score rejects the comparison. Reports show current baseline leaders, alternative top1 rates, percentage-point changes, rank ranges and top150 batch counts. Exact rank ties preserve bank order; banks smaller than 150 use the whole bank. Sample roster matches are not full-contest duplicate predictions; zero matches do not establish uniqueness.
 
@@ -1297,7 +1297,7 @@ Column clicks sort all current output pages while preserving saved-lineup identi
 
 ## Projection sensitivity
 
-Open **Settings > Projection Sensitivity**, select an existing Classic or Showdown bank, and run the comparison. A new Deep build is not required; every baseline is rescored using current code. Defaults are **3 batches × 3 profiles × 5,000 scenarios** (nine simulations). Keep the app open and allow several minutes per profile. Cancel preserves only fully completed three-profile batches. Repeating the same settings uses the same seeds.
+Open **Settings > Projection Sensitivity**, select an existing Classic or Showdown bank, and run the comparison. A new Deep build is not required; every baseline is rescored using current code. Defaults are **3 batches × up to 8 profiles × 5,000 scenarios** (up to 24 simulations). Keep the app open and allow several minutes per profile. Cancel preserves only fully completed all-profile batches. Repeating the same settings uses the same seeds.
 
 The profiles are explicit stress assumptions:
 
@@ -1321,3 +1321,8 @@ NFL Classic and Showdown keep two separate records: recent form from the latest 
 Projection Sensitivity's wider-outcomes profile targets explicit rookie flags, fewer than four matched games across those available seasons, or unknown history. Each target explains why and lists current/prior counts separately from recent-window games. Missing or ambiguous matches are unknown, never observed zero games. Unavailable source coverage is labeled. Players with at least four matched games across the available seasons are excluded from this particular stress unless explicitly marked as rookies.
 
 Old snapshots and banks stay frozen. To capture full-season evidence, update the app, reload the salary CSV with automatic NFL data enabled, and complete a new Deep build. Then run **Settings > Projection Sensitivity** on that new bank. Replaying an old snapshot or testing an old bank does not fetch new history. Legacy reports remain viewable; new checks on old banks label missing full-season evidence explicitly. This change improves stress targeting and reports; it does not change recent-form workload weights or automatically adjust projections.
+
+
+Projection Sensitivity now tests each of the five saved favorites individually at 15% lower simulated production, alongside baseline, the combined reduction and wider-history outcomes. Classic and Showdown both support this. Defaults run up to eight profiles per batch: 3 batches at 5,000 scenarios means 24 simulations, roughly 2.7 times the former three-profile workload. The dialog shows the exact profile count for the selected bank. Existing banks can be reused; no new Deep build is required for these additional tests.
+
+Copy Report identifies each displayed baseline leader's largest individual decline and summarizes each tested player's effect across the baseline top150. JSON/CSV retain all candidate/profile/batch results. Effects apply equally to opponents and candidates, with shared Captain scoring; they do not redistribute touches or add up to the combined effect. Every requested profile must finish before a batch counts. Saved comparison columns include all tested profiles in lowest-rate/rank summaries; older three-profile reports remain viewable. This diagnoses dependence on forecasts, not proven projection errors or automatic exposure changes.

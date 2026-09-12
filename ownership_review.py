@@ -33,8 +33,12 @@ def load_review(path, bank_folder, comparison='ownership'):
         raise ValueError('Choose a completed comparison with all requested batches.')
     if report.get('kind') != payload['kind'] or report.get('input_id') != payload['input_id'] or report.get('saved_model') != payload['model_version']:
         raise ValueError('Comparison does not match its saved bank.')
+    if comparison=='projection' and report.get('sensitivity_version')=='projection-stress-v3':
+        from projection_sensitivity import comparison_targets
+        profiles=tuple(comparison_targets(payload, report.get('individual_tests',True)))
+        if report.get('profiles')!=list(profiles): raise ValueError('Invalid projection profile definitions.')
     reference = candidates(payload)
-    if report.get('candidate_count') != len(reference) or len(report.get('rows', [])) != 3 * len(reference):
+    if report.get('candidate_count') != len(reference) or len(report.get('rows', [])) != len(profiles) * len(reference):
         raise ValueError('Incomplete candidate comparison.')
     grouped = {}
     for row in report['rows']:

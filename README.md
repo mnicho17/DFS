@@ -628,3 +628,8 @@ NFL Deep builds now save the validated shortlist automatically. Open **Settings 
 
 
 Projection checks distinguish recent four-week form from full available current/prior-season history for both NFL formats. Reload salaries and create a new Deep bank after updating to capture the new evidence; old snapshots remain frozen. See the [full-season history guide](docs/USER_GUIDE.md#full-season-history-in-projection-checks).
+
+
+Projection Sensitivity now tests each of the five saved favorites individually at 15% lower simulated production, alongside baseline, the combined reduction and wider-history outcomes. Classic and Showdown both support this. Defaults run up to eight profiles per batch: 3 batches at 5,000 scenarios means 24 simulations, roughly 2.7 times the former three-profile workload. The dialog shows the exact profile count for the selected bank. Existing banks can be reused; no new Deep build is required for these additional tests.
+
+Copy Report identifies each displayed baseline leader's largest individual decline and summarizes each tested player's effect across the baseline top150. JSON/CSV retain all candidate/profile/batch results. Effects apply equally to opponents and candidates, with shared Captain scoring; they do not redistribute touches or add up to the combined effect. Every requested profile must finish before a batch counts. Saved comparison columns include all tested profiles in lowest-rate/rank summaries; older three-profile reports remain viewable. This diagnoses dependence on forecasts, not proven projection errors or automatic exposure changes.

@@ -58,7 +58,7 @@ class ProjectionSensitivityTests(unittest.TestCase):
                 path,p,raw=self.bank(f,kind);original=path.read_bytes();before=copy.deepcopy(p)
                 sim=simulate_nfl_contest if kind=='classic' else simulate_showdown
                 ordinary=sim(raw,p,scenarios=1000,field_lineup_count=20,seed=1200007)
-                report=run_projection(path,batches=1,scenarios=1000)
+                report=run_projection(path,individual=False,batches=1,scenarios=1000)
                 self.assertEqual(report['status'],'completed');self.assertEqual(path.read_bytes(),original);self.assertEqual(p,before)
                 proof=report['evidence'][0]
                 self.assertEqual(len({v['base_outcome_id'] for v in proof.values()}),1)
@@ -87,11 +87,11 @@ class ProjectionSensitivityTests(unittest.TestCase):
                     return dict(lineups=rows,report=dict(scenarios=999 if changed=='partial' and n==5 else 1000,
                         sensitivity_field_id=str(n if changed=='field' else 1)))
                 if changed=='partial':
-                    r=run_projection(path,batches=2,scenarios=1000,simulate=sim)
+                    r=run_projection(path,individual=False,batches=2,scenarios=1000,simulate=sim)
                     self.assertEqual(r['completed_batches'],1);self.assertEqual(r['status'],'incomplete')
                 else:
-                    with self.assertRaises(ValueError):run_projection(path,batches=1,scenarios=1000,simulate=sim)
-            r=run_projection(path,batches=1,scenarios=1000,cancelled=lambda:True)
+                    with self.assertRaises(ValueError):run_projection(path,individual=False,batches=1,scenarios=1000,simulate=sim)
+            r=run_projection(path,individual=False,batches=1,scenarios=1000,cancelled=lambda:True)
             self.assertEqual(r['completed_batches'],0)
 
     def test_projection_and_ownership_columns_coexist_and_sort_both_formats(self):
