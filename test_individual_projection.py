@@ -1,4 +1,5 @@
 import copy
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -33,7 +34,7 @@ class IndividualProjectionTests(unittest.TestCase):
                 self.assertEqual(path.read_bytes(),original)
                 broken=copy.deepcopy(report);broken['rows']=broken['rows'][:-1];save_projection(dest,broken)
                 with self.assertRaises(ValueError):load_review(dest,folder,comparison='projection')
-                broken=copy.deepcopy(report);broken['profiles'][-1]='Unknown';save_projection(dest,broken)
+                broken=copy.deepcopy(report);broken['profiles'][-1]='Unknown';dest.write_text(json.dumps(broken),encoding='utf-8')
                 with self.assertRaises(ValueError):load_review(dest,folder,comparison='projection')
 
     def test_incomplete_individual_profile_discards_whole_batch(self):
