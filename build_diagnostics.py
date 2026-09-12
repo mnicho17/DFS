@@ -361,6 +361,8 @@ def create_build_diagnostic(
             "sim_enabled": bool(settings.get("sim_enabled")),
             "sim_scenarios": max(0, _integer(settings.get("sim_scenarios"))),
             "field_preset": str(settings.get("field_preset") or ""),
+            "entry_target": str(settings.get("entry_target") or ""),
+            "auto_entry_target": bool(settings.get("auto_entry_target")),
             "contest_profile_name": str(contest_profile.get("name") or ""),
             "contest_field_size": max(0, _integer(contest_profile.get("field_size"))),
             "contest_entry_fee": max(0.0, _number(contest_profile.get("entry_fee"))),
@@ -737,6 +739,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             )
         )
 
+    if settings.get("entry_target"):
+        lines.append(f"- Entry target: {settings["entry_target"]}; {"automatic from requested count" if settings.get("auto_entry_target") else "manual"}. Preset field assumptions are defaults, not verified contest details.")
     warnings = [str(warning) for warning in portfolio.get("warnings") or [] if str(warning).strip()]
     lines.extend(["", "Warnings"])
     if warnings:

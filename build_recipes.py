@@ -12,7 +12,7 @@ RECIPE_KEYS = (
     "ownership_sims", "showdown_field_templates", "ownership_mode", "ownership_weight",
     "build_style", "mlb_stack_preference", "salary_strategy", "nfl_sim_enabled",
     "nfl_sim_scenarios", "nfl_field_preset", "nfl_compute_mode", "min_unique",
-    "team_max_pct", "game_max_pct", "balance_ownership", "deep_compute",
+    "team_max_pct", "game_max_pct", "balance_ownership", "deep_compute", "auto_entry_target",
 )
 
 
@@ -35,7 +35,7 @@ def normalize_recipe(recipe: Mapping[str, Any]) -> Dict[str, Any]:
                 cleaned[key] = float(cleaned[key])
             except (TypeError, ValueError):
                 cleaned.pop(key, None)
-    for key in ("showdown_field_templates", "nfl_sim_enabled", "balance_ownership"):
+    for key in ("showdown_field_templates", "nfl_sim_enabled", "balance_ownership", "auto_entry_target"):
         if key in cleaned:
             cleaned[key] = bool(cleaned[key])
     if "deep_compute" in cleaned:

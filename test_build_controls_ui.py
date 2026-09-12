@@ -17,6 +17,7 @@ class BuildControlsTests(unittest.TestCase):
             settings=QtCore.QSettings(os.path.join(directory,'settings.ini'),QtCore.QSettings.IniFormat)
             with mock.patch('main_window.QtCore.QSettings',return_value=settings):
                 w=MainWindow()
+                w.chk_auto_entry_target.setChecked(False)
                 w.deep_compute_settings.update(all_styles=True,selection_mode='Individual ranking')
                 name=next(k for k in DEEP_PROFILES if k.startswith('Thorough'))
                 w.combo_compute_profile.activated[str].emit(name)

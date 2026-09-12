@@ -8471,6 +8471,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.combo_salary_strategy.currentTextChanged.connect(self._update_workspace_summary)
 
         self.combo_field_preset.currentTextChanged.connect(self._update_workspace_summary)
+        from entry_target import setup_entry_target
+        setup_entry_target(self)
 
         self.combo_nfl_compute_mode.currentTextChanged.connect(self._update_workspace_summary)
 
@@ -8889,6 +8891,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "nfl_sim_scenarios": self.spin_nfl_sim_scenarios.value(),
 
             "nfl_field_preset": self.combo_field_preset.currentText(),
+            "auto_entry_target": self.chk_auto_entry_target.isChecked(),
 
             "nfl_compute_mode": self.combo_nfl_compute_mode.currentText(),
 
@@ -8976,6 +8979,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         selection.addItems(["Portfolio selection", "Individual ranking"])
 
         selection.setCurrentText(self.deep_compute_settings["selection_mode"])
+        selection.setEnabled(not (self.chk_auto_entry_target.isChecked() and self.combo_sport.currentText().upper()=="NFL"))
+        selection.setToolTip("Turn off Auto from lineup count in Build to override selection.")
 
         selection.setToolTip("Individual ranking: top-1%, then top-2%, top-5%, first-place rate and mean points. Explicit rules still apply. Minimum exposure is reported, not prioritized. Portfolio selection: choose complementary lineups, then display in the same finish-rate order.")
 
@@ -9181,6 +9186,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self.tabs_lineups.setCurrentIndex(0 if kind == "showdown" else 1)
 
+        self.chk_auto_entry_target.setChecked(bool(value.get("auto_entry_target", False)))
         requested = int(value.get("requested_lineups", 1) or 1)
 
         salary_cap = float(value.get("salary_cap", 50000.0) or 50000.0)
@@ -12904,6 +12910,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         sim_spin = getattr(self, "spin_nfl_sim_scenarios", None)
 
+        from entry_target import sync_entry_target
+        sync_entry_target(self, count=num, kind=kind)
         field_preset_widget = getattr(self, "combo_field_preset", None)
 
         compute_mode_widget = getattr(self, "combo_nfl_compute_mode", None)
@@ -13009,6 +13017,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
                 "sim_scenarios": sim_scenarios if effective_sim_enabled else 0,
 
                 "field_preset": ("Showdown ownership sample" if kind == "showdown" else field_preset) if effective_sim_enabled else "",
+                "entry_target": field_preset if sport=="NFL" else "",
+                "auto_entry_target": self.chk_auto_entry_target.isChecked() and sport=="NFL",
 
                 "contest_profile": dict(contest_profile or {}),
 

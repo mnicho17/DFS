@@ -66,7 +66,9 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIsNotNone(window.findChild(QtWidgets.QSpinBox, "nflSimScenarios"))
         preset = window.findChild(QtWidgets.QComboBox, "nflFieldPreset")
         self.assertIsNotNone(preset)
-        self.assertEqual(preset.currentText(), "150-Max")
+        from entry_target import entry_target
+        count=window.spin_sd.value() if window._contest_mode()=="showdown" else window.spin_cl.value()
+        self.assertEqual(preset.currentText(), entry_target(count)["preset"])
         compute = window.findChild(QtWidgets.QComboBox, "nflComputeMode")
         self.assertIsNotNone(compute)
         self.assertEqual(compute.currentText(), "Fast (default)")

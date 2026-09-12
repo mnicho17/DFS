@@ -78,3 +78,6 @@ def sync_build_controls(w):
         w.lbl_compute_summary.setText(f"{scope} · {w.deep_compute_settings['selection_mode']} · {w.deep_compute_settings['minutes']} min maximum · {w.spin_nfl_sim_scenarios.value():,} validation scenarios")
     else:
         w.lbl_compute_summary.setText('Fast build. Choose a Deep profile for a timed search and independent validation.')
+
+    from entry_target import sync_entry_target
+    sync_entry_target(w)
