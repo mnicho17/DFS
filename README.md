@@ -625,3 +625,6 @@ Build controls now use one Compute profile picker. Search & output groups Deep s
 **Settings > Ownership & Leverage** compares projected field ownership with the actual simulated field, top-candidate exposure and selected exposure for Classic and Showdown. Build reports disclose bounded ownership matching; Results & Learning separately audits recorded ownership forecasts against imported results. These are diagnostic comparisons, not automatic exposure recommendations or trained predictions.
 
 NFL Deep builds now save the validated shortlist automatically. Open **Settings > Ranking Repeatability** to compare that same set across fresh scenario/opponent batches. Copy the summary or use the automatic CSV/JSON/text exports in `history/ranking-checks`. This diagnoses sampling sensitivity without changing selected lineups. A new Deep build is required to capture a bank; older snapshots do not contain the shortlist. See the [user guide](docs/USER_GUIDE.md#ranking-repeatability).
+
+
+Projection checks distinguish recent four-week form from full available current/prior-season history for both NFL formats. Reload salaries and create a new Deep bank after updating to capture the new evidence; old snapshots remain frozen. See the [full-season history guide](docs/USER_GUIDE.md#full-season-history-in-projection-checks).

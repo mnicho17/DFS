@@ -14,7 +14,8 @@ from lineup_ranking import ranked_lineups
 from nfl_simulation import player_key
 
 PROFILES = ('Baseline', 'Lower production for favorites', 'Wider limited-history outcomes')
-VERSION = 'projection-stress-v1'
+VERSION = 'projection-stress-v2'
+from usage_history import history_evidence
 
 def roster(lu, kind):
     return [lu['Captain']] + list(lu['Flex']) if kind == 'showdown' else list(lu)
@@ -38,18 +39,10 @@ def prepare_targets(payload):
                   exposure_pct=100*counts[k]/max(1,len(leaders)), multiplier=.85) for k in selected]
     wider = []
     for k,p in sorted(skills.items()):
-        games = p.get('NFLUsageGames')
-        try: games = float(games)
-        except (ValueError,TypeError): games = None
-        if games is not None and (not math.isfinite(games) or games < 0): games = None
-        if p.get('NFLRookie') is True or p.get('Rookie') is True:
-            reason = 'Explicit rookie flag'
-        elif p.get('NFLUsageSource') == 'unavailable' or games is None:
-            reason = 'Usage history missing or not recorded'
-        elif games < 4:
-            reason = 'Fewer than four recorded usage games'
-        else: continue
-        wider.append(dict(key=k, player=p.get('Name',k), reason=reason, usage_games=games, low=.75, high=1.25))
+        evidence = history_evidence(p)
+        if not evidence['stress']: continue
+        wider.append(dict(key=k, player=p.get('Name',k), usage_games=p.get('NFLUsageGames'),
+                          low=.75, high=1.25, **evidence))
     return {PROFILES[0]:[], PROFILES[1]:lower, PROFILES[2]:wider}
 
 class OutcomeStress:
@@ -139,12 +132,12 @@ def format_projection(r):
            f"{r['kind'].title()}: {r['candidate_count']} fixed candidates; {r['scenarios']} scenarios/profile/batch; {r['opponents']} requested opponents.",
            'Every batch uses identical opponent rosters and underlying outcomes, verified by fingerprints. Stressed player scores apply equally to candidates and opponents; Captain receives 1.5x the same player outcome.',
            'Lower production: the five most-used QB/RB/WR/TE players in the saved top150 receive 15% lower simulated points, as a workload-shortfall proxy. Touches, game scripts, teammate shares and specialist effects are not recalculated.',
-           'Wider outcomes: explicit rookies or players with missing usage evidence / fewer than four recorded games receive independent 0.75x or 1.25x score multipliers with equal probability per scenario. Conditional expected scores are preserved, but finite-sample means can vary. Missing history does not establish rookie status.',
+           'Wider outcomes: explicit rookies or players with missing full-season evidence / fewer than four matched games across available current and prior seasons receive independent 0.75x or 1.25x score multipliers with equal probability per scenario. Conditional expected scores are preserved, but finite-sample means can vary. Missing history does not establish rookie status. Counts cover available regular-season rows, not career games. The recent four-week form window is separate. Old banks retain their recorded inputs; reload salaries and build a new bank to capture full-season evidence.',
            'These are explicit hypothetical assumptions, not fitted projection corrections or historical validation. Inputs, ownership, selected outputs and limits remain unchanged. No joint ownership-plus-projection stress is implied.',
            'Ranks use simulated finish-rate order within this bank; exact ties preserve bank order. Repeating settings repeats seeds. Only complete three-profile batches count.']
     for name in PROFILES[1:]:
         targets=r['targets'][name]; lines+=['',f'{name}: {len(targets)} targeted players']
-        for v in targets[:30]: lines.append(f"- {v['player']}: {v['reason']}"+(f"; saved contender exposure {v['exposure_pct']:.1f}%" if 'exposure_pct' in v else f"; recorded usage games {v['usage_games']}"))
+        for v in targets[:30]: lines.append(f"- {v['player']}: {v['reason']}"+(f"; saved contender exposure {v['exposure_pct']:.1f}%" if 'exposure_pct' in v else f"; recent-window games {v['usage_games']}; current-season games {v.get('current_games')}; prior-season games {v.get('prior_games')}"))
         if len(targets)>30: lines.append(f'- {len(targets)-30} additional targets in the saved JSON report.')
         if not targets: lines.append('- No eligible targets: this profile is identical to baseline.')
     if r['completed_batches']:

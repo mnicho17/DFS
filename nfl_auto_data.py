@@ -851,6 +851,9 @@ def apply_auto_nfl_context(
     sleeper_index = _sleeper_index(sleeper_data or {})
     usage_index = _build_usage_index(usage_rows or [])
     prior_index = _build_usage_index(prior_usage_rows or []) if usage_season == target_season else {}
+    from usage_history import season_index, attach_history
+    history_current = season_index(usage_rows if usage_season == target_season else [], target_season)
+    history_prior = season_index(usage_rows if usage_season == target_season - 1 else prior_usage_rows, target_season - 1)
     from nfl_kickers import build_kicking_index, attach_kicking_history
     kicking_index = build_kicking_index(usage_rows or [], usage_season)
     prior_kicking_index = build_kicking_index(prior_usage_rows or [], target_season - 1) if usage_season == target_season else {}
@@ -892,6 +895,7 @@ def apply_auto_nfl_context(
         player['NFLUsageSource'] = ('current_season' if player_usage_season == target_season else 'prior_season') if usage else 'unavailable'
         player['NFLUsageSourceURL'] = NFLVERSE_PLAYER_STATS_URL.format(season=player_usage_season) if usage else ''
         player['NFLUsageCheckedAt'] = checked_at
+        attach_history(player, history_current, history_prior, target_season, checked_at)
         if usage:
             usage_matches += 1
         usage_score = _to_float(usage.get("score"), 0.0)
@@ -1111,7 +1115,7 @@ def clear_nfl_context(players: List[Dict[str, Any]]) -> None:
         player["CptProjection"] = 1.5 * base
         for key in (
             "NFLKickingHistory", "NFLKickerOpportunities", "KickerProjection",
-            "NFLAdjRaw", "NFLAdjScore", "NFLUsage", "NFLUsageGames", "NFLUsageSeason",
+            "NFLAdjRaw", "NFLAdjScore", "NFLUsage", "NFLUsageGames", "NFLUsageHistory", "NFLUsageSeason",
             "NFLUsageSource", "NFLUsageSourceURL", "NFLUsageState", "NFLUsageCheckedAt",
             "NFLUsageScore", "NFLMatchupScore", "NFLRole", "NFLRoleScore",
             "NFLRoleBase", "NFLRoleBaseScore", "NFLReplacementBoost", "NFLReplacementFor",

@@ -45,7 +45,7 @@ class ProjectionSensitivityTests(unittest.TestCase):
             skills[0]['NFLUsageGames']=None;skills[1]['NFLUsageGames']=0;skills[2]['Rookie']=True
             targets=prepare_targets(payload)
             wider={v['key']:v['reason'] for v in targets[PROFILES[2]]}
-            self.assertIn('missing',wider[player_key(skills[0])]);self.assertIn('Fewer',wider[player_key(skills[1])])
+            self.assertIn('missing',wider[player_key(skills[0])]);self.assertIn('missing',wider[player_key(skills[1])])
             self.assertEqual(wider[player_key(skills[2])],'Explicit rookie flag')
             self.assertEqual(len(targets[PROFILES[1]]),5)
             self.assertFalse({player_key(v) for v in payload['players'] if v['Position']=='DST'} & set(wider))
