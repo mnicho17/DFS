@@ -82,6 +82,12 @@ class OwnershipSensitivityTests(unittest.TestCase):
                 run_sensitivity(path,batches=1,scenarios=1000,simulate=lambda rows,p,**kw:dict(lineups=rows[:-1],report={'scenarios':1000}))
             r=run_sensitivity(path,batches=1,scenarios=1000,cancelled=lambda:True)
             self.assertEqual(r['completed_batches'],0)
+            calls.clear()
+            def shortage(rows,p,**kw):
+                calls.append(1)
+                return dict(lineups=rows,report={'scenarios':1000,'field_lineups':20 if len(calls)==1 else 19})
+            with self.assertRaisesRegex(ValueError,'sample size changed'):
+                run_sensitivity(path,batches=1,scenarios=1000,simulate=shortage)
 
     def test_real_simulators_identical_outcomes_and_different_fields(self):
         from nfl_simulation import generate_nfl_field_lineups,simulate_nfl_contest
@@ -108,4 +114,3 @@ class OwnershipSensitivityTests(unittest.TestCase):
                 r=run_sensitivity(path,batches=1,scenarios=1000)
                 self.assertEqual(r['status'],'completed');self.assertEqual(len(r['rows']),len(scored)*3)
                 self.assertEqual(p,before)
-

@@ -78,7 +78,7 @@ def run_sensitivity(path,*,batches=3,scenarios=5000,cancelled=lambda:False,progr
     observations={name:[] for name in PROFILES};fields=[];seeds=[]
     for batch in range(batches):
         if cancelled():break
-        seed=910003+batch*100003;paired={};batch_fields={}
+        seed=910003+batch*100003;paired={};batch_fields={};baseline_field_count=None
         for name,opponents in profiles.items():
             if cancelled():break
             progress(f'Batch {batch+1}/{batches}: {name}')
@@ -93,6 +93,9 @@ def run_sensitivity(path,*,batches=3,scenarios=5000,cancelled=lambda:False,progr
                 from showdown_simulation import simulate_showdown
                 result=simulate_showdown(candidates(p),copy.deepcopy(p['players']),**kwargs)
             if cancelled() or result.get('report',{}).get('scenarios')!=scenarios:break
+            count=result.get('report',{}).get('field_lineups')
+            if name==PROFILES[0]:baseline_field_count=count
+            elif count!=baseline_field_count:raise ValueError('Opponent sample size changed across profiles; comparison rejected')
             ordered=ranked_lineups(result.get('lineups') or [])
             found=[identity(lu,p['kind']) for lu in ordered]
             if len(found)!=len(keys) or set(found)!=set(keys):raise ValueError('Candidate identities changed')
@@ -130,7 +133,7 @@ def format_sensitivity(r):
     n=r['completed_batches'];lines=['DFS Ownership Sensitivity',f"Status: {r['status']}; matched batches {n}/{r['requested_batches']}",
         f"Bank ID: {r['bank_id']}",f"Input ID: {r['input_id']}",
         f"{r['kind'].title()}: {r['candidate_count']} fixed candidates; {r['scenarios']} scenarios/profile/batch; {r['opponents']} sampled opponents.",
-        'Baseline is recalculated under the current model. Old saved ranks label candidates only. Scoring inputs and outcome seeds are identical across profiles; incomplete three-profile batches are excluded.',
+        'Baseline is recalculated under the current model. Old saved ranks label candidates only. Scoring inputs and outcome seeds are identical across profiles; opponent sample sizes must match. Incomplete three-profile batches are excluded.',
         'Favorites: up to five positive contender-minus-field gaps per slot from saved top150. Raw weights increase by max(5 percentage points, original ownership), then redistribute within Classic positions or Showdown slots.',
         'Concentrated field: ownership weights raised to power 1.35, then redistributed. Showdown Captain/FLEX total 100/500%, with combined player ownership capped at 100%. Classic position totals preserved.',
         'These are hypothetical ownership stresses, not forecasts. Matching to targets is approximate. Sample roster matches are not full-contest duplication predictions; zero matches do not establish uniqueness. No output ranks or exposures are changed.']
