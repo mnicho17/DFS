@@ -804,6 +804,7 @@ def _deep_candidate_quality(lineup: Any) -> Tuple[float, float, float, float, Tu
 from compute_settings import deep_phase_fractions
 
 from lineup_ranking import search_jobs, ranked_lineups, finish_rank, finish_tooltip
+from ownership_review import COLUMNS as OWN_COLUMNS, KEYS as OWN_KEYS, comparison_value, tooltip as ownership_tooltip
 
 
 
@@ -13252,6 +13253,19 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         bar.addWidget(reset)
 
+        ownership = QtWidgets.QPushButton("Ownership…")
+        ownership_menu = QtWidgets.QMenu(ownership)
+        def review_ownership():
+            from ownership_review_ui import open_review
+            open_review(self, kind)
+        ownership_menu.addAction('Load comparison…', review_ownership)
+        ownership.setMenu(ownership_menu)
+        bar.addWidget(ownership)
+        def clear_review():
+            setattr(self, '_' + kind + '_ownership_review', None)
+            self._reset_result_sort(kind)
+        ownership_menu.addAction('Clear comparison', clear_review)
+
         previous = QtWidgets.QPushButton("Previous 150")
 
         following = QtWidgets.QPushButton("Next 150")
@@ -13312,6 +13326,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         numeric = label in {"SIM Edge", "Grade", "TotalSal", "Top 1%", "Top 2%", "Top 5%", "First %", "Mean pts"}
 
+        if label in OWN_COLUMNS:
+            numeric = label in OWN_COLUMNS[:2]
+
         descending = not previous[1] if previous and previous[0] == column else numeric
 
         setattr(self, "_" + kind + "_sort", (column, descending, label))
@@ -13335,6 +13352,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
                    "Top 5%": "sim_top_five_pct", "First %": "sim_win_rate", "Mean pts": "sim_mean"}
 
         def key(lu):
+
+            if label in OWN_COLUMNS:
+                row = comparison_value(self, lu, kind)
+                return row[OWN_KEYS[OWN_COLUMNS.index(label)]] if row else (float('-inf') if descending else float('inf'))
 
             if label in metrics:
 
@@ -13428,6 +13449,24 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                     item.setToolTip(finish_tooltip(lineup))
 
+                    table.setItem(row, col, item)
+
+        review = getattr(self, '_' + kind + '_ownership_review', None)
+        for col in range(table.columnCount()):
+            header = table.horizontalHeaderItem(col)
+            if header and header.text() in OWN_COLUMNS:
+                table.setColumnCount(col)
+                break
+        if review and review['compatible'] and (kind == 'showdown' or getattr(self, '_classic_result_sport', 'NFL') == 'NFL'):
+            start = table.columnCount()
+            table.setColumnCount(start + len(OWN_COLUMNS))
+            for col, (label, key) in enumerate(zip(OWN_COLUMNS, OWN_KEYS), start):
+                table.setHorizontalHeaderItem(col, QtWidgets.QTableWidgetItem(label))
+                for row, lineup in enumerate(visible):
+                    values = comparison_value(self, lineup, kind)
+                    item = QtWidgets.QTableWidgetItem(f'{values[key]:.2f}' if values else '—')
+                    item.setToolTip(ownership_tooltip(review) if values else 'No exact saved player-input match for this lineup.')
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
                     table.setItem(row, col, item)
 
         combo, previous, following = getattr(self, "_" + kind + "_pages")

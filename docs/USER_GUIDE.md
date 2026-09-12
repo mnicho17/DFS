@@ -1277,3 +1277,20 @@ Scoring inputs, candidate identities and outcome seeds stay fixed within each ba
 **Copy Report** copies the displayed analysis. Full candidate/profile/batch results, bank and model IDs, target changes, seeds and field diagnostics save as JSON, CSV and text under `history/ownership-checks`. Back up that folder and `history/ranking-banks`. Reports include player names but omit account settings and source paths. These are hypothetical model stress tests, not calibrated ownership forecasts, historical validation or automatic strategy recommendations.
 
 ![Ownership sensitivity controls](images/ownership-sensitivity.png)
+
+### Review and sort saved ownership comparisons
+
+In **Settings > Ownership Sensitivity**, choose **View saved comparison** and open the completed JSON report from `history/ownership-checks`. Your existing completed report works without another run. The table includes the entire saved candidate bank, including candidates not selected for your original output. Click any column to sort; it initially sorts **Lowest tested %** descending.
+
+| Column | Meaning |
+|---|---|
+| Own baseline % | Average simulated top1 rate under the paired comparison's baseline; separate from the original build rate. |
+| Lowest tested % | Lowest profile-average top1 rate across baseline and both ownership stresses. |
+| Own drop pp | Baseline minus lowest tested rate, in percentage points; smaller means less decline. |
+| Test rank min / max | Best and worst observed rank across all profiles and completed batches in the saved bank. |
+
+For current Classic or Showdown outputs, use **Ownership… > Load comparison** beside **Best first**. This also opens the full saved-bank review. Close that review to see the new columns beside matching current lineups. A match requires the same complete saved player inputs and Captain assignment; changed forecasts, roles or other player inputs leave a dash, not zero. A status message shows the matched count. Reports from another model version remain viewable as historical comparisons but cannot attach to current outputs.
+
+Column clicks sort all current output pages while preserving saved-lineup identities. Baseline and lowest rates initially sort descending; drop and rank bounds initially sort ascending. Unmatched rows stay last in either direction. **Best first** restores the build's usual SIM order; **Ownership… > Clear comparison** removes the added columns and restores that order. Neither action changes SIM metrics, exposure limits or portfolio selection. These rates are tested model outcomes, not confidence bounds or guaranteed worst cases. Keep the matching `.dfsbank` file in `history/ranking-banks` with your reports.
+
+![Saved ownership comparison table](images/ownership-comparison-table.png)

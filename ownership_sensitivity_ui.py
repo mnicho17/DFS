@@ -42,6 +42,10 @@ class SensitivityDialog(RepeatabilityDialog):
                 self.bank.addItem(f"{b['created_at'][:19]} | {p['kind']} | {len(p['rows'])} candidates | bank {b['bank_id'][:12]}",str(path))
             except Exception:continue
         self.start.setEnabled(self.bank.count()>0)
+        self.review_button=QtWidgets.QPushButton('View saved comparison…')
+        self.layout().insertWidget(5,self.review_button)
+        from ownership_review_ui import open_review
+        self.review_button.clicked.connect(lambda:open_review(self))
         self.text.setPlainText('Three hypothetical ownership profiles per batch. Original lineups and forecasts remain unchanged.' if self.bank.count() else 'No saved candidate bank found. Complete an NFL Deep build first.')
     def begin(self):
         self.thread=QtCore.QThread(self);self.worker=SensitivityWorker(self.bank.currentData(),self.batches.value(),self.scenarios.currentData())

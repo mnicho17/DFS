@@ -10,6 +10,8 @@ NFL Classic and Showdown support **Settings > Ownership Sensitivity**: compare a
 
 ## User documentation
 
+Completed ownership sensitivity reports can be reopened as sortable tables. Use **Settings > Ownership Sensitivity > View saved comparison**, or **Ownership… > Load comparison** beside the Classic/Showdown output table to add comparison columns to exact matching player inputs. No new simulation is required.
+
 
 
 - [Five-minute quick start](docs/QUICK_START.md)

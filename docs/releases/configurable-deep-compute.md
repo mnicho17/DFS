@@ -1,5 +1,9 @@
 # Configurable Deep compute (test branch)
 
+### Ownership comparison tables
+
+Completed ownership reports now reopen as sortable full-bank tables without another simulation. Classic and Showdown result tables can attach baseline, lowest tested rate, drop and observed rank bounds through Ownership > Load comparison. Full saved player inputs and Captain identity must match; changed inputs display unknown, and historical model reports are review-only. Numeric sorting spans every output page, preserves saved identities, and leaves unknowns last. Best first and Clear comparison restore normal SIM order. Existing saved report formats remain supported through their matching integrity-checked candidate bank. Documentation and inspected table screenshot included.
+
 ### Paired ownership sensitivity
 
 Settings > Ownership Sensitivity evaluates fixed Classic and Showdown candidate banks against baseline, higher ownership for saved favorites, and concentrated ownership. Scoring inputs are separated from opponent ownership, with matching outcome seeds per batch. Classic position totals and Showdown Captain/FLEX totals and player caps are preserved. Actual targets and sampled-field mismatch are reported. Defaults run three batches of three profiles at 5,000 scenarios; incomplete batches are excluded. Candidate/score guards reject invalid comparisons. Copy Report and automatic JSON/CSV/text include per-candidate results, target changes, seeds and field diagnostics. Older banks may be used because every baseline is recalculated under current code; strict Ranking Repeatability compatibility is unchanged. No selected outputs, exposure limits or forecasts are modified. This tests hypothetical ownership assumptions, not historical accuracy. Guide and controls screenshot included.
