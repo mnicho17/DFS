@@ -2,6 +2,7 @@
 from collections import Counter
 from projection_sources import number
 from usage_history import history_evidence
+from forecast_checks import check_forecasts, format_checks
 from nfl_auto_data import _slate_season
 
 
@@ -22,7 +23,7 @@ def summarize_projection_coverage(players):
         if source=='Missing forecast' or number(p.get('BaseProjection',p.get('FlexProjection'))) is None:
             missing.append(f"{p.get('Name','Unknown')} [{p.get('Team','')} {pos}]")
     return dict(eligible=len(players),season=season,sources=dict(sources),usage=dict(usage),
-                history=dict(history),positions=dict(positions),missing_count=len(missing),missing_players=missing[:12])
+                forecast_checks=check_forecasts(players),history=dict(history),positions=dict(positions),missing_count=len(missing),missing_players=missing[:12])
 
 
 def format_projection_coverage(report):
@@ -35,4 +36,5 @@ def format_projection_coverage(report):
     lines.append(f"- Missing / invalid forecasts: {report['missing_count']}.")
     if report.get('missing_players'):lines.append('  Review: '+'; '.join(report['missing_players']))
     lines.append('- Automatic workload and historical-average estimates are forecasts with limitations, not missing values. Usage counts describe available evidence; supplied/manual forecasts take precedence. Specialists use separate history. Prior-season usage is not current-season form; missing usage is not an observed zero.')
+    lines.extend(format_checks(report.get("forecast_checks") or {}))
     return lines

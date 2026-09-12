@@ -263,6 +263,9 @@ def create_build_diagnostic(
     warnings: List[str] = []
     projection_reviews = _integer(context.get('projection_review_count'))
     coverage = dict(sim.get('projection_coverage') or {})
+    forecast_review = (coverage.get('forecast_checks') or {}).get('review_players',0)
+    if forecast_review:
+        warnings.append(f'{forecast_review} players have automatic forecast review signals. See Automatic forecast checks; no projections were changed.')
     if coverage.get('missing_count'):
         warnings.append(f"{coverage['missing_count']} eligible players have missing or invalid forecasts. See Projection and usage coverage.")
     elif projection_reviews and not coverage:
