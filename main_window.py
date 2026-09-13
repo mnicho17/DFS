@@ -7462,6 +7462,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         portfolio_insights_action = settings_menu.addAction("Portfolio Insights...", self.on_portfolio_summary)
 
         portfolio_insights_action.setObjectName("portfolioInsightsAction")
+        from portfolio_comparison_ui import PortfolioComparisonDialog
+        settings_menu.addAction("Portfolio Comparison...", lambda: PortfolioComparisonDialog(self).exec_())
         from entry_review_ui import open_entry_review
         settings_menu.addAction("Review my entries...", lambda: open_entry_review(self))
 

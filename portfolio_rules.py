@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import time
 from collections import Counter
+from itertools import combinations
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
@@ -192,6 +193,8 @@ def select_portfolio(
     refinement_stop_callback: Optional[Any] = None,
     refinement_polish_duplication: bool = False,
     individual_ranking: bool = False,
+    core_penalty: float = 0.0,
+    selection_cancel_callback: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
@@ -203,6 +206,9 @@ def select_portfolio(
     if individual_ranking:
         refinement_passes = 0
         refinement_polish_duplication = False
+    core_penalty = 0.0 if individual_ranking else float(core_penalty)
+    if not math.isfinite(core_penalty) or not 0 <= core_penalty <= 10:
+        raise ValueError("Core penalty must be between 0 and 10")
     requested = max(1, int(requested or 1))
     normalized = normalize_rules(rules)
     kind = str(kind or "classic").lower()
@@ -323,6 +329,7 @@ def select_portfolio(
         keys, teams, games = _lineup_sets(lineup, kind)
         captain = lineup_captain(lineup, kind)
         candidate_meta[id(lineup)] = {
+            "cores": tuple(combinations(sorted(keys), 2)) + tuple(combinations(sorted(keys), 3)) if core_penalty else (),
             "keys": keys,
             "teams": teams,
             "games": games,
@@ -347,6 +354,7 @@ def select_portfolio(
 
     selected: List[Any] = list(retained)
     selected_candidate_ids: set[int] = {id(lineup) for lineup in retained}
+    core_counts = Counter()
     total_counts: Counter[str] = Counter()
     cpt_counts: Counter[str] = Counter()
     team_counts: Counter[str] = Counter()
@@ -362,6 +370,7 @@ def select_portfolio(
 
     for lineup in retained:
         meta = candidate_meta[id(lineup)]
+        core_counts.update(meta["cores"])
         total_counts.update(meta["keys"])
         team_counts.update(meta["teams"])
         game_counts.update(meta["games"])
@@ -451,9 +460,9 @@ def select_portfolio(
             # Reward the first few lineups from a distinct Showdown story, then
             # taper naturally so quality still controls the complete portfolio.
             archetype_bonus = 14.0 / (1.0 + archetype_counts[meta["archetype"]])
-        # Exposure concentration already captures repeated player overlap and
-        # is much cheaper than comparing every candidate to every selected set.
-        overlap_penalty = 0.0
+        # The diagnostic-only core penalty uses cached pairs/trios. Its maximum
+        # marginal cost is core_penalty; default production behavior stays off.
+        overlap_penalty = core_penalty * sum(core_counts[c] for c in meta["cores"]) / max(1, len(meta["cores"])) / max(1, requested - 1) if core_penalty else 0.0
         sim = meta["sim"]
         sim_edge = _pct(sim.get("sim_edge"), None)
         if sim_edge is None:
@@ -516,6 +525,8 @@ def select_portfolio(
     remaining = list(pool)
     auto_relaxations = 0
     while len(selected) < requested and remaining:
+        if selection_cancel_callback and selection_cancel_callback():
+            raise ValueError("Selection cancelled")
         eligible = [lineup for lineup in remaining if admissible(lineup, current_min_unique)]
         if not eligible:
             if current_min_unique > 1:
@@ -548,6 +559,7 @@ def select_portfolio(
         games = chosen_meta["games"]
         selected.append(chosen)
         selected_candidate_ids.add(id(chosen))
+        core_counts.update(chosen_meta["cores"])
         total_counts.update(keys)
         team_counts.update(teams)
         game_counts.update(games)
@@ -722,6 +734,8 @@ def select_portfolio(
             for key in touched_players
         )
         delta += 500.0 * float(before_shortfall - after_shortfall)
+        core_weight = core_penalty / max(1, len(in_meta["cores"])) / max(1, requested - 1)
+        delta += counter_swap_delta(core_counts, set(out_meta["cores"]), set(in_meta["cores"]), core_weight)
         delta += counter_swap_delta(total_counts, out_meta["keys"], in_meta["keys"], 0.08)
         delta += counter_swap_delta(team_counts, out_meta["teams"], in_meta["teams"], 0.04)
         delta += counter_swap_delta(game_counts, out_meta["games"], in_meta["games"], 0.03)
@@ -750,6 +764,7 @@ def select_portfolio(
         selected_candidate_ids.remove(id(outgoing))
         selected_candidate_ids.add(id(incoming))
         for counts, out_values, in_values in (
+            (core_counts, set(out_meta["cores"]), set(in_meta["cores"])),
             (total_counts, out_meta["keys"], in_meta["keys"]),
             (team_counts, out_meta["teams"], in_meta["teams"]),
             (game_counts, out_meta["games"], in_meta["games"]),

@@ -1357,3 +1357,14 @@ Open **Settings > Review my entries** (also under the saved-entry **More** menu)
 Sortable tables show player exposure, repeated pairs/trios, repeated full rosters, constructions and unused salary. Showdown adds Captain + FLEX pairs and Captain positions; Classic includes QB receivers, opposing players and game concentrations. Percentages use all analyzed rosters, including repeated entries. Missing salaries/context are disclosed. These are shared-player counts, not measured outcome correlations or opponent duplication estimates. Saved collections may contain multiple builds: review one slate together. **Copy Report** copies the summary and top 20 rows per section; all rows remain available in the tables.
 
 ![Entry review showing repeated pairs in an illustrative saved candidate sample](images/entry-review.png)
+
+
+## Optional portfolio comparison
+
+**Settings > Portfolio Comparison** compares the current portfolio selector with an experimental repeated-pair/trio penalty for NFL Classic and Showdown. Choose a saved Deep bank with more candidates than requested entries (1-150). Defaults: 150 entries and 2,000 scenarios per pass. Two passes run: shared selection scenarios, then fresh independent evaluation of both frozen selections. Allow several minutes; Cancel discards incomplete comparisons. This is optional development work, not a required step for every contest.
+
+The trial adds a bounded 6-point penalty on the existing selection scale, normalized by roster core count and requested portfolio size. It supplements existing scenario-coverage rewards; it is not a calibrated risk estimate or a hard player cap. Athlete pairs/trios ignore Captain assignment, while existing Captain constraints remain. Production builds and Individual ranking stay unchanged.
+
+Saved banks omit original group/team/game settings, so this does not recreate the original build. Both trials use minimum unique 2, ownership balancing on, saved player limits and standard Showdown guardrails, without refinement. The report discloses selection shortfalls/relaxations. Fresh evaluation reports average individual top-1% rates, scenarios covered by at least one entry, roster overlap and repeated-core concentrations. One held-out simulation stream does not establish historical accuracy, monetary returns or an improvement. Repeating uses the same seeds. Original forecasts and selected entries remain unchanged. **Copy Report** and automatic JSON/text files under `history/portfolio-checks` preserve the results, including player names and selected roster identities.
+
+![Portfolio comparison controls](images/portfolio-comparison.png)
