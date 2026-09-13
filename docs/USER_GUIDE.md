@@ -1383,3 +1383,12 @@ Showdown uses separate Captain/FLEX prices, forecasts and explicit percentage ow
 Use the position filter to compare QB, RB, WR, TE, K or DST. Cross-position value sorting is not an overall player ranking.
 
 ![Core Plays on illustrative saved inputs, with recorded data warnings](images/core-plays.png)
+
+
+## Update one contest in a combined entries file
+
+Save the replacement lineups, click **Update Entries**, and select your DraftKings entries CSV. When it contains multiple contests, choose the contest by name and ID. The dialog shows its entry count and how many other entries will remain unchanged; continue is enabled only when the saved lineup count matches. Same-name contests remain distinct by ID. **All contests** remains available for an explicitly ordered full-file replacement. Single-contest files retain the existing workflow.
+
+Only the selected contest's roster cells change, in existing entry order. Entry IDs, contest metadata, other contests, instructions and embedded salary tables are preserved. Save a new upload file. To edit another contest, select that newly saved file as your next input, then upload the final combined file. Reusing the original download for the second update would omit your first update. This does not submit entries or change contest entry limits. Use replacement lineups from the matching slate.
+
+![Choosing one contest to update](images/entries-contest-selector.png)

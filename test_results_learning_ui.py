@@ -1000,6 +1000,24 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(rows[1][11], "keep")
         window.close()
 
+    def test_update_entries_targets_one_contest_and_preserves_other(self):
+        import csv
+        window=MainWindow();lineup=_showdown_lineup();window.saved_showdown=[lineup]
+        source=os.path.join(self.temp.name,'multi.csv');dest=os.path.join(self.temp.name,'multi-updated.csv')
+        original=[['Entry ID','Contest Name','Contest ID','Entry Fee','CPT']+['FLEX']*5+['','Notes'],
+                  ['101','First','77','$1']+['old']*6+['','keep'],
+                  ['102','Second','88','$2']+['other']*6+['','keep too']]
+        with open(source,'w',newline='',encoding='utf-8-sig') as f:csv.writer(f).writerows(original)
+        with mock.patch.object(window,'_confirm_portfolio_export',return_value=True), mock.patch.object(
+            QtWidgets.QFileDialog,'getOpenFileName',return_value=(source,'')), mock.patch.object(
+            QtWidgets.QFileDialog,'getSaveFileName',return_value=(dest,'')), mock.patch(
+            'entries_scope_ui.choose_scope',return_value=(True,'77')), mock.patch.object(QtWidgets.QMessageBox,'information'):
+            window.on_update_entries('showdown')
+        with open(dest,newline='',encoding='utf-8-sig') as f:actual=list(csv.reader(f))
+        self.assertEqual(actual[2],original[2]);self.assertEqual(actual[1][:4],original[1][:4])
+        self.assertEqual(actual[1][4],str(lineup['Captain']['CptID']))
+        self.assertEqual(actual[1][10:],original[1][10:]);window.close()
+
 
 if __name__ == "__main__":
     unittest.main()

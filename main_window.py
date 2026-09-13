@@ -15173,11 +15173,18 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 )
 
-            if len(rows) != template.entry_count:
+            from entries_scope_ui import choose_scope
+            accepted, contest_id = choose_scope(self, template, len(rows))
+            if not accepted:
+                return
+            target_count = len(template.selected_rows(contest_id))
+            preserved_count = template.entry_count - target_count
+
+            if len(rows) != target_count:
 
                 raise ValueError(
 
-                    f"The file has {template.entry_count} entries, but {len(rows)} lineups are saved. "
+                    f"The selected contest has {target_count} entries, but {len(rows)} lineups are saved. "
 
                     "Save exactly one lineup for every entry before creating the upload file."
 
@@ -15217,7 +15224,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         try:
 
-            write_updated_entries(source_path, output_path, rows)
+            write_updated_entries(source_path, output_path, rows, contest_id=contest_id)
 
         except Exception as exc:
 
@@ -15231,7 +15238,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self.status.showMessage(
 
-            f"Updated {template.entry_count} DraftKings entries in {output_path}.",
+            f"Updated {target_count} entries; preserved {preserved_count} other entries in {output_path}.",
 
             10000,
 
@@ -15243,7 +15250,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             "Entries File Ready",
 
-            f"Updated {template.entry_count} entries and preserved their contest identifiers.\n\n"
+            f"Updated {target_count} entries; left {preserved_count} other entries unchanged. Contest identifiers were preserved.\n\n"
+            "To update another contest, use this newly saved file as your next input.\n\n"
 
             f"Upload this file to DraftKings:\n{output_path}",
 
