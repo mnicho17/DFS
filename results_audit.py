@@ -72,7 +72,7 @@ def build_results_audit(conn, username=''):
             fingerprints.add(hashlib.sha256(json.dumps(signature).encode()).hexdigest())
         matched = [r for r in rows if r[3]]
         total_matched += len(matched)
-        lines.append(f'- Contest: {file_name}; your entries {len(rows)}, forecast matches {len(matched)}, unmatched {len(rows)-len(matched)}.')
+        lines.append(f'- Contest: {file_name}; your entries {len(rows)}, export-linked forecast matches {len(matched)}, without export links {len(rows)-len(matched)}. Snapshot comparisons are separate below.')
         if problem:
             lines.append('  Data gap: '+problem)
         unmatched = [r for r in rows if not r[3]]

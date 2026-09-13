@@ -130,6 +130,9 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
                 messages.append(name+': complete NFL field unavailable');continue
             progress('Analyzing '+name)
             if not path or not os.path.isfile(path):messages.append(name+': original file unavailable; previous cached review retained');continue
+            from results_field_ownership import refresh_cached_profile
+            with conn:
+                refresh_cached_profile(conn,import_id,path,cancelled)
             inferred_date=result_date(name) or result_date(Path(path).name)
             from learning_db import _import_username_entries
             with conn:

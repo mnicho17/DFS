@@ -833,10 +833,13 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
             f"- Exported lineups: {exported_lineups}",
             f"- Result files imported: {imported_files}",
             f"- Result entries imported: {imported_rows}",
-            f"- Exact lineup matches: {matched_rows} entries / {matched_lineups} unique lineups ({match_rate:.1f}%)",
-            f"- Forecast validation confidence: {outcome_confidence}",
+            f"- Export-linked matches (separate from username/snapshot matching): {matched_rows} entries / {matched_lineups} unique lineups ({match_rate:.1f}% of imported entries)",
+            f"- Export-linked forecast validation confidence: {outcome_confidence}",
             "- All history stays on this computer.", "", "Contest performance",
         ]
+        from results_snapshot_learning import snapshot_counts
+        snapshot_summary = snapshot_counts(conn, username)
+        lines.insert(-2, f"- Automatic snapshot comparisons: {snapshot_summary['contests']} contests; {snapshot_summary['entries']} submitted entries; {snapshot_summary['unique']} unique lineups within contests.")
         own_rows = []
         if username:
             for entry_name, points, rank, percentile, top_one, raw, import_id in cur.execute(
@@ -889,9 +892,9 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
         else:
             lines.append("- No imported result has matched an exported lineup yet.")
             if imported_rows:
-                lines.append("- Results are saved, but prediction comparisons require the original export history from the device that generated these lineups.")
+                lines.append("- Results are saved. Export-linked comparisons need original exports; automatic snapshot comparisons below work independently.")
 
-        lines.extend(["", "Projection calibration"])
+        lines.extend(["", "Export-linked projection calibration"])
         if actual:
             lines.append(f"- Matched lineups with actual scores: {len(actual)}")
             lines.append(f"- Adjusted projection MAE: {adjusted_mae:.2f} DK points")
@@ -992,6 +995,9 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
                             for name, value in top_owned
                         )
                     )
+                if ownership_profile.get('version') != 'observed-rosters-v2':
+                    lines.append('- Older lineup-ownership summary hidden; Analyze Saved Results rebuilds it from observed rosters.')
+                    ownership_profile = {}
                 profile_field = dict(ownership_profile.get("field") or {})
                 profile_top = dict(ownership_profile.get("top_one") or {})
                 if profile_field.get("lineups") and profile_top.get("lineups"):
@@ -1109,7 +1115,7 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
         else:
             lines.append("- Samples are useful for auditing, but contest selection and slate strength still affect ROI.")
         if imported_rows and matched_rows < imported_rows:
-            lines.append("- Unmatched rows usually mean the final submitted lineup differed from the app export or the file lacks a parseable lineup.")
+            lines.append("- Missing export links do not prevent username-based results analysis or automatic snapshot comparisons below.")
 
         from results_audit import build_results_audit
         lines.extend(build_results_audit(conn, username=username))
@@ -1119,6 +1125,7 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
             "text": "\n".join(lines), "db_path": path, "export_count": export_count,
             "exported_lineups": exported_lineups, "historical_rows": imported_rows,
             "personal_results_count": len(own_rows),
+            "snapshot_comparisons": snapshot_summary,
             "matched_rows": matched_rows, "matched_lineups": matched_lineups,
             "match_rate": match_rate, "net": net, "roi_pct": roi_pct,
             "cash_rate": statistics.mean(cash_values) if cash_values else None,
@@ -1764,6 +1771,8 @@ def _finalize_ownership_profile(
         }
     return {
         "ownership_coverage_pct": accumulator["mapped_slots"] / max(1, accumulator["total_slots"]) * 100.0,
+        "version": "observed-rosters-v2",
+        "ownership_source": "Observed roster appearances / parsed field entries",
         "source_vs_computed_mae": source_vs_computed_mae,
         "field": averages(accumulator["field"]),
         "top_one": averages(accumulator["top_one"]),
@@ -2242,7 +2251,6 @@ def _stream_complete_field_summary(
         str(key): _safe_float(value)
         for key, value in dict(preflight.get("source_ownership") or {}).items()
     }
-    ownership_accumulator = _new_ownership_profile_accumulator()
 
     with open(path, "r", newline="", encoding="utf-8-sig") as handle:
         sample = handle.read(4096)
@@ -2287,15 +2295,6 @@ def _stream_complete_field_summary(
             is_top_one = rank <= top_cutoff
             if is_top_one:
                 top_signatures.append(digest)
-            if source_ownership:
-                _add_ownership_profile(
-                    ownership_accumulator,
-                    signature,
-                    digest,
-                    source_ownership,
-                    top_one=is_top_one,
-                )
-
             lineup_meta = [metadata.get(token) for token in signature]
             mapped_slots += sum(1 for meta in lineup_meta if meta)
             total_slots += len(signature)
@@ -2351,18 +2350,10 @@ def _stream_complete_field_summary(
         for token, actual in actual_ownership.items()
         if token in metadata and _safe_float(metadata[token].get("ownership"), 0.0) > 0
     ]
-    source_ownership_errors = [
-        abs(actual_ownership[token] - source_ownership[token])
-        for token in actual_ownership
-        if token in source_ownership
-    ]
-    ownership_profile = _finalize_ownership_profile(
-        ownership_accumulator,
-        signature_counts,
-        source_vs_computed_mae=(
-            statistics.mean(source_ownership_errors) if source_ownership_errors else None
-        ),
-    )
+    from results_field_ownership import field_profile
+    ownership_profile = field_profile(path, field_size, source_ownership,
+        ownership=actual_ownership, counts=signature_counts,
+        cancelled=cancel_callback or (lambda: False))
     construction_count = sum(stack_counts.values())
     stack_rates = {
         str(value): stack_counts[str(value)] / max(1, construction_count)
@@ -3072,6 +3063,8 @@ def load_nfl_field_calibration(
         try:
             profile = json.loads(row[11] or "{}")
         except Exception:
+            profile = {}
+        if profile.get('version') != 'observed-rosters-v2':
             profile = {}
         row_entries = _safe_int(row[0], 0)
         if profile and row_entries > 0:

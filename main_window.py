@@ -4044,13 +4044,13 @@ class ResultsLearningDialog(QtWidgets.QDialog):
                 f"{int(payload.get('personal_results_count', 0)):,} your results  |  "
                 f"{int(payload.get('exported_lineups', 0)):,} exported lineups  |  "
 
-                f"{int(payload.get('matched_rows', 0)):,} matched results  |  "
+                f"{int(payload.get('matched_rows', 0)):,} export-linked matches  |  "
 
                 f"{int(payload.get('sim_matched_rows', 0)):,} SIM results  |  "
 
                 f"{int(payload.get('field_entries', 0)):,} field entries  |  "
 
-                f"{float(payload.get('match_rate', 0.0)):.1f}% match rate  |  {roi_text}"
+                f"{int(payload.get('snapshot_comparisons', {}).get('entries', 0)):,} snapshot-compared entries  |  {roi_text}"
 
             )
 

@@ -21,7 +21,8 @@ class ResultsAuditTests(unittest.TestCase):
                     w.writerow([i+1,1000+i,'Example_User (1/1)' if i==0 else 'Other',65,'CPT '+names[0]+' FLEX '+' FLEX '.join(names[1:])]+side)
             import_historical_result_csvs([str(path)],username='Example_User',db_path=db,archive_files=False)
             text=generate_learning_report(db_path=db,username='Example_User')['text']
-            self.assertIn('forecast matches 1, unmatched 0',text)
+            self.assertIn('export-linked forecast matches 1, without export links 0',text)
+            self.assertIn('Snapshot comparisons are separate below',text)
             self.assertIn('1 checked, 0 mismatches',text)
             self.assertIn('1 player pairs checked; 0 differ',text)
             self.assertIn('Largest player forecast misses',text)
