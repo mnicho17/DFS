@@ -7462,6 +7462,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         portfolio_insights_action = settings_menu.addAction("Portfolio Insights...", self.on_portfolio_summary)
 
         portfolio_insights_action.setObjectName("portfolioInsightsAction")
+        from entry_review_ui import open_entry_review
+        settings_menu.addAction("Review my entries...", lambda: open_entry_review(self))
 
         self.action_copy_build_report = settings_menu.addAction(
 
@@ -8259,6 +8261,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         saved_more_menu = QtWidgets.QMenu(saved_more)
 
         saved_more_menu.addAction("Stack Exposure Dashboard", self.on_view_stack_exposure)
+        saved_more_menu.addAction("Review my entries...", lambda: open_entry_review(self))
 
         saved_more_menu.addSeparator()
 

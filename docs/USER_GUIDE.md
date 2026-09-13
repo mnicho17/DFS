@@ -1348,3 +1348,12 @@ Classic selects its existing contest preset (including the 150-Max large-field d
 Turn Auto off to choose the contest preset and Search & output selection manually. For example, 20 entries can still be intended for a 150-Max contest. Auto mode persists locally and in new recipes/snapshots; older recipes without this setting retain manual behavior. Existing snapshots are not silently rewritten. Build reports show the target and whether it came from count or manual settings. No additional setup or test run is required.
 
 ![Automatic entry target controls](images/entry-target.png)
+
+
+## Review my entries
+
+Open **Settings > Review my entries** (also under the saved-entry **More** menu) for the active NFL Classic or Showdown tab. Choose **Generated outputs** for the whole build, including all pages, or **Saved entries** for your saved collection. No extra simulations run and no entries, rankings or settings change.
+
+Sortable tables show player exposure, repeated pairs/trios, repeated full rosters, constructions and unused salary. Showdown adds Captain + FLEX pairs and Captain positions; Classic includes QB receivers, opposing players and game concentrations. Percentages use all analyzed rosters, including repeated entries. Missing salaries/context are disclosed. These are shared-player counts, not measured outcome correlations or opponent duplication estimates. Saved collections may contain multiple builds: review one slate together. **Copy Report** copies the summary and top 20 rows per section; all rows remain available in the tables.
+
+![Entry review showing repeated pairs in an illustrative saved candidate sample](images/entry-review.png)
