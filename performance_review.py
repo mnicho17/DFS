@@ -131,10 +131,28 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             progress('Analyzing '+name)
             if not path or not os.path.isfile(path):messages.append(name+': original file unavailable; previous cached review retained');continue
             inferred_date=result_date(name) or result_date(Path(path).name)
+            from learning_db import _import_username_entries
+            with conn:
+                _import_username_entries(conn,path,import_id,username,dict(field_size=field[0],sport=field[2]),cancelled)
             meta=scoped_metadata(conn,import_id)
             scores,own,problem=_player_results(path,_normalize_roster_token)
             from learning_db import history_db_path
+            from results_snapshot_learning import compare_snapshot
+            with conn:
+                snapshot_check=compare_snapshot(conn,import_id,name,Path(db_path or history_db_path()).parent,inferred_date,
+                    'showdown' if field[1]==6 else 'classic',scores,own,username)
+            date_source='filename-unverified' if inferred_date else 'unknown'
+            if not inferred_date and snapshot_check.get('date'):
+                inferred_date=snapshot_check['date'];date_source='saved contest-ID schedule'
             snap_meta=snapshot_metadata(Path(db_path or history_db_path()).parent/'snapshots',inferred_date,{k for k in scores if not k.startswith('@cpt:')})
+            if snapshot_check.get('input_id'):
+                from build_snapshots import load_snapshot
+                selected=load_snapshot(str(Path(db_path or history_db_path()).parent/'snapshots'/(snapshot_check['input_id']+'.json')))
+                for player in selected['inputs']['players']:
+                    key=_normalize_roster_token(player.get('Name'))
+                    base=dict(team=player.get('Team'),opponent=player.get('Opponent'),position=player.get('Position'),salary=player.get('FlexSalary'))
+                    snap_meta.setdefault(key,base)
+                    if player.get('CptSalary') is not None:snap_meta.setdefault('@cpt:'+key,dict(base,salary=player['CptSalary']))
             for key,value in snap_meta.items():meta.setdefault(key,value)
             if field[2]=='UNKNOWN' and not meta and 'NFL' not in name.upper():
                 messages.append(name+': sport unverified; matching NFL metadata needed');continue
@@ -179,7 +197,7 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
                 conn.execute('INSERT OR REPLACE INTO construction_reviews VALUES (?,?,?,?)',(import_id,digest.hexdigest(),json.dumps(payload),dt.datetime.now(dt.timezone.utc).isoformat()))
                 if base:
                     conn.execute('DELETE FROM contest_player_scores WHERE import_id=?',(import_id,))
-                    conn.executemany('INSERT INTO contest_player_scores VALUES (?,?,?,?,?)',[(import_id,k,v,payload['date'],'filename-unverified' if payload['date'] else 'unknown') for k,v in base.items()])
+                    conn.executemany('INSERT INTO contest_player_scores VALUES (?,?,?,?,?)',[(import_id,k,v,payload['date'],date_source) for k,v in base.items()])
             completed+=1
         return dict(completed=completed,cancelled=cancelled(),message=f'Analyzed {completed} contests. '+ '; '.join(messages))
     finally:conn.close()
@@ -268,6 +286,8 @@ def review_report(conn,username=''):
     from score_reconciliation import reconciliation_report
     lines += reconciliation_report(conn)
     lines += player_history_report(conn)
+    from results_snapshot_learning import snapshot_report
+    lines += snapshot_report(conn,username)
     return lines
 
 

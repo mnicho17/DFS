@@ -905,7 +905,7 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
                 else:
                     lines.append(f"- Base vs context comparison is directional only until 25 matched lineups ({len(base_pairs)}/25).")
         else:
-            lines.append("- Export lineups, then import DraftKings results to measure projection accuracy.")
+            lines.append("- No export-linked forecasts. Automatic snapshot comparisons below can validate recorded forecasts without a lineup export.")
 
         lines.extend(["", "NFL Classic SIM validation"])
         if sim_rows:
@@ -1462,6 +1462,7 @@ def init_historical_import_tables(conn: sqlite3.Connection) -> None:
     init_db(conn)
     conn.executescript(
         """
+        CREATE TABLE IF NOT EXISTS username_result_scans(import_id TEXT, username TEXT, PRIMARY KEY(import_id,username));
         CREATE TABLE IF NOT EXISTS historical_imports (
             import_id TEXT PRIMARY KEY,
             created_at TEXT NOT NULL,
@@ -2427,6 +2428,8 @@ def _import_username_entries(conn, path, import_id, username, preflight, cancel_
     username = _dk_username(username)
     if not username:
         return 0
+    if conn.execute('SELECT 1 FROM username_result_scans WHERE import_id=? AND username=?',(import_id,username)).fetchone():
+        return 0
     field_size = _safe_int(preflight.get('field_size'), 0)
     found = 0
     with open(path, newline='', encoding='utf-8-sig') as handle:
@@ -2462,6 +2465,7 @@ def _import_username_entries(conn, path, import_id, username, preflight, cancel_
                 for slot, token in enumerate(tokens, 1):
                     conn.execute('INSERT INTO historical_result_players (hist_player_id,result_id,token,slot_index) VALUES (?,?,?,?)',
                                  (str(uuid.uuid4()),result_id,token,slot))
+    conn.execute('INSERT OR IGNORE INTO username_result_scans VALUES (?,?)',(import_id,username))
     return found
 
 
@@ -2516,7 +2520,7 @@ def import_historical_result_csvs(
                     # The content hash matches: keep the current readable location for audits.
                     with conn:
                         conn.execute('UPDATE historical_imports SET source_path=? WHERE import_id=?', (path, existing[0]))
-                    if username and existing[1] == 'field_only' and not skip_existing:
+                    if username and existing[1] == 'field_only' and not conn.execute('SELECT 1 FROM username_result_scans WHERE import_id=? AND username=?',(existing[0],_dk_username(username))).fetchone():
                         preflight = _preflight_complete_field_csv(path, cancel_callback=cancel_callback)
                         with conn:
                             personal_added += _import_username_entries(conn, path, existing[0], username, preflight, cancel_callback)

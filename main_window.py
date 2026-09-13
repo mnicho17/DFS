@@ -3833,7 +3833,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         intro = QtWidgets.QLabel(
             "Upload contest standings to analyze lineups and field ownership. "
             "Save your DraftKings username to identify your entries automatically. "
-            "Salary files are optional; prediction comparisons use original saved forecasts. All data stays local."
+            "No salary upload or lineup export is required for results analysis. Matching pre-game snapshots are linked automatically for forecast comparisons. All data stays local."
         )
 
         intro.setWordWrap(True)
@@ -12989,7 +12989,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 snapshot['input_id'] = fingerprint(snapshot['inputs'])
 
-                save_snapshot(os.path.join(os.path.dirname(build_history_path()), 'snapshots', snapshot['input_id'] + '.json'), snapshot)
+                snapshot_path = os.path.join(os.path.dirname(build_history_path()), 'snapshots', snapshot['input_id'] + '.json')
+                if not os.path.exists(snapshot_path):
+                    save_snapshot(snapshot_path, snapshot)
 
             except Exception:
 
@@ -15225,6 +15227,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         try:
 
             write_updated_entries(source_path, output_path, rows, contest_id=contest_id)
+            if sport == "NFL":
+                try:
+                    from results_snapshot_learning import remember_contests
+                    remember_contests(template, contest_id, self._capture_snapshot(), os.path.dirname(build_history_path()))
+                except Exception as exc:
+                    logger.warning("Entries file saved; automatic contest snapshot association unavailable: %s", exc)
+
 
         except Exception as exc:
 
