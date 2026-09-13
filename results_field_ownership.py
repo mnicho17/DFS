@@ -9,6 +9,20 @@ from collections import Counter
 VERSION = 'observed-rosters-v2'
 
 
+def observed_ownership(conn, import_id, known_slots=()):
+    """Only a complete imported field establishes observed ownership, including zeros."""
+    rows=conn.execute('SELECT ownership_json,entry_count,field_size FROM contest_field_summaries WHERE import_id=?',(import_id,)).fetchall()
+    if len(rows)!=1:return {},'Observed ownership unavailable: one complete field is required.'
+    encoded,count,size=rows[0]
+    if not size or not count or count<max(25,math.ceil(size*.95)):
+        return {},'Observed ownership unavailable: incomplete field.'
+    values=json.loads(encoded or '{}')
+    if not values:return {},'Observed ownership unavailable: no roster counts.'
+    result={k:float(v) for k,v in values.items() if isinstance(v,(float,int)) and math.isfinite(v) and 0<=v<=100}
+    for key in known_slots:result.setdefault(key,0.)
+    return result,f'Observed roster ownership across {count:,} parsed field entries; listed CSV percentages are not used for forecast accuracy.'
+
+
 def field_profile(path, field_size, source=None, *, ownership=None, counts=None, cancelled=lambda:False):
     from learning_db import (_field_roster_signature, _parse_rank, _canon_result_col,
         _new_ownership_profile_accumulator, _add_ownership_profile, _finalize_ownership_profile, _ImportCancelled)

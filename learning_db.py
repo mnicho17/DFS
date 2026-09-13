@@ -851,7 +851,8 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
                 points = [float(x[0]) for x in own_rows if x[0] is not None]
                 ranks = [_parse_rank(x[1]) for x in own_rows if _parse_rank(x[1]) > 0]
                 if points:
-                    lines.append(f"- Your average score: {statistics.mean(points):.2f}; best score: {max(points):.2f}; best rank: {min(ranks):,}.")
+                    best_rank = f"{min(ranks):,}" if ranks else 'unavailable'
+                    lines.append(f"- Your average score: {statistics.mean(points):.2f}; best score: {max(points):.2f}; best rank: {best_rank}.")
                 lines.append("- Winnings and cash rate need payout data; ownership and scores alone do not establish profit.")
                 # Compare entry exposure with the observed field for each imported contest.
                 for import_id in dict.fromkeys(x[5] for x in own_rows):
@@ -870,6 +871,10 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
                                 field_text = f"{float(value):.1f}%" if isinstance(value,(float,int)) else 'unavailable'
                                 label = token.replace('@cpt:', 'Captain: ')
                                 lines.append(f"  - {label}: yours {count/len(subset)*100:.1f}% | field {field_text}")
+        from results_finish import username_finishes, finish_lines
+        finish_summary = username_finishes(conn, username)
+        if username:
+            lines.extend(finish_lines(finish_summary))
         if outcome_rows:
             if roi_values:
                 lines.append(f"- Entry fees: {_fmt_money(stake)} | winnings: {_fmt_money(winnings)} | net: {_fmt_money(net)}")
@@ -881,14 +886,15 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
                 f"- Cash rate: {statistics.mean(cash_values) * 100.0:.1f}% ({len(cash_values)} entries)"
                 if cash_values else "- Cash rate is unavailable in the imported file."
             )
-            lines.append(
-                f"- Average finish percentile: {statistics.mean(percentile_values):.1f}% ({len(percentile_values)} entries)"
-                if percentile_values else "- Percentile needs contest field size or complete standings."
-            )
-            lines.append(
-                f"- Top 1% rate: {statistics.mean(top_values) * 100.0:.1f}% ({len(top_values)} entries)"
-                if top_values else "- Top 1% rate needs contest field size or complete standings."
-            )
+            if not username:
+                lines.append(
+                    f"- Average finish percentile: {statistics.mean(percentile_values):.1f}% ({len(percentile_values)} entries)"
+                    if percentile_values else "- Percentile needs contest field size or complete standings."
+                )
+                lines.append(
+                    f"- Top 1% rate: {statistics.mean(top_values) * 100.0:.1f}% ({len(top_values)} entries)"
+                    if top_values else "- Top 1% rate needs contest field size or complete standings."
+                )
         else:
             lines.append("- No imported result has matched an exported lineup yet.")
             if imported_rows:
@@ -1125,6 +1131,7 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
             "text": "\n".join(lines), "db_path": path, "export_count": export_count,
             "exported_lineups": exported_lineups, "historical_rows": imported_rows,
             "personal_results_count": len(own_rows),
+            "username_finishes": finish_summary,
             "snapshot_comparisons": snapshot_summary,
             "matched_rows": matched_rows, "matched_lineups": matched_lineups,
             "match_rate": match_rate, "net": net, "roi_pct": roi_pct,

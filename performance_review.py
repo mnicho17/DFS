@@ -139,11 +139,13 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
                 _import_username_entries(conn,path,import_id,username,dict(field_size=field[0],sport=field[2]),cancelled)
             meta=scoped_metadata(conn,import_id)
             scores,own,problem=_player_results(path,_normalize_roster_token)
+            from results_field_ownership import observed_ownership
+            own,ownership_source=observed_ownership(conn,import_id,scores)
             from learning_db import history_db_path
             from results_snapshot_learning import compare_snapshot
             with conn:
                 snapshot_check=compare_snapshot(conn,import_id,name,Path(db_path or history_db_path()).parent,inferred_date,
-                    'showdown' if field[1]==6 else 'classic',scores,own,username)
+                    'showdown' if field[1]==6 else 'classic',scores,own,username,ownership_source=ownership_source)
             date_source='filename-unverified' if inferred_date else 'unknown'
             if not inferred_date and snapshot_check.get('date'):
                 inferred_date=snapshot_check['date'];date_source='saved contest-ID schedule'
@@ -164,7 +166,7 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             digest=hashlib.sha256()
             with open(path,'rb') as handle:
                 for block in iter(lambda:handle.read(1024*1024),b''):digest.update(block)
-            meta_key=hashlib.sha256(json.dumps(dict(metadata=meta,date=inferred_date),sort_keys=True).encode()).hexdigest()
+            meta_key=hashlib.sha256(json.dumps(dict(metadata=meta,date=inferred_date,observed_ownership=own),sort_keys=True).encode()).hexdigest()
             cached=conn.execute('SELECT file_hash,payload FROM construction_reviews WHERE import_id=?',(import_id,)).fetchone()
             if cached and cached[0]==digest.hexdigest():
                 previous=json.loads(cached[1])

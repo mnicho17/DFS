@@ -93,11 +93,11 @@ def match_snapshot(folder,date,kind,observed,filename):
     return snap,('contest-ID association' if linked else 'filename date and full player-name coverage')
 
 
-def compare_snapshot(conn,import_id,name,folder,date,kind,scores,ownership,username):
+def compare_snapshot(conn,import_id,name,folder,date,kind,scores,ownership,username,*,ownership_source='Provided comparison data'):
     from learning_db import _normalize_roster_token,_dk_username,_field_roster_signature
     observed={k.removeprefix('@cpt:') for k in scores}
     snap,reason=match_snapshot(folder,date,kind,observed,name)
-    payload=dict(version=2,name=name,username=_dk_username(username),status='unavailable',reason=reason,
+    payload=dict(version=3,name=name,username=_dk_username(username),status='unavailable',reason=reason,ownership_source=ownership_source,
                  input_id=None,players=[],lineups=[],personal_entries=0)
     personal=[]
     for entry,actual,raw in conn.execute('SELECT entry_name,actual_points,raw_json FROM historical_results WHERE import_id=?',(import_id,)):
@@ -170,10 +170,12 @@ def snapshot_report(conn,username):
                 for r in sorted(rows,key=lambda r:-abs(r['actual']-r['projected']))[:3]:
                     lines.append(f"    {r['player']}: forecast {r['projected']:.2f}, actual {r['actual']:.2f}; {r['source']}.")
         for slot in sorted({r['slot'] for r in p['players']}):
+            if p.get('version',0)<3:continue
             usable=[r for r in p['players'] if r['slot']==slot and r['expected_ownership'] is not None and r['actual_ownership'] is not None]
             if usable:
                 errors=[r['actual_ownership']-r['expected_ownership'] for r in usable]
                 lines.append(f"  {slot} ownership: {len(errors)} players; MAE {statistics.mean(map(abs,errors)):.2f} percentage points; actual-minus-estimate bias {statistics.mean(errors):+.2f} pp.")
+        lines.append('  '+p.get('ownership_source','Older ownership comparison hidden; Analyze Saved Results refreshes it from observed rosters.'))
         entries=p['lineups']
         lines.append(f"  Reconciled unique submitted lineups with complete forecasts: {len(entries)} (not independent games).")
         if entries:lines.append(f"  Lineup forecast MAE: {statistics.mean(abs(r['actual']-r['projected']) for r in entries):.2f} points.")

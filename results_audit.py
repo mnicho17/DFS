@@ -67,12 +67,15 @@ def build_results_audit(conn, username=''):
         if not rows:
             continue
         scores, ownership, problem = _player_results(path or '', _normalize_roster_token)
+        from results_field_ownership import observed_ownership
+        ownership, ownership_source = observed_ownership(conn,import_id,scores)
         if scores:
             signature = sorted((k,round(v,4)) for k,v in scores.items())
             fingerprints.add(hashlib.sha256(json.dumps(signature).encode()).hexdigest())
         matched = [r for r in rows if r[3]]
         total_matched += len(matched)
         lines.append(f'- Contest: {file_name}; your entries {len(rows)}, export-linked forecast matches {len(matched)}, without export links {len(rows)-len(matched)}. Snapshot comparisons are separate below.')
+        lines.append('  '+ownership_source)
         if problem:
             lines.append('  Data gap: '+problem)
         unmatched = [r for r in rows if not r[3]]
