@@ -7424,6 +7424,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         settings_menu.addAction("Long Search / Resume...", self.on_long_search)
         settings_menu.addAction("Ranking Repeatability...", self.on_ranking_repeatability)
+        from core_plays_ui import open_core_plays
+        settings_menu.addAction("Core Plays...", lambda: open_core_plays(self))
         settings_menu.addAction("Ownership & Leverage...", self.on_ownership_leverage)
         settings_menu.addAction("Ownership Sensitivity...", self.on_ownership_sensitivity)
         settings_menu.addAction("Projection Sensitivity...", self.on_projection_sensitivity)
