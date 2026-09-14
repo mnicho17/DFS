@@ -45,6 +45,11 @@ def fit_field(initial, players, sample, *, showdown=False, cancelled=lambda:Fals
     def error(entries):
         actual=exposures(entries,showdown)
         return sum(abs(actual.get(k,0)-v) for k,v in targets.items())/len(targets)
+    def salary_gap(entries):
+        diagnostic = getattr(entries, 'diagnostic', {}) or {}
+        targets = diagnostic.get('salary_band_targets') or {}
+        counts = diagnostic.get('salary_band_counts') or {}
+        return sum(max(0, value-counts.get(key,0)) for key,value in targets.items())
     start=error(best);score=start;working=copy.deepcopy(players);current=best
     for attempt in range(2):
         if cancelled():break
@@ -56,7 +61,7 @@ def fit_field(initial, players, sample, *, showdown=False, cancelled=lambda:Fals
         trial=sample(working,attempt+1);info['passes']+=1
         if cancelled() or len(trial)!=len(initial):break
         current=trial;trial_error=error(trial)
-        if trial_error<score:
+        if trial_error<score and (not showdown or salary_gap(trial)<=salary_gap(best)):
             best=MatchedField(trial);best.diagnostic=dict(getattr(trial,'diagnostic',{}) or {});score=trial_error
     info.update(status='completed',reason='',before_mae_pp=round(start,3),after_mae_pp=round(score,3),targets=len(targets))
     best.ownership_fit=info

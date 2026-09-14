@@ -3,7 +3,7 @@ import random
 from collections import Counter
 from optimizers import ShowdownLineup, _salary, _cpt_salary, _showdown_cpt_own, _showdown_flex_own
 
-MODEL = 'showdown-salary-bands-v1'
+MODEL = 'showdown-salary-bands-v2'
 # Unspent fractions of the salary cap; broad heuristic, not fitted to winners.
 BANDS = ((.01, .60), (.03, .25), (.06, .10), (.15, .05))
 
@@ -44,15 +44,28 @@ def _sample_field(pool, count, *, salary_cap=50000, seed=0, cancel_callback=None
     accepted = [0]*4; overflow = []
     labels = [f'{int((BANDS[i-1][0] if i else 0)*100)}–{int(edge*100)}% unused' for i,(edge,_) in enumerate(BANDS)]
     field.diagnostic['salary_band_targets'] = dict(zip(labels, targets))
-    for attempt in range(max(200, count*200)):
+    for attempt in range(max(200, count*40)):
         if len(field)>=count or (cancel_callback and cancel_callback()):
             break
         field.diagnostic['attempts'] = attempt+1
         c = rng.choices(captains, weights=cw, k=1)[0]
         available = list(range(len(pool))); available.remove(c); flex = []
-        for _ in range(5):
+        band_target = rng.choices(range(4), weights=[max(0, target-done) for target,done in zip(targets,accepted)], k=1)[0]
+        for _ in range(4):
             j = rng.choices(available, weights=[fweights[i] for i in available], k=1)[0]
             flex.append(j); available.remove(j)
+        subtotal = cals[c]+sum(salaries[i] for i in flex)
+        def legal_band(j):
+            unused = (salary_cap-subtotal-salaries[j])/salary_cap
+            if unused < 0 or unused > .15 or len({teams[i] for i in [c]+flex+[j]}) != 2:
+                return None
+            return next(i for i,(edge,_) in enumerate(BANDS) if unused <= edge)
+        finishers = [j for j in available if legal_band(j) == band_target]
+        if finishers:
+            flex.append(rng.choices(finishers,weights=[fweights[j] for j in finishers],k=1)[0])
+        else:
+            # Preserve a legal shortage proposal, but do not pretend it met the target band.
+            flex.append(rng.choices(available,weights=[fweights[j] for j in available],k=1)[0])
         salary = cals[c]+sum(salaries[i] for i in flex)
         unused = (salary_cap-salary)/salary_cap
         if unused < 0 or unused > .15 or len({teams[i] for i in [c]+flex}) != 2:

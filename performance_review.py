@@ -237,7 +237,8 @@ def refresh_season_stats(season,*,db_path=None,cancelled=lambda:False,progress=l
                 if valid:
                     # Upsert corrections without deleting previously available games on a partial download.
                     conn.executemany('INSERT OR REPLACE INTO seasonal_player_stats VALUES (?,?,?,?,?,?,?,?,?)',valid.values())
-                conn.execute('INSERT OR REPLACE INTO seasonal_stats_status(season,checked_at,status,source_url) VALUES (?,?,?,?)',(year,stamp,'ok' if valid else 'unavailable; existing cache retained',NFLVERSE_PLAYER_STATS_URL.format(season=year)))
+                state = ('cached; original download '+getattr(rows,'fetched_at','unknown')) if valid and getattr(rows,'state','') == 'cached' else 'ok' if valid else 'unavailable; existing cache retained'
+                conn.execute('INSERT OR REPLACE INTO seasonal_stats_status(season,checked_at,status,source_url) VALUES (?,?,?,?)',(year,stamp,state,NFLVERSE_PLAYER_STATS_URL.format(season=year)))
             counts[year]=len(valid)
         return dict(completed=sum(counts.values()),cancelled=cancelled(),message='Weekly player rows refreshed: '+', '.join(f'{y}: {n:,}' for y,n in counts.items())+'. Missing seasons retain their previous cache.')
     finally:conn.close()

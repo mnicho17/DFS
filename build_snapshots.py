@@ -68,4 +68,6 @@ def freshness_text(summary, replay=False):
     usage = summary.get('usage_state') or 'unknown'
     evidence = (f'current {summary["usage_current_matches"]}, prior {summary.get("usage_prior_matches",0)}'
                 if 'usage_current_matches' in summary else f'season {summary.get("usage_season") or "unknown"}, matches {summary.get("usage", "unknown")}')
-    return f'{mode}. Last recorded check: {checked}. Player source: {status}; usage: {usage} ({evidence}); odds: {odds}.'
+    cached = [f'{year}: saved {item.get("fetched_at") or "unknown"}' for year,item in (summary.get('usage_downloads') or {}).items() if item.get('state') == 'cached']
+    cache_note = ' Cached usage after download failure (' + '; '.join(cached) + '); not freshly downloaded.' if cached else ''
+    return f'{mode}. Last recorded check: {checked}. Player source: {status}; usage: {usage} ({evidence}); odds: {odds}.' + cache_note

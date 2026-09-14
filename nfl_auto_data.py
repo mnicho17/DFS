@@ -178,7 +178,7 @@ def _fetch_nflverse_season_rows(season: int, timeout_sec: int = 15) -> List[Dict
     if not HAS_REQUESTS:
         return []
     url = NFLVERSE_PLAYER_STATS_URL.format(season=int(season))
-    try:
+    def download():
         response = requests.get(url, timeout=timeout_sec)
         response.raise_for_status()
         payload = response.content
@@ -194,13 +194,15 @@ def _fetch_nflverse_season_rows(season: int, timeout_sec: int = 15) -> List[Dict
                 continue
             if int(_to_float(row.get("season"), season)) != int(season):
                 continue
-            if int(_to_float(row.get('week'), 0)) <= 0:
+            if not 1 <= int(_to_float(row.get('week'), 0)) <= 22:
                 continue
             rows.append(dict(row))
         return rows
-    except Exception as exc:
-        logger.info("nflverse season %s unavailable: %s", season, exc)
-        return []
+    from nfl_usage_cache import fetch_cached
+    result = fetch_cached(season, url, download)
+    if result.error:
+        logger.info("nflverse season %s: %s (%s)", season, result.error, result.state)
+    return result
 
 
 def fetch_recent_usage_with_fallback(
@@ -895,6 +897,9 @@ def apply_auto_nfl_context(
         player['NFLUsageSource'] = ('current_season' if player_usage_season == target_season else 'prior_season') if usage else 'unavailable'
         player['NFLUsageSourceURL'] = NFLVERSE_PLAYER_STATS_URL.format(season=player_usage_season) if usage else ''
         player['NFLUsageCheckedAt'] = checked_at
+        origin = prior_usage_rows if player_usage_season == target_season - 1 and usage_season == target_season else usage_rows
+        player['NFLUsageFetchState'] = getattr(origin, 'state', 'provided')
+        player['NFLUsageFetchedAt'] = getattr(origin, 'fetched_at', '')
         attach_history(player, history_current, history_prior, target_season, checked_at)
         if usage:
             usage_matches += 1
@@ -967,6 +972,7 @@ def apply_auto_nfl_context(
         "usage_state": ('ok' if usage_matches else 'no_player_matches') if usage_index or prior_index else 'unavailable',
         "usage_rows": len(usage_rows or []),
         "usage_checked_at": checked_at,
+        "usage_downloads": {str(year): {"state": getattr(rows, "state", "provided"), "fetched_at": getattr(rows, "fetched_at", ""), "rows": len(rows or []), "error": getattr(rows, "error", "")} for year, rows in ((usage_season or target_season, usage_rows), (target_season - 1, prior_usage_rows)) if rows is not None},
         "usage_url": NFLVERSE_PLAYER_STATS_URL.format(season=usage_season or target_season),
         "weather_games": len(weather_index),
         "usage_season": usage_season,

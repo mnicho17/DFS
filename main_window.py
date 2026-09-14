@@ -2376,6 +2376,8 @@ class LineupBuildWorker(QtCore.QObject):
                 self.num_lineups,
 
                 rules=self.portfolio_rules,
+                allow_relaxation=False,
+                repair_time_limit=max(0,min(15,deep_deadline-time.perf_counter())) if deep_build else 15,
 
                 kind=self.kind,
 

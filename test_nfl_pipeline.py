@@ -25,7 +25,9 @@ class PipelineTests(unittest.TestCase):
         self.assertIn('stats_player/stats_player_week_2025.csv', get.call_args.args[0])
         bad = Mock(content=b'<html>not statistics</html>')
         with patch('nfl_auto_data.requests.get', return_value=bad):
-            self.assertEqual(_fetch_nflverse_season_rows(2025), [])
+            cached = _fetch_nflverse_season_rows(2025)
+            self.assertEqual(cached, rows)
+            self.assertEqual(cached.state, 'cached')
 
     def test_no_usage_keeps_veteran_differences_and_rookie_role(self):
         players = roster()

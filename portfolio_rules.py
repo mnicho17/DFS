@@ -195,13 +195,16 @@ def select_portfolio(
     individual_ranking: bool = False,
     core_penalty: float = 0.0,
     selection_cancel_callback: Optional[Any] = None,
+    allow_relaxation: bool = True,
+    repair_time_limit: float = 15,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
     Maximums and player groups remain hard rules. Minimum exposure is prioritized
     during selection and reported as a shortfall when the candidate pool cannot
-    satisfy it. Lineup uniqueness relaxes one player at a time only when needed so
-    an aggressive setting cannot freeze or crash a large build.
+    satisfy it. Desktop builds disable legacy relaxation and attempt a bounded
+    feasibility repair before reporting a shortage; diagnostic callers may opt
+    into the legacy fill behavior.
     """
     if individual_ranking:
         refinement_passes = 0
@@ -529,6 +532,8 @@ def select_portfolio(
             raise ValueError("Selection cancelled")
         eligible = [lineup for lineup in remaining if admissible(lineup, current_min_unique)]
         if not eligible:
+            if not allow_relaxation:
+                break
             if current_min_unique > 1:
                 current_min_unique -= 1
                 current_uniqueness_conflicts = uniqueness_conflicts(current_min_unique)
@@ -577,6 +582,35 @@ def select_portfolio(
         sim_value_counts.update(chosen_values.keys())
         if chosen_meta["archetype"]:
             archetype_counts[chosen_meta["archetype"]] += 1
+
+    feasibility_repaired = False
+    if len(selected) < requested and not allow_relaxation:
+        from portfolio_feasibility import repair
+        repaired = repair(pool, retained, selected, candidate_meta, current_uniqueness_conflicts,
+            dict(requested=requested,total=max_total,captain=max_cpt,team=max_team,game=max_game,specialist=specialist_cpt_limit),
+            lambda keys: _group_ok(keys, normalized['groups']), score, seconds=repair_time_limit)
+        if repaired is None:
+            raise ValueError(
+                f"This search found {len(selected)} of {requested} requested lineups under the current uniqueness and exposure limits. "
+                "No limits were relaxed and the bounded feasibility repair did not find a complete portfolio. "
+                "Increase candidate/shortlist coverage, or explicitly lower the requested count or change the limits, then rebuild. "
+                "This does not prove that no feasible full portfolio exists."
+            )
+        selected = repaired
+        feasibility_repaired = True
+        selected_candidate_ids = {id(lu) for lu in selected}
+        remaining = [lu for lu in pool if id(lu) not in selected_candidate_ids]
+        for counter in (core_counts,total_counts,team_counts,game_counts,cpt_counts,sim_top_counts,sim_top_five_counts,sim_win_counts,sim_value_counts,archetype_counts):
+            counter.clear()
+        specialist_cpt_count = 0
+        for lu in selected:
+            m = candidate_meta[id(lu)]
+            core_counts.update(m['cores']);total_counts.update(m['keys']);team_counts.update(m['teams']);game_counts.update(m['games'])
+            if m['captain_key']:cpt_counts[m['captain_key']] += 1
+            specialist_cpt_count += int(m['specialist_captain'])
+            sim_top_counts.update(m['top_hits']);sim_top_five_counts.update(m['top_five_hits']);sim_win_counts.update(m['win_hits'])
+            sim_value_counts.update(m['scenario_values'].keys())
+            if m['archetype']:archetype_counts[m['archetype']] += 1
 
     # Deep builds have enough candidates to benefit from a small local-search
     # pass after the greedy portfolio is complete.  Only non-retained lineups
@@ -873,6 +907,9 @@ def select_portfolio(
         refinement_stop_reason = "disabled in individual ranking" if individual_ranking else "disabled"
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
     report["effective_min_unique"] = current_min_unique
+    report["feasibility_repaired"] = feasibility_repaired
+    if feasibility_repaired:
+        warnings.append("Bounded feasibility repair completed the portfolio without weakening uniqueness or exposure limits.")
     report["refinement_swaps"] = refinement_swaps
     report["duplication_refinement_swaps"] = duplication_refinement_swaps
     report["refinement_attempts"] = refinement_attempts

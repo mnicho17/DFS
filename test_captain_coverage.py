@@ -97,7 +97,7 @@ class CaptainCoverageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder,patch.dict(os.environ,{'DFS_OPTIMIZER_DATA_DIR':folder}),patch('showdown_simulation.simulate_showdown',side_effect=small):
             worker=LineupBuildWorker(players,kind='showdown',num_lineups=2,salary_cap=50000,sim_enabled=True,
                 compute_mode='Deep',sim_scenarios=2500,deep_time_limit_seconds=20,
-                deep_options={'candidates':120,'shortlist':30,'field':20,'screening':250})
+                deep_options={'candidates':120,'shortlist':30,'field':20,'screening':250},portfolio_rules={'balance_ownership':False,'min_unique':1})
             results=[];errors=[];worker.finished.connect(results.append);worker.error.connect(errors.append);worker.run()
             self.assertFalse(errors,errors);r=results[0];self.assertEqual(players,original)
             record=create_build_diagnostic(context={'sport':'NFL','kind':'showdown','settings':{}},

@@ -84,6 +84,8 @@ def format_field(report):
         lines.append(f"- Field model: {sampling['model']}; experimental salary-spending prior, not learned from results.")
         lines.append('- Salary bands (target / sampled entries): ' + '; '.join(f"{key}: {target} / {sampling.get('salary_band_counts',{}).get(key,0)}" for key,target in sampling.get('salary_band_targets',{}).items()))
         lines.append(f"- Salary-band fallback entries: {sampling.get('fallback_entries',0)}; requested field {sampling['requested']:,}, returned {report['entries']:,}. Shortages and cancellation can change the mix.")
+        if sampling.get('model') == 'showdown-salary-bands-v2':
+            lines.append('- Band-conditioned sampling: draw Captain and four FLEX players, then a weighted legal fifth FLEX for an underfilled salary band. This experimental sampler is not a calibrated joint ownership model; feedback cannot trade a worse salary-band shortage for lower ownership error.')
     if report['candidate_fallback']:
         lines.append('- Field generation failed; candidates were used as fallback opponents. This is not an independently generated field.')
     fit=report.get('ownership_fit') or {}

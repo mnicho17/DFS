@@ -330,6 +330,8 @@ def run_deep_showdown(worker, shortlist_fn):
     selection_start = time.perf_counter()
     worker.progress.emit(0, worker.num_lineups, "Phase 4 of 4 - selecting and refining Showdown portfolio")
     selected = select_portfolio(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
+        allow_relaxation=worker._cancel_event.is_set(),
+        repair_time_limit=max(0,min(15,deadline-time.perf_counter())),
         retained_lineups=retained, refinement_passes=256,
         refinement_stop_callback=lambda: stop(deadline), refinement_polish_duplication=True,
         individual_ranking=options["selection_mode"] == "Individual ranking")

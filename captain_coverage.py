@@ -95,8 +95,12 @@ def coverage_report(targets, generated, shortlisted, validated, selected, *, val
     if validation_complete:
         for rank, lu in enumerate(sorted(validated, key=finish_rank, reverse=True), 1):
             best.setdefault(player_key(lu['Captain']), (rank, getattr(lu, 'sim_metrics', {})))
+    eligible = {player_key(p) for p in targets}
+    seen = {player_key(p): p for p in targets}
+    for lu in list(generated) + list(shortlisted) + list(validated) + list(selected):
+        seen.setdefault(player_key(lu['Captain']), lu['Captain'])
     rows = []
-    for p in targets:
+    for p in seen.values():
         key = player_key(p)
         gen, short, full, chosen = [stage[key] for stage in stages]
         reason = ('Selected' if chosen and full else 'Selected from incomplete validation' if chosen else
@@ -105,9 +109,10 @@ def coverage_report(targets, generated, shortlisted, validated, selected, *, val
             'Independent validation incomplete or unavailable' if not full else 'Fully evaluated; not selected')
         rank, metrics = best.get(key, (None, {}))
         rows.append(dict(player=str(p.get('Name')),team=p.get('Team'),position=p.get('Position'),
+            reservation_eligible=key in eligible,
             generated=gen,shortlisted=short,validated=full,selected=chosen,best_rank=rank,
             best_top1=metrics.get('sim_top_one_pct'),best_first=metrics.get('sim_win_rate'),reason=reason))
-    return dict(rows=rows,seeded=seeded,reserved=reserved,validation_complete=validation_complete,
+    return dict(rows=rows,eligible_count=len(eligible),seeded=seeded,reserved=reserved,validation_complete=validation_complete,
         library=library,note='Search coverage only; no final exposure minimum. Up to 12 seeded candidates per Captain within 10% of the candidate budget and a short time slice; up to three shortlist reservations per Captain within 20% of shortlist capacity. Retained entries take priority. Limited budgets may leave gaps. Saved-library generation is unchanged.')
 
 
@@ -115,10 +120,11 @@ def format_coverage(report):
     if not report:
         return []
     lines=['', 'Showdown Captain coverage', '- ' + report['note'],
-        f"- Eligible review Captains: {len(report['rows'])}; coverage candidates added: {report['seeded']}; shortlist reservations: {report['reserved']}. Full independent validation: {'complete' if report['validation_complete'] else 'incomplete/unavailable'}."]
+        f"- Reservation-eligible Captains: {report.get('eligible_count', len(report['rows']))}; Captains reported: {len(report['rows'])}; coverage candidates added: {report['seeded']}; shortlist reservations: {report['reserved']}. Full independent validation: {'complete' if report['validation_complete'] else 'incomplete/unavailable'}."]
     for r in report['rows']:
         result = (f"; best tested rank #{r['best_rank']}; top-1% {r['best_top1']:.2f}%; first including ties {r['best_first']:.2f}%"
             if r['best_rank'] is not None else '')
-        lines.append(f"- {r['player']} [{r['team']} {r['position']}]: generated {r['generated']}; shortlisted {r['shortlisted']}; fully evaluated {r['validated']}; selected {r['selected']}{result}. {r['reason']}.")
+        eligibility = 'reserved-search eligible' if r.get('reservation_eligible',True) else 'ordinary search; no reservation'
+        lines.append(f"- {r['player']} [{r['team']} {r['position']}; {eligibility}]: generated {r['generated']}; shortlisted {r['shortlisted']}; fully evaluated {r['validated']}; selected {r['selected']}{result}. {r['reason']}.")
     lines.append('- Review eligibility: positive forecast and recorded QB eligibility, RB/TE depth 1–2, WR depth 1–3, K/DST, supplied forecast or explicit Captain lock; active-player checks and personal exclusions still apply. Rates compare tested candidates within the model, not proven winning probabilities. Reservations affect both output-selection modes; final selection rules are unchanged.')
     return lines
