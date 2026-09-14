@@ -68,7 +68,7 @@ class ShowdownDeepTests(unittest.TestCase):
         players[0]["LockFlex"] = True
         players[1]["FadeCpt"] = True
         retained = ShowdownOptimizer(players).build_lineups(1)
-        worker = LineupBuildWorker(players, kind="showdown", sport="NFL", num_lineups=8,
+        worker = LineupBuildWorker(players, kind="showdown", sport="NFL", num_lineups=8, salary_strategy="Balanced Spend",
             salary_cap=50000, sim_enabled=True, compute_mode="Deep", sim_scenarios=2500,
             deep_time_limit_seconds=20, deep_options={"candidates": 160, "shortlist": 20, "field": 50, "screening": 250},
             retained_lineups=retained, portfolio_rules={"min_unique": 1, "balance_ownership": False})

@@ -47,6 +47,8 @@ def _aggregate_warning(value: Any) -> str:
     lower = text.casefold()
     if not text:
         return ""
+    if lower.startswith("selection used the sim-scored compliant set preserved before shortlisting") or lower.startswith("bounded feasibility repair completed the portfolio without weakening"):
+        return ""  # Successful recovery is disclosed in build details, not a failed rule.
     if lower.startswith("individual ranking uses simulated finish rates"):
         return ""  # Selection-mode information is not a failed rule.
     relaxation = re.match(r"Automatic Showdown exposure guardrails were relaxed (\d+) times", text)
@@ -313,6 +315,7 @@ def create_build_diagnostic(
         "schema_version": 4,
         "input_id": str(context.get('input_id') or ''),
         "candidate_library": dict(sim.get("candidate_library") or {}),
+        "salary_filter": dict(sim.get("salary_filter") or {}),
         "portfolio_feasibility": dict((sim.get('deep_build') or timing).get('portfolio_feasibility') or {}),
         "feasible_shortlist_fallback_used": bool(portfolio.get('feasible_shortlist_fallback_used')),
         "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
@@ -672,6 +675,9 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             lines.append(f"- Repeatability shortlist saved: {bank['candidates']:,} candidates; bank {bank['bank_id'][:12]}. Open Settings > Ranking Repeatability.")
         elif bank:
             lines.append('- Repeatability shortlist was not saved; check local storage and rerun Deep.')
+        salary_filter = record.get('salary_filter') or {}
+        if salary_filter:
+            lines.append(f"- Showdown salary filter: {salary_filter.get('excluded', 0):,} candidates excluded before screening; minimum ${salary_filter.get('minimum', 0):,.0f}.")
         feasibility = record.get('portfolio_feasibility') or {}
         if feasibility:
             lines.append(f"- Portfolio feasibility before shortlist: {feasibility.get('status')}; {feasibility.get('lineups', 0)} lineups preserved from {feasibility.get('searched', 0):,} candidates; {feasibility.get('seconds', 0):.2f}s")

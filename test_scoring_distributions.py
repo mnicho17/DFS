@@ -105,6 +105,7 @@ class ScoringDistributionTests(unittest.TestCase):
             target='main_window.simulate_nfl_contest' if kind=='classic' else 'showdown_simulation.simulate_showdown'
             with tempfile.TemporaryDirectory() as folder,patch.dict(os.environ,{'DFS_OPTIMIZER_DATA_DIR':folder}),patch(target,side_effect=small):
                 worker=LineupBuildWorker(players,kind=kind,num_lineups=2,salary_cap=50000,sim_enabled=True,sim_scenarios=10,
+                    salary_strategy="Balanced Spend" if kind=="showdown" else "Near Cap",
                     compute_mode=mode,deep_time_limit_seconds=20,deep_options={'candidates':30,'shortlist':8,'field':10,'screening':250},portfolio_rules={'balance_ownership':False,'min_unique':1})
                 worker.build_input_id='a'*64;results=[];errors=[]
                 worker.finished.connect(results.append);worker.error.connect(errors.append);worker.run()

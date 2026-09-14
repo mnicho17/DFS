@@ -13,6 +13,21 @@ from nfl_simulation import _scenario_outcomes, _quantile, player_key
 from optimizers import (ShowdownOptimizer, ShowdownLineup, attach_showdown_metrics,
                         _salary, _cpt_salary, _showdown_cpt_own, _showdown_flex_own)
 from portfolio_rules import select_portfolio
+from selection_shortage import PortfolioSelectionShortage, TITLE as LIMITS_TITLE
+
+
+def salary_floor(salary_cap, strategy):
+    text = str(strategy or '').casefold()
+    if 'max' in text:
+        return max(0, salary_cap - 500)
+    if 'near cap' in text:
+        return max(0, salary_cap - 2500)
+    return 0
+
+
+def filter_salary_candidates(rows, salary_cap, strategy):
+    floor = salary_floor(salary_cap, strategy)
+    return [lu for lu in rows if floor <= _cpt_salary(lu['Captain']) + sum(_salary(p) for p in lu['Flex']) <= salary_cap]
 
 
 def showdown_signature(lineup):
@@ -220,6 +235,8 @@ def run_deep_showdown(worker, shortlist_fn):
     retained = list(worker.retained_lineups)
     for lineup in retained:
         validate_showdown_lineup(lineup, players, worker.salary_cap)
+        if not worker._cancel_event.is_set() and not filter_salary_candidates([lineup], worker.salary_cap, worker.salary_strategy):
+            raise PortfolioSelectionShortage(LIMITS_TITLE + "\n\nA retained lineup is outside the selected salary strategy. Change the salary strategy or remove that retained lineup before rebuilding.")
     retained_keys = {showdown_signature(lu) for lu in retained}
     requested = max(0, worker.num_lineups - len(retained))
     budget = deep_candidate_budget(max(1, requested), options, False) if requested else 0
@@ -264,6 +281,11 @@ def run_deep_showdown(worker, shortlist_fn):
     from pipeline_audit import quarterback_mix
     qb_stages = {"generated": quarterback_mix(list(bank.values()) + retained)}
     generated = len(bank)
+    eligible_salary = filter_salary_candidates(list(bank.values()), worker.salary_cap, worker.salary_strategy)
+    salary_excluded = generated - len(eligible_salary)
+    bank = {showdown_signature(lu): lu for lu in eligible_salary}
+    if generated and not bank and not retained:
+        raise PortfolioSelectionShortage(LIMITS_TITLE + "\n\nNo generated Showdown candidates meet the selected salary strategy. Broaden the search or deliberately change the salary strategy.")
     generation_seconds = time.perf_counter() - start
     sim_start = time.perf_counter()
     lineups = list(bank.values())
@@ -357,6 +379,7 @@ def run_deep_showdown(worker, shortlist_fn):
     from ownership_strategy import leverage_report
     sim_report['ownership_leverage'] = leverage_report(retained+lineups,selected['lineups'],players,
         sim_report.get('field_diagnostic') or {},showdown=True)
+    sim_report['salary_filter'] = dict(excluded=salary_excluded, minimum=salary_floor(worker.salary_cap, worker.salary_strategy))
     sim_report["candidate_library"] = getattr(worker, "library_report", {})
     from projection_coverage import summarize_projection_coverage
     sim_report["projection_coverage"] = summarize_projection_coverage(players)
