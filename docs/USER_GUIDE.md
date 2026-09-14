@@ -1438,3 +1438,18 @@ One player in one scheduled game counts once across repeated contests within a f
 Older ownership aggregates are labeled **Legacy export-metadata ownership difference** because their forecast timing or units may be unverified. Use the snapshot-backed ownership comparison for current accuracy checks.
 
 ![Recorded scoring-distribution comparison, illustrative data](images/scoring-distribution-validation.png)
+
+
+## Showdown Captain search coverage
+
+Normal **Showdown Deep** builds now reserve a bounded part of generation and screening for plausible Captain alternatives. No extra control or results upload is required. Review eligibility requires a positive forecast and recorded eligible/starting QB status, RB/TE depth 1–2, WR depth 1–3, K/DST, a supplied forecast or an explicit Captain lock. Active-player/QB eligibility checks, Captain fades, FLEX locks, another Captain lock and explicit zero exposure limits still apply. Ownership alone neither qualifies nor disqualifies a Captain; unknown unsupported roles are not automatically included.
+
+The search attempts up to 12 candidates per eligible Captain within 10% of the overall candidate budget. It uses at most 30 seconds or 10% of the generation time allowance, whichever is smaller, sharing that time across Captains. These are existing-budget candidates, not additional output entries. Temporary Captain search locks are removed before scoring and selection; user locks are preserved. Candidate shortage can mean insufficient time, budget or feasible constructions, not proof of an impossible lineup.
+
+After coarse scoring, up to three of each review Captain's strongest generated candidates receive shortlist reservations. Reservations share at most 20% of shortlist capacity; existing retained entries take priority. Scarce slots are distributed round-robin, with higher projected players considered first. The remaining shortlist uses the existing selection policy. This applies to both **Individual ranking** and **Portfolio selection**. It improves coverage but cannot guarantee every Captain is tested under every budget or constraint. Saved candidate libraries are not expanded; their existing Captain candidates can receive shortlist reservations.
+
+**Copy Last Build Report** and **Build History** include **Showdown Captain coverage**: generated, shortlisted, fully evaluated and selected counts for each review Captain, plus the best tested rank, top-1% rate and first-place rate including ties. Full evaluation is claimed only when all requested independent validation scenarios complete. Reports distinguish missing candidates, screening gaps, incomplete validation and evaluated-but-unselected alternatives. Ranks are among that build's evaluated candidates and do not measure historical prediction quality.
+
+Coverage does not impose final exposure minimums or change forecasts, ownership, outcome models, or portfolio rules. Final lineup selection can still choose zero of a reviewed Captain. Classic and non-Deep Showdown behavior are unchanged. Run a fresh Showdown Deep build to use the expanded search; old banks are not rewritten. A new build may have different lineups because different candidates were compared.
+
+![Showdown Captain coverage in Build History, illustrative data](images/captain-coverage.png)

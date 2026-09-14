@@ -5670,7 +5670,7 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
             "Recent lineup builds are saved locally so timing and settings can be compared between app releases. "
 
-            "Reports contain aggregate counts only—never player names, lineups, file paths, or API keys."
+            "Reports can include player names, lineup details and strategy inputs; they exclude file paths and API keys."
 
         )
 

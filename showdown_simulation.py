@@ -231,7 +231,19 @@ def run_deep_showdown(worker, shortlist_fn):
         budget = len(bank)
     generation_fraction, screening_fraction = deep_phase_fractions(options)
     generation_end = start + limit * generation_fraction
+    from captain_coverage import captain_targets, seed_captains, shortlist_reservations, coverage_report
+    targets = captain_targets(players)
+    library_build = bool(bank)
+    seeded = 0
+    if requested and not library_build:
+        seeded = seed_captains(players, targets, bank, retained_keys, budget,
+            salary_cap=worker.salary_cap, own_mode=worker.own_mode, own_weight=worker.own_weight,
+            deadline=start + min(30.0, limit * generation_fraction * .10),
+            cancelled=worker._cancel_event.is_set,
+            progress=lambda text: worker.progress.emit(len(bank), budget, 'Phase 1 of 4 - ' + text))
+        style_counts['Captain coverage'] = seeded
     exclusions = {(sig[0][4:], tuple(sig[1:])) for sig in retained_keys}
+    exclusions.update((sig[0][4:], tuple(sig[1:])) for sig in bank)
     for index, (style, seed) in enumerate(jobs):
         if not requested or len(bank) >= budget or stop(generation_end):
             break
@@ -256,6 +268,10 @@ def run_deep_showdown(worker, shortlist_fn):
     sim_start = time.perf_counter()
     lineups = list(bank.values())
     sim_report = {}
+    coverage_short = []
+    coverage_validated = []
+    coverage_reserved = 0
+    coverage_complete = False
     deep = {"enabled": True, "time_limit_seconds": limit, "screening_scenarios": 0,
             "validation_scenarios": 0, "shortlist_count": 0, "validation_top_overlap_pct": None,
             "candidate_bank_count": generated, "validation_time_limit_reached": False}
@@ -267,7 +283,10 @@ def run_deep_showdown(worker, shortlist_fn):
             progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 2 of 4 - " + c))
         deep["screening_scenarios"] = coarse["report"]["scenarios"]
         if deep["screening_scenarios"]:
-            short = shortlist_fn(coarse["lineups"], max(worker.num_lineups, options["shortlist"] or 900), reserved_signatures=retained_keys, individual_ranking=options["selection_mode"] == "Individual ranking")
+            shortlist_limit = max(worker.num_lineups, options["shortlist"] or 900)
+            reservations, coverage_reserved = shortlist_reservations(coarse['lineups'], targets, shortlist_limit, retained_keys)
+            short = shortlist_fn(coarse["lineups"], shortlist_limit, reserved_signatures=reservations, individual_ranking=options["selection_mode"] == "Individual ranking")
+            coverage_short = list(short)
             qb_stages["shortlisted"] = quarterback_mix(short, scored=True)
             sim_report = coarse["report"]
             rank = finish_rank
@@ -280,6 +299,8 @@ def run_deep_showdown(worker, shortlist_fn):
                     progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 3 of 4 - " + c))
                 if validated["report"]["scenarios"]:
                     short = validated["lineups"]
+                    coverage_validated = list(short)
+                    coverage_complete = validated['report']['scenarios'] == max(2500, worker.sim_scenarios)
                     qb_stages["validated"] = quarterback_mix(short, scored=True)
                     sim_report = validated["report"]
                     deep["validation_scenarios"] = sim_report["scenarios"]
@@ -328,6 +349,9 @@ def run_deep_showdown(worker, shortlist_fn):
     from projection_coverage import summarize_projection_coverage
     sim_report["projection_coverage"] = summarize_projection_coverage(players)
     sim_report["deep_build"] = dict(deep)
+    sim_report['captain_coverage'] = coverage_report(targets, list(bank.values()) + list(worker.retained_lineups),
+        coverage_short, coverage_validated, selected['lineups'], validation_complete=coverage_complete,
+        seeded=seeded, reserved=coverage_reserved, library=library_build)
     timing = dict(deep, generation_allocation_seconds=limit * generation_fraction,
         style_candidate_counts=style_counts, deep_options=dict(options), deep_time_limit_seconds=limit,
         compute_mode="Deep", generation_seconds=generation_seconds, simulation_seconds=simulation_seconds,

@@ -8,7 +8,7 @@ from PyQt5 import QtCore, QtWidgets
 from lineup_ranking import BUILD_STYLES, finish_rank, ranked_lineups, search_jobs
 from compute_settings import normalize_deep_settings, matching_deep_profile, DEEP_PROFILES
 from main_window import MainWindow, LineupBuildWorker, _deep_shortlist
-from nfl_simulation import SimLineup, simulate_nfl_contest
+from nfl_simulation import SimLineup, simulate_nfl_contest, player_key
 from optimizers import MultiSportClassicOptimizer, ShowdownOptimizer, ShowdownLineup
 from portfolio_rules import select_portfolio
 from showdown_simulation import simulate_showdown, showdown_signature
@@ -90,16 +90,24 @@ class RankedSearchTests(unittest.TestCase):
                     worker.run()
                 self.assertFalse(errors, errors)
                 self.assertEqual(set(styles), set(BUILD_STYLES))
-                self.assertFalse(exclusions[0])
+                if kind == 'classic':
+                    self.assertFalse(exclusions[0])
+                    identity = lambda lu: tuple(sorted(player_key(p) for p in lu))
+                else:
+                    self.assertTrue(exclusions[0])
+                    self.assertEqual(len(exclusions[0]), results[0]['sim_report']['captain_coverage']['seeded'])
+                    identity = lambda lu: (player_key(lu['Captain']), tuple(sorted(player_key(p) for p in lu['Flex'])))
                 self.assertTrue(exclusions[1])
                 self.assertEqual(len(sim_calls), 2)
                 self.assertNotEqual(sim_calls[0][1]['seed'], sim_calls[1][1]['seed'])
-                self.assertEqual(len(sim_calls[0][0]), 5)
+                expected = exclusions[0] | {identity(lu) for lu in bank[:5]}
+                self.assertEqual({identity(lu) for lu in sim_calls[0][0]}, expected)
+                self.assertEqual(len(sim_calls[0][0]), len(expected))
                 self.assertEqual(len(results[0]['lineups']), 3)
                 stages = results[0]['sim_report']['quarterback_pipeline']
-                self.assertEqual(stages['generated']['total'], 5)
-                self.assertEqual(stages['shortlisted']['total'], 5)
-                self.assertEqual(stages['validated']['total'], 5)
+                self.assertEqual(stages['generated']['total'], len(expected))
+                self.assertEqual(stages['shortlisted']['total'], len(expected))
+                self.assertEqual(stages['validated']['total'], len(expected))
                 self.assertEqual(stages['selected']['total'], 3)
                 for stage in stages.values():
                     self.assertEqual(sum(group['count'] for group in stage['groups'].values()), stage['total'])

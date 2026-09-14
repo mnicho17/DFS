@@ -470,6 +470,7 @@ def create_build_diagnostic(
         },
     }
     diagnostic["distribution_capture"] = dict(sim.get("distribution_capture") or {})
+    diagnostic['captain_coverage'] = dict(sim.get('captain_coverage') or {})
     return diagnostic
 
 
@@ -656,6 +657,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     if sim.get("volatility_model"):
         lines.append("- Scenario model: game scripts, role-aware player ranges, and guarded rare ceiling outcomes")
     capture = record.get('distribution_capture') or {}
+    from captain_coverage import format_coverage
+    lines.extend(format_coverage(record.get('captain_coverage') or {}))
     if capture:
         lines.append(f"- Scoring distributions: {capture.get('status')}; {capture.get('scenarios', 0):,} scenarios; {capture.get('players', 0)} players. {capture.get('reason', '')}")
     if deep_mode:
@@ -814,7 +817,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     lines.extend(["", (
         "Privacy: This report includes lineup names and strategy inputs for troubleshooting; "
         "it excludes file paths and API keys."
-        if lineup_details or record.get("ranked_groups") or record.get('field_diagnostic') or record.get('projection_coverage') else
+        if lineup_details or record.get("ranked_groups") or record.get('field_diagnostic') or record.get('projection_coverage') or record.get('captain_coverage') else
         "Privacy: This report contains aggregate settings and counts only; no players, "
         "lineups, file paths, or API keys."
     )])
