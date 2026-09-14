@@ -513,6 +513,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     is_showdown = str(record.get("contest_type") or "").casefold() == "showdown"
     sim_ran = bool(settings.get("sim_enabled") and _integer(sim.get("scenario_count")) > 0)
 
+    archive = dict(record.get('generated_archive') or {})
+
     phase_times = {
         "Generate": _number(timing.get("generation_seconds")),
         "SIM": _number(timing.get("simulation_seconds")),
@@ -834,6 +836,12 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         "Privacy: This report contains aggregate settings and counts only; no players, "
         "lineups, file paths, or API keys."
     )])
+    if archive:
+        lines += ['', 'Automatic generated-lineup archive',
+            f"- Status: {archive.get('status')}; outputs: {archive.get('lineups', 0)}."]
+        if archive.get('status') == 'saved':
+            lines.append(f"- File: {archive.get('filename')}; snapshot: {archive.get('snapshot')}.")
+            lines.append('- Settings > Open Automatic Build Archives. Generated outputs are not proof of export or submission.')
     return "\n".join(lines)
 
 

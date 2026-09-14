@@ -7442,6 +7442,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         settings_menu.addAction("Projection Sensitivity...", self.on_projection_sensitivity)
         settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
         settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
+        settings_menu.addAction("Open Automatic Build Archives...", self.on_open_build_archives)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)
 
         settings_menu.addAction("Load Build Snapshot...", self.on_load_snapshot)
@@ -14730,6 +14731,16 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
+    def on_open_build_archives(self) -> None:
+        from build_archives import archive_folder
+        try:
+            folder = archive_folder()
+            folder.mkdir(parents=True, exist_ok=True)
+            if not QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(folder))):
+                raise OSError("The folder could not be opened")
+        except OSError as exc:
+            QtWidgets.QMessageBox.warning(self, "Build archives", str(exc))
+
     def on_results_learning(self) -> None:
 
         ResultsLearningDialog(self).exec_()
@@ -14821,6 +14832,14 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             lineups=list(payload.get("lineups") or []),
 
         )
+
+        try:
+            from build_archives import save_build_archive
+            diagnostic['generated_archive'] = save_build_archive(payload, context, diagnostic)
+        except Exception:
+            logger.exception("Generated lineup archive could not be saved")
+            diagnostic['generated_archive'] = {'status': 'failed', 'lineups': len(payload.get('lineups') or [])}
+            self.status.showMessage("Lineups are available, but their automatic audit archive could not be saved.", 10000)
 
         self.last_build_diagnostic = diagnostic
 
