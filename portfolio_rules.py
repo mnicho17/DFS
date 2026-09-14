@@ -209,6 +209,10 @@ def select_portfolio(
     into the legacy fill behavior.
     """
     selection_started = time.perf_counter()
+    def feasibility_checkpoint():
+        if feasibility_only:
+            from bounded_solver import check
+            check(selection_started + max(0, repair_time_limit), selection_cancel_callback or (lambda: False))
     if individual_ranking:
         refinement_passes = 0
         refinement_polish_duplication = False
@@ -228,6 +232,7 @@ def select_portfolio(
 
     unique_candidates: Dict[Tuple[str, ...], Any] = {}
     for lineup in candidates or []:
+        feasibility_checkpoint()
         signature = _candidate_signature(lineup, kind)
         if signature and signature not in retained_by_signature and signature not in unique_candidates:
             unique_candidates[signature] = lineup
@@ -238,6 +243,7 @@ def select_portfolio(
         key: dict(value) for key, value in normalized["player_constraints"].items()
     }
     for lineup in all_lineups:
+        feasibility_checkpoint()
         for player in lineup_players(lineup, kind):
             key = player_key(player)
             if key:
@@ -332,6 +338,7 @@ def select_portfolio(
     # player dictionaries millions of times dominated the v1 selector.
     candidate_meta: Dict[int, Dict[str, Any]] = {}
     for lineup in all_lineups:
+        feasibility_checkpoint()
         keys, teams, games = _lineup_sets(lineup, kind)
         captain = lineup_captain(lineup, kind)
         candidate_meta[id(lineup)] = {
@@ -397,7 +404,7 @@ def select_portfolio(
     def uniqueness_conflicts(min_unique):
         if min_unique not in uniqueness_cache:
             from portfolio_feasibility import conflict_index
-            edges, groups = conflict_index(all_lineups, lambda lu: _uniqueness_keys(lu, kind), min_unique)
+            edges, groups = conflict_index(all_lineups, lambda lu: _uniqueness_keys(lu, kind), min_unique, feasibility_checkpoint, expand=not feasibility_only)
             uniqueness_cache[min_unique] = edges
             uniqueness_groups[min_unique] = groups
         return uniqueness_cache[min_unique]
@@ -530,7 +537,8 @@ def select_portfolio(
         witness = repair(pool, retained, [], candidate_meta, current_uniqueness_conflicts,
             feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), finish_rank,
             seconds=max(0, repair_time_limit - (time.perf_counter() - selection_started)),
-            conflict_groups=uniqueness_groups.get(current_min_unique))
+            conflict_groups=uniqueness_groups.get(current_min_unique),
+            cancelled=selection_cancel_callback or (lambda: False))
         return {'lineups': witness or [], 'report': {}, 'candidate_count': len(pool)}
 
     while len(selected) < requested and remaining:
@@ -600,7 +608,8 @@ def select_portfolio(
             feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']))
         repaired = fallback if fallback_used else repair(pool, retained, selected, candidate_meta, current_uniqueness_conflicts,
             feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), score, seconds=repair_time_limit,
-            conflict_groups=uniqueness_groups.get(current_min_unique))
+            conflict_groups=uniqueness_groups.get(current_min_unique),
+            cancelled=selection_cancel_callback or (lambda: False))
         if repaired is None:
             from selection_shortage import PortfolioSelectionShortage, describe
             raise PortfolioSelectionShortage(describe(requested, selected, remaining, candidate_meta,

@@ -2081,6 +2081,7 @@ class LineupBuildWorker(QtCore.QObject):
                     if coarse_lineups and deep_report["screening_scenarios"] > 0:
 
                         from feasible_shortlist import preserve
+                        self.progress.emit(0, self.num_lineups, "Phase 2 of 4 - checking portfolio feasibility (up to 20 seconds; Cancel available)")
                         shortlist_all, feasible_fallback, deep_report['portfolio_feasibility'] = preserve(
                             coarse_lineups, _deep_shortlist, shortlist_limit, self.num_lineups,
                             kind=self.kind, rules=self.portfolio_rules, retained=self.retained_lineups,
@@ -2377,6 +2378,7 @@ class LineupBuildWorker(QtCore.QObject):
                 rules=self.portfolio_rules,
                 allow_relaxation=False,
                 fallback_lineups=feasible_fallback,
+                selection_cancel_callback=self._cancel_event.is_set,
                 repair_time_limit=max(0,min(15,deep_deadline-time.perf_counter())) if deep_build else 15,
 
                 kind=self.kind,

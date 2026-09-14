@@ -287,7 +287,7 @@ def run_deep_showdown(worker, shortlist_fn):
             shortlist_limit = max(worker.num_lineups, options["shortlist"] or 900)
             reservations, coverage_reserved = shortlist_reservations(coarse['lineups'], targets, shortlist_limit, retained_keys)
             from feasible_shortlist import preserve
-            worker.progress.emit(0, worker.num_lineups, "Phase 2 of 4 - preserving a compliant portfolio before shortlisting")
+            worker.progress.emit(0, worker.num_lineups, "Phase 2 of 4 - checking portfolio feasibility (up to 20 seconds; Cancel available)")
             short, feasible_fallback, deep['portfolio_feasibility'] = preserve(
                 coarse['lineups'], shortlist_fn, shortlist_limit, worker.num_lineups,
                 kind='showdown', rules=worker.portfolio_rules, retained=retained,
@@ -340,6 +340,7 @@ def run_deep_showdown(worker, shortlist_fn):
     selected = select_portfolio(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
         allow_relaxation=worker._cancel_event.is_set(),
         fallback_lineups=feasible_fallback,
+        selection_cancel_callback=worker._cancel_event.is_set,
         repair_time_limit=max(0,min(15,deadline-time.perf_counter())),
         retained_lineups=retained, refinement_passes=256,
         refinement_stop_callback=lambda: stop(deadline), refinement_polish_duplication=True,
