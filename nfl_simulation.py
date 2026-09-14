@@ -1235,6 +1235,7 @@ def simulate_nfl_contest(
     seed: int = 90210,
     opponent_players: Optional[Sequence[Dict[str, Any]]] = None,
     outcome_transform: Optional[Callable] = None,
+    capture_distributions: bool = False,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     cancel_callback: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
@@ -1308,6 +1309,8 @@ def simulate_nfl_contest(
     from build_snapshots import fingerprint
 
     scenario_count = max(1, int(scenarios or 1))
+    from scoring_distributions import DistributionCapture
+    distribution = DistributionCapture(sim_players, "classic", scenario_count, seed) if capture_distributions and outcome_transform is None else None
     rng = random.Random(seed)
     scores_by_candidate: List[List[float]] = [[] for _ in candidate_lists]
     top_hits: List[set[int]] = [set() for _ in candidate_lists]
@@ -1404,6 +1407,7 @@ def simulate_nfl_contest(
             return_scores[index] += scenario_value
             if scenario_value >= 1.5:
                 scenario_values[index][scenario_index] = scenario_value
+        if distribution is not None: distribution.record(outcomes)
         completed += 1
         if progress_callback and ((scenario_index + 1) % batch == 0 or scenario_index + 1 == scenario_count):
             progress_callback(scenario_index + 1, scenario_count, "Ranking candidates against simulated NFL fields")
@@ -1565,6 +1569,7 @@ def simulate_nfl_contest(
         "lineups": wrapped,
         "report": {
             "scenarios": completed,
+            "player_distributions": distribution.finish(completed) if distribution is not None else None,
             "field_lineups": len(field_lineups),
             "field_size": effective_field_size,
             "role_pool_size": len(role_pool),

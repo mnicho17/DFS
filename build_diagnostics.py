@@ -469,6 +469,7 @@ def create_build_diagnostic(
             ),
         },
     }
+    diagnostic["distribution_capture"] = dict(sim.get("distribution_capture") or {})
     return diagnostic
 
 
@@ -654,6 +655,9 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.append("- Specialist limits: offense remains projection-based; event rates await historical calibration")
     if sim.get("volatility_model"):
         lines.append("- Scenario model: game scripts, role-aware player ranges, and guarded rare ceiling outcomes")
+    capture = record.get('distribution_capture') or {}
+    if capture:
+        lines.append(f"- Scoring distributions: {capture.get('status')}; {capture.get('scenarios', 0):,} scenarios; {capture.get('players', 0)} players. {capture.get('reason', '')}")
     if deep_mode:
         stop_reason = str(sim.get("refinement_stop_reason") or "").strip()
         from ranking_stability import format_stability

@@ -146,6 +146,10 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             with conn:
                 snapshot_check=compare_snapshot(conn,import_id,name,Path(db_path or history_db_path()).parent,inferred_date,
                     'showdown' if field[1]==6 else 'classic',scores,own,username,ownership_source=ownership_source)
+            from distribution_validation import compare_distributions
+            with conn:
+                compare_distributions(conn,import_id,snapshot_check.get('input_id'),
+                    'showdown' if field[1]==6 else 'classic',scores,Path(db_path or history_db_path()).parent)
             date_source='filename-unverified' if inferred_date else 'unknown'
             if not inferred_date and snapshot_check.get('date'):
                 inferred_date=snapshot_check['date'];date_source='saved contest-ID schedule'
@@ -293,6 +297,8 @@ def review_report(conn,username=''):
     lines += player_history_report(conn)
     from results_snapshot_learning import snapshot_report
     lines += snapshot_report(conn,username)
+    from distribution_validation import validation_report
+    lines += validation_report(conn)
     return lines
 
 

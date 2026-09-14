@@ -2184,6 +2184,7 @@ class LineupBuildWorker(QtCore.QObject):
                             salary_cap=self.salary_cap,
 
                             seed=90210,
+                            capture_distributions=True,
 
                             progress_callback=lambda done, total, text: self.progress.emit(
 
@@ -2285,6 +2286,7 @@ class LineupBuildWorker(QtCore.QObject):
                         build_players,
 
                         scenarios=self.sim_scenarios,
+                        capture_distributions=True,
 
                         field_lineup_count=field_count,
 
@@ -2341,6 +2343,8 @@ class LineupBuildWorker(QtCore.QObject):
                     ]
 
                 sim_report = dict(sim_result.get("report") or {})
+                from scoring_distributions import save_distribution
+                save_distribution(sim_report, getattr(self, "build_input_id", ""))
                 sim_report["quarterback_pipeline"] = qb_stages
 
                 if deep_build:

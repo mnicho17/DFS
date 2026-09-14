@@ -976,7 +976,7 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
                 lines.append(f"- Average field salary used: ${field_avg_salary:,.0f}")
             if field_ownership_mae is not None:
                 lines.append(
-                    f"- Projected-vs-actual player ownership MAE: {field_ownership_mae:.2f} percentage points"
+                    f"- Legacy export-metadata ownership difference: {field_ownership_mae:.2f} percentage points (mixed contests; forecast timing/units may be unverified). Use snapshot-backed ownership accuracy below for current comparisons."
                 )
             latest_nfl = next(
                 (row for row in field_rows if str(row[0] or "").upper() == "NFL" and _safe_int(row[16], 0) == 9),
