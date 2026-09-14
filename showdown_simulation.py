@@ -127,7 +127,7 @@ def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0,
 
 
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
-                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False):
+                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False):
     if not candidates:
         return {"lineups": [], "report": {"scenarios": 0, "field_lineups": 0}}
     pool = active_showdown_players(players)
@@ -152,14 +152,21 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     scripts = Counter()
     from scoring_distributions import DistributionCapture
     distribution = DistributionCapture(pool, "showdown", max(1, int(scenarios)), seed) if capture_distributions and outcome_transform is None else None
+    from scenario_cache import ScenarioReplay
+    replay = ScenarioReplay(pool, [[showdown_signature(lu) for lu in bank] for bank in banks],
+        kind='showdown', seed=seed, count=max(1,int(scenarios)),
+        enabled=scenario_cache and outcome_transform is None, cancelled=cancel_callback,
+        context=dict(players=list(players),opponent_players=opponent_players,field_model=field_model,salary_cap=salary_cap))
     completed = 0
     for scenario in range(max(1, int(scenarios))):
         if cancel_callback and cancel_callback():
             break
-        outcomes = _scenario_outcomes(rng, pool, script_counter=scripts)
-        if outcome_transform is not None:
-            outcomes = outcome_transform(outcomes)
-        ranked = sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
+        def compute_frame():
+            outcomes = _scenario_outcomes(rng, pool, script_counter=scripts)
+            if outcome_transform is not None:
+                outcomes = outcome_transform(outcomes)
+            return outcomes, sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
+        outcomes, ranked = replay.frame(scenario, compute_frame, scripts)
         top1, top5, cash, bust = [ranked[int(q * (len(ranked) - 1))] for q in (0.99, 0.95, 0.8, 0.4)]
         for i, lineup in enumerate(candidates):
             score = showdown_score(lineup, outcomes)
@@ -180,6 +187,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         completed += 1
         if progress_callback and (completed % 50 == 0 or completed == scenarios):
             progress_callback(completed, scenarios, "Scoring Captain and FLEX against Showdown opponents")
+    cache_report = replay.finish(completed)
     rows = []
     for i, lineup in enumerate(candidates):
         base = dict(getattr(lineup, "sim_metrics", {}) or {})
@@ -212,6 +220,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     from field_diagnostics import summarize_field
     from build_snapshots import fingerprint
     return {"lineups": result, "report": {
+        "scenario_cache": cache_report,
         "field_diagnostic": summarize_field(field, field_pool, showdown=True, salary_cap=salary_cap),
         "sensitivity_field_id": fingerprint([showdown_signature(lu) for lu in field]) if outcome_transform is not None else None,
         "player_distributions": distribution.finish(completed) if distribution is not None else None,
@@ -299,7 +308,7 @@ def run_deep_showdown(worker, shortlist_fn):
             "validation_scenarios": 0, "shortlist_count": 0, "validation_top_overlap_pct": None,
             "candidate_bank_count": generated, "validation_time_limit_reached": False}
     if lineups and not stop(start + limit * screening_fraction):
-        coarse = simulate_showdown(retained + lineups, players,
+        coarse = simulate_showdown(retained + lineups, players, scenario_cache=getattr(worker,"scenario_cache",False),
             scenarios=min(options["screening"], max(250, worker.sim_scenarios)),
             field_lineup_count=min(1600, options["field"] or 1200), salary_cap=worker.salary_cap, seed=73129,
             cancel_callback=lambda: stop(start + limit * screening_fraction),
@@ -323,7 +332,7 @@ def run_deep_showdown(worker, shortlist_fn):
             top = {showdown_signature(lu) for lu in sorted(short, key=rank, reverse=True)[:worker.num_lineups]}
             validation_end = deadline - min(60, limit * .20)
             if not stop(validation_end):
-                validated = simulate_showdown(short, players, scenarios=max(2500, worker.sim_scenarios),
+                validated = simulate_showdown(short, players, scenario_cache=getattr(worker,"scenario_cache",False), scenarios=max(2500, worker.sim_scenarios),
                     field_lineup_count=options["field"] or 2700, salary_cap=worker.salary_cap, seed=90210, capture_distributions=True,
                     cancel_callback=lambda: stop(validation_end),
                     progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 3 of 4 - " + c))

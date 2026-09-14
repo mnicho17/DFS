@@ -1236,6 +1236,7 @@ def simulate_nfl_contest(
     opponent_players: Optional[Sequence[Dict[str, Any]]] = None,
     outcome_transform: Optional[Callable] = None,
     capture_distributions: bool = False,
+    scenario_cache: bool = False,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     cancel_callback: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
@@ -1328,17 +1329,21 @@ def simulate_nfl_contest(
     batch = max(10, scenario_count // 25)
     script_counts: Counter[str] = Counter()
 
+    from scenario_cache import ScenarioReplay
+    replay = ScenarioReplay(sim_players, opponent_field_banks, kind='classic', seed=seed,
+        count=scenario_count, enabled=scenario_cache and outcome_transform is None, cancelled=cancel_callback,
+        context=dict(players=list(players),opponent_players=opponent_players,config=config,salary_cap=salary_cap,field_size=effective_field_size))
     for scenario_index in range(scenario_count):
         if cancel_callback and cancel_callback():
             break
-        outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
-        if outcome_transform is not None:
-            outcomes = outcome_transform(outcomes)
-        active_field_keys = opponent_field_banks[scenario_index % len(opponent_field_banks)]
-        field_scores = sorted(
-            sum(outcomes.get(key, 0.0) for key in signature)
-            for signature in active_field_keys
-        )
+        def compute_frame():
+            outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
+            if outcome_transform is not None:
+                outcomes = outcome_transform(outcomes)
+            active_field_keys = opponent_field_banks[scenario_index % len(opponent_field_banks)]
+            return outcomes, sorted(sum(outcomes.get(key, 0.0) for key in signature)
+                for signature in active_field_keys)
+        outcomes, field_scores = replay.frame(scenario_index, compute_frame, script_counts)
         if not field_scores:
             continue
         top_one_threshold = field_scores[max(0, int(math.floor(0.99 * (len(field_scores) - 1))))]
@@ -1412,6 +1417,7 @@ def simulate_nfl_contest(
         if progress_callback and ((scenario_index + 1) % batch == 0 or scenario_index + 1 == scenario_count):
             progress_callback(scenario_index + 1, scenario_count, "Ranking candidates against simulated NFL fields")
 
+    cache_report = replay.finish(completed)
     denominator = float(max(1, completed))
     preliminary: List[Dict[str, Any]] = []
     winning_ownership_target = dict(config.get("winning_ownership_profile") or {})
@@ -1569,6 +1575,7 @@ def simulate_nfl_contest(
         "lineups": wrapped,
         "report": {
             "scenarios": completed,
+            "scenario_cache": cache_report,
             "player_distributions": distribution.finish(completed) if distribution is not None else None,
             "field_lineups": len(field_lineups),
             "field_size": effective_field_size,

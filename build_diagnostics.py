@@ -401,6 +401,7 @@ def create_build_diagnostic(
         "lineup_details": lineup_details,
         "lineup_details_total": len(list(lineups or [])),
         "sim": {
+            "scenario_cache": dict(sim.get("scenario_cache") or {}),
             "preset_fit": _number(preset.get("fit_score")) if preset.get("available") else None,
             "field_lineups": max(0, _integer(sim.get("field_lineups"), _integer(sim.get("field_lineup_count")))),
             "opponent_field_samples": max(
@@ -663,6 +664,9 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.append("- Specialist limits: offense remains projection-based; event rates await historical calibration")
     if sim.get("volatility_model"):
         lines.append("- Scenario model: game scripts, role-aware player ranges, and guarded rare ceiling outcomes")
+        cache = sim.get('scenario_cache') or {}
+        if cache and cache.get('status') != 'disabled':
+            lines.append(f"- Reusable scenarios: {cache.get('status')}; {_integer(cache.get('reused_scenarios')):,}/{_integer(cache.get('requested_scenarios')):,} reused. Current lineup scoring and rules still apply; independent audits remain fresh.")
     capture = record.get('distribution_capture') or {}
     from captain_coverage import format_coverage
     lines.extend(format_coverage(record.get('captain_coverage') or {}))
@@ -933,4 +937,3 @@ def format_build_comparison(first: Mapping[str, Any], second: Mapping[str, Any])
         "Privacy: This comparison contains aggregate settings and counts only; no players, lineups, file paths, or API keys.",
     ])
     return "\n".join(lines)
-

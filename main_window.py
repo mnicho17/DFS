@@ -1033,6 +1033,7 @@ class LineupBuildWorker(QtCore.QObject):
 
         repair_source: str = "",
         candidate_library: str = "",
+        scenario_cache: bool = False,
 
     ):
 
@@ -1087,6 +1088,7 @@ class LineupBuildWorker(QtCore.QObject):
         self.retained_lineups = list(retained_lineups or [])[:self.num_lineups]
 
         self.repair_source = str(repair_source or "")
+        self.scenario_cache = scenario_cache
         self.candidate_library = candidate_library
         self.library_candidates = []
         self.library_report = {}
@@ -2030,6 +2032,7 @@ class LineupBuildWorker(QtCore.QObject):
 
                         build_players,
 
+                        scenario_cache=self.scenario_cache,
                         scenarios=screening_scenarios,
 
                         field_lineup_count=screening_field_count,
@@ -2177,6 +2180,7 @@ class LineupBuildWorker(QtCore.QObject):
 
                             build_players,
 
+                            scenario_cache=self.scenario_cache,
                             scenarios=validation_scenarios,
 
                             field_lineup_count=validation_field_count,
@@ -2285,6 +2289,7 @@ class LineupBuildWorker(QtCore.QObject):
 
                         build_players,
 
+                        scenario_cache=self.scenario_cache,
                         scenarios=self.sim_scenarios,
                         capture_distributions=True,
 
@@ -13156,6 +13161,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             retained_lineups=retained,
 
             candidate_library=getattr(self, "_candidate_library", ""),
+            scenario_cache=True,
             repair_source=repair_source,
 
         )

@@ -1,33 +1,44 @@
 """Simple desktop controls for checkpointed candidate generation."""
 import copy
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 from candidate_library import metadata, run_search, load_candidates
 
 class SearchWorker(QtCore.QObject):
     progress=QtCore.pyqtSignal(str)
     finished=QtCore.pyqtSignal(str)
-    def __init__(self,path,snapshot,seconds,candidate_limit=20000):
+    def __init__(self,path,snapshot,seconds,candidate_limit=20000,prepare=False):
         super().__init__()
         import threading
         self.stop=threading.Event();self.path=path;self.snapshot=snapshot;self.seconds=seconds
         self.candidate_limit=candidate_limit
+        self.prepare=prepare
     def run(self):
         try:
-            count=run_search(self.path,self.snapshot,seconds=self.seconds,
+            import time
+            from compute_settings import normalize_deep_settings
+            started=time.monotonic()
+            options=normalize_deep_settings(self.snapshot.get('inputs',{}).get('recipe',{}).get('deep_compute'))
+            reserve=min(self.seconds*.25,options['minutes']*60) if self.prepare else 0
+            count=run_search(self.path,self.snapshot,seconds=max(1,self.seconds-reserve),
                              cancelled=self.stop.is_set,progress=self.progress.emit,candidate_limit=self.candidate_limit)
-            self.finished.emit(f'{count:,} unique lineups saved. Load this library and run Deep to score and rank them.')
+            prepared=''
+            if self.prepare and count and not self.stop.is_set():
+                from scenario_preparation import prepare_scenarios
+                prepared=prepare_scenarios(self.path,self.snapshot,seconds=max(0,self.seconds-(time.monotonic()-started)),
+                    cancelled=self.stop.is_set,progress=self.progress.emit)
+            self.finished.emit(f'{count:,} unique lineups saved. '+prepared+' Load this library and run Deep to score and rank current inputs.')
         except Exception as exc:
             self.finished.emit('Search stopped: '+str(exc))
 
 class LongSearchDialog(QtWidgets.QDialog):
     def __init__(self,parent):
-        super().__init__(parent);self.setWindowTitle('Overnight Preparation / Long Search');self.resize(620,380)
+        super().__init__(parent);self.setWindowTitle('Overnight Preparation / Long Search');self.resize(620,440)
         self.snapshot=None;self.thread=None
         layout=QtWidgets.QVBoxLayout(self)
         intro=QtWidgets.QLabel('Build a reusable candidate library for this NFL slate. All five styles run in small batches. '
             'Progress is saved after each batch and saved combinations are excluded from later searches. '
             'Stops at the candidate target or time limit, whichever comes first. Leave the app open and the PC awake; pause before closing. '
-            'This prepares combinations only. Load the library and run Deep to simulate current outcomes and select your portfolio.')
+            'Optional scenario preparation uses the saved inputs. Load the library and run Deep to check current inputs and select your portfolio.')
         intro.setWordWrap(True);layout.addWidget(intro)
         row=QtWidgets.QHBoxLayout();self.path=QtWidgets.QLineEdit();self.path.setReadOnly(True);row.addWidget(self.path)
         new=QtWidgets.QPushButton('New library');resume=QtWidgets.QPushButton('Open existing');row.addWidget(new);row.addWidget(resume);layout.addLayout(row)
@@ -38,13 +49,23 @@ class LongSearchDialog(QtWidgets.QDialog):
         self.target=QtWidgets.QComboBox()
         for count in (12000,20000,50000,100000):self.target.addItem(f'{count:,} candidates',count)
         self.target.setCurrentIndex(1);limits.addRow('Saved candidate target',self.target);layout.addLayout(limits)
+        self.prepare=QtWidgets.QCheckBox('Also prepare reusable scenarios (within this time limit)')
+        self.prepare.setChecked(True);layout.addWidget(self.prepare)
+        self.cache_folder_button=QtWidgets.QPushButton('Open reusable scenario cache folder')
+        self.cache_folder_button.clicked.connect(self.open_cache_folder);layout.addWidget(self.cache_folder_button)
         note=QtWidgets.QLabel('Larger libraries can make the later simulation slower. Start with 12,000–20,000; the target is for candidates, not submitted entries.')
         note.setWordWrap(True);layout.addWidget(note)
         self.status=QtWidgets.QLabel('Choose a new library or an existing checkpoint.');self.status.setWordWrap(True);layout.addWidget(self.status)
         buttons=QtWidgets.QHBoxLayout();self.start=QtWidgets.QPushButton('Start / Resume');self.pause=QtWidgets.QPushButton('Pause and save');self.pause.setEnabled(False)
         buttons.addWidget(self.start);buttons.addWidget(self.pause);layout.addLayout(buttons)
         self.start.clicked.connect(self.begin);self.pause.clicked.connect(self.cancel)
-        self.controls=[new,resume,self.hours,self.target,self.start]
+        self.controls=[new,resume,self.hours,self.target,self.prepare,self.cache_folder_button,self.start]
+    def open_cache_folder(self):
+        try:
+            from scenario_cache import cache_folder
+            folder=cache_folder();folder.mkdir(parents=True,exist_ok=True)
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(folder)))
+        except Exception as exc:self.status.setText('Could not open scenario cache: '+str(exc))
     def new_library(self):
         try:
             self.snapshot=self.parent()._capture_snapshot()
@@ -67,7 +88,7 @@ class LongSearchDialog(QtWidgets.QDialog):
         except Exception as exc:self.status.setText(str(exc))
     def begin(self):
         if not self.path.text() or self.snapshot is None:return
-        self.thread=QtCore.QThread(self);self.worker=SearchWorker(self.path.text(),copy.deepcopy(self.snapshot),self.hours.currentData()*3600,self.target.currentData())
+        self.thread=QtCore.QThread(self);self.worker=SearchWorker(self.path.text(),copy.deepcopy(self.snapshot),self.hours.currentData()*3600,self.target.currentData(),self.prepare.isChecked())
         self.worker.moveToThread(self.thread);self.thread.started.connect(self.worker.run)
         self.worker.progress.connect(self.status.setText);self.worker.finished.connect(self.status.setText)
         self.worker.finished.connect(self.thread.quit);self.worker.finished.connect(self.worker.deleteLater)
