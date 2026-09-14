@@ -728,13 +728,32 @@ def capture_projection_controls(output_dir: Path) -> None:
             window.close()
 
 
+def capture_overnight_controls(output_dir):
+    from long_search_ui import LongSearchDialog
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    # Qt's offscreen Windows platform may not discover system fonts.
+    font_path = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts' / 'segoeui.ttf'
+    if font_path.exists():
+        font_id = QtGui.QFontDatabase.addApplicationFont(str(font_path))
+        families = QtGui.QFontDatabase.applicationFontFamilies(font_id)
+        if families: app.setFont(QtGui.QFont(families[0], 10))
+    app.setStyle('Fusion'); app.setStyleSheet(DARK_QSS)
+    dialog = LongSearchDialog(None)
+    dialog.show(); app.processEvents()
+    save_widget(dialog, output_dir / 'overnight-preparation.png')
+    dialog.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight"), default="all")
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    if args.only == 'projections':
+    if args.only == 'overnight':
+        capture_overnight_controls(output_dir)
+    elif args.only == 'projections':
         capture_projection_controls(output_dir)
     elif args.only == 'snapshots':
         capture_snapshot_controls(output_dir)

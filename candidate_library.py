@@ -3,6 +3,7 @@ from contextlib import contextmanager
 import copy
 import hashlib
 import json
+import math
 import sqlite3
 import sys
 import time
@@ -76,7 +77,14 @@ def roster_keys(lineup, kind):
         return [player_key(lineup['Captain'])] + sorted(player_key(p) for p in lineup['Flex'])
     return sorted(player_key(p) for p in lineup)
 
-def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress=lambda text:None, batch_size=200):
+def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress=lambda text:None, batch_size=200,
+               candidate_limit=MAX_CANDIDATES):
+    if not math.isfinite(float(seconds)) or not 0 < float(seconds) <= 12*3600:
+        raise ValueError('Search time must be greater than zero and at most 12 hours.')
+    if isinstance(candidate_limit, bool) or int(candidate_limit) != candidate_limit or not 1 <= candidate_limit <= MAX_CANDIDATES:
+        raise ValueError('Candidate target must be between 1 and 100,000.')
+    if isinstance(batch_size, bool) or int(batch_size) != batch_size or not 1 <= batch_size <= 1000:
+        raise ValueError('Batch size must be between 1 and 1,000.')
     initialize(path,snapshot)
     inputs = snapshot['inputs']; recipe=inputs['recipe']; kind=recipe['contest_kind']
     players = eligible_players(apply_qb_eligibility(copy.deepcopy(inputs['players'])))
@@ -86,29 +94,39 @@ def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress
     with connect(path) as con:
         index=con.execute('SELECT COALESCE(MAX(id),-1)+1 FROM batches').fetchone()[0]
         count=con.execute('SELECT count(*) FROM candidates').fetchone()[0]
-        while not stop() and count < MAX_CANDIDATES:
+        saved_keys=[json.loads(row[0]) for row in con.execute('SELECT roster FROM candidates')]
+        exclusions=({(keys[0],tuple(keys[1:])) for keys in saved_keys} if kind=='showdown'
+                    else {tuple(keys) for keys in saved_keys})
+        stagnant=0
+        while not stop() and count < candidate_limit:
             style=STYLES[index % len(STYLES)]; seed=1337+index*104729
             start=time.monotonic()
-            progress(f'Batch {index+1}: {style}; {count:,} saved candidates')
+            progress(f'Batch {index+1}: {style}; {count:,}/{candidate_limit:,} saved candidates')
             kwargs=dict(salary_cap=cap,seed=seed,own_mode=recipe.get('ownership_mode','Balanced'),
                         own_weight=float(recipe.get('ownership_weight') or 0),build_style=style)
             opt=ShowdownOptimizer(players,**kwargs) if kind=='showdown' else MultiSportClassicOptimizer(
                 players,sport='NFL',salary_strategy=recipe.get('salary_strategy','Near Cap'),**kwargs)
             # Short batches bound lost work on power failure. Repeated seeds are avoided on resume.
-            rows=opt.build_lineups(num_lineups=min(batch_size,MAX_CANDIDATES-count),cancel_callback=stop)
+            exclusion_args=({'excluded_signatures':exclusions} if kind=='showdown'
+                            else {'exact_excluded_signatures':exclusions})
+            rows=opt.build_lineups(num_lineups=min(batch_size,candidate_limit-count),cancel_callback=stop,
+                                  **exclusion_args)
+            added=0
             with con:
                 for row in rows:
+                    if count+added >= candidate_limit:break
                     keys=roster_keys(row,kind)
                     encoded=json.dumps(keys,separators=(',',':'))
-                    con.execute('INSERT OR IGNORE INTO candidates VALUES (?,?,?,?,?)',
-                                (encoded,encoded,index,style,seed))
-                con.execute('INSERT INTO batches VALUES (?,?,?,?,?)',(index,style,seed,len(rows),time.monotonic()-start))
+                    added+=con.execute('INSERT OR IGNORE INTO candidates VALUES (?,?,?,?,?)',
+                                (encoded,encoded,index,style,seed)).rowcount
+                    exclusions.add((keys[0],tuple(keys[1:])) if kind=='showdown' else tuple(keys))
+                con.execute('INSERT INTO batches VALUES (?,?,?,?,?)',(index,style,seed,added,time.monotonic()-start))
             count=con.execute('SELECT count(*) FROM candidates').fetchone()[0]
             index+=1
-            if not rows and not stop():
-                progress('This batch found no candidates. Check available players and locks if this continues.')
-            if index >= 5 and con.execute('SELECT SUM(count) FROM (SELECT count FROM batches ORDER BY id DESC LIMIT 5)').fetchone()[0] == 0:
-                raise ValueError('Five search styles produced no candidates. Check depth charts, locks and salaries.')
+            stagnant=stagnant+1 if added==0 else 0
+            if stagnant >= len(STYLES):
+                progress('Stopped after five styles added no new candidates. Saved work is retained; this does not prove the slate is exhausted.')
+                break
     progress(f'Search paused/completed: {count:,} unique candidates saved. Load the library and build to simulate current outcomes.')
     return count
 
