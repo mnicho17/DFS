@@ -590,12 +590,13 @@ def select_portfolio(
             dict(requested=requested,total=max_total,captain=max_cpt,team=max_team,game=max_game,specialist=specialist_cpt_limit),
             lambda keys: _group_ok(keys, normalized['groups']), score, seconds=repair_time_limit)
         if repaired is None:
-            raise ValueError(
-                f"This search found {len(selected)} of {requested} requested lineups under the current uniqueness and exposure limits. "
-                "No limits were relaxed and the bounded feasibility repair did not find a complete portfolio. "
-                "Increase candidate/shortlist coverage, or explicitly lower the requested count or change the limits, then rebuild. "
-                "This does not prove that no feasible full portfolio exists."
-            )
+            from selection_shortage import PortfolioSelectionShortage, describe
+            raise PortfolioSelectionShortage(describe(requested, selected, remaining, candidate_meta,
+                current_uniqueness_conflicts,
+                dict(total=max_total, captain=max_cpt, team=max_team, game=max_game, specialist=specialist_cpt_limit),
+                dict(total=total_counts, captain=cpt_counts, team=team_counts, game=game_counts, specialist=specialist_cpt_count),
+                player_lookup, current_min_unique, auto_total_keys, auto_cpt_keys,
+                lambda keys: _group_ok(keys, normalized['groups'])))
         selected = repaired
         feasibility_repaired = True
         selected_candidate_ids = {id(lu) for lu in selected}

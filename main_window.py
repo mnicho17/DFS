@@ -1,6 +1,7 @@
 # main_window.py
 
 from __future__ import annotations
+from selection_shortage import PortfolioSelectionShortage, TITLE as SELECTION_SHORTAGE_TITLE
 
 
 
@@ -2764,6 +2765,9 @@ class LineupBuildWorker(QtCore.QObject):
                 "repair_source": self.repair_source,
 
             })
+
+        except PortfolioSelectionShortage as exc:
+            self.error.emit(str(exc))
 
         except Exception:
 
@@ -14284,6 +14288,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._lineup_space_phase = ""
 
         self._update_lineup_space_dashboard()
+
+        if msg.startswith(SELECTION_SHORTAGE_TITLE + "\n"):
+            self.status.showMessage("Build stopped: current lineup limits could not be met.", 8000)
+            logger.warning("Lineup selection stopped:\n%s", msg)
+            QtWidgets.QMessageBox.warning(self, "Lineup limits", msg)
+            return
 
         self.status.showMessage("Lineup build failed.", 5000)
 
