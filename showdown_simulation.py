@@ -268,6 +268,7 @@ def run_deep_showdown(worker, shortlist_fn):
     sim_start = time.perf_counter()
     lineups = list(bank.values())
     sim_report = {}
+    feasible_fallback = []
     coverage_short = []
     coverage_validated = []
     coverage_reserved = 0
@@ -285,7 +286,14 @@ def run_deep_showdown(worker, shortlist_fn):
         if deep["screening_scenarios"]:
             shortlist_limit = max(worker.num_lineups, options["shortlist"] or 900)
             reservations, coverage_reserved = shortlist_reservations(coarse['lineups'], targets, shortlist_limit, retained_keys)
-            short = shortlist_fn(coarse["lineups"], shortlist_limit, reserved_signatures=reservations, individual_ranking=options["selection_mode"] == "Individual ranking")
+            from feasible_shortlist import preserve
+            worker.progress.emit(0, worker.num_lineups, "Phase 2 of 4 - preserving a compliant portfolio before shortlisting")
+            short, feasible_fallback, deep['portfolio_feasibility'] = preserve(
+                coarse['lineups'], shortlist_fn, shortlist_limit, worker.num_lineups,
+                kind='showdown', rules=worker.portfolio_rules, retained=retained,
+                reserved=reservations, signature=showdown_signature,
+                individual_ranking=options['selection_mode'] == 'Individual ranking',
+                deadline=deadline - min(60, limit * .20), cancelled=worker._cancel_event.is_set)
             coverage_short = list(short)
             qb_stages["shortlisted"] = quarterback_mix(short, scored=True)
             sim_report = coarse["report"]
@@ -331,6 +339,7 @@ def run_deep_showdown(worker, shortlist_fn):
     worker.progress.emit(0, worker.num_lineups, "Phase 4 of 4 - selecting and refining Showdown portfolio")
     selected = select_portfolio(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
         allow_relaxation=worker._cancel_event.is_set(),
+        fallback_lineups=feasible_fallback,
         repair_time_limit=max(0,min(15,deadline-time.perf_counter())),
         retained_lineups=retained, refinement_passes=256,
         refinement_stop_callback=lambda: stop(deadline), refinement_polish_duplication=True,

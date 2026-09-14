@@ -855,7 +855,7 @@ def _deep_shortlist(
 
             unique[signature] = lineup
 
-    reserved = {tuple(signature) for signature in (reserved_signatures or [])}
+    reserved = list(dict.fromkeys(tuple(signature) for signature in (reserved_signatures or [])))
 
     chosen: List[Any] = []
 
@@ -1124,6 +1124,7 @@ class LineupBuildWorker(QtCore.QObject):
                 from nfl_eligibility import eligible_players, apply_qb_eligibility
                 self.players = apply_qb_eligibility([dict(p) for p in self.players])
                 eligible_players(self.players)
+            feasible_fallback = []
             build_started = time.perf_counter()
 
             deep_requested = self.compute_mode.casefold().startswith("deep")
@@ -2079,17 +2080,14 @@ class LineupBuildWorker(QtCore.QObject):
 
                     if coarse_lineups and deep_report["screening_scenarios"] > 0:
 
-                        shortlist_all = _deep_shortlist(
-
-                            coarse_lineups,
-
-                            shortlist_limit,
-
-                            reserved_signatures=list(retained_signatures),
-
-                            individual_ranking=self.deep_options["selection_mode"] == "Individual ranking",
-
-                        )
+                        from feasible_shortlist import preserve
+                        shortlist_all, feasible_fallback, deep_report['portfolio_feasibility'] = preserve(
+                            coarse_lineups, _deep_shortlist, shortlist_limit, self.num_lineups,
+                            kind=self.kind, rules=self.portfolio_rules, retained=self.retained_lineups,
+                            reserved=list(retained_signatures), signature=_lineup_signature,
+                            individual_ranking=self.deep_options['selection_mode'] == 'Individual ranking',
+                            deadline=deep_deadline - min(60, self.deep_time_limit_seconds * .20),
+                            cancelled=self._cancel_event.is_set)
 
                         qb_stages["shortlisted"] = quarterback_mix(shortlist_all, scored=True)
                         coarse_by_signature = {
@@ -2378,6 +2376,7 @@ class LineupBuildWorker(QtCore.QObject):
 
                 rules=self.portfolio_rules,
                 allow_relaxation=False,
+                fallback_lineups=feasible_fallback,
                 repair_time_limit=max(0,min(15,deep_deadline-time.perf_counter())) if deep_build else 15,
 
                 kind=self.kind,

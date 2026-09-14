@@ -313,6 +313,8 @@ def create_build_diagnostic(
         "schema_version": 4,
         "input_id": str(context.get('input_id') or ''),
         "candidate_library": dict(sim.get("candidate_library") or {}),
+        "portfolio_feasibility": dict((sim.get('deep_build') or timing).get('portfolio_feasibility') or {}),
+        "feasible_shortlist_fallback_used": bool(portfolio.get('feasible_shortlist_fallback_used')),
         "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
         "ranking_bank": dict((sim.get('deep_build') or {}).get('ranking_bank') or {}),
         "field_diagnostic": dict(sim.get('field_diagnostic') or {}),
@@ -670,6 +672,11 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             lines.append(f"- Repeatability shortlist saved: {bank['candidates']:,} candidates; bank {bank['bank_id'][:12]}. Open Settings > Ranking Repeatability.")
         elif bank:
             lines.append('- Repeatability shortlist was not saved; check local storage and rerun Deep.')
+        feasibility = record.get('portfolio_feasibility') or {}
+        if feasibility:
+            lines.append(f"- Portfolio feasibility before shortlist: {feasibility.get('status')}; {feasibility.get('lineups', 0)} lineups preserved from {feasibility.get('searched', 0):,} candidates; {feasibility.get('seconds', 0):.2f}s")
+            if record.get('feasible_shortlist_fallback_used'):
+                lines.append("- Selection recovered using the SIM-scored preserved portfolio; no limits were changed.")
         time_remaining = max(0.0, _number(sim.get("time_remaining_seconds")))
         if sim.get("deep_time_limit_reached"):
             deep_status = "time budget used"

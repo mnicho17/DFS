@@ -197,6 +197,8 @@ def select_portfolio(
     selection_cancel_callback: Optional[Any] = None,
     allow_relaxation: bool = True,
     repair_time_limit: float = 15,
+    feasibility_only: bool = False,
+    fallback_lineups: Optional[Sequence[Any]] = None,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
@@ -206,6 +208,7 @@ def select_portfolio(
     feasibility repair before reporting a shortage; diagnostic callers may opt
     into the legacy fill behavior.
     """
+    selection_started = time.perf_counter()
     if individual_ranking:
         refinement_passes = 0
         refinement_polish_duplication = False
@@ -349,10 +352,10 @@ def select_portfolio(
                 or _sim_metrics(lineup).get("candidate_archetype")
                 or ""
             ),
-            "top_hits": set(getattr(lineup, "sim_top_hits", set()) or set()),
-            "top_five_hits": set(getattr(lineup, "sim_top_five_hits", set()) or set()),
-            "win_hits": set(getattr(lineup, "sim_win_hits", set()) or set()),
-            "scenario_values": dict(getattr(lineup, "sim_scenario_values", {}) or {}),
+            "top_hits": set() if feasibility_only else set(getattr(lineup, "sim_top_hits", set()) or set()),
+            "top_five_hits": set() if feasibility_only else set(getattr(lineup, "sim_top_five_hits", set()) or set()),
+            "win_hits": set() if feasibility_only else set(getattr(lineup, "sim_win_hits", set()) or set()),
+            "scenario_values": {} if feasibility_only else dict(getattr(lineup, "sim_scenario_values", {}) or {}),
         }
 
     selected: List[Any] = list(retained)
@@ -388,22 +391,15 @@ def select_portfolio(
         if meta["archetype"]:
             archetype_counts[meta["archetype"]] += 1
 
-    uniqueness_cache: Dict[int, Dict[int, set[int]]] = {}
+    uniqueness_cache = {}
+    uniqueness_groups = {}
 
-    def uniqueness_conflicts(min_unique: int) -> Dict[int, set[int]]:
-        if min_unique <= 1:
-            return {}
+    def uniqueness_conflicts(min_unique):
         if min_unique not in uniqueness_cache:
-            conflicts: Dict[int, set[int]] = {id(lineup): set() for lineup in all_lineups}
-            for index, lineup in enumerate(all_lineups):
-                lineup_id = id(lineup)
-                keys = _uniqueness_keys(lineup, kind)
-                for previous in all_lineups[:index]:
-                    previous_id = id(previous)
-                    if len(keys - _uniqueness_keys(previous, kind)) < min_unique:
-                        conflicts[lineup_id].add(previous_id)
-                        conflicts[previous_id].add(lineup_id)
-            uniqueness_cache[min_unique] = conflicts
+            from portfolio_feasibility import conflict_index
+            edges, groups = conflict_index(all_lineups, lambda lu: _uniqueness_keys(lu, kind), min_unique)
+            uniqueness_cache[min_unique] = edges
+            uniqueness_groups[min_unique] = groups
         return uniqueness_cache[min_unique]
 
     current_uniqueness_conflicts = uniqueness_conflicts(current_min_unique)
@@ -527,6 +523,16 @@ def select_portfolio(
 
     remaining = list(pool)
     auto_relaxations = 0
+    feasibility_limits = dict(requested=requested, total=max_total, captain=max_cpt,
+        team=max_team, game=max_game, specialist=specialist_cpt_limit)
+    if feasibility_only:
+        from portfolio_feasibility import repair
+        witness = repair(pool, retained, [], candidate_meta, current_uniqueness_conflicts,
+            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), finish_rank,
+            seconds=max(0, repair_time_limit - (time.perf_counter() - selection_started)),
+            conflict_groups=uniqueness_groups.get(current_min_unique))
+        return {'lineups': witness or [], 'report': {}, 'candidate_count': len(pool)}
+
     while len(selected) < requested and remaining:
         if selection_cancel_callback and selection_cancel_callback():
             raise ValueError("Selection cancelled")
@@ -584,11 +590,17 @@ def select_portfolio(
             archetype_counts[chosen_meta["archetype"]] += 1
 
     feasibility_repaired = False
+    fallback_used = False
     if len(selected) < requested and not allow_relaxation:
         from portfolio_feasibility import repair
-        repaired = repair(pool, retained, selected, candidate_meta, current_uniqueness_conflicts,
-            dict(requested=requested,total=max_total,captain=max_cpt,team=max_team,game=max_game,specialist=specialist_cpt_limit),
-            lambda keys: _group_ok(keys, normalized['groups']), score, seconds=repair_time_limit)
+        from portfolio_feasibility import valid_portfolio
+        fallback_keys = {_candidate_signature(lu, kind) for lu in (fallback_lineups or [])}
+        fallback = [lu for lu in all_lineups if _candidate_signature(lu, kind) in fallback_keys]
+        fallback_used = valid_portfolio(fallback, retained, candidate_meta, current_uniqueness_conflicts,
+            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']))
+        repaired = fallback if fallback_used else repair(pool, retained, selected, candidate_meta, current_uniqueness_conflicts,
+            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), score, seconds=repair_time_limit,
+            conflict_groups=uniqueness_groups.get(current_min_unique))
         if repaired is None:
             from selection_shortage import PortfolioSelectionShortage, describe
             raise PortfolioSelectionShortage(describe(requested, selected, remaining, candidate_meta,
@@ -908,8 +920,11 @@ def select_portfolio(
         refinement_stop_reason = "disabled in individual ranking" if individual_ranking else "disabled"
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
     report["effective_min_unique"] = current_min_unique
+    report["feasible_shortlist_fallback_used"] = fallback_used
+    if fallback_used:
+        report["warnings"].append("Selection used the SIM-scored compliant set preserved before shortlisting; rules were unchanged.")
     report["feasibility_repaired"] = feasibility_repaired
-    if feasibility_repaired:
+    if feasibility_repaired and not fallback_used:
         warnings.append("Bounded feasibility repair completed the portfolio without weakening uniqueness or exposure limits.")
     report["refinement_swaps"] = refinement_swaps
     report["duplication_refinement_swaps"] = duplication_refinement_swaps
