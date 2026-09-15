@@ -745,13 +745,64 @@ def capture_overnight_controls(output_dir):
     dialog.close()
 
 
+def capture_output_columns(output_dir):
+    from unittest.mock import patch
+    from test_nfl_logic import _fixture_players
+    from test_showdown_performance import _showdown_players
+    from optimizers import ShowdownOptimizer, ShowdownLineup
+    output_dir.mkdir(parents=True,exist_ok=True)
+    app=QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    font_path=Path(os.environ.get('WINDIR','C:/Windows'))/'Fonts'/'segoeui.ttf'
+    if font_path.exists():
+        font_id=QtGui.QFontDatabase.addApplicationFont(str(font_path))
+        families=QtGui.QFontDatabase.applicationFontFamilies(font_id)
+        if families:app.setFont(QtGui.QFont(families[0],9))
+    app.setStyle('Fusion');app.setStyleSheet(DARK_QSS)
+    with tempfile.TemporaryDirectory() as folder:
+        settings=QtCore.QSettings(folder+'/capture.ini',QtCore.QSettings.IniFormat)
+        with patch('main_window.QtCore.QSettings',return_value=settings),patch.dict(os.environ,{'DFS_OPTIMIZER_DATA_DIR':folder}):
+            window=MainWindow();window.resize(1440,900)
+            classic=MultiSportClassicOptimizer(_fixture_players()).build_lineups(1)[0]
+            names=['Trevor Lawrence','Derrick Henry','Rhamondre Stevenson','Jaxon Smith-Njigba','Drake London',"Wan'Dale Robinson",'Kyle Pitts','Jacory Croskey-Merritt','Jacksonville Jaguars']
+            for player,name in zip(classic,names):player['Name']=name
+            sd=ShowdownOptimizer(_showdown_players()).build_lineups(1)[0]
+            for player,name in zip([sd['Captain']]+sd['Flex'],names):player['Name']=name
+            metrics=dict(sim_scenarios=1000,sim_top_one_pct=4.71,sim_top_two_pct=7.83,sim_top_five_pct=15.35,sim_win_rate=.38,sim_mean=133.7,sim_edge=92)
+            for kind in ('classic','showdown'):
+                rows=[]
+                for i in range(160):
+                    lu=SimLineup(copy.deepcopy(classic),metrics=dict(metrics)) if kind=='classic' else ShowdownLineup(copy.deepcopy(sd['Captain']),copy.deepcopy(sd['Flex']))
+                    lu.sim_metrics=dict(metrics);rows.append(lu)
+                if kind=='classic':window._populate_classic_lineups(rows,'NFL')
+                else:window._populate_showdown_lineups(rows)
+                table=window.tbl_cl if kind=='classic' else window.tbl_sd
+                window.tabs_lineups.setCurrentIndex(1 if kind=='classic' else 0)
+                window.show();app.processEvents()
+                assert table.horizontalScrollBar().maximum()>0
+                assert all(table.horizontalHeader().sectionResizeMode(i)==QtWidgets.QHeaderView.Interactive for i in range(table.columnCount()))
+                table.horizontalHeader().resizeSection(1,245)
+                getattr(window,'_'+kind+'_pages')[0].setCurrentIndex(1);app.processEvents()
+                assert table.columnWidth(1)==245
+                getattr(window,'_'+kind+'_pages')[0].setCurrentIndex(0);app.processEvents()
+                assert table.columnWidth(1)==245
+                window._sort_result_column(kind,1);app.processEvents()
+                assert table.columnWidth(1)==245
+                window._reset_result_sort(kind);app.processEvents()
+                assert table.columnWidth(1)==245
+                table.horizontalScrollBar().setValue(0)
+                save_widget(window.tabs_lineups,output_dir/('lineup-columns-'+kind+'.png'))
+            window.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns"), default="all")
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    if args.only == 'overnight':
+    if args.only == 'lineup-columns':
+        capture_output_columns(output_dir)
+    elif args.only == 'overnight':
         capture_overnight_controls(output_dir)
     elif args.only == 'projections':
         capture_projection_controls(output_dir)

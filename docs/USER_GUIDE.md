@@ -1545,3 +1545,15 @@ Validation used exact comparisons of cached and uncached metrics, hit sets, scen
 Classic previously sorted the full candidate-rating population again for each candidate and each of six rating columns after the scenario counter reached its target. This scaled poorly with large overnight libraries and did not show post-simulation progress. Each rating column is now sorted once and reused for percentile lookups, preserving the exact existing midrank/tie formula. Phase 2 separately reports Summarizing candidate scores and Finalizing candidate ratings, with candidate counts. Candidate pools, scenarios, scoring formulas and portfolio limits are unchanged. Showdown already used shared sorted rating columns.
 
 Focused comparisons preserved complete Classic metrics and tie handling. A local microbenchmark took 1.715 seconds for 4,000 old-style rating lookups versus 0.003 seconds with shared sorting; the revised six-column rating stage for 100,000 candidates took 0.850 seconds. This measures rating finalization only: scoring, summaries, memory pressure and portfolio feasibility still contribute to build time. A running process uses its loaded code and must be restarted to receive the correction.
+
+### Resizable generated-lineup tables
+
+Classic/Sport and Showdown result tables now give player columns at least 180 pixels by default, expanding for visible names up to 260 pixels. All result columns can be resized by dragging header dividers; double-click a divider to fit contents. A horizontal scrollbar exposes later players and SIM/comparison metrics instead of compressing names into the window width. Hover over a player cell for its full displayed name.
+
+Manual widths are retained within the open app while paging, sorting, restoring Best first, or refreshing results, including repeated roster slots. Numeric cells remain right-aligned and Save actions are unchanged. Widths are not saved across app restarts. This changes presentation only: lineup identities, ordering rules, saved selections, exports and simulation behavior are unchanged.
+
+Illustrative layout data (not real player/team assignments or recommendations):
+
+![Resizable Classic lineup columns](images/lineup-columns-classic.png)
+
+![Resizable Showdown lineup columns](images/lineup-columns-showdown.png)

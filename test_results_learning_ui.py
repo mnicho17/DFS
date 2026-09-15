@@ -398,8 +398,12 @@ class ResultsLearningUITests(unittest.TestCase):
         window.tabs_lineups.setCurrentIndex(1)
         total_column = window.tbl_cl.columnCount() - 2
         grade_column = window.tbl_cl.columnCount() - 1
-        self.assertEqual(window.tbl_cl.horizontalHeader().sectionSize(total_column), 88)
-        self.assertEqual(window.tbl_cl.horizontalHeader().sectionSize(grade_column), 92)
+        self.assertGreaterEqual(window.tbl_cl.horizontalHeader().sectionSize(total_column), 88)
+        self.assertGreaterEqual(window.tbl_cl.horizontalHeader().sectionSize(grade_column), 92)
+        self.assertEqual(window.tbl_cl.horizontalHeader().sectionResizeMode(1), QtWidgets.QHeaderView.Interactive)
+        window.tbl_cl.horizontalHeader().resizeSection(1,245)
+        window._fit_lineup_table_columns(window.tbl_cl)
+        self.assertEqual(window.tbl_cl.columnWidth(1),245)
         self.assertEqual(
             window.tbl_cl.horizontalHeaderItem(total_column).textAlignment() & horizontal_mask,
             int(QtCore.Qt.AlignRight),

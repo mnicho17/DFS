@@ -8522,54 +8522,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
     def _fit_lineup_table_columns(table: QtWidgets.QTableWidget) -> None:
 
-        """Use the output width while keeping summary fields compact and aligned."""
-
-        header = table.horizontalHeader()
-
-        if table.columnCount() <= 0:
-
-            return
-
-        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Fixed)
-
-        header.resizeSection(0, 64)
-
-        save_header = table.horizontalHeaderItem(0)
-
-        if save_header is not None:
-
-            save_header.setTextAlignment(int(QtCore.Qt.AlignCenter))
-
-        for column in range(1, table.columnCount()):
-
-            header_item = table.horizontalHeaderItem(column)
-
-            label = header_item.text() if header_item is not None else ""
-
-            if label == "TotalSal":
-
-                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Fixed)
-
-                header.resizeSection(column, 88)
-
-                header_item.setTextAlignment(int(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter))
-
-            elif label in {"Grade", "SIM Edge"}:
-
-                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Fixed)
-
-                header.resizeSection(column, 126 if label == "SIM Edge" else 92)
-
-                header_item.setTextAlignment(int(QtCore.Qt.AlignCenter))
-
-            else:
-
-                header.setSectionResizeMode(column, QtWidgets.QHeaderView.Stretch)
-
-                if header_item is not None:
-
-                    header_item.setTextAlignment(int(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter))
-
+        from output_columns import fit_output_columns
+        fit_output_columns(table)
 
 
     @staticmethod
@@ -13541,6 +13495,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             table.horizontalHeader().setSortIndicator(choice[0], QtCore.Qt.DescendingOrder if choice[1] else QtCore.Qt.AscendingOrder)
 
+        self._fit_lineup_table_columns(table)
         self._sync_saved_checkboxes(kind)
 
 
