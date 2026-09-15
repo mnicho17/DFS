@@ -1372,6 +1372,8 @@ Saved banks omit original group/team/game settings, so this does not recreate th
 
 ## Core Plays from loaded salaries
 
+Core Plays opens with **Starting shortlist**: up to three distinct players per position and slot. It first takes the highest-projected anchor, then the highest-value remaining value candidate, then the highest-projected remaining lower-owned alternative. Any remaining places use projection among tagged candidates. This is a review starting point, not a SIM ranking, exposure recommendation or requirement to use all three. Warnings remain visible; **Core candidates** restores the full list. Filters narrow the existing shortlist. Captain and FLEX are handled separately. Alternative details show exact differences in salary dollars, projected points and ownership percentage points. Column widths and sorting remain in place while filtering.
+
 After loading NFL salaries and refreshing player data, open **Settings > Core Plays** for the active Classic or Showdown output tab. No Deep run is required. This read-only view uses the currently loaded inputs; it does not fetch data, change projections, set exposure limits or lock players. Reopen after changing inputs. Filters show core candidates, all eligible/loaded players, individual signal categories and Captain/FLEX slots. Search by player/team/position; click headers to sort numerically, with unknowns last in either direction. Select a row for workload, sources, history, status-check time, reasons and review notes. **Copy Report** copies every row in the current filtered/sorted view.
 
 Signals are transparent heuristics, not recommendations to lock a player: **Underpriced role candidate** requires points per $1,000 percentile >=75 and projection percentile >=50 among at least four supported positive-forecast peers at the same position/slot. **High-projection anchor** requires projection percentile >=80; equal peers do not count as strictly lower. **Popular play to assess** uses estimated ownership >=10% Classic, >=25% FLEX or >=8% Captain. **Lower-owned alternative** compares same-position/slot players with >=90% of a popular peer's projection, <=110% salary, and both >=5 percentage points and >=30% lower ownership. Similar mean projections do not prove similar ceilings. **Role-change opportunity** requires explicit unavailability in every earlier recorded depth slot. No salary file alone establishes current starters or actual ownership.
@@ -1382,7 +1384,9 @@ Showdown uses separate Captain/FLEX prices, forecasts and explicit percentage ow
 
 Use the position filter to compare QB, RB, WR, TE, K or DST. Cross-position value sorting is not an overall player ranking.
 
-![Core Plays on illustrative saved inputs, with recorded data warnings](images/core-plays.png)
+![Classic starting shortlist on illustrative inputs](images/core-plays.png)
+
+![Showdown starting shortlist with separate Captain and FLEX rows](images/core-plays-showdown.png)
 
 
 ## Update one contest in a combined entries file

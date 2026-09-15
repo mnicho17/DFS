@@ -2,7 +2,7 @@ import copy
 import os
 import unittest
 from datetime import datetime,timezone
-from core_plays import build_core_plays,format_core_report,CATEGORIES,POSITIVE
+from core_plays import build_core_plays,format_core_report,focused_core_rows,CATEGORIES,POSITIVE
 
 NOW=datetime(2026,9,13,12,tzinfo=timezone.utc)
 
@@ -17,6 +17,23 @@ def player(name,projection=12,salary=5000,own=12,**extra):
 
 
 class CorePlaysTests(unittest.TestCase):
+    def test_shortlist_reserves_distinct_signals_and_keeps_slot_warnings(self):
+        pool=[player('Anchor',20,7000,30),player('Value',18,3000,20,Rookie=True),
+              player('Alternative',19,6500,2),player('Other',10,5000,11),player('Low',5,4000,1),
+              player('Faded',30,2000,1,FadeCpt=True,FadeFlex=True)]
+        report=build_core_plays(pool,'showdown',NOW)
+        before=copy.deepcopy(report)
+        shortlist=focused_core_rows(report['rows'])
+        for slot in ('Captain','FLEX'):
+            rows=[r for r in shortlist if r['slot']==slot]
+            self.assertEqual([r['name'] for r in rows],['Anchor','Value','Alternative'])
+        self.assertEqual(report,before)
+        self.assertTrue(any(r['concerns'] for r in shortlist))
+        self.assertNotIn('Faded',[r['name'] for r in shortlist])
+        notes=format_core_report(report,shortlist)
+        self.assertIn('-1.00 projected points, -500 salary dollars, -28.0 ownership percentage points',notes)
+        self.assertEqual(focused_core_rows([]),[])
+
     def test_relative_value_anchors_alternatives_and_no_mutation(self):
         pool=[player('Value',18,3000,4),player('Popular',20,7000,25),player('Middle',12),player('Low',6)]
         before=copy.deepcopy(pool);r=build_core_plays(pool,now=NOW);rows={x['name']:x for x in r['rows']}
@@ -81,7 +98,10 @@ class CorePlaysTests(unittest.TestCase):
         app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
         pool=[player('Ten',10,10000,10),player('Two',20,2000,2),player('Unknown',OwnershipUnits='unknown')]
         before=copy.deepcopy(pool);d=CorePlaysDialog(pool,'showdown')
+        self.assertEqual(d.category.currentText(),'Starting shortlist')
+        d.table.setColumnWidth(0,300)
         d.category.setCurrentText('All loaded');d.slot.setCurrentText('FLEX')
+        self.assertEqual(d.table.columnWidth(0),300)
         self.assertEqual(d.table.rowCount(),3)
         for order in (QtCore.Qt.AscendingOrder,QtCore.Qt.DescendingOrder):
             d.table.sortItems(5,order)

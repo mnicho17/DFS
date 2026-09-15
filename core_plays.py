@@ -13,6 +13,32 @@ CATEGORIES = ('Underpriced role candidate', 'High-projection anchor', 'Popular p
 POSITIVE = set(CATEGORIES[:-1])
 
 
+def focused_core_rows(rows):
+    """Three distinct review candidates per position/slot, not a lineup ranking."""
+    groups = defaultdict(list)
+    for row in rows:
+        if row['eligible'] and POSITIVE.intersection(row['categories']):
+            groups[(row['slot'], row['position'])].append(row)
+    result = []
+    positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST']
+    for group in sorted(groups, key=lambda g: (g[0], positions.index(g[1]) if g[1] in positions else 99)):
+        peers = groups[group]
+        chosen = []
+        # Reserve different reasons to review; popularity alone gets no reserved place.
+        for category, metric in ((CATEGORIES[1], 'projection'), (CATEGORIES[0], 'value'),
+                                 (CATEGORIES[3], 'projection')):
+            candidates = [r for r in peers if category in r['categories'] and r not in chosen]
+            if candidates:
+                chosen.append(sorted(candidates, key=lambda r: (-r[metric], r['player']))[0])
+        for row in sorted(peers, key=lambda r: (-r['projection'], -r['value'], r['player'])):
+            if len(chosen) >= 3:
+                break
+            if row not in chosen:
+                chosen.append(row)
+        result.extend(chosen)
+    return result
+
+
 def build_core_plays(players, kind='classic', now=None):
     if kind not in ('classic', 'showdown'):
         raise ValueError('Core Plays supports NFL Classic and Showdown.')
@@ -140,7 +166,9 @@ def build_core_plays(players, kind='classic', now=None):
                 and r['ownership']<=.7*q['ownership'] and r['projection']>=.9*q['projection']
                 and r['salary']<=1.1*q['salary']]
             for q in sorted(alternatives,key=lambda q:-q['ownership'])[:2]:
-                add(CATEGORIES[3], f"Compare with {q['name']}: {q['projection']:.1f} projected points, ${q['salary']:,.0f}, {q['ownership']:.1f}% estimated ownership. Similar mean projection does not establish similar ceiling.")
+                add(CATEGORIES[3], f"Compare with {q['name']}: {q['projection']:.1f} projected points, ${q['salary']:,.0f}, {q['ownership']:.1f}% estimated ownership. "
+                    f"This player: {r['projection']-q['projection']:+.2f} projected points, {r['salary']-q['salary']:+,.0f} salary dollars, {r['ownership']-q['ownership']:+.1f} ownership percentage points. "
+                    "Similar mean projection does not establish similar ceiling.")
         if active and r['promoted']:
             add(CATEGORIES[4], 'Earlier recorded depth slots are explicitly unavailable. Increased opportunity is a candidate signal, not confirmation of starting snaps.')
         if r['concerns'] or r['excluded']:
