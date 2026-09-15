@@ -856,3 +856,7 @@ The offline `scripts/compare_showdown_construction.py` diagnostic compares broad
 Results construction review now separates defense and kicker counts in Showdown and shows the top-1% finish rate within each construction for both formats. After updating, Analyze Saved Results refreshes existing cached construction reviews.
 
 Deep Showdown reports now trace defense counts through generation, salary filtering, screening, validation, individual leaders and selected output, without running extra scenarios or changing selection.
+
+## Copying build errors
+
+Lineup-limit warnings and optimization errors include **Copy Error**. Click it to copy the complete message, including any traceback, for troubleshooting.

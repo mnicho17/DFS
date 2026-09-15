@@ -1591,3 +1591,7 @@ Run Analyze Saved Results after updating to refresh older cached construction re
 ### Tracing both-defense selections
 
 Copy Build Report includes Defense construction through the build for Deep Showdown. Compare the zero/one/two-DST counts after generation, salary filtering, screening, validation and selection. When independent validation completes, individually ranked leaders are shown before portfolio rules. Those leaders are a diagnostic comparison, not a separately feasible portfolio. Captain counts once. Missing player positions are reported as unknown. Stage averages describe their own simulation samples, not historical accuracy.
+
+## Copying build errors
+
+Lineup-limit warnings and optimization errors include **Copy Error**. Click it to copy the complete message, including any traceback, for troubleshooting.

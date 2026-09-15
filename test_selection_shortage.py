@@ -36,9 +36,9 @@ class SelectionShortageTests(unittest.TestCase):
 
     def test_expected_stop_uses_warning_and_cleans_up_build_ui(self):
         window=Mock()
-        with patch('main_window.QtWidgets.QMessageBox.warning') as warning, patch('main_window.QtWidgets.QMessageBox.critical') as critical:
+        with patch('main_window.show_build_error') as warning:
             MainWindow._on_lineup_build_error(window, TITLE+'\nDetails')
-        warning.assert_called_once();critical.assert_not_called()
+        warning.assert_called_once_with(window, 'Lineup limits', TITLE+'\nDetails', warning=True)
         window._finish_lineup_build_ui.assert_called_once()
         self.assertEqual(window._active_build_context,{})
 
