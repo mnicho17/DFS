@@ -11,6 +11,8 @@ from pathlib import Path
 from collections import Counter,defaultdict
 from results_audit import _number, _player_results
 
+CONSTRUCTION_VERSION = 2
+
 
 def ensure_tables(conn):
     conn.executescript("""
@@ -70,7 +72,9 @@ def construction(signature,metadata):
         captain=rows[next(i for i,k in enumerate(signature) if k.startswith('@cpt:'))]
         features += ['Team split '+ '-'.join(map(str,sorted(counts.values(),reverse=True))),
                      'Captain '+captain['position'],str(positions['QB'])+' quarterbacks',
-                     str(positions['K']+positions['DST'])+' kickers/defenses']
+                     str(positions['K']+positions['DST'])+' kickers/defenses',
+                     str(positions['DST'])+(' defense' if positions['DST']==1 else ' defenses'),
+                     str(positions['K'])+(' kicker' if positions['K']==1 else ' kickers')]
         if captain['position'] in {'WR','TE'}:
             features.append('Receiver Captain with QB' if any(p['position']=='QB' and p['team']==captain['team'] for p in rows) else 'Receiver Captain without QB')
         if captain['position']=='QB':
@@ -174,7 +178,7 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             cached=conn.execute('SELECT file_hash,payload FROM construction_reviews WHERE import_id=?',(import_id,)).fetchone()
             if cached and cached[0]==digest.hexdigest():
                 previous=json.loads(cached[1])
-                if previous.get('metadata_key')==meta_key and previous.get('username')==_dk_username(username):
+                if previous.get('construction_version')==CONSTRUCTION_VERSION and previous.get('metadata_key')==meta_key and previous.get('username')==_dk_username(username):
                     continue
             with open(path,newline='',encoding='utf-8-sig') as handle:
                 reader=csv.DictReader(handle)
@@ -198,7 +202,7 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
                         if target!='field':subsets[target][key]+=1
             groups['field']['duplicates']=sum(n for n in duplicates.values() if n>1)
             for target,counts in subsets.items():groups[target]['duplicates']=sum(n for k,n in counts.items() if duplicates[k]>1)
-            payload=dict(name=name,groups=groups,username=_dk_username(username),format='Showdown' if field[1]==6 else 'Classic',
+            payload=dict(construction_version=CONSTRUCTION_VERSION,name=name,groups=groups,username=_dk_username(username),format='Showdown' if field[1]==6 else 'Classic',
                          date=inferred_date,score_gap=problem,metadata_key=meta_key,metadata_source='matched exports and date-matched snapshot consensus')
             # FLEX scores are the base observations. Captain is never counted as another game.
             base={k:v for k,v in scores.items() if not k.startswith('@cpt:')}
@@ -261,12 +265,17 @@ def review_report(conn,username=''):
             lines.append(f"  {label}: {b['n']:,} entries; construction metadata {b['mapped']:,}/{b['n']:,}; duplicated {100*b['duplicates']/b['n']:.1f}%; average salary {salary}; average slot ownership {own}.")
         keys=set(field['features'])|set(g['top1']['features'])
         ranked=sorted(keys,key=lambda k:abs(g['top1']['features'].get(k,0)/max(1,g['top1']['mapped'])-field['features'].get(k,0)/max(1,field['mapped'])),reverse=True)
-        for key in ranked[:14]:
+        important=['0 defenses','1 defense','2 defenses'] if p['format']=='Showdown' and p.get('construction_version',0)>=2 else []
+        for key in important + [k for k in ranked if k not in important][:14]:
             parts=[]
             for label,group in [('field',field),('top 5%',g['top5']),('top 1%',g['top1']),('winners',g['winners']),('yours',g['yours'])]:
                 if label=='yours' and _dk_username(username)!=p.get('username'):continue
                 if group['mapped']:parts.append(f"{label} {100*group['features'].get(key,0)/group['mapped']:.1f}% ({group['features'].get(key,0)}/{group['mapped']})")
             lines.append('    '+key+': '+' | '.join(parts))
+            n=field['features'].get(key,0)
+            if n:
+                hits=g['top1']['features'].get(key,0)
+                lines.append(f'      Top-1% finish rate within this construction: {100*hits/n:.2f}% ({hits:,}/{n:,} entries; ties included).')
         if not field['mapped']:lines.append('  Team/position constructions need matching export history or date-matched snapshots; no current-slate salary guesses were used.')
     lines += ['- Rank cutoffs include ties. Construction percentages use fully mapped lineups; ownership uses covered lineups. Cohorts overlap.',
               '- Top-finisher frequency alone is not evidence of an edge. Compare its field frequency and independent games.',

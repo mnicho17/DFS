@@ -1577,3 +1577,9 @@ python scripts/compare_showdown_construction.py INPUT.json SALARIES.csv --output
 ```
 
 The comparison is a bounded diagnostic search, not a replay of the full Deep pipeline (including its Captain reservations and portfolio selection). The stresses are applied after scoring and do not regenerate specialist events; they measure sensitivity rather than define a new play-level scoring model.
+
+### Comparing other users’ constructions
+
+Analyze Saved Results reviews the complete available contest field, including other users, with separate top-5%, top-1%, winner and username groups. Showdown now lists zero, one and two defenses separately from kicker counts. Each construction includes its own top-1% finish rate: qualifying entries divided by all mapped entries using that construction. Rank cutoffs include ties. This is not a cash rate or ROI.
+
+Run Analyze Saved Results after updating to refresh older cached construction reviews; the original results files must remain available. Multiple contests from the same game are shared outcomes, not independent evidence. Compare constructions against their field frequency and across different games before changing strategy. These reports do not automatically change simulation weights or lineup rules.

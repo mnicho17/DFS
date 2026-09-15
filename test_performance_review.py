@@ -10,6 +10,19 @@ from test_learning_results import _showdown_lineup
 from build_snapshots import create_snapshot,save_snapshot
 
 class PerformanceReviewTests(unittest.TestCase):
+    def test_defenses_are_distinct_from_kickers_and_captain_counts_once(self):
+        signature=('@cpt:a','b','c','d','e','f')
+        positions=('DST','DST','QB','WR','RB','TE')
+        meta={k:dict(team='A' if i%2 else 'B',position=pos) for i,(k,pos) in enumerate(zip(signature,positions))}
+        features=construction(signature,meta)
+        self.assertIn('2 defenses',features)
+        self.assertIn('0 kickers',features)
+        meta['b']['position']='K'
+        features=construction(signature,meta)
+        self.assertIn('1 defense',features)
+        self.assertNotIn('2 defenses',features)
+        self.assertIn('2 kickers/defenses',features)
+
     def test_showdown_cohorts_persist_and_same_day_scores_do_not_multiply(self):
         with tempfile.TemporaryDirectory() as tmp:
             db=str(Path(tmp)/'history.sqlite')
@@ -41,8 +54,15 @@ class PerformanceReviewTests(unittest.TestCase):
             text=generate_learning_report(db_path=db,username='Example_User')['text']
             self.assertIn('6 deduplicated player/date observations',text)
             self.assertIn('Captain QB',text)
+            self.assertIn('Top-1% finish rate within this construction',text)
             self.assertIn('Saved forecast bias by player',text)
             self.assertEqual(analyze_saved_results(db_path=db,username='Example_User')['completed'],0)
+            con=sqlite3.connect(db)
+            for import_id,encoded in con.execute('SELECT import_id,payload FROM construction_reviews').fetchall():
+                old=json.loads(encoded);old.pop('construction_version',None)
+                con.execute('UPDATE construction_reviews SET payload=? WHERE import_id=?',(json.dumps(old),import_id))
+            con.commit();con.close()
+            self.assertEqual(analyze_saved_results(db_path=db,username='Example_User')['completed'],2)
             for path in paths:path.unlink()
             analyze_saved_results(db_path=db,username='Example_User')
             self.assertIn('Captain QB',generate_learning_report(db_path=db,username='Example_User')['text'])
