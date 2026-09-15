@@ -848,3 +848,5 @@ Manual widths are retained within the open app while paging, sorting, restoring 
 ### Showdown concentration audit
 
 Deep Showdown build reports now show the Captain locks recorded for that build, retained-lineup count, and Captain/QB concentration among individually ranked leaders versus the selected output. The comparison uses completed validation only and does not change projections, selection, or exposure limits.
+
+The offline `scripts/compare_showdown_construction.py` diagnostic compares broader Showdown candidate coverage and explicit QB scoring stresses on frozen inputs. It saves paired comparison results and candidate banks without changing normal builds. See the user guide for assumptions and supported inputs.

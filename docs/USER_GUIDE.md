@@ -1561,3 +1561,19 @@ Illustrative layout data (not real player/team assignments or recommendations):
 ### Understanding Showdown concentration
 
 In Copy Build Report, the Captain coverage section identifies build-time Captain locks and retained lineups. A lock explains a required Captain; it is not evidence of model preference. For completed independent validation, compare the individually ranked leaders with the selected output to see how portfolio rules affect Captain and quarterback concentration. The ranked comparison is descriptive and may violate portfolio constraints. Results matched to a later compatible snapshot cannot establish the original build settings.
+
+### Offline Showdown construction comparison
+
+The developer diagnostic `scripts/compare_showdown_construction.py` accepts a saved NFL Showdown input snapshot and its matching salary CSV. It checks active-player IDs, names, teams and both slot salaries before using the snapshot forecasts. DKEntries files with an embedded salary table are supported; submitted entry rows are not used for candidate generation.
+
+The experiment compares all-style search with explicit zero/one-QB exploration using the same candidate cap and generation time allowance. Banks are reduced to equal counts before scoring. Baseline, 15% lower QB scoring, and wider QB scoring use the same underlying outcome draws and opponent identities. QB stresses affect opponents too. The wider case independently multiplies each QB outcome by 0.65 or 1.35 with equal probability; its expected multiplier is 1, but realized sample means can differ. These are sensitivity assumptions, not calibrated forecasts or production defaults.
+
+Reports and frozen diagnostic banks are saved only at the specified output location. Top-150 comparisons rank individual candidates; they are not portfolio recommendations and do not apply cross-lineup exposure or uniqueness limits. Extra portfolio groups/player constraints are rejected. No application settings, live history, result imports or scenario caches are modified.
+
+Example developer invocation:
+
+```powershell
+python scripts/compare_showdown_construction.py INPUT.json SALARIES.csv --output comparison.json
+```
+
+The comparison is a bounded diagnostic search, not a replay of the full Deep pipeline (including its Captain reservations and portfolio selection). The stresses are applied after scoring and do not regenerate specialist events; they measure sensitivity rather than define a new play-level scoring model.
