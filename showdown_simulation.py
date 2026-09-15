@@ -287,12 +287,14 @@ def run_deep_showdown(worker, shortlist_fn):
             if key not in retained_keys:
                 bank.setdefault(key, lu)
                 exclusions.add((key[0][4:], tuple(key[1:])))
-    from pipeline_audit import quarterback_mix
+    from pipeline_audit import quarterback_mix, defense_mix
     qb_stages = {"generated": quarterback_mix(list(bank.values()) + retained)}
+    dst_stages = {"generated": defense_mix(list(bank.values()) + retained)}
     generated = len(bank)
     eligible_salary = filter_salary_candidates(list(bank.values()), worker.salary_cap, worker.salary_strategy)
     salary_excluded = generated - len(eligible_salary)
     bank = {showdown_signature(lu): lu for lu in eligible_salary}
+    dst_stages['salary_eligible'] = defense_mix(list(bank.values()) + retained)
     if generated and not bank and not retained:
         raise PortfolioSelectionShortage(LIMITS_TITLE + "\n\nNo generated Showdown candidates meet the selected salary strategy. Broaden the search or deliberately change the salary strategy.")
     generation_seconds = time.perf_counter() - start
@@ -327,6 +329,7 @@ def run_deep_showdown(worker, shortlist_fn):
                 deadline=deadline - min(60, limit * .20), cancelled=worker._cancel_event.is_set)
             coverage_short = list(short)
             qb_stages["shortlisted"] = quarterback_mix(short, scored=True)
+            dst_stages['shortlisted'] = defense_mix(short, scored=True)
             sim_report = coarse["report"]
             rank = finish_rank
             top = {showdown_signature(lu) for lu in sorted(short, key=rank, reverse=True)[:worker.num_lineups]}
@@ -341,6 +344,7 @@ def run_deep_showdown(worker, shortlist_fn):
                     coverage_validated = list(short)
                     coverage_complete = validated['report']['scenarios'] == max(2500, worker.sim_scenarios)
                     qb_stages["validated"] = quarterback_mix(short, scored=True)
+                    dst_stages['validated'] = defense_mix(short, scored=True)
                     sim_report = validated["report"]
                     deep["validation_scenarios"] = sim_report["scenarios"]
                     other = {showdown_signature(lu) for lu in sorted(short, key=rank, reverse=True)[:worker.num_lineups]}
@@ -385,6 +389,10 @@ def run_deep_showdown(worker, shortlist_fn):
         selected["report"].setdefault("warnings", []).append("Deep Showdown did not complete independent validation; returning the best available stage.")
     qb_stages["selected"] = quarterback_mix(selected["lineups"], scored=True)
     sim_report["quarterback_pipeline"] = qb_stages
+    if coverage_complete:
+        dst_stages['ranked'] = defense_mix(ranked_lineups(coverage_validated)[:len(selected['lineups'])], scored=True)
+    dst_stages['selected'] = defense_mix(selected['lineups'], scored=True)
+    sim_report['defense_pipeline'] = dst_stages
     from ownership_strategy import leverage_report
     sim_report['ownership_leverage'] = leverage_report(retained+lineups,selected['lineups'],players,
         sim_report.get('field_diagnostic') or {},showdown=True)

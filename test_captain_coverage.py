@@ -126,6 +126,8 @@ class CaptainCoverageTests(unittest.TestCase):
             record=create_build_diagnostic(context={'sport':'NFL','kind':'showdown','settings':{}},
                 timing_report=r['timing_report'],portfolio_report=r['portfolio_report'],sim_report=r['sim_report'],lineups=r['lineups'])
             self.assertIn('Showdown Captain coverage',format_build_report(record))
+            self.assertIn('Defense construction through the build',format_build_report(record))
+            self.assertIn('selected',record['sim']['defense_pipeline'])
             self.assertFalse(record['captain_coverage']['validation_complete'])
             self.assertLessEqual(len(r['lineups']),2)
             self.assertTrue(all(not p.get('LockCpt') for lu in r['lineups'] for p in [lu['Captain']]+lu['Flex']))

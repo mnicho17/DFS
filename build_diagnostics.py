@@ -432,6 +432,7 @@ def create_build_diagnostic(
             "generated_sources": aggregate_counts(candidate_sources.get("generated")),
             "selected_sources": aggregate_counts(candidate_sources.get("selected")),
             "quarterback_pipeline": dict(sim.get("quarterback_pipeline") or {}),
+            "defense_pipeline": dict(sim.get("defense_pipeline") or {}),
             "screening_scenarios": max(0, _integer(timing.get("screening_scenarios"))),
             "validation_scenarios": max(0, _integer(timing.get("validation_scenarios"))),
             "portfolio_simulation_scenarios": max(
@@ -773,8 +774,9 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in warnings)
     else:
         lines.append("- None")
-    from pipeline_audit import format_quarterback_pipeline
+    from pipeline_audit import format_quarterback_pipeline, format_defense_pipeline
     lines.extend(format_quarterback_pipeline(sim.get("quarterback_pipeline") or {}))
+    lines.extend(format_defense_pipeline(sim.get("defense_pipeline") or {}))
     from field_diagnostics import format_field
     from projection_coverage import format_projection_coverage
     lines.extend(format_projection_coverage(record.get('projection_coverage') or {}))

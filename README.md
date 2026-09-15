@@ -852,3 +852,5 @@ Deep Showdown build reports now show the Captain locks recorded for that build, 
 The offline `scripts/compare_showdown_construction.py` diagnostic compares broader Showdown candidate coverage and explicit QB scoring stresses on frozen inputs. It saves paired comparison results and candidate banks without changing normal builds. See the user guide for assumptions and supported inputs.
 
 Results construction review now separates defense and kicker counts in Showdown and shows the top-1% finish rate within each construction for both formats. After updating, Analyze Saved Results refreshes existing cached construction reviews.
+
+Deep Showdown reports now trace defense counts through generation, salary filtering, screening, validation, individual leaders and selected output, without running extra scenarios or changing selection.
