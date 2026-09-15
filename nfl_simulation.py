@@ -984,9 +984,12 @@ def _opponent_field_banks(
 
 
 def _percentile_rank(values: Sequence[float], value: float) -> float:
-    if len(values) <= 1:
+    return _percentile_rank_sorted(sorted(values), value)
+
+
+def _percentile_rank_sorted(ordered: Sequence[float], value: float) -> float:
+    if len(ordered) <= 1:
         return 0.5
-    ordered = sorted(values)
     left = bisect.bisect_left(ordered, value)
     right = bisect.bisect_right(ordered, value)
     return ((left + right - 1) / 2.0) / float(len(ordered) - 1)
@@ -1419,9 +1422,13 @@ def simulate_nfl_contest(
 
     cache_report = replay.finish(completed)
     denominator = float(max(1, completed))
+    if progress_callback:
+        progress_callback(0, len(candidate_lists), "Summarizing candidate scores")
     preliminary: List[Dict[str, Any]] = []
     winning_ownership_target = dict(config.get("winning_ownership_profile") or {})
     for index, lineup in enumerate(candidate_lists):
+        if progress_callback and index and index % 250 == 0:
+            progress_callback(index, len(candidate_lists), "Summarizing candidate scores")
         signature = candidate_keys[index]
         ownership_values = [max(0.05, field_ownership.get(key, 0.05)) / 100.0 for key in signature]
         log_product = sum(math.log(value) for value in ownership_values)
@@ -1458,21 +1465,25 @@ def simulate_nfl_contest(
             })
         preliminary.append(row)
 
-    top_values = [item["sim_top_one_pct"] for item in preliminary]
-    top_five_values = [item["sim_top_five_pct"] for item in preliminary]
-    win_values = [item["sim_win_rate"] for item in preliminary]
-    ceiling_values = [item["sim_ceiling"] for item in preliminary]
-    return_values = [item["sim_return_score"] for item in preliminary]
-    dup_values = [item["duplication_raw"] for item in preliminary]
+    top_values = sorted([item["sim_top_one_pct"] for item in preliminary])
+    top_five_values = sorted([item["sim_top_five_pct"] for item in preliminary])
+    win_values = sorted([item["sim_win_rate"] for item in preliminary])
+    ceiling_values = sorted([item["sim_ceiling"] for item in preliminary])
+    return_values = sorted([item["sim_return_score"] for item in preliminary])
+    dup_values = sorted([item["duplication_raw"] for item in preliminary])
+    if progress_callback:
+        progress_callback(0, len(candidate_lists), "Finalizing candidate ratings")
     wrapped: List[SimLineup] = []
     for index, lineup in enumerate(candidate_lists):
+        if progress_callback and index and index % 250 == 0:
+            progress_callback(index, len(candidate_lists), "Finalizing candidate ratings")
         metrics = preliminary[index]
-        top_rank = _percentile_rank(top_values, metrics["sim_top_one_pct"])
-        top_five_rank = _percentile_rank(top_five_values, metrics["sim_top_five_pct"])
-        win_rank = _percentile_rank(win_values, metrics["sim_win_rate"])
-        ceiling_rank = _percentile_rank(ceiling_values, metrics["sim_ceiling"])
-        return_rank = _percentile_rank(return_values, metrics["sim_return_score"])
-        duplicate_rank = _percentile_rank(dup_values, metrics["duplication_raw"])
+        top_rank = _percentile_rank_sorted(top_values, metrics["sim_top_one_pct"])
+        top_five_rank = _percentile_rank_sorted(top_five_values, metrics["sim_top_five_pct"])
+        win_rank = _percentile_rank_sorted(win_values, metrics["sim_win_rate"])
+        ceiling_rank = _percentile_rank_sorted(ceiling_values, metrics["sim_ceiling"])
+        return_rank = _percentile_rank_sorted(return_values, metrics["sim_return_score"])
+        duplicate_rank = _percentile_rank_sorted(dup_values, metrics["duplication_raw"])
         base_edge = (
             0.32 * top_rank
             + 0.12 * win_rank
