@@ -87,7 +87,7 @@ def shortlist_reservations(lineups, targets, limit, retained_keys):
 
 
 def coverage_report(targets, generated, shortlisted, validated, selected, *, validation_complete,
-                    seeded, reserved, library):
+                    seeded, reserved, library, players=None, selection_mode='', retained_count=0):
     def counts(rows):
         return Counter(player_key(lu['Captain']) for lu in rows)
     stages = [counts(rows) for rows in (generated, shortlisted, validated if validation_complete else [], selected)]
@@ -112,7 +112,20 @@ def coverage_report(targets, generated, shortlisted, validated, selected, *, val
             reservation_eligible=key in eligible,
             generated=gen,shortlisted=short,validated=full,selected=chosen,best_rank=rank,
             best_top1=metrics.get('sim_top_one_pct'),best_first=metrics.get('sim_win_rate'),reason=reason))
-    return dict(rows=rows,eligible_count=len(eligible),seeded=seeded,reserved=reserved,validation_complete=validation_complete,
+    from pipeline_audit import quarterback_mix
+    def leaders(items):
+        counts = Counter(str(lu['Captain'].get('Name')) for lu in items)
+        return [dict(player=name, count=count) for name, count in counts.most_common(3)]
+    # Only compare a completed validation bank. Partial scores cannot establish
+    # whether the final portfolio changed the independently ranked leaders.
+    ranked = sorted(validated, key=finish_rank, reverse=True)[:len(selected)] if validation_complete else []
+    context = dict(selection_mode=selection_mode, retained_count=retained_count,
+        captain_locks=[str(p.get('Name')) for p in (players or []) if p.get('LockCpt')],
+        lock_evidence_available=players is not None,
+        ranked_count=len(ranked), selected_count=len(selected),
+        ranked_captains=leaders(ranked), selected_captains=leaders(selected),
+        ranked_qbs=quarterback_mix(ranked), selected_qbs=quarterback_mix(selected))
+    return dict(rows=rows,selection_context=context,eligible_count=len(eligible),seeded=seeded,reserved=reserved,validation_complete=validation_complete,
         library=library,note='Search coverage only; no final exposure minimum. Up to 12 seeded candidates per Captain within 10% of the candidate budget and a short time slice; up to three shortlist reservations per Captain within 20% of shortlist capacity. Retained entries take priority. Limited budgets may leave gaps. Saved-library generation is unchanged.')
 
 
@@ -121,6 +134,18 @@ def format_coverage(report):
         return []
     lines=['', 'Showdown Captain coverage', '- ' + report['note'],
         f"- Reservation-eligible Captains: {report.get('eligible_count', len(report['rows']))}; Captains reported: {len(report['rows'])}; coverage candidates added: {report['seeded']}; shortlist reservations: {report['reserved']}. Full independent validation: {'complete' if report['validation_complete'] else 'incomplete/unavailable'}."]
+    context = report.get('selection_context') or {}
+    if context:
+        locks = ', '.join(context['captain_locks']) or ('none' if context['lock_evidence_available'] else 'not recorded')
+        lines.append(f"- Build-time Captain locks: {locks}. Selection: {context['selection_mode'] or 'not recorded'}; retained lineups: {context['retained_count']}.")
+        for prefix, label in [('ranked', 'Individually ranked leaders before portfolio rules'), ('selected', 'Selected output')]:
+            n = context[prefix + '_count']
+            if not n:
+                continue
+            caps = '; '.join(f"{r['player']} {r['count']}/{n} ({100*r['count']/n:.1f}%)" for r in context[prefix + '_captains'])
+            qbs = '; '.join(f"{key} QB {r['count']}/{n} ({100*r['count']/n:.1f}%)" for key,r in sorted(context[prefix + '_qbs']['groups'].items()))
+            lines.append(f'- {label}: {caps}. QB mix: {qbs}.')
+        lines.append('- A Captain lock is a user constraint, not a model preference. Ranked leaders are a diagnostic comparison of the same validated bank and may violate portfolio limits. Concentration without a lock is not proof of value; search coverage, forecasts and sampling can all contribute. No settings are changed.')
     for r in report['rows']:
         result = (f"; best tested rank #{r['best_rank']}; top-1% {r['best_top1']:.2f}%; first including ties {r['best_first']:.2f}%"
             if r['best_rank'] is not None else '')

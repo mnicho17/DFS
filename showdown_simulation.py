@@ -395,7 +395,8 @@ def run_deep_showdown(worker, shortlist_fn):
     sim_report["deep_build"] = dict(deep)
     sim_report['captain_coverage'] = coverage_report(targets, list(bank.values()) + list(worker.retained_lineups),
         coverage_short, coverage_validated, selected['lineups'], validation_complete=coverage_complete,
-        seeded=seeded, reserved=coverage_reserved, library=library_build)
+        seeded=seeded, reserved=coverage_reserved, library=library_build,
+        players=worker.players, selection_mode=options['selection_mode'], retained_count=len(worker.retained_lineups))
     timing = dict(deep, generation_allocation_seconds=limit * generation_fraction,
         style_candidate_counts=style_counts, deep_options=dict(options), deep_time_limit_seconds=limit,
         compute_mode="Deep", generation_seconds=generation_seconds, simulation_seconds=simulation_seconds,

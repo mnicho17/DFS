@@ -1557,3 +1557,7 @@ Illustrative layout data (not real player/team assignments or recommendations):
 ![Resizable Classic lineup columns](images/lineup-columns-classic.png)
 
 ![Resizable Showdown lineup columns](images/lineup-columns-showdown.png)
+
+### Understanding Showdown concentration
+
+In Copy Build Report, the Captain coverage section identifies build-time Captain locks and retained lineups. A lock explains a required Captain; it is not evidence of model preference. For completed independent validation, compare the individually ranked leaders with the selected output to see how portfolio rules affect Captain and quarterback concentration. The ranked comparison is descriptive and may violate portfolio constraints. Results matched to a later compatible snapshot cannot establish the original build settings.

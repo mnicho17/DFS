@@ -15,6 +15,29 @@ from test_showdown_performance import _showdown_players
 
 
 class CaptainCoverageTests(unittest.TestCase):
+    def test_selection_context_separates_locks_from_ranked_concentration(self):
+        players=self.players()
+        first=ShowdownLineup(players[0],players[1:6])
+        second=ShowdownLineup(players[1],[players[0]]+players[2:6])
+        first.sim_metrics={'sim_scenarios':1000,'sim_top_one_pct':9.,'sim_win_rate':1.}
+        second.sim_metrics={'sim_scenarios':1000,'sim_top_one_pct':2.,'sim_win_rate':.1}
+        original=copy.deepcopy(players)
+        args=dict(targets=[],generated=[first,second],shortlisted=[first,second],validated=[second,first],
+            selected=[second],seeded=0,reserved=0,library=True,players=players,
+            selection_mode='Portfolio selection',retained_count=1)
+        report=coverage_report(**args,validation_complete=True)
+        context=report['selection_context']
+        self.assertEqual(context['ranked_captains'][0]['player'],players[0]['Name'])
+        self.assertEqual(context['selected_captains'][0]['player'],players[1]['Name'])
+        self.assertEqual(context['captain_locks'],[])
+        self.assertEqual(players,original)
+        players[1]['LockCpt']=True
+        report=coverage_report(**args,validation_complete=False)
+        self.assertEqual(report['selection_context']['captain_locks'],[players[1]['Name']])
+        self.assertEqual(report['selection_context']['ranked_count'],0)
+        self.assertIn('retained lineups: 1','\n'.join(format_coverage(report)))
+        self.assertNotIn('Individually ranked leaders before portfolio rules','\n'.join(format_coverage(report)))
+
     def players(self):
         players=_showdown_players()
         players[5].update(Name='Lower mean starter',Position='TE',NFLDepthOrder=1,FlexProjection=5.46,

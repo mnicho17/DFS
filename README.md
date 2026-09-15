@@ -844,3 +844,7 @@ Focused comparisons preserved complete Classic metrics and tie handling. A local
 Classic/Sport and Showdown result tables now give player columns at least 180 pixels by default, expanding for visible names up to 260 pixels. All result columns can be resized by dragging header dividers; double-click a divider to fit contents. A horizontal scrollbar exposes later players and SIM/comparison metrics instead of compressing names into the window width. Hover over a player cell for its full displayed name.
 
 Manual widths are retained within the open app while paging, sorting, restoring Best first, or refreshing results, including repeated roster slots. Numeric cells remain right-aligned and Save actions are unchanged. Widths are not saved across app restarts. This changes presentation only: lineup identities, ordering rules, saved selections, exports and simulation behavior are unchanged.
+
+### Showdown concentration audit
+
+Deep Showdown build reports now show the Captain locks recorded for that build, retained-lineup count, and Captain/QB concentration among individually ranked leaders versus the selected output. The comparison uses completed validation only and does not change projections, selection, or exposure limits.
