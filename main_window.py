@@ -1609,6 +1609,16 @@ class LineupBuildWorker(QtCore.QObject):
 
                     )
 
+                    from showdown_coverage import expand_capped_candidates
+                    self.progress.emit(len(lineups), candidate_budget,
+                        "Phase 1 - exploring alternatives for capped players (up to 20 seconds)")
+                    coverage = expand_capped_candidates(lineups, build_players, self.num_lineups,
+                        self.portfolio_rules, salary_cap=self.salary_cap, own_mode=self.own_mode,
+                        own_weight=self.own_weight, build_style=self.build_style,
+                        cancelled=self._cancel_event.is_set)
+                    lineups.extend(coverage)
+                    candidate_target += len(coverage)
+                    candidate_budget += len(coverage)
                     lineups = attach_showdown_metrics(lineups, self.salary_cap)
 
                 else:
@@ -2625,15 +2635,12 @@ class LineupBuildWorker(QtCore.QObject):
 
                 }
 
-                sim_report["preset_comparison"] = compare_nfl_lineups_to_preset(
-
-                    lineups,
-
-                    nfl_field_preset(self.field_preset, self.field_calibration),
-
-                    salary_cap=self.salary_cap,
-
-                )
+                if self.kind != "showdown":
+                    sim_report["preset_comparison"] = compare_nfl_lineups_to_preset(
+                        lineups,
+                        nfl_field_preset(self.field_preset, self.field_calibration),
+                        salary_cap=self.salary_cap,
+                    )
 
             if use_nfl_sim:
 
