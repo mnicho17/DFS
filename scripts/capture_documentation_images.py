@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from PyQt5 import QtCore, QtWidgets  # noqa: E402
+from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
 from main_window import BuildDiagnosticsDialog, BuildRecipesDialog, ContestProfileDialog, EntrySafetyDialog, FinalLockCheckDialog, MainWindow, PortfolioInsightsDialog, ResultsLearningDialog, SlateReadinessDialog, StackExposureDialog  # noqa: E402
@@ -306,7 +306,7 @@ def capture(output_dir: Path) -> None:
         app.processEvents()
         save_widget(window, output_dir / "main-workspace.png")
 
-        window.combo_nfl_compute_mode.setCurrentText("Deep (up to 5 min)")
+        window.combo_nfl_compute_mode.setCurrentText("Deep (custom budget)")
         window.action_show_build_controls.setChecked(True)
         window.tabs_workspace_controls.setCurrentIndex(0)
         app.processEvents()
@@ -531,7 +531,7 @@ def capture(output_dir: Path) -> None:
                 "sport": "NFL", "contest_kind": "classic", "requested_lineups": 150,
                 "build_style": "Strategic", "salary_strategy": "Near Cap",
                 "nfl_sim_enabled": True, "nfl_field_preset": "150-Max",
-                "nfl_compute_mode": "Deep (up to 5 min)", "min_unique": 2,
+                "nfl_compute_mode": "Deep (custom budget)", "min_unique": 2,
             },
             "NFL Single Entry": {
                 "sport": "NFL", "contest_kind": "classic", "requested_lineups": 1,
@@ -609,13 +609,210 @@ def capture(output_dir: Path) -> None:
         app.processEvents()
 
 
+def capture_deep_compute(output_dir: Path, showdown: bool = False) -> None:
+    from unittest import mock
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    if sys.platform == "win32" and os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        QtGui.QFontDatabase.addApplicationFont("C:/Windows/Fonts/segoeui.ttf")
+        app.setFont(QtGui.QFont("Segoe UI", 10))
+    app.setStyle("Fusion")
+    app.setStyleSheet(DARK_QSS)
+    with tempfile.TemporaryDirectory() as directory:
+        settings = QtCore.QSettings(str(Path(directory) / "capture.ini"), QtCore.QSettings.IniFormat)
+        with mock.patch("main_window.QtCore.QSettings", return_value=settings):
+            window = MainWindow()
+            window.combo_sport.setCurrentText("NFL")
+            window.tabs_lineups.setCurrentIndex(0 if showdown else 1)
+            window.chk_nfl_contest_sim.setChecked(True)
+            window.combo_nfl_compute_mode.setCurrentIndex(1)
+            window.action_show_build_controls.setChecked(True)
+            window.tabs_workspace_controls.setCurrentIndex(0)
+            window.resize(1400, 900)
+            window.show()
+            app.processEvents()
+            prefix = "showdown-" if showdown else ""
+            save_widget(window.tabs_workspace_controls, output_dir / (prefix + "deep-build.png"))
+            def capture_dialog():
+                dialog = app.activeModalWidget()
+                dialog.findChild(QtWidgets.QComboBox, "deepProfile").setCurrentText("Thorough — 20 min cap")
+                dialog.findChild(QtWidgets.QCheckBox, "deepAllStyles").setChecked(True)
+                dialog.findChild(QtWidgets.QComboBox, "deepSelectionMode").setCurrentText("Individual ranking")
+                save_widget(dialog, output_dir / (prefix + "deep-compute-settings.png"))
+                dialog.reject()
+            QtCore.QTimer.singleShot(100, capture_dialog)
+            window._edit_deep_compute_settings()
+            # Illustrative finish rates on legal synthetic fixtures; no user data.
+            from test_showdown_performance import _showdown_players
+            from optimizers import ShowdownOptimizer, ShowdownLineup
+            if showdown:
+                rows = ShowdownOptimizer(_showdown_players()).build_lineups(450)
+                rows = [ShowdownLineup(lu["Captain"], lu["Flex"]) for lu in rows]
+            else:
+                rows = MultiSportClassicOptimizer(representative_players(), sport="NFL").build_lineups(450)
+                rows = [SimLineup(lu) for lu in rows]
+            for index, lu in enumerate(rows):
+                rate = 8.0 - index / 100.0
+                lu.sim_metrics = dict(sim_scenarios=10000, sim_field_lineups=4000,
+                    sim_top_one_pct=rate, sim_top_two_pct=rate + 3,
+                    sim_top_five_pct=rate + 10, sim_win_rate=rate / 10,
+                    sim_mean=100 + rate, sim_edge=80 + rate)
+            window.tabs_workspace_controls.setVisible(False)
+            window.tabs_lineups.setCurrentIndex(0 if showdown else 1)
+            if showdown:
+                window.spin_sd.setValue(450)
+                window._populate_showdown_lineups(rows)
+            else:
+                window.spin_cl.setValue(450)
+                window._populate_classic_lineups(rows, "NFL")
+            kind = "showdown" if showdown else "classic"
+            getattr(window, "_" + kind + "_pages")[0].setCurrentIndex(1)
+            window.resize(1800, 900)
+            app.processEvents()
+            save_widget(window.tabs_lineups, output_dir / (prefix + "ranked-results.png"))
+            window.close()
+
+
+def capture_snapshot_controls(output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    if sys.platform == 'win32':
+        QtGui.QFontDatabase.addApplicationFont('C:/Windows/Fonts/segoeui.ttf')
+        app.setFont(QtGui.QFont('Segoe UI', 10))
+    app.setStyle('Fusion')
+    app.setStyleSheet(DARK_QSS)
+    with tempfile.TemporaryDirectory() as folder:
+        previous = os.environ.get('DFS_OPTIMIZER_DATA_DIR')
+        os.environ['DFS_OPTIMIZER_DATA_DIR'] = folder
+        try:
+            window = MainWindow()
+            button = window.findChild(QtWidgets.QToolButton, 'workspaceSettingsButton')
+            menu = button.menu()
+            menu.popup(QtCore.QPoint(100, 100))
+            app.processEvents()
+            save_widget(menu, output_dir / 'snapshot-settings.png')
+            menu.close()
+            window.close()
+        finally:
+            if previous is None:
+                os.environ.pop('DFS_OPTIMIZER_DATA_DIR', None)
+            else:
+                os.environ['DFS_OPTIMIZER_DATA_DIR'] = previous
+
+
+def capture_projection_controls(output_dir: Path) -> None:
+    from projection_sources import initialize_projection
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    if sys.platform == 'win32':
+        QtGui.QFontDatabase.addApplicationFont('C:/Windows/Fonts/segoeui.ttf')
+        app.setFont(QtGui.QFont('Segoe UI', 10))
+    app.setStyle('Fusion')
+    app.setStyleSheet(DARK_QSS)
+    with tempfile.TemporaryDirectory() as folder:
+        from unittest.mock import patch
+        with patch.dict(os.environ, {'DFS_OPTIMIZER_DATA_DIR': folder}):
+            window = MainWindow()
+            window.resize(1500, 940)
+            window.combo_sport.setCurrentText('NFL')
+            window.players = representative_players()
+            for p in window.players:
+                initialize_projection(p, historical=p['BaseProjection'])
+            from nfl_auto_data import _reapply_context_adjustments
+            _reapply_context_adjustments(window.players)
+            window._refresh_players_table()
+            window.tbl_players.selectRow(0)
+            window.show()
+            app.processEvents()
+            save_widget(window, output_dir / 'projection-sources.png')
+            window.close()
+
+
+def capture_overnight_controls(output_dir):
+    from long_search_ui import LongSearchDialog
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    # Qt's offscreen Windows platform may not discover system fonts.
+    font_path = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts' / 'segoeui.ttf'
+    if font_path.exists():
+        font_id = QtGui.QFontDatabase.addApplicationFont(str(font_path))
+        families = QtGui.QFontDatabase.applicationFontFamilies(font_id)
+        if families: app.setFont(QtGui.QFont(families[0], 10))
+    app.setStyle('Fusion'); app.setStyleSheet(DARK_QSS)
+    dialog = LongSearchDialog(None)
+    dialog.show(); app.processEvents()
+    save_widget(dialog, output_dir / 'overnight-preparation.png')
+    dialog.close()
+
+
+def capture_output_columns(output_dir):
+    from unittest.mock import patch
+    from test_nfl_logic import _fixture_players
+    from test_showdown_performance import _showdown_players
+    from optimizers import ShowdownOptimizer, ShowdownLineup
+    output_dir.mkdir(parents=True,exist_ok=True)
+    app=QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    font_path=Path(os.environ.get('WINDIR','C:/Windows'))/'Fonts'/'segoeui.ttf'
+    if font_path.exists():
+        font_id=QtGui.QFontDatabase.addApplicationFont(str(font_path))
+        families=QtGui.QFontDatabase.applicationFontFamilies(font_id)
+        if families:app.setFont(QtGui.QFont(families[0],9))
+    app.setStyle('Fusion');app.setStyleSheet(DARK_QSS)
+    with tempfile.TemporaryDirectory() as folder:
+        settings=QtCore.QSettings(folder+'/capture.ini',QtCore.QSettings.IniFormat)
+        with patch('main_window.QtCore.QSettings',return_value=settings),patch.dict(os.environ,{'DFS_OPTIMIZER_DATA_DIR':folder}):
+            window=MainWindow();window.resize(1440,900)
+            classic=MultiSportClassicOptimizer(_fixture_players()).build_lineups(1)[0]
+            names=['Trevor Lawrence','Derrick Henry','Rhamondre Stevenson','Jaxon Smith-Njigba','Drake London',"Wan'Dale Robinson",'Kyle Pitts','Jacory Croskey-Merritt','Jacksonville Jaguars']
+            for player,name in zip(classic,names):player['Name']=name
+            sd=ShowdownOptimizer(_showdown_players()).build_lineups(1)[0]
+            for player,name in zip([sd['Captain']]+sd['Flex'],names):player['Name']=name
+            metrics=dict(sim_scenarios=1000,sim_top_one_pct=4.71,sim_top_two_pct=7.83,sim_top_five_pct=15.35,sim_win_rate=.38,sim_mean=133.7,sim_edge=92)
+            for kind in ('classic','showdown'):
+                rows=[]
+                for i in range(160):
+                    lu=SimLineup(copy.deepcopy(classic),metrics=dict(metrics)) if kind=='classic' else ShowdownLineup(copy.deepcopy(sd['Captain']),copy.deepcopy(sd['Flex']))
+                    lu.sim_metrics=dict(metrics);rows.append(lu)
+                if kind=='classic':window._populate_classic_lineups(rows,'NFL')
+                else:window._populate_showdown_lineups(rows)
+                table=window.tbl_cl if kind=='classic' else window.tbl_sd
+                window.tabs_lineups.setCurrentIndex(1 if kind=='classic' else 0)
+                window.show();app.processEvents()
+                assert table.horizontalScrollBar().maximum()>0
+                assert all(table.horizontalHeader().sectionResizeMode(i)==QtWidgets.QHeaderView.Interactive for i in range(table.columnCount()))
+                table.horizontalHeader().resizeSection(1,245)
+                getattr(window,'_'+kind+'_pages')[0].setCurrentIndex(1);app.processEvents()
+                assert table.columnWidth(1)==245
+                getattr(window,'_'+kind+'_pages')[0].setCurrentIndex(0);app.processEvents()
+                assert table.columnWidth(1)==245
+                window._sort_result_column(kind,1);app.processEvents()
+                assert table.columnWidth(1)==245
+                window._reset_result_sort(kind);app.processEvents()
+                assert table.columnWidth(1)==245
+                table.horizontalScrollBar().setValue(0)
+                save_widget(window.tabs_lineups,output_dir/('lineup-columns-'+kind+'.png'))
+            window.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns"), default="all")
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    if args.only == "contest-aware-sim":
+    if args.only == 'lineup-columns':
+        capture_output_columns(output_dir)
+    elif args.only == 'overnight':
+        capture_overnight_controls(output_dir)
+    elif args.only == 'projections':
+        capture_projection_controls(output_dir)
+    elif args.only == 'snapshots':
+        capture_snapshot_controls(output_dir)
+    elif args.only == "showdown-deep":
+        capture_deep_compute(output_dir, showdown=True)
+    elif args.only == "deep-compute":
+        capture_deep_compute(output_dir)
+    elif args.only == "contest-aware-sim":
         output_dir.mkdir(parents=True, exist_ok=True)
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
         app.setStyle("Fusion")
@@ -628,4 +825,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

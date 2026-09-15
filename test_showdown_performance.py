@@ -26,6 +26,7 @@ def _showdown_players():
                 "Name": f"{team} Player {index + 1}",
                 "Team": team,
                 "Position": "QB" if index == 0 else ("RB" if index < 5 else "WR"),
+                "NFLDepthOrder": 1 if index == 0 else index,
                 "FlexID": player_id,
                 "FlexNamePlusID": f"{team} Player {index + 1} ({player_id})",
                 "CptID": f"9{player_id}",

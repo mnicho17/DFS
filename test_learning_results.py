@@ -291,7 +291,7 @@ class ResultsLearningTests(unittest.TestCase):
 
         report = generate_learning_report(db_path=self.db_path)
         self.assertEqual(report["sim_matched_rows"], 10)
-        self.assertIn("NFL SIM validation", report["text"])
+        self.assertIn("NFL Classic SIM validation", report["text"])
         self.assertIn("Predicted top 1%", report["text"])
         self.assertIn("Predicted top 5%", report["text"])
         self.assertIn("Predicted cash rate", report["text"])
@@ -337,7 +337,7 @@ class ResultsLearningTests(unittest.TestCase):
         })
         report = generate_learning_report(db_path=self.db_path)
         self.assertTrue(report["latest_sim_field_comparison"]["available"])
-        self.assertIn("Real Field vs latest NFL SIM", report["text"])
+        self.assertIn("Real Field vs latest NFL Classic SIM", report["text"])
         self.assertIn("SIM 20.0% | real 65.7%", report["text"])
         self.assertIn("report-only comparison", report["text"])
 
