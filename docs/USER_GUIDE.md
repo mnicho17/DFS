@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.19.0 | Windows desktop app
+Version 1.21.3 | Windows desktop app | [Release notes](https://github.com/mnicho17/DFS/releases/tag/v1.21.3)
 
 DFS Optimizer builds DraftKings lineups for NFL, MLB, NBA, NHL, and WNBA. It combines projections, contest construction, exposure rules, live NFL context, simulation, and local result tracking in one desktop workflow.
 
@@ -175,6 +175,11 @@ worker to finish safely. Ordinary generated-only builds keep their existing part
 Build History records whether a saved repair was applied and why a proposal was rejected. Rejected attempts do
 not replace the current portfolio's report. A diagnostic-write or display error after application does not undo
 the committed repair. No repair automatically exports a file. These checks do not provide process-crash recovery.
+
+![Illustrative cancelled Showdown repair: 17 proposed entries were not applied and 20 saved entries remain](images/saved-repair-history.png){medium}
+
+This synthetic Build History example illustrates the application status. It is separate from the real-worker
+cancellation and successful-repair acceptance tests.
 
 The **Player exposure** tab lists every player's count, percentage, and lineup numbers. Select a player and choose **Show selected player's lineups** to jump back to the exact affected rows. This is useful for reviewing a concentrated core before deciding whether individual lineups need replacement.
 
