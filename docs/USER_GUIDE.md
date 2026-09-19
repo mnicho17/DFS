@@ -165,6 +165,17 @@ The sortable **Lineup details** tab identifies the exact rows behind those signa
 - **Replace selected** keeps every unselected lineup fixed and generates only the open slots with the current slate, strategy, and portfolio rules.
 - Closing the window without choosing an action leaves the portfolio unchanged.
 
+Saved repairs apply only when the complete replacement portfolio still matches the saved set and rules that
+launched it. Cancelling before application preserves the current saved entries, even if computation already
+finished. A shortage, changed saved set, changed player eligibility, or obsolete result also leaves current
+entries intact. Live news updates remain current; unchanged saved entries can still need an Entry Safety review.
+Successful repairs apply once. Closing the main window during a build requests cancellation and waits for its
+worker to finish safely. Ordinary generated-only builds keep their existing partial-result behavior.
+
+Build History records whether a saved repair was applied and why a proposal was rejected. Rejected attempts do
+not replace the current portfolio's report. A diagnostic-write or display error after application does not undo
+the committed repair. No repair automatically exports a file. These checks do not provide process-crash recovery.
+
 The **Player exposure** tab lists every player's count, percentage, and lineup numbers. Select a player and choose **Show selected player's lineups** to jump back to the exact affected rows. This is useful for reviewing a concentrated core before deciding whether individual lineups need replacement.
 
 ![Portfolio Insights filtering review signals and selecting rows for removal or replacement](images/portfolio-insights.png){compact}

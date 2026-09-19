@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from test_environment import install
+install()
 import sys
 import unittest
 from unittest import mock

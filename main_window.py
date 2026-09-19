@@ -10,10 +10,12 @@ import math
 import time
 import random
 import threading
+from copy import deepcopy
 from collections import Counter
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from saved_repair import BuildReceipt, signatures, validate_proposal
 
 
 class SortKeyItem(QtWidgets.QTableWidgetItem):
@@ -3112,6 +3114,32 @@ class PortfolioInsightsDialog(QtWidgets.QDialog):
         self.accept()
 
 
+class LineupBuildDelivery(QtCore.QObject):
+    """GUI-affine slots keep every queued callback bound to its launch receipt."""
+
+    def __init__(self, window, receipt):
+        super().__init__(window)
+        self.window = window
+        self.receipt = receipt
+
+    @QtCore.pyqtSlot(dict)
+    def finished(self, payload):
+        self.window._on_lineup_build_finished(payload, receipt=self.receipt)
+
+    @QtCore.pyqtSlot(str)
+    def error(self, message):
+        self.window._on_lineup_build_error(message, receipt=self.receipt)
+
+    @QtCore.pyqtSlot(int, int, str)
+    def progress(self, done, total, text):
+        self.window._on_lineup_build_progress(done, total, text, receipt=self.receipt)
+
+    @QtCore.pyqtSlot()
+    def retired(self):
+        self.window._on_lineup_thread_finished(receipt=self.receipt)
+        self.deleteLater()
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -3124,6 +3152,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.saved_showdown: List[Dict[str, Any]] = []
         self.saved_classic: List[List[Dict[str, Any]]] = []
+        self._saved_revisions = {"showdown": 0, "classic": 0}
+        self._build_receipt = None
+        self._accept_build_results = True
+        self._close_after_build = False
+        self._applying_build = False
         self.portfolio_groups: List[Dict[str, Any]] = []
         self.last_portfolio_report: Dict[str, Any] = {}
         self.last_sim_report: Dict[str, Any] = {}
@@ -6114,8 +6147,13 @@ class MainWindow(QtWidgets.QMainWindow):
         repair_source: str = "",
     ) -> None:
         """Run a lineup build in a worker thread and show status-bar progress."""
+        if not self._accept_build_results or self._applying_build:
+            return
+        source_before = self._saved_source(kind) if repair_source == "saved" else None
         if str(sport or "").strip().upper() == "NFL" and not self._ensure_live_nfl_before_build():
             self.status.showMessage("Lineup generation cancelled until the game-day status check is resolved.", 6000)
+            return
+        if not self._accept_build_results:
             return
         # A previous QThread may already have been deleted by Qt even though the
         # Python attribute still points at the wrapper. Guard against that so a
@@ -6132,6 +6170,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if running:
             self.status.showMessage("A lineup build is already running.", 3000)
+            return
+
+        if source_before is not None and source_before != self._saved_source(kind):
+            self.status.showMessage("Saved entries changed during preflight; request repair again.", 6000)
             return
 
         own_mode = getattr(self, "combo_build_own_mode", None)
@@ -6219,9 +6261,28 @@ class MainWindow(QtWidgets.QMainWindow):
             if repairing else f"Building {label_sport} lineups ({num:,}) • {build_style} • {salary_strategy}…"
         )
 
+        receipt = BuildReceipt(
+            kind=kind, sport=sport, requested=int(num),
+            context=deepcopy(self._active_build_context), repair=repair_source == "saved",
+        )
+        worker_players = list(self.players)
+        if receipt.repair:
+            receipt.source = self._saved_source(kind)
+            receipt.operational = self._repair_operational_context(kind)
+            receipt.retained = Counter(signatures(retained, kind))
+            current = self.saved_showdown if kind == "showdown" else self.saved_classic
+            if len(current) != num or receipt.retained - Counter(signatures(current, kind)):
+                self._finish_lineup_build_ui()
+                self._active_build_context = {}
+                self.status.showMessage("Saved repair source no longer matches; request repair again.", 6000)
+                return
+            # One copy preserves aliases within the worker graph, without sharing
+            # nested players, metrics or scenario sets with the saved portfolio.
+            worker_players, retained = deepcopy((worker_players, retained))
+        self._build_receipt = receipt
         self._build_thread = QtCore.QThread(self)
         self._build_worker = LineupBuildWorker(
-            list(self.players),
+            worker_players,
             kind=kind,
             sport=sport,
             num_lineups=num,
@@ -6242,15 +6303,16 @@ class MainWindow(QtWidgets.QMainWindow):
             repair_source=repair_source,
         )
         self._build_worker.moveToThread(self._build_thread)
+        delivery = LineupBuildDelivery(self, receipt)
 
         self._build_thread.started.connect(self._build_worker.run)
-        self._build_worker.progress.connect(self._on_lineup_build_progress)
-        self._build_worker.finished.connect(self._on_lineup_build_finished)
-        self._build_worker.error.connect(self._on_lineup_build_error)
+        self._build_worker.progress.connect(delivery.progress)
+        self._build_worker.finished.connect(delivery.finished)
+        self._build_worker.error.connect(delivery.error)
 
         self._build_worker.finished.connect(self._build_thread.quit)
         self._build_worker.finished.connect(self._build_worker.deleteLater)
-        self._build_thread.finished.connect(self._on_lineup_thread_finished)
+        self._build_thread.finished.connect(delivery.retired)
         self._build_thread.finished.connect(self._build_thread.deleteLater)
 
         self._build_worker.error.connect(self._build_thread.quit)
@@ -6258,12 +6320,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._build_thread.start()
 
-    def _on_lineup_thread_finished(self) -> None:
+    def _on_lineup_thread_finished(self, *, receipt=None) -> None:
         """Clear stale build-thread wrappers after Qt finishes/deletes them."""
+        if receipt is not None:
+            receipt.thread_finished = True
+            if receipt is not self._build_receipt:
+                return
         self._build_thread = None
         self._build_worker = None
+        if self._close_after_build:
+            QtCore.QTimer.singleShot(0, self.close)
 
-    def _on_lineup_build_progress(self, done: int, total: int, text: str) -> None:
+    def _on_lineup_build_progress(self, done: int, total: int, text: str, *, receipt=None) -> None:
+        if receipt is not None and (receipt is not self._build_receipt or receipt.disposition != "pending" or not self._accept_build_results):
+            return
         if total and total > 0:
             self._build_progress.setRange(0, total)
             self._build_progress.setValue(done)
@@ -6282,6 +6352,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_lineup_space_dashboard()
 
     def _cancel_lineup_build(self) -> None:
+        receipt = self._build_receipt
+        if receipt is not None:
+            if receipt.disposition != "pending":
+                return
+            receipt.cancelled = True
         worker = getattr(self, "_build_worker", None)
         if worker is None:
             return
@@ -6295,7 +6370,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_eta.setVisible(False)
         self._build_cancel.setVisible(False)
 
-    def _populate_showdown_lineups(self, lineups: List[Dict[str, Any]]) -> None:
+    def _populate_showdown_lineups(self, lineups: List[Dict[str, Any]], *, process_events=True) -> None:
         self.last_showdown = lineups or []
         self.tbl_sd.setRowCount(0)
         self.tbl_sd.setRowCount(len(self.last_showdown))
@@ -6324,9 +6399,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tbl_sd.setItem(i, 2 + j, flex_item)
             self._build_progress.setValue(i + 1)
             self._build_eta.setText(f"Rendering {i + 1:,}/{total:,}")
-            QtWidgets.QApplication.processEvents()
+            if process_events:
+                QtWidgets.QApplication.processEvents()
 
-    def _populate_classic_lineups(self, lineups: List[List[Dict[str, Any]]], sport: str) -> None:
+    def _populate_classic_lineups(self, lineups: List[List[Dict[str, Any]]], sport: str, *, prepared=False) -> None:
         # Defensive UI guard: never display/save lineups with unfilled slots.
         # This also protects exports if tight Max% caps produce edge cases.
         valid_lineups: List[List[Dict[str, Any]]] = []
@@ -6346,10 +6422,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # DK rows remain player IDs only and do not include grade metadata.
         try:
             cap_for_grade = self._safe_float(self.edit_cl_cap.text(), 50000.0)
-            valid_lineups.sort(
-                key=lambda lu: float(lineup_grade_for_sport(lu, sport, cap_for_grade).get("score", 0.0) or 0.0),
-                reverse=True,
-            )
+            if not prepared:
+                valid_lineups.sort(
+                    key=lambda lu: float(lineup_grade_for_sport(lu, sport, cap_for_grade).get("score", 0.0) or 0.0),
+                    reverse=True,
+                )
         except Exception:
             pass
 
@@ -6466,7 +6543,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
             self._build_progress.setValue(i + 1)
             self._build_eta.setText(f"Rendering {i + 1:,}/{total:,}")
-            QtWidgets.QApplication.processEvents()
+            if not prepared:
+                QtWidgets.QApplication.processEvents()
 
     def _lineup_quality_summary(self, lineups: List[Any], sport: str, kind: str) -> str:
         try:
@@ -6565,7 +6643,144 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             return f"Quality summary unavailable: {e}"
 
-    def _on_lineup_build_finished(self, payload: Dict[str, Any]) -> None:
+    def _saved_source(self, kind):
+        saved = self.saved_showdown if kind == "showdown" else self.saved_classic
+        return self._saved_revisions[kind], signatures(saved, kind)
+
+    def _repair_operational_context(self, kind):
+        """Freeze semantic inputs; table sorting and paging are not source edits."""
+        return deepcopy({
+            "sport": self._current_sport(),
+            "players": sorted(self.players, key=player_key),
+            "rules": self._portfolio_rules(),
+            "cap": self.edit_sd_cap.text() if kind == "showdown" else self.edit_cl_cap.text(),
+            "style": self.combo_build_style.currentText(),
+            "salary": self.combo_salary_strategy.currentText(),
+            "ownership": (self.combo_build_own_mode.currentText(), self.spin_build_own_weight.value()),
+            "simulation": (self.chk_nfl_contest_sim.isChecked(), self.spin_nfl_sim_scenarios.value(),
+                           self.combo_field_preset.currentText(), self.combo_nfl_compute_mode.currentText()),
+            "contest": self._active_contest_profile(),
+        })
+
+    def _repair_rejection(self, receipt, payload):
+        if receipt is not self._build_receipt:
+            return "stale_job"
+        if not self._accept_build_results:
+            return "closing"
+        if (payload.get("kind"), payload.get("sport"), payload.get("repair_source")) != (receipt.kind, receipt.sport, "saved"):
+            return "scope_mismatch"
+        if receipt.cancelled or payload.get("cancelled"):
+            return "cancelled"
+        if receipt.source != self._saved_source(receipt.kind):
+            return "source_changed"
+        if receipt.operational != self._repair_operational_context(receipt.kind):
+            return "context_changed"
+        return ""
+
+    def _record_repair_attempt(self, receipt, payload):
+        if receipt.recorded:
+            return
+        receipt.recorded = True
+        try:
+            self._record_build_diagnostic(
+                payload, displayed_count=len(payload.get("lineups") or []) if receipt.disposition == "applied" else 0,
+                context=receipt.context,
+                application={"job_id": receipt.job_id, "status": "applied" if receipt.disposition == "applied" else "not_applied", "reason": receipt.disposition},
+                make_current=receipt is self._build_receipt and receipt.disposition == "applied",
+            )
+        except Exception:
+            logger.exception("Repair diagnostic failed; application disposition remains %s", receipt.disposition)
+            if receipt is self._build_receipt and self._accept_build_results:
+                self.status.showMessage(f"Repair {receipt.disposition}; diagnostic recording failed.", 9000)
+
+    def _apply_saved_repair(self, payload, receipt):
+        if receipt is None or not receipt.repair:
+            self.status.showMessage("Saved repair rejected: no matching launch receipt.", 6000)
+            return
+        if receipt.disposition != "pending":
+            return
+        try:
+            reason = self._repair_rejection(receipt, payload)
+            if not reason:
+                reason = validate_proposal(receipt, payload, self.players)
+            if not reason:
+                lineups = list(payload.get("lineups") or [])
+                # Match the existing successful Classic display/saved ordering.
+                if receipt.kind != "showdown":
+                    cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
+                    lineups.sort(key=lambda lu: float(lineup_grade_for_sport(lu, receipt.sport, cap).get("score", 0.0) or 0.0), reverse=True)
+                reports = tuple(deepcopy(payload.get(key) or {}) for key in ("portfolio_report", "sim_report", "timing_report"))
+                reason = self._repair_rejection(receipt, payload)
+        except Exception:
+            logger.exception("Saved repair preparation failed")
+            reason = "preparation_failed"
+        if reason:
+            receipt.disposition = reason
+            if receipt is self._build_receipt and self._accept_build_results:
+                self._active_build_context = {}
+                try:
+                    self._finish_lineup_build_ui()
+                    self._lineup_space_phase = ""
+                    self._update_readiness_badge()
+                    self.status.showMessage(f"Repair {reason.replace('_', ' ')} — saved entries unchanged.", 9000)
+                except Exception:
+                    logger.exception("Rejected repair preserved saved entries; status refresh failed")
+            self._record_repair_attempt(receipt, payload)
+            return
+
+        # No dialog, event pump, I/O, optimizer or fallible preparation between
+        # the final check above and this authoritative GUI-thread commit.
+        receipt.disposition = "applied"
+        setattr(self, "saved_" + receipt.kind, lineups)
+        setattr(self, "last_" + receipt.kind, lineups)
+        self._saved_revisions[receipt.kind] += 1
+        self.last_portfolio_report, self.last_sim_report, self.last_build_timing_report = reports
+        self.last_entry_safety_report = {}
+        self.last_final_lock_report = {}
+        self.last_build_diagnostic = {}
+        self._active_build_context = {}
+        try:
+            if receipt.kind == "showdown":
+                self._populate_showdown_lineups(lineups, process_events=False)
+            else:
+                self._populate_classic_lineups(lineups, receipt.sport, prepared=True)
+            self._refresh_saved_tables()
+            self._sync_saved_checkboxes(receipt.kind)
+            self._lineup_space_phase = ""
+            self._update_readiness_badge()
+            self._update_lineup_space_dashboard()
+            self.status.showMessage(f"Repair applied — {len(lineups)} saved entries. " + self._lineup_quality_summary(lineups, receipt.sport, receipt.kind), 9000)
+        except Exception:
+            logger.exception("Saved repair committed, but its display could not be refreshed")
+            self.status.showMessage("Repair applied; display refresh failed. Saved entries remain committed.", 9000)
+        finally:
+            self._finish_lineup_build_ui()
+            self._lineup_space_phase = ""
+            self._record_repair_attempt(receipt, payload)
+
+    def closeEvent(self, event):
+        self._accept_build_results = False
+        thread = getattr(self, "_build_thread", None)
+        try:
+            running = thread is not None and thread.isRunning()
+        except RuntimeError:
+            running = False
+        if running:
+            self._close_after_build = True
+            self._cancel_lineup_build()
+            event.ignore()
+            return
+        super().closeEvent(event)
+
+    def _on_lineup_build_finished(self, payload: Dict[str, Any], *, receipt=None) -> None:
+        if (receipt is not None and receipt.repair) or payload.get("repair_source") == "saved":
+            self._apply_saved_repair(payload, receipt)
+            return
+        if receipt is not None:
+            if receipt is not self._build_receipt or receipt.disposition != "pending" or not self._accept_build_results:
+                return
+            receipt.disposition = "applied"
+        self._applying_build = True
         try:
             self._build_cancel.setVisible(False)
             kind = str(payload.get("kind", "classic"))
@@ -6613,10 +6828,6 @@ class MainWindow(QtWidgets.QMainWindow):
             if kind == "showdown":
                 self._populate_showdown_lineups(lineups)
                 built = len(self.last_showdown)
-                if repair_source == "saved":
-                    self.saved_showdown = list(self.last_showdown)
-                    self._refresh_saved_tables()
-                    self._sync_saved_checkboxes(kind)
                 result = (
                     f"Repaired {replacement_count} slot{'s' if replacement_count != 1 else ''}; preserved {retained_count}"
                     if repair_source and not cancelled
@@ -6627,24 +6838,30 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self._populate_classic_lineups(lineups, sport)
                 built = len(self.last_classic)
-                if repair_source == "saved":
-                    self.saved_classic = list(self.last_classic)
-                    self._refresh_saved_tables()
-                    self._sync_saved_checkboxes(kind)
                 result = (
                     f"Repaired {replacement_count} slot{'s' if replacement_count != 1 else ''}; preserved {retained_count}"
                     if repair_source and not cancelled
                     else f"Built {built} of {requested}"
                 )
                 self.status.showMessage(f"{result} {sport} lineups. {self._lineup_quality_summary(self.last_classic, sport, kind)}{portfolio_note}{comparison_note}{timing_note}", 12000)
-            self._record_build_diagnostic(payload, displayed_count=built)
+            self._record_build_diagnostic(payload, displayed_count=built,
+                                          context=receipt.context if receipt is not None else None)
             self._lineup_space_phase = ""
             self._update_readiness_badge()
             self._update_lineup_space_dashboard()
         finally:
+            self._applying_build = False
             self._finish_lineup_build_ui()
 
-    def _on_lineup_build_error(self, msg: str) -> None:
+    def _on_lineup_build_error(self, msg: str, *, receipt=None) -> None:
+        if receipt is not None:
+            if receipt.disposition != "pending":
+                return
+            receipt.disposition = "cancelled" if receipt.cancelled else "failed"
+            if receipt.repair:
+                self._record_repair_attempt(receipt, {"kind": receipt.kind, "sport": receipt.sport, "cancelled": receipt.cancelled})
+            if receipt is not self._build_receipt or not self._accept_build_results:
+                return
         self._finish_lineup_build_ui()
         self._active_build_context = {}
         self._lineup_space_phase = ""
@@ -6818,6 +7035,8 @@ class MainWindow(QtWidgets.QMainWindow):
             return "NFL"
 
     def _on_sport_changed(self, sport: str) -> None:
+        self._saved_revisions["classic"] += 1
+        self._saved_revisions["showdown"] += 1
         sport_u = (sport or "NFL").strip().upper()
         slots = get_roster_slots_for_sport(sport_u)
         headers = ["Save"] + slots + ["TotalSal", "Grade"]
@@ -6869,10 +7088,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_results_learning(self) -> None:
         ResultsLearningDialog(self).exec_()
 
-    def _record_build_diagnostic(self, payload: Dict[str, Any], *, displayed_count: int) -> None:
-        context = dict(self._active_build_context or {})
-        self._active_build_context = {}
-        if not context:
+    def _record_build_diagnostic(self, payload: Dict[str, Any], *, displayed_count: int,
+                                 context=None, application=None, make_current=True) -> None:
+        captured = context is not None
+        context = deepcopy(context if captured else self._active_build_context or {})
+        if not captured:
+            self._active_build_context = {}
+        if not context and not captured:
             kind = str(payload.get("kind") or "classic").strip().lower()
             context = {
                 "sport": str(payload.get("sport") or self._current_sport()).strip().upper(),
@@ -6912,16 +7134,23 @@ class MainWindow(QtWidgets.QMainWindow):
             cancelled=bool(payload.get("cancelled")),
             lineups=list(payload.get("lineups") or []),
         )
-        self.last_build_diagnostic = diagnostic
+        if application is not None:
+            diagnostic["application"] = dict(application)
+        if make_current:
+            self.last_build_diagnostic = diagnostic
         try:
-            self.last_build_diagnostic = save_build_diagnostic(diagnostic)
+            diagnostic = save_build_diagnostic(diagnostic)
         except Exception:
+            if application is not None:
+                raise
             logger.exception("Build diagnostic could not be saved locally")
             self.status.showMessage(
                 "Lineups were built, but the local diagnostic history could not be saved.",
                 6000,
             )
-        if hasattr(self, "action_copy_build_report"):
+        if make_current:
+            self.last_build_diagnostic = diagnostic
+        if make_current and hasattr(self, "action_copy_build_report"):
             self.action_copy_build_report.setEnabled(True)
 
     def copy_last_build_report(self) -> None:
@@ -7146,10 +7375,12 @@ class MainWindow(QtWidgets.QMainWindow):
         if state == QtCore.Qt.Checked:
             if lu not in self.saved_showdown:
                 self.saved_showdown.append(lu)
+                self._saved_revisions["showdown"] += 1
             self.action_show_saved_portfolio.setChecked(True)
         else:
             if lu in self.saved_showdown:
                 self.saved_showdown.remove(lu)
+                self._saved_revisions["showdown"] += 1
         self._refresh_saved_tables()
 
     def _cl_checkbox_changed(self, row: int, state: int) -> None:
@@ -7159,10 +7390,12 @@ class MainWindow(QtWidgets.QMainWindow):
         if state == QtCore.Qt.Checked:
             if lu not in self.saved_classic:
                 self.saved_classic.append(lu)
+                self._saved_revisions["classic"] += 1
             self.action_show_saved_portfolio.setChecked(True)
         else:
             if lu in self.saved_classic:
                 self.saved_classic.remove(lu)
+                self._saved_revisions["classic"] += 1
         self._refresh_saved_tables()
 
     def on_sd_save_all(self) -> None:
@@ -7190,6 +7423,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 w.setChecked(False)
 
     def on_clear_saved(self) -> None:
+        for kind in ("showdown", "classic"):
+            if getattr(self, "saved_" + kind):
+                self._saved_revisions[kind] += 1
         self.saved_showdown.clear()
         self.saved_classic.clear()
         self.on_sd_unsave_all()
@@ -7350,6 +7586,7 @@ class MainWindow(QtWidgets.QMainWindow):
             sim_report=self.last_sim_report if sport == "NFL" and kind == "classic" else {},
         )
         source_label = "saved" if saved else "generated"
+        source_token = self._saved_source(kind)
         dialog = PortfolioInsightsDialog(
             insights,
             self,
@@ -7357,6 +7594,9 @@ class MainWindow(QtWidgets.QMainWindow):
             source_label=source_label,
         )
         dialog.exec_()
+        if source_label == "saved" and source_token != self._saved_source(kind):
+            self.status.showMessage("Saved entries changed while Insights was open; review them again.", 6000)
+            return
         if dialog.requested_action:
             self._handle_portfolio_insights_action(
                 kind=kind,
@@ -7379,6 +7619,10 @@ class MainWindow(QtWidgets.QMainWindow):
         indexes: List[int],
         salary_cap: float,
     ) -> None:
+        source_token = self._saved_source(kind) if source_label == "saved" else None
+        if source_token is not None and source_token[1] != signatures(lineups, kind):
+            self.status.showMessage("Saved entries changed; review them again before repair.", 6000)
+            return
         selected_indexes = sorted({index for index in indexes if 0 <= index < len(lineups)})
         if not selected_indexes:
             return
@@ -7396,7 +7640,10 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             if answer != QtWidgets.QMessageBox.Yes:
                 return
+            if source_token is not None and source_token != self._saved_source(kind):
+                return
             if source_label == "saved":
+                self._saved_revisions[kind] += 1
                 if kind == "showdown":
                     self.saved_showdown = retained
                 else:
@@ -7428,6 +7675,9 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.Yes,
         )
         if answer != QtWidgets.QMessageBox.Yes:
+            return
+        if source_token is not None and source_token != self._saved_source(kind):
+            self.status.showMessage("Saved entries changed during confirmation; request repair again.", 6000)
             return
         self._start_lineup_build(
             kind=kind,
@@ -7502,8 +7752,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._current_sport() != "NFL" or not self.players:
             return True
         report = self._final_lock_report(kind, lineups)
+        source_token = self._saved_source(kind)
         dialog = FinalLockCheckDialog(report, self)
         result = dialog.exec_()
+        if source_token != self._saved_source(kind):
+            return False
         if dialog.repair_requested:
             self._repair_saved_lineups(
                 kind,
@@ -7567,8 +7820,11 @@ class MainWindow(QtWidgets.QMainWindow):
         salary_cap: float,
     ) -> bool:
         report = self._entry_safety_report(kind, lineups, rows, salary_cap)
+        source_token = self._saved_source(kind)
         dialog = EntrySafetyDialog(report, self)
         result = dialog.exec_()
+        if source_token != self._saved_source(kind):
+            return False
         if dialog.repair_requested:
             self._repair_saved_lineups(
                 kind,

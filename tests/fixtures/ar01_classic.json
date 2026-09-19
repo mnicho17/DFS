@@ -1,0 +1,3348 @@
+{
+  "warning": "SYNTHETIC TEST DATA ONLY. NOT REAL PLAYERS, FORECASTS, ENTRY IDs, OR AN UPLOAD FILE.",
+  "kind": "classic",
+  "sport": "NFL",
+  "parameters": {
+    "salary_cap": 50000,
+    "min_salary_pct": 0.94,
+    "compute_mode": "Fast",
+    "sim_enabled": false,
+    "build_style": "Balanced",
+    "salary_strategy": "Balanced Spend",
+    "num_lineups": 20,
+    "portfolio_rules": {
+      "min_unique": 1,
+      "max_team_pct": 100,
+      "max_game_pct": 100,
+      "balance_ownership": false,
+      "groups": [],
+      "player_constraints": {}
+    }
+  },
+  "players": [
+    {
+      "Name": "Test Fixture T1 QB1",
+      "Team": "T1",
+      "Position": "QB",
+      "FlexID": "TEST_CL_T1_QB1",
+      "CptID": "TEST_CPT_CL_T1_QB1",
+      "FlexNamePlusID": "Test Fixture T1 QB1 (TEST_CL_T1_QB1)",
+      "CptNamePlusID": "Test Fixture T1 QB1 (TEST_CPT_CL_T1_QB1)",
+      "FlexSalary": 7000,
+      "CptSalary": 10500,
+      "FlexProjection": 20,
+      "CptProjection": 30.0,
+      "BaseProjection": 20,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "QB",
+      "NFLDepthOrder": 1,
+      "NFLRole": "STARTER",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T2",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T1 RB1",
+      "Team": "T1",
+      "Position": "RB",
+      "FlexID": "TEST_CL_T1_RB1",
+      "CptID": "TEST_CPT_CL_T1_RB1",
+      "FlexNamePlusID": "Test Fixture T1 RB1 (TEST_CL_T1_RB1)",
+      "CptNamePlusID": "Test Fixture T1 RB1 (TEST_CPT_CL_T1_RB1)",
+      "FlexSalary": 6500,
+      "CptSalary": 9750,
+      "FlexProjection": 18,
+      "CptProjection": 27.0,
+      "BaseProjection": 18,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "RB",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T2",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T1 RB2",
+      "Team": "T1",
+      "Position": "RB",
+      "FlexID": "TEST_CL_T1_RB2",
+      "CptID": "TEST_CPT_CL_T1_RB2",
+      "FlexNamePlusID": "Test Fixture T1 RB2 (TEST_CL_T1_RB2)",
+      "CptNamePlusID": "Test Fixture T1 RB2 (TEST_CPT_CL_T1_RB2)",
+      "FlexSalary": 6000,
+      "CptSalary": 9000,
+      "FlexProjection": 14,
+      "CptProjection": 21.0,
+      "BaseProjection": 14,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "RB",
+      "NFLDepthOrder": 2,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T2",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T1 WR1",
+      "Team": "T1",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T1_WR1",
+      "CptID": "TEST_CPT_CL_T1_WR1",
+      "FlexNamePlusID": "Test Fixture T1 WR1 (TEST_CL_T1_WR1)",
+      "CptNamePlusID": "Test Fixture T1 WR1 (TEST_CPT_CL_T1_WR1)",
+      "FlexSalary": 6000,
+      "CptSalary": 9000,
+      "FlexProjection": 17,
+      "CptProjection": 25.5,
+      "BaseProjection": 17,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T2",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T1 WR2",
+      "Team": "T1",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T1_WR2",
+      "CptID": "TEST_CPT_CL_T1_WR2",
+      "FlexNamePlusID": "Test Fixture T1 WR2 (TEST_CL_T1_WR2)",
+      "CptNamePlusID": "Test Fixture T1 WR2 (TEST_CPT_CL_T1_WR2)",
+      "FlexSalary": 5500,
+      "CptSalary": 8250,
+      "FlexProjection": 14,
+      "CptProjection": 21.0,
+      "BaseProjection": 14,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 2,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T2",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T1 WR3",
+      "Team": "T1",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T1_WR3",
+      "CptID": "TEST_CPT_CL_T1_WR3",
+      "FlexNamePlusID": "Test Fixture T1 WR3 (TEST_CL_T1_WR3)",
+      "CptNamePlusID": "Test Fixture T1 WR3 (TEST_CPT_CL_T1_WR3)",
+      "FlexSalary": 5000,
+      "CptSalary": 7500,
+      "FlexProjection": 11,
+      "CptProjection": 16.5,
+      "BaseProjection": 11,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 3,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T2",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T1 TE1",
+      "Team": "T1",
+      "Position": "TE",
+      "FlexID": "TEST_CL_T1_TE1",
+      "CptID": "TEST_CPT_CL_T1_TE1",
+      "FlexNamePlusID": "Test Fixture T1 TE1 (TEST_CL_T1_TE1)",
+      "CptNamePlusID": "Test Fixture T1 TE1 (TEST_CPT_CL_T1_TE1)",
+      "FlexSalary": 4500,
+      "CptSalary": 6750,
+      "FlexProjection": 10,
+      "CptProjection": 15.0,
+      "BaseProjection": 10,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "TE",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T2",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T1 DST",
+      "Team": "T1",
+      "Position": "DST",
+      "FlexID": "TEST_CL_T1_DST",
+      "CptID": "TEST_CPT_CL_T1_DST",
+      "FlexNamePlusID": "Test Fixture T1 DST (TEST_CL_T1_DST)",
+      "CptNamePlusID": "Test Fixture T1 DST (TEST_CPT_CL_T1_DST)",
+      "FlexSalary": 3500,
+      "CptSalary": 5250,
+      "FlexProjection": 7,
+      "CptProjection": 10.5,
+      "BaseProjection": 7,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "DST",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T2",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T2 QB1",
+      "Team": "T2",
+      "Position": "QB",
+      "FlexID": "TEST_CL_T2_QB1",
+      "CptID": "TEST_CPT_CL_T2_QB1",
+      "FlexNamePlusID": "Test Fixture T2 QB1 (TEST_CL_T2_QB1)",
+      "CptNamePlusID": "Test Fixture T2 QB1 (TEST_CPT_CL_T2_QB1)",
+      "FlexSalary": 7000,
+      "CptSalary": 10500,
+      "FlexProjection": 20,
+      "CptProjection": 30.0,
+      "BaseProjection": 20,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "QB",
+      "NFLDepthOrder": 1,
+      "NFLRole": "STARTER",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T1",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T2 RB1",
+      "Team": "T2",
+      "Position": "RB",
+      "FlexID": "TEST_CL_T2_RB1",
+      "CptID": "TEST_CPT_CL_T2_RB1",
+      "FlexNamePlusID": "Test Fixture T2 RB1 (TEST_CL_T2_RB1)",
+      "CptNamePlusID": "Test Fixture T2 RB1 (TEST_CPT_CL_T2_RB1)",
+      "FlexSalary": 6500,
+      "CptSalary": 9750,
+      "FlexProjection": 18,
+      "CptProjection": 27.0,
+      "BaseProjection": 18,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "RB",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T1",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T2 RB2",
+      "Team": "T2",
+      "Position": "RB",
+      "FlexID": "TEST_CL_T2_RB2",
+      "CptID": "TEST_CPT_CL_T2_RB2",
+      "FlexNamePlusID": "Test Fixture T2 RB2 (TEST_CL_T2_RB2)",
+      "CptNamePlusID": "Test Fixture T2 RB2 (TEST_CPT_CL_T2_RB2)",
+      "FlexSalary": 6000,
+      "CptSalary": 9000,
+      "FlexProjection": 14,
+      "CptProjection": 21.0,
+      "BaseProjection": 14,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "RB",
+      "NFLDepthOrder": 2,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T1",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T2 WR1",
+      "Team": "T2",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T2_WR1",
+      "CptID": "TEST_CPT_CL_T2_WR1",
+      "FlexNamePlusID": "Test Fixture T2 WR1 (TEST_CL_T2_WR1)",
+      "CptNamePlusID": "Test Fixture T2 WR1 (TEST_CPT_CL_T2_WR1)",
+      "FlexSalary": 6000,
+      "CptSalary": 9000,
+      "FlexProjection": 17,
+      "CptProjection": 25.5,
+      "BaseProjection": 17,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T1",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T2 WR2",
+      "Team": "T2",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T2_WR2",
+      "CptID": "TEST_CPT_CL_T2_WR2",
+      "FlexNamePlusID": "Test Fixture T2 WR2 (TEST_CL_T2_WR2)",
+      "CptNamePlusID": "Test Fixture T2 WR2 (TEST_CPT_CL_T2_WR2)",
+      "FlexSalary": 5500,
+      "CptSalary": 8250,
+      "FlexProjection": 14,
+      "CptProjection": 21.0,
+      "BaseProjection": 14,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 2,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T1",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T2 WR3",
+      "Team": "T2",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T2_WR3",
+      "CptID": "TEST_CPT_CL_T2_WR3",
+      "FlexNamePlusID": "Test Fixture T2 WR3 (TEST_CL_T2_WR3)",
+      "CptNamePlusID": "Test Fixture T2 WR3 (TEST_CPT_CL_T2_WR3)",
+      "FlexSalary": 5000,
+      "CptSalary": 7500,
+      "FlexProjection": 11,
+      "CptProjection": 16.5,
+      "BaseProjection": 11,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 3,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T1",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T2 TE1",
+      "Team": "T2",
+      "Position": "TE",
+      "FlexID": "TEST_CL_T2_TE1",
+      "CptID": "TEST_CPT_CL_T2_TE1",
+      "FlexNamePlusID": "Test Fixture T2 TE1 (TEST_CL_T2_TE1)",
+      "CptNamePlusID": "Test Fixture T2 TE1 (TEST_CPT_CL_T2_TE1)",
+      "FlexSalary": 4500,
+      "CptSalary": 6750,
+      "FlexProjection": 10,
+      "CptProjection": 15.0,
+      "BaseProjection": 10,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "TE",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T1",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T2 DST",
+      "Team": "T2",
+      "Position": "DST",
+      "FlexID": "TEST_CL_T2_DST",
+      "CptID": "TEST_CPT_CL_T2_DST",
+      "FlexNamePlusID": "Test Fixture T2 DST (TEST_CL_T2_DST)",
+      "CptNamePlusID": "Test Fixture T2 DST (TEST_CPT_CL_T2_DST)",
+      "FlexSalary": 3500,
+      "CptSalary": 5250,
+      "FlexProjection": 7,
+      "CptProjection": 10.5,
+      "BaseProjection": 7,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "DST",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T1@T2",
+      "GameInfo": "T1@T2",
+      "Opponent": "T1",
+      "AwayTeam": "T1",
+      "HomeTeam": "T2",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T3 QB1",
+      "Team": "T3",
+      "Position": "QB",
+      "FlexID": "TEST_CL_T3_QB1",
+      "CptID": "TEST_CPT_CL_T3_QB1",
+      "FlexNamePlusID": "Test Fixture T3 QB1 (TEST_CL_T3_QB1)",
+      "CptNamePlusID": "Test Fixture T3 QB1 (TEST_CPT_CL_T3_QB1)",
+      "FlexSalary": 7000,
+      "CptSalary": 10500,
+      "FlexProjection": 20,
+      "CptProjection": 30.0,
+      "BaseProjection": 20,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "QB",
+      "NFLDepthOrder": 1,
+      "NFLRole": "STARTER",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T4",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T3 RB1",
+      "Team": "T3",
+      "Position": "RB",
+      "FlexID": "TEST_CL_T3_RB1",
+      "CptID": "TEST_CPT_CL_T3_RB1",
+      "FlexNamePlusID": "Test Fixture T3 RB1 (TEST_CL_T3_RB1)",
+      "CptNamePlusID": "Test Fixture T3 RB1 (TEST_CPT_CL_T3_RB1)",
+      "FlexSalary": 6500,
+      "CptSalary": 9750,
+      "FlexProjection": 18,
+      "CptProjection": 27.0,
+      "BaseProjection": 18,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "RB",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T4",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T3 RB2",
+      "Team": "T3",
+      "Position": "RB",
+      "FlexID": "TEST_CL_T3_RB2",
+      "CptID": "TEST_CPT_CL_T3_RB2",
+      "FlexNamePlusID": "Test Fixture T3 RB2 (TEST_CL_T3_RB2)",
+      "CptNamePlusID": "Test Fixture T3 RB2 (TEST_CPT_CL_T3_RB2)",
+      "FlexSalary": 6000,
+      "CptSalary": 9000,
+      "FlexProjection": 14,
+      "CptProjection": 21.0,
+      "BaseProjection": 14,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "RB",
+      "NFLDepthOrder": 2,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T4",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T3 WR1",
+      "Team": "T3",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T3_WR1",
+      "CptID": "TEST_CPT_CL_T3_WR1",
+      "FlexNamePlusID": "Test Fixture T3 WR1 (TEST_CL_T3_WR1)",
+      "CptNamePlusID": "Test Fixture T3 WR1 (TEST_CPT_CL_T3_WR1)",
+      "FlexSalary": 6000,
+      "CptSalary": 9000,
+      "FlexProjection": 17,
+      "CptProjection": 25.5,
+      "BaseProjection": 17,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T4",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T3 WR2",
+      "Team": "T3",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T3_WR2",
+      "CptID": "TEST_CPT_CL_T3_WR2",
+      "FlexNamePlusID": "Test Fixture T3 WR2 (TEST_CL_T3_WR2)",
+      "CptNamePlusID": "Test Fixture T3 WR2 (TEST_CPT_CL_T3_WR2)",
+      "FlexSalary": 5500,
+      "CptSalary": 8250,
+      "FlexProjection": 14,
+      "CptProjection": 21.0,
+      "BaseProjection": 14,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 2,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T4",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T3 WR3",
+      "Team": "T3",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T3_WR3",
+      "CptID": "TEST_CPT_CL_T3_WR3",
+      "FlexNamePlusID": "Test Fixture T3 WR3 (TEST_CL_T3_WR3)",
+      "CptNamePlusID": "Test Fixture T3 WR3 (TEST_CPT_CL_T3_WR3)",
+      "FlexSalary": 5000,
+      "CptSalary": 7500,
+      "FlexProjection": 11,
+      "CptProjection": 16.5,
+      "BaseProjection": 11,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 3,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T4",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T3 TE1",
+      "Team": "T3",
+      "Position": "TE",
+      "FlexID": "TEST_CL_T3_TE1",
+      "CptID": "TEST_CPT_CL_T3_TE1",
+      "FlexNamePlusID": "Test Fixture T3 TE1 (TEST_CL_T3_TE1)",
+      "CptNamePlusID": "Test Fixture T3 TE1 (TEST_CPT_CL_T3_TE1)",
+      "FlexSalary": 4500,
+      "CptSalary": 6750,
+      "FlexProjection": 10,
+      "CptProjection": 15.0,
+      "BaseProjection": 10,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "TE",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T4",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T3 DST",
+      "Team": "T3",
+      "Position": "DST",
+      "FlexID": "TEST_CL_T3_DST",
+      "CptID": "TEST_CPT_CL_T3_DST",
+      "FlexNamePlusID": "Test Fixture T3 DST (TEST_CL_T3_DST)",
+      "CptNamePlusID": "Test Fixture T3 DST (TEST_CPT_CL_T3_DST)",
+      "FlexSalary": 3500,
+      "CptSalary": 5250,
+      "FlexProjection": 7,
+      "CptProjection": 10.5,
+      "BaseProjection": 7,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "DST",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T4",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T4 QB1",
+      "Team": "T4",
+      "Position": "QB",
+      "FlexID": "TEST_CL_T4_QB1",
+      "CptID": "TEST_CPT_CL_T4_QB1",
+      "FlexNamePlusID": "Test Fixture T4 QB1 (TEST_CL_T4_QB1)",
+      "CptNamePlusID": "Test Fixture T4 QB1 (TEST_CPT_CL_T4_QB1)",
+      "FlexSalary": 7000,
+      "CptSalary": 10500,
+      "FlexProjection": 20,
+      "CptProjection": 30.0,
+      "BaseProjection": 20,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "QB",
+      "NFLDepthOrder": 1,
+      "NFLRole": "STARTER",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T3",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T4 RB1",
+      "Team": "T4",
+      "Position": "RB",
+      "FlexID": "TEST_CL_T4_RB1",
+      "CptID": "TEST_CPT_CL_T4_RB1",
+      "FlexNamePlusID": "Test Fixture T4 RB1 (TEST_CL_T4_RB1)",
+      "CptNamePlusID": "Test Fixture T4 RB1 (TEST_CPT_CL_T4_RB1)",
+      "FlexSalary": 6500,
+      "CptSalary": 9750,
+      "FlexProjection": 18,
+      "CptProjection": 27.0,
+      "BaseProjection": 18,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "RB",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T3",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T4 RB2",
+      "Team": "T4",
+      "Position": "RB",
+      "FlexID": "TEST_CL_T4_RB2",
+      "CptID": "TEST_CPT_CL_T4_RB2",
+      "FlexNamePlusID": "Test Fixture T4 RB2 (TEST_CL_T4_RB2)",
+      "CptNamePlusID": "Test Fixture T4 RB2 (TEST_CPT_CL_T4_RB2)",
+      "FlexSalary": 6000,
+      "CptSalary": 9000,
+      "FlexProjection": 14,
+      "CptProjection": 21.0,
+      "BaseProjection": 14,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "RB",
+      "NFLDepthOrder": 2,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T3",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T4 WR1",
+      "Team": "T4",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T4_WR1",
+      "CptID": "TEST_CPT_CL_T4_WR1",
+      "FlexNamePlusID": "Test Fixture T4 WR1 (TEST_CL_T4_WR1)",
+      "CptNamePlusID": "Test Fixture T4 WR1 (TEST_CPT_CL_T4_WR1)",
+      "FlexSalary": 6000,
+      "CptSalary": 9000,
+      "FlexProjection": 17,
+      "CptProjection": 25.5,
+      "BaseProjection": 17,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T3",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T4 WR2",
+      "Team": "T4",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T4_WR2",
+      "CptID": "TEST_CPT_CL_T4_WR2",
+      "FlexNamePlusID": "Test Fixture T4 WR2 (TEST_CL_T4_WR2)",
+      "CptNamePlusID": "Test Fixture T4 WR2 (TEST_CPT_CL_T4_WR2)",
+      "FlexSalary": 5500,
+      "CptSalary": 8250,
+      "FlexProjection": 14,
+      "CptProjection": 21.0,
+      "BaseProjection": 14,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 2,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T3",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T4 WR3",
+      "Team": "T4",
+      "Position": "WR",
+      "FlexID": "TEST_CL_T4_WR3",
+      "CptID": "TEST_CPT_CL_T4_WR3",
+      "FlexNamePlusID": "Test Fixture T4 WR3 (TEST_CL_T4_WR3)",
+      "CptNamePlusID": "Test Fixture T4 WR3 (TEST_CPT_CL_T4_WR3)",
+      "FlexSalary": 5000,
+      "CptSalary": 7500,
+      "FlexProjection": 11,
+      "CptProjection": 16.5,
+      "BaseProjection": 11,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "WR",
+      "NFLDepthOrder": 3,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T3",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T4 TE1",
+      "Team": "T4",
+      "Position": "TE",
+      "FlexID": "TEST_CL_T4_TE1",
+      "CptID": "TEST_CPT_CL_T4_TE1",
+      "FlexNamePlusID": "Test Fixture T4 TE1 (TEST_CL_T4_TE1)",
+      "CptNamePlusID": "Test Fixture T4 TE1 (TEST_CPT_CL_T4_TE1)",
+      "FlexSalary": 4500,
+      "CptSalary": 6750,
+      "FlexProjection": 10,
+      "CptProjection": 15.0,
+      "BaseProjection": 10,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "TE",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T3",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    },
+    {
+      "Name": "Test Fixture T4 DST",
+      "Team": "T4",
+      "Position": "DST",
+      "FlexID": "TEST_CL_T4_DST",
+      "CptID": "TEST_CPT_CL_T4_DST",
+      "FlexNamePlusID": "Test Fixture T4 DST (TEST_CL_T4_DST)",
+      "CptNamePlusID": "Test Fixture T4 DST (TEST_CPT_CL_T4_DST)",
+      "FlexSalary": 3500,
+      "CptSalary": 5250,
+      "FlexProjection": 7,
+      "CptProjection": 10.5,
+      "BaseProjection": 7,
+      "Status": "ACTIVE",
+      "NFLAvailability": "ACTIVE",
+      "NFLDepthPosition": "DST",
+      "NFLDepthOrder": 1,
+      "NFLRole": "FIXTURE",
+      "GameKey": "T3@T4",
+      "GameInfo": "T3@T4",
+      "Opponent": "T3",
+      "AwayTeam": "T3",
+      "HomeTeam": "T4",
+      "ProjOwnPct": 28.125,
+      "ProjCptOwnPct": null,
+      "ProjFlexOwnPct": 28.125,
+      "LockFlex": false,
+      "LockCpt": false,
+      "FadeFlex": false,
+      "FadeCpt": false,
+      "MaxPct": null,
+      "MinPct": null,
+      "MaxCptPct": null,
+      "MinCptPct": null,
+      "MaxFlexPct": null,
+      "FixtureOnly": true
+    }
+  ],
+  "roster_catalog": [
+    {
+      "roster_id": "CL-L001",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_QB1",
+          "TEST_CL_T1_RB1",
+          "TEST_CL_T1_TE1",
+          "TEST_CL_T1_WR1",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T2_WR2",
+          "TEST_CL_T3_DST",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR3"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L002",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_RB1",
+          "TEST_CL_T1_TE1",
+          "TEST_CL_T2_QB1",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T2_WR1",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR2",
+          "TEST_CL_T4_DST",
+          "TEST_CL_T4_WR3"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L003",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_DST",
+          "TEST_CL_T1_RB1",
+          "TEST_CL_T1_TE1",
+          "TEST_CL_T1_WR3",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T3_QB1",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR1",
+          "TEST_CL_T4_WR2"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L004",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_RB1",
+          "TEST_CL_T1_TE1",
+          "TEST_CL_T1_WR2",
+          "TEST_CL_T2_DST",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T2_WR3",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T4_QB1",
+          "TEST_CL_T4_WR1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L005",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_QB1",
+          "TEST_CL_T1_TE1",
+          "TEST_CL_T1_WR1",
+          "TEST_CL_T2_RB1",
+          "TEST_CL_T2_WR2",
+          "TEST_CL_T3_DST",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR3",
+          "TEST_CL_T4_RB2"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L006",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_TE1",
+          "TEST_CL_T2_QB1",
+          "TEST_CL_T2_RB1",
+          "TEST_CL_T2_WR1",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR2",
+          "TEST_CL_T4_DST",
+          "TEST_CL_T4_RB2",
+          "TEST_CL_T4_WR3"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L007",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_DST",
+          "TEST_CL_T1_WR3",
+          "TEST_CL_T2_RB1",
+          "TEST_CL_T2_TE1",
+          "TEST_CL_T3_QB1",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR1",
+          "TEST_CL_T4_RB2",
+          "TEST_CL_T4_WR2"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L008",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_WR2",
+          "TEST_CL_T2_DST",
+          "TEST_CL_T2_RB1",
+          "TEST_CL_T2_TE1",
+          "TEST_CL_T2_WR3",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T4_QB1",
+          "TEST_CL_T4_RB2",
+          "TEST_CL_T4_WR1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L009",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T3_RB1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T3_RB1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_QB1",
+          "TEST_CL_T1_RB2",
+          "TEST_CL_T1_WR1",
+          "TEST_CL_T2_TE1",
+          "TEST_CL_T3_DST",
+          "TEST_CL_T3_RB1",
+          "TEST_CL_T3_WR2",
+          "TEST_CL_T3_WR3",
+          "TEST_CL_T4_RB2"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L010",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T3_RB1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T3_RB1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_RB2",
+          "TEST_CL_T2_QB1",
+          "TEST_CL_T2_TE1",
+          "TEST_CL_T2_WR1",
+          "TEST_CL_T3_RB1",
+          "TEST_CL_T4_DST",
+          "TEST_CL_T4_RB2",
+          "TEST_CL_T4_WR2",
+          "TEST_CL_T4_WR3"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L011",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T3_RB1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T3_RB1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_DST",
+          "TEST_CL_T1_RB2",
+          "TEST_CL_T1_WR2",
+          "TEST_CL_T1_WR3",
+          "TEST_CL_T2_TE1",
+          "TEST_CL_T3_QB1",
+          "TEST_CL_T3_RB1",
+          "TEST_CL_T3_WR1",
+          "TEST_CL_T4_RB2"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L012",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T3_RB1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T3_RB1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T2_TE1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_RB2",
+          "TEST_CL_T2_DST",
+          "TEST_CL_T2_TE1",
+          "TEST_CL_T2_WR2",
+          "TEST_CL_T2_WR3",
+          "TEST_CL_T3_RB1",
+          "TEST_CL_T4_QB1",
+          "TEST_CL_T4_RB2",
+          "TEST_CL_T4_WR1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L013",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T4_RB1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T4_RB1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_QB1",
+          "TEST_CL_T1_RB2",
+          "TEST_CL_T1_WR1",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T3_DST",
+          "TEST_CL_T3_TE1",
+          "TEST_CL_T3_WR2",
+          "TEST_CL_T3_WR3",
+          "TEST_CL_T4_RB1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L014",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T4_RB1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T4_RB1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_RB2",
+          "TEST_CL_T2_QB1",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T2_WR1",
+          "TEST_CL_T3_TE1",
+          "TEST_CL_T4_DST",
+          "TEST_CL_T4_RB1",
+          "TEST_CL_T4_WR2",
+          "TEST_CL_T4_WR3"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L015",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T4_RB1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T4_RB1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_DST",
+          "TEST_CL_T1_RB2",
+          "TEST_CL_T1_WR2",
+          "TEST_CL_T1_WR3",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T3_QB1",
+          "TEST_CL_T3_TE1",
+          "TEST_CL_T3_WR1",
+          "TEST_CL_T4_RB1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L016",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T4_RB1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T4_RB1",
+        "TEST_CL_T1_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_RB2",
+          "TEST_CL_T2_DST",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T2_WR2",
+          "TEST_CL_T2_WR3",
+          "TEST_CL_T3_TE1",
+          "TEST_CL_T4_QB1",
+          "TEST_CL_T4_RB1",
+          "TEST_CL_T4_WR1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L017",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_QB1",
+          "TEST_CL_T1_RB1",
+          "TEST_CL_T1_WR1",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T3_DST",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_TE1",
+          "TEST_CL_T3_WR3",
+          "TEST_CL_T4_WR2"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L018",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T3_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_RB1",
+          "TEST_CL_T1_WR2",
+          "TEST_CL_T2_QB1",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T2_WR1",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_TE1",
+          "TEST_CL_T4_DST",
+          "TEST_CL_T4_WR3"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L019",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_DST",
+          "TEST_CL_T1_RB1",
+          "TEST_CL_T1_WR3",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T2_WR2",
+          "TEST_CL_T3_QB1",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR1",
+          "TEST_CL_T4_TE1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L020",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_RB1",
+          "TEST_CL_T2_DST",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T2_WR3",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR2",
+          "TEST_CL_T4_QB1",
+          "TEST_CL_T4_TE1",
+          "TEST_CL_T4_WR1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L021",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T1_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T4_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_QB1",
+          "TEST_CL_T1_WR1",
+          "TEST_CL_T2_RB1",
+          "TEST_CL_T3_DST",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR3",
+          "TEST_CL_T4_RB2",
+          "TEST_CL_T4_TE1",
+          "TEST_CL_T4_WR2"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L022",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T2_WR1",
+        "TEST_CL_T1_WR2",
+        "TEST_CL_T4_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T4_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_WR2",
+          "TEST_CL_T2_QB1",
+          "TEST_CL_T2_RB1",
+          "TEST_CL_T2_WR1",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T4_DST",
+          "TEST_CL_T4_RB2",
+          "TEST_CL_T4_TE1",
+          "TEST_CL_T4_WR3"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L023",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T3_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T1_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T1_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_DST",
+          "TEST_CL_T1_WR3",
+          "TEST_CL_T2_RB1",
+          "TEST_CL_T2_WR2",
+          "TEST_CL_T3_QB1",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR1",
+          "TEST_CL_T4_RB2",
+          "TEST_CL_T4_TE1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L024",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T4_QB1",
+        "TEST_CL_T2_RB1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T4_WR1",
+        "TEST_CL_T3_WR2",
+        "TEST_CL_T2_WR3",
+        "TEST_CL_T4_TE1",
+        "TEST_CL_T4_RB2",
+        "TEST_CL_T2_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T2_DST",
+          "TEST_CL_T2_RB1",
+          "TEST_CL_T2_WR3",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR2",
+          "TEST_CL_T4_QB1",
+          "TEST_CL_T4_RB2",
+          "TEST_CL_T4_TE1",
+          "TEST_CL_T4_WR1"
+        ]
+      }
+    },
+    {
+      "roster_id": "CL-L025",
+      "slot_roles": [
+        "QB",
+        "RB",
+        "RB",
+        "WR",
+        "WR",
+        "WR",
+        "TE",
+        "FLEX",
+        "DST"
+      ],
+      "athlete_flex_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "expected_salary": 50000,
+      "expected_role_ids": [
+        "TEST_CL_T2_QB1",
+        "TEST_CL_T1_RB1",
+        "TEST_CL_T2_RB2",
+        "TEST_CL_T1_WR1",
+        "TEST_CL_T2_WR2",
+        "TEST_CL_T3_WR3",
+        "TEST_CL_T1_TE1",
+        "TEST_CL_T3_RB2",
+        "TEST_CL_T3_DST"
+      ],
+      "scoring_identity": {
+        "captain_flex_id": null,
+        "sorted_athlete_flex_ids": [
+          "TEST_CL_T1_RB1",
+          "TEST_CL_T1_TE1",
+          "TEST_CL_T1_WR1",
+          "TEST_CL_T2_QB1",
+          "TEST_CL_T2_RB2",
+          "TEST_CL_T2_WR2",
+          "TEST_CL_T3_DST",
+          "TEST_CL_T3_RB2",
+          "TEST_CL_T3_WR3"
+        ]
+      }
+    }
+  ],
+  "states": {
+    "source_A": {
+      "saved_revision_label": "A",
+      "entries": [
+        {
+          "occurrence_label": "CL-S001",
+          "roster_id": "CL-L001"
+        },
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-S004",
+          "roster_id": "CL-L004"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-S012",
+          "roster_id": "CL-L012"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-S019",
+          "roster_id": "CL-L019"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        }
+      ],
+      "entry_count": 20
+    },
+    "retained_17": {
+      "entries": [
+        {
+          "occurrence_label": "CL-S001",
+          "roster_id": "CL-L001"
+        },
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        }
+      ],
+      "entry_count": 17
+    },
+    "replacement_3": {
+      "entries": [
+        {
+          "occurrence_label": "CL-R001",
+          "roster_id": "CL-L021"
+        },
+        {
+          "occurrence_label": "CL-R002",
+          "roster_id": "CL-L022"
+        },
+        {
+          "occurrence_label": "CL-R003",
+          "roster_id": "CL-L023"
+        }
+      ],
+      "entry_count": 3
+    },
+    "proposal_full_20": {
+      "entries": [
+        {
+          "occurrence_label": "CL-S001",
+          "roster_id": "CL-L001"
+        },
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-R001",
+          "roster_id": "CL-L021"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-R002",
+          "roster_id": "CL-L022"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-R003",
+          "roster_id": "CL-L023"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        }
+      ],
+      "entry_count": 20
+    },
+    "proposal_partial_19": {
+      "entries": [
+        {
+          "occurrence_label": "CL-S001",
+          "roster_id": "CL-L001"
+        },
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-R001",
+          "roster_id": "CL-L021"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-R002",
+          "roster_id": "CL-L022"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        }
+      ],
+      "entry_count": 19
+    },
+    "proposal_missing_retained_20": {
+      "entries": [
+        {
+          "occurrence_label": "CL-R004",
+          "roster_id": "CL-L024"
+        },
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-R001",
+          "roster_id": "CL-L021"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-R002",
+          "roster_id": "CL-L022"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-R003",
+          "roster_id": "CL-L023"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        }
+      ],
+      "entry_count": 20
+    },
+    "proposal_changed_retained_20": {
+      "entries": [
+        {
+          "occurrence_label": "CL-S001",
+          "roster_id": "CL-L025"
+        },
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-R001",
+          "roster_id": "CL-L021"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-R002",
+          "roster_id": "CL-L022"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-R003",
+          "roster_id": "CL-L023"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        }
+      ],
+      "entry_count": 20
+    },
+    "current_B_added_21": {
+      "saved_revision_label": "B",
+      "entries": [
+        {
+          "occurrence_label": "CL-S001",
+          "roster_id": "CL-L001"
+        },
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-S004",
+          "roster_id": "CL-L004"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-S012",
+          "roster_id": "CL-L012"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-S019",
+          "roster_id": "CL-L019"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        },
+        {
+          "occurrence_label": "CL-S021",
+          "roster_id": "CL-L024"
+        }
+      ],
+      "entry_count": 21
+    },
+    "current_after_remove_19": {
+      "saved_revision_label": "B",
+      "entries": [
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-S004",
+          "roster_id": "CL-L004"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-S012",
+          "roster_id": "CL-L012"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-S019",
+          "roster_id": "CL-L019"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        }
+      ],
+      "entry_count": 19
+    },
+    "current_C_readded_20": {
+      "saved_revision_label": "C",
+      "entries": [
+        {
+          "occurrence_label": "CL-S001",
+          "roster_id": "CL-L001"
+        },
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-S004",
+          "roster_id": "CL-L004"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-S012",
+          "roster_id": "CL-L012"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-S019",
+          "roster_id": "CL-L019"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        }
+      ],
+      "entry_count": 20
+    },
+    "committed_B": {
+      "saved_revision_label": "B",
+      "entries": [
+        {
+          "occurrence_label": "CL-S001",
+          "roster_id": "CL-L001"
+        },
+        {
+          "occurrence_label": "CL-S002",
+          "roster_id": "CL-L002"
+        },
+        {
+          "occurrence_label": "CL-S003",
+          "roster_id": "CL-L003"
+        },
+        {
+          "occurrence_label": "CL-R001",
+          "roster_id": "CL-L021"
+        },
+        {
+          "occurrence_label": "CL-S005",
+          "roster_id": "CL-L005"
+        },
+        {
+          "occurrence_label": "CL-S006",
+          "roster_id": "CL-L006"
+        },
+        {
+          "occurrence_label": "CL-S007",
+          "roster_id": "CL-L007"
+        },
+        {
+          "occurrence_label": "CL-S008",
+          "roster_id": "CL-L008"
+        },
+        {
+          "occurrence_label": "CL-S009",
+          "roster_id": "CL-L009"
+        },
+        {
+          "occurrence_label": "CL-S010",
+          "roster_id": "CL-L010"
+        },
+        {
+          "occurrence_label": "CL-S011",
+          "roster_id": "CL-L011"
+        },
+        {
+          "occurrence_label": "CL-R002",
+          "roster_id": "CL-L022"
+        },
+        {
+          "occurrence_label": "CL-S013",
+          "roster_id": "CL-L013"
+        },
+        {
+          "occurrence_label": "CL-S014",
+          "roster_id": "CL-L014"
+        },
+        {
+          "occurrence_label": "CL-S015",
+          "roster_id": "CL-L015"
+        },
+        {
+          "occurrence_label": "CL-S016",
+          "roster_id": "CL-L016"
+        },
+        {
+          "occurrence_label": "CL-S017",
+          "roster_id": "CL-L017"
+        },
+        {
+          "occurrence_label": "CL-S018",
+          "roster_id": "CL-L018"
+        },
+        {
+          "occurrence_label": "CL-R003",
+          "roster_id": "CL-L023"
+        },
+        {
+          "occurrence_label": "CL-S020",
+          "roster_id": "CL-L020"
+        }
+      ],
+      "entry_count": 20
+    },
+    "empty_current": {
+      "saved_revision_label": "B",
+      "entries": [],
+      "entry_count": 0
+    }
+  }
+}
