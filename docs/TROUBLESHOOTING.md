@@ -59,6 +59,55 @@ Update to version 1.10.1 or later and run the build again. Earlier versions coul
 - If the error followed generation, also choose **Settings > Copy Last Build Report** so the timing and aggregate settings can be reproduced.
 - Restart the app before repeating the failed action. Do not repeatedly submit or export if you are unsure which action completed.
 
+### Saved repair cancellation (AR-01)
+
+Cancellation, shortages and obsolete work now preserve the current saved set and its compatible reports.
+If the status says the saved set or inputs changed, review current entries and request a new repair. Do not
+restore an older portfolio over newer edits or live news. A display or diagnostic failure after application
+does not undo the saved repair; Build History separates computation from saved application.
+
+Developer verification, September 19, 2026: accepted base `0c7dddba08e847da5cca70c911f227afb2c03685`.
+The real worker/GUI baseline returned 17 retained Showdown entries on cancellation and installed all 17 over
+the original 20. Classic's cancelled fallback returned 20 but still replaced original entries and reports.
+Both uncancelled paths returned complete 20-entry proposals. The changed paths preserve the exact originals
+on cancellation and apply complete matching repairs only once, with the accepted Classic grade ordering.
+The same four cancellation/apply-once acceptance checks failed on the baseline and passed on the change;
+both baseline success paths replaced the committed collection again on a repeated completion callback.
+
+Windows Python 3.12.14, PyQt5 5.15.11 / Qt 5.15.2, PuLP 3.3.2: the unchanged baseline passed 145 tests;
+the stable change passed 164 tests in 80.226 seconds, with no failures or skips. The focused AR-01 module
+passed 19 methods with format/event subtests. One earlier changed-suite run, overlapping another test process,
+missed the existing 5-second selector limit at 5.058 seconds; the unchanged limit passed in the stable run.
+Initial harness development also exposed an incorrect signature import, a comparison of elapsed time as if it
+were a model output, and an invalid-roster probe aimed at a retained entry. Those setup errors were corrected;
+production acceptance assertions and the existing performance limits were retained.
+
+| Original cases | Executed coverage |
+|---|---|
+| C01–C07 | Preflight veto/source edit; real pre-generation and mid-generation cancellation; cancelled full proposals, queued success after GUI cancel, late cancel, shortages |
+| C08–C12 | Partial optional analytics, real successful repair, missing retained occurrence, Captain/roster mismatch, wrong scope |
+| C13–C16 | Save/Unsave remove-readd, Clear Saved, Insights removal, presentation-only sorting, current rules/news/slate changes |
+| C17–C21 | Queued obsolete progress/finished/error, error-first and thread-retirement ownership, duplicate terminal suppression |
+| C22 | Shared nested fixture graph, worker-only mutations, unchanged fixed-work rosters/counts/report values (elapsed time measured separately) |
+| C23–C28 | Recording/preparation/render failures, current OUT status, unbound receipt rejection, ordinary partial builds |
+
+Real worker coverage includes NFL Classic Fast/Deep, supported main Showdown, and NBA/WNBA/MLB repair
+cancellation/success. Close-during-work tests wait for cooperative worker retirement. Main has no PR #37
+Deep Showdown or paging subsystem, so those branch-only variants remain inapplicable to this main-only patch.
+Controlled boundary payloads are separate from the real-worker tests and are labelled in test names.
+
+Run `python -m unittest discover -v` for the required full suite, or
+`python scripts/run_isolated_tests.py test_saved_repair` for the focused module. The test-only environment
+is installed before DFS imports/GUI construction: disposable data/working roots, real INI QSettings with
+fallbacks disabled and read-back verification, and denied/recorded external requests. Fixture live responses
+feed the real preflight; workers, queued callbacks and settings retire before temporary storage cleanup.
+No user settings/history are seeded, cleared or restored. Synthetic fixture extracts retain their original
+player/roster values; the private handoff and its original status files are not included or modified.
+
+These are Windows offscreen Qt source-runtime checks, not a visible desktop or packaged-executable smoke
+test, deployment approval, or full PR #37 acceptance. The review PR's automatic Windows workflow supplies
+separate CI/guide/packaging evidence; no release or merge is part of AR-01.
+
 ## DraftKings rejects the export
 
 - Confirm the export came from the same slate as the contest.
