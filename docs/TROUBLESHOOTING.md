@@ -148,3 +148,104 @@ Results & Learning matches exact rosters previously exported by the app. A row m
 
 Choose **Results & Learning**, then **Open Local History Folder**. Exports, imported results, slate snapshots, and build diagnostics remain on the computer.
 
+## Export Review Report: unavailable values or save failures
+
+The new action captures stored evidence without refreshing matches, migrating schema, generating lineups,
+fitting models or uploading data. The existing dialog constructor/Refresh still calls the legacy report and
+can update matches; this boundary is unchanged. Finish or cancel an active import/attachment before exporting.
+
+Check the source states in the preview. Missing tables, unsupported schemas, unreadable/locked databases,
+and invalid or inaccessible diagnostic JSON are different from empty valid history. SQLite reads use a
+one-second busy timeout and one explicit read transaction, including committed WAL content. JSON diagnostics
+have a separate capture time. No application checkpoint/journal-mode change occurs; this is not a promise
+that SQLite performs no OS-level WAL/shared-memory housekeeping.
+
+Older results often lack explicit format/currency. A specific format filter excludes unknown types. Cash
+needs original nominal fee and gross cash winnings with compatible explicit currency (USD, CAD, GBP, EUR);
+a dollar symbol alone does not establish currency. Unsupported prizes/adjustments and missing/invalid
+amounts stay excluded. The old `roi` column is not read as a percentage. Paid-subset totals use identical
+complete positive-fee rows; whole-group ROI is unavailable if any target row cannot qualify. Zero-fee
+prizes are separate. Explicit paid-rank/cash contradictions are counted without inferring a payout.
+
+Legacy exported metric values are observations, with finite/invalid/missing/zero counts for each field.
+Neither Edge nor scenario count certifies completion, timing, or forecast/result identity. No historical
+forecast pair is qualified on this base. Role/total ownership aggregates cannot be qualified from legacy
+averages; this action does not add the missing E0 storage or lineage. Optional detail retains recognized
+numeric export observations without rescaling them. Recorded export slots are not certified submitted slots.
+
+Save errors preserve an existing destination; retry uses the same frozen report. Select a writable location
+with free space. Database/diagnostic source files and database WAL/SHM sidecars cannot be chosen as output.
+Cancel or Close waits for owned worker cleanup. A save that already committed remains a successful save
+even if cancellation arrived immediately afterward. No automatic open-folder or upload action follows it.
+
+### Review ZIP schema 1
+
+`evidence.json` is strict UTF-8 JSON with `schema_version`, `report_id`, `generated_at`, `generator`,
+`filters`, `options`, `database`, `diagnostics`, `observation`, `findings`, `limitations`, and
+`qualification_limits`. App version/revision remain null when not embedded; recorded export versions are
+separate. Source paths retained privately for overwrite protection never enter the archive.
+
+`database` includes per-table availability/scanned/total/truncation counts, result coverage and filter
+exclusions, independent import inventory, recorded match methods, contest-label count, performance groups,
+export-setting groups, per-field metric availability, and separate opponent-field observations. Each
+performance measure carries state/value/unit/basis/cohort/qualified-count/target-count/exclusions. Values
+are finite numbers or null; null never means measured zero. Summary values are displayed to four
+significant figures; JSON and detail retain numeric values. Contest labels are report-local references,
+not certified unique contests. Imported occurrences are not deduplicated or claimed to be personal submissions.
+
+The recognized raw-result adapter reads canonical `entry_fee`, `winnings`, `actual_points`, `rank`,
+`field_size`, `places_paid`, explicit `currency` or compatible `entry fee currency`/`winnings currency`,
+`prize type`, and `contest type`. It does not export raw JSON or arbitrary unknown keys. Result dates come
+from recorded `slate_date`; other sections use their own recorded ISO timestamps' calendar date, preserving
+the recorded offset rather than guessing a locale/timezone. Unknown filtered dates/formats are counted.
+
+Bounds: 100,000 scanned rows per table in rowid order; 16,385 characters per fetched text/blob field
+(raw JSON over 16,384 is rejected); 500 groups per breakdown; 1,000 optional result details with at most
+12 recorded roster slots each; 8,000,000 diagnostic bytes/100 records; 2,000 observation characters.
+Source/group/detail exclusions disclose lost coverage. Totals cover the explicitly scanned/qualified cohort,
+not a truncated detail sample. Large source tables may need a future separately scoped paging enhancement.
+
+`summary.md` and optional `lineups.csv` derive from the same immutable evidence as the preview. CSV has
+the fixed header `result_ref,export_ref,sport,format,date,association,slot,player,player_id,score,fee,winnings,currency,net,roi_pct,cash_state`.
+Rows repeat per recorded slot; do not sum entry cash once per slot. Numeric entry values are repeated only
+for context. Formula-leading text is quoted and prefixed safely. Default reports omit detail entirely;
+opt-in still excludes account/entry/contest names, source paths, unknown keys and raw logs. Review optional
+observation/player text before sharing; redaction is not a guarantee of anonymity.
+
+### RL-01 verification record
+
+Base: `ec292c1060d559f345e195d9d18de12894c6188d` (v1.21.3). The scoped PR records the exact change SHA.
+Fresh baseline: 164 tests passed; the absent-button acceptance probe failed as expected and separately
+confirmed preexisting legacy dialog database creation. The identical probe now passes; legacy construction
+still creates its database. Initial new-test errors were fixture connection cleanup on Windows and a missing
+required field timestamp; both were fixed without changing acceptance assertions or performance limits.
+
+Windows 11 build 26200, Python 3.12.14, PyQt 5.15.11 / Qt 5.15.2. Focused command:
+`python scripts/run_isolated_tests.py test_review_report` (31 methods). Real offscreen Qt preview/save,
+SQLite and ZIP boundaries use disposable synthetic data and verified INI settings with network denied.
+The new reader also runs under an SQLite authorizer denying writes, and quiet source/diagnostic/settings
+bytes are compared before/after. WAL concurrency is checked separately with an actual second writer.
+A 10,000-row synthetic run used approximately 7.9 MiB peak traced Python memory and 2.5-3.1 seconds with
+tracing enabled; GUI timer callbacks continued. This does not measure total process memory or certify every
+possible 100,000-row shape. Final `python -m unittest discover -v`: 195 passed in 79.976 seconds,
+no failures/skips. The preceding direct-discovery run had one existing performance test fail at 5.755
+seconds against its unchanged 5-second limit; the isolated recheck passed in 3.849 seconds before the full
+repeat. No optimizer/test-limit changes were made. An earlier full isolated run passed 194 tests before the
+additional source-overwrite guard test. Automatic PR Windows CI supplies separate evidence.
+
+| Supplied case IDs | Executed scope or explicit limit |
+|---|---|
+| C01-C06 | Missing/empty/partial sources, actual preview/save, source-byte/SQL authorizer checks, WAL snapshot, frozen retries, filters, corrupt/locked/inaccessible paths |
+| C07-C12 | Original cash source reader and UI ZIP, valid zero/missing/invalid/overflow, 2-of-3 common cohort (-80% ROI), free prizes/currency rejection, legacy preservation, paid-rank contradictions |
+| C13 | Positive role/total ownership fixture skipped: accepted history has no supported role/unit/completion record. Legacy zero/missing observations remain unverified; no substitution or ownership buckets |
+| C14-C17 | Per-field legacy presence/zero/invalid state, projection without Edge, zero/positive scenario count not certified; forecast-pair exclusion path. Positive paired/partial-stage producer cases unavailable on this base; no invented storage |
+| C18-C21 | Name-based/repeated result links across slates remain unverified, export settings/version separation, bounded missing/invalid diagnostics, computation vs saved-application distinction |
+| C22-C27 | Real UI default/detail ZIP privacy, exact previews, strict JSON/CSV, hostile text, option invalidation, cancellation, injected write/fsync/replace failures and UI retry |
+| C28-C30 | Close at real reader checkpoint, job-owned stale/duplicate delivery checks, import/attach launch and retirement gating, bounded detail/table scans, timed/traced 10,000-row worker |
+| C31-C35 | Partial-source UI reports, separate opponent fields, sport/currency/contest groups, denied external calls, full existing regression suite including import and AR-01 |
+| C36 | Visible desktop and packaged-executable runtime smoke checks not run. Offscreen screenshots and CI packaging are separate evidence |
+
+The new synthetic screenshot was captured using `scripts/capture_documentation_images.py --only review-report --isolated`
+and visually inspected. The rebuilt guide's changed pages were rendered and inspected. The private handoff,
+example/status files, existing README line-ending work and real user history remain outside this patch.
+

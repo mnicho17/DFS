@@ -635,18 +635,60 @@ def capture_saved_repair(output_dir: Path) -> None:
     dialog.close()
 
 
+def capture_review_report(output_dir: Path) -> None:
+    """Synthetic isolated reader/UI illustration; never load personal history."""
+    import json
+    import sqlite3
+    import time
+    from contextlib import closing
+    from learning_db import init_historical_import_tables
+    from review_report import source_paths
+    from review_report_ui import ReviewReportDialog
+
+    db, diagnostics = source_paths()
+    db.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(db)) as conn:
+        init_historical_import_tables(conn)
+        conn.execute("INSERT INTO historical_imports(import_id,created_at,sport) VALUES ('example','2026-09-10','NFL')")
+        for i, winnings in enumerate(('0', None)):
+            raw = {'entry_fee': '10', 'winnings': winnings, 'currency': 'USD',
+                   'contest type': 'classic', 'actual_points': 105 + i * 10}
+            conn.execute('INSERT INTO historical_results(result_id,import_id,sport,slate_date,contest_name,raw_json) VALUES (?,?,?,?,?,?)',
+                         (str(i), 'example', 'NFL', '2026-09-10', 'Synthetic contest', json.dumps(raw)))
+        conn.commit()
+    dialog = ReviewReportDialog(db_path=db, diagnostic_path=diagnostics)
+    dialog.observation.setPlainText('Synthetic example: compare known zero winnings with a missing result.')
+    dialog.resize(1120, 900)
+    dialog.show()
+    dialog.generate.click()
+    deadline = time.monotonic() + 15
+    while dialog._job is not None and time.monotonic() < deadline:
+        QtWidgets.QApplication.processEvents()
+        time.sleep(.002)
+    if dialog._job is not None:
+        dialog.cancel_operation()
+        while dialog._job is not None:
+            QtWidgets.QApplication.processEvents()
+            time.sleep(.002)
+        raise RuntimeError('Documentation preview timed out')
+    if dialog._report is None:
+        raise RuntimeError('Documentation preview failed')
+    save_widget(dialog, output_dir / 'review-report.png')
+    dialog.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "saved-repair"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "saved-repair", "review-report"), default="all")
     parser.add_argument("--isolated", action="store_true", help="Use disposable settings/data and block network access.")
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
     if args.isolated and not output_dir.is_absolute():
         output_dir = REPO_ROOT / output_dir
-    if args.only == "saved-repair" and not args.isolated:
-        parser.error("--only saved-repair requires --isolated to preserve local history")
-    if args.only in {"contest-aware-sim", "saved-repair"}:
+    if args.only in {"saved-repair", "review-report"} and not args.isolated:
+        parser.error("This capture requires --isolated to preserve local history")
+    if args.only in {"contest-aware-sim", "saved-repair", "review-report"}:
         output_dir.mkdir(parents=True, exist_ok=True)
         app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
         if args.isolated and sys.platform == "win32":
@@ -660,6 +702,8 @@ def main() -> None:
         app.setStyleSheet(DARK_QSS)
         if args.only == "saved-repair":
             capture_saved_repair(output_dir)
+        elif args.only == "review-report":
+            capture_review_report(output_dir)
         else:
             capture_contest_profile(output_dir)
         app.processEvents()
