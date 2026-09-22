@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - main
+      - codex/rl01-review-report
   push:
     tags:
       - "v*"

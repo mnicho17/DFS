@@ -265,7 +265,9 @@ class Snapshot:
 
 
 def _database(path, options, cancelled, progress):
+    from review_build_evidence import roster_key
     excluded, coverage, methods = Counter(), Counter(), Counter()
+    build_link_rows = []
     groups, contests, exports = {}, {}, {}
     details, detail_ids = [], defaultdict(list)
     settings, settings_excluded, fields = Counter(), Counter(), []
@@ -285,6 +287,7 @@ def _database(path, options, cancelled, progress):
             if not accepted(options, sport, kind, day, excluded):
                 continue
             coverage['selected_results'] += 1
+            build_link_rows.append((sport, kind, day, roster_key(raw.get('lineup'))))
             coverage['unknown_date'] += day is None
             coverage['unknown_format'] += kind == 'unknown'
             matched = bool(row['matched_lineup_id'])
@@ -452,7 +455,7 @@ def _database(path, options, cancelled, progress):
                                     0, coverage['recorded_rosters'], 'lineage_unverified', 'selected_export_rosters'),
                            'observed_counts': dict(recorded_counts[name])}
                     for name, unit in RECORDED_METRICS.items()}
-    return {'sources': sources, 'coverage': dict(coverage), 'filter_exclusions': dict(excluded),
+    return {'_build_link_rows': build_link_rows, 'sources': sources, 'coverage': dict(coverage), 'filter_exclusions': dict(excluded),
             'match_methods': dict(methods), 'distinct_recorded_contest_labels': len(contests),
             'groups': measures, 'settings': settings_rows, 'settings_filter_exclusions': dict(settings_excluded),
             'imports': dict(imports), 'import_filter_exclusions': dict(import_excluded),
@@ -515,6 +518,7 @@ class Report:
     """Immutable serialized evidence is the sole source of all output files."""
     evidence: bytes
     _source_files: tuple[Path, ...] = field(default=(), repr=False)
+    _source_roots: tuple[Path, ...] = field(default=(), repr=False)
 
     @property
     def data(self):
@@ -526,7 +530,7 @@ class Report:
         filters = d['filters']
         date_scope = f'{filters["start"]} through {filters["end"]} (inclusive)' if filters['start'] else 'all available dates'
         lines = ['# DFS Review Report', '', f'Report: {d["report_id"]}', f'Captured: {d["generated_at"]}',
-                 'Schema: 1; running application version/revision: unavailable (not embedded).',
+                 'Schema: 2; running application version/revision: unavailable (not embedded).',
                  '', '## Scope and data quality',
                  f'Dates: {date_scope}; sport: {filters["sport"]}; format: {filters["format"]}.',
                  'Results use recorded slate dates. Settings/imports/diagnostics use their own recorded timestamp dates.',
@@ -554,6 +558,26 @@ class Report:
             lines.append(f'- {row["count"]} exports: {row["sport"]} {row["format"]}; app {row["recorded_app_version"] or "version unknown"}; {row["build_style"]}; {row["salary_strategy"]}; ownership {row["ownership_mode"]}; field {row["field_preset"]}.')
         if not db.get('settings'):
             lines.append('No selected export settings are available.')
+        builds = d.get('build_evidence', {})
+        linkage = builds.get('result_linkage', {})
+        lines += ['', '## Original build evidence',
+                  'State: ' + builds.get('state', 'unavailable'),
+                  'Result linkage: ' + json.dumps(linkage.get('counts', {})) + f'; denominator: {linkage.get("target_count", 0)} selected imported occurrences.',
+                  'Exact Captain-aware name-roster matches and compatible snapshots are separate evidence. Neither certifies the original build or submission.']
+        for record in builds.get('records', []):
+            counts = record['player_decisions']['counts']
+            settings = record['recorded_settings']
+            concentration = record.get('captain_concentration', {})
+            lines.append(f'- {record["build_ref"]}: {record["source"]}; {record["slate_date"] or "date unknown"} {record["format"]}; '
+                         f'input {record["input_id"][:12]}; selection {settings["selection_mode"]}; '
+                         f'recorded Captain locks {counts.get("LockCpt_true", 0)}, unknown lock flags {counts.get("LockCpt_unknown", 0)}; '
+                         f'excluded QBs with positive forecasts {counts.get("excluded_qb_positive_projection", 0)}; '
+                         f'unknown QB eligibility {counts.get("qb_unknown", 0)}; related result occurrences {record["matched_result_occurrences"]}.')
+            if concentration:
+                lines.append(f'  Largest Captain exposure: {concentration["largest_count"] if concentration["largest_count"] is not None else "not applicable"}/{concentration["output_denominator"]} generated outputs; '
+                             f'outputs with a recorded Captain lock: {concentration["locked_captain_output_count"]}. '
+                             f'Code fingerprint: {record.get("recorded_code_fingerprint") or "unknown"}; Git revision: not recorded.')
+        lines.extend('- ' + item for item in builds.get('limitations', []))
         lines += ['', '## Predictions and ownership', *d['qualification_limits']]
         for name, m in db.get('recorded_metric_availability', {}).items():
             lines.append(f'- {name}: qualified comparison unavailable (0/{m["target_count"]}); stored observations: {json.dumps(m["observed_counts"])}; units: {m["unit"]}.')
@@ -608,6 +632,8 @@ def capture(options=Options(), *, db_path=None, diagnostic_path=None,
     except OSError:
         db = {'state': 'inaccessible', 'captured_at': db['captured_at']}
     diag = diagnostics(diagnostic_path if diagnostic_path is not None else default_diag, options, cancelled)
+    from review_build_evidence import capture_build_evidence
+    builds = capture_build_evidence(path.parent, options, db.pop('_build_link_rows', []), cancelled, progress)
     coverage = db.get('coverage', {})
     selected = coverage.get('selected_results', 0)
     findings = [f'{coverage.get("recorded_matches", 0)} of {selected} selected imported rows have recorded legacy matches; original forecast/build identity is unverified.']
@@ -625,12 +651,12 @@ def capture(options=Options(), *, db_path=None, diagnostic_path=None,
               'Diagnostic JSON has a separate capture time and incomplete history.',
               'The existing Results & Learning refresh may update matches; this new capture/save does not.',
               'Automatic text redaction cannot identify every personal detail. Review before sharing.']
-    data = {'schema_version': 1, 'report_id': str(uuid.uuid4()), 'generated_at': now(),
+    data = {'schema_version': 2, 'report_id': str(uuid.uuid4()), 'generated_at': now(),
             'generator': {'application_version': None, 'source_revision': None, 'identity_state': 'not_embedded'},
             'filters': {'start': options.start or None, 'end': options.end or None, 'sport': options.sport,
                         'format': options.kind, 'result_date_basis': 'recorded_slate_date',
                         'other_date_basis': 'recorded_timestamp_calendar_date', 'range_unknowns': 'excluded_and_counted'},
-            'options': {'details': options.details}, 'database': db, 'diagnostics': diag,
+            'options': {'details': options.details}, 'database': db, 'diagnostics': diag, 'build_evidence': builds,
             'observation': safe_text(options.observation, 2000), 'findings': findings, 'limitations': limits,
             'qualification_limits': [
                 'Forecast comparison unavailable: legacy storage does not certify original run/stage/timing or role-aware outcome association.',
@@ -640,7 +666,8 @@ def capture(options=Options(), *, db_path=None, diagnostic_path=None,
         raise Cancelled()
     return Report(json.dumps(data, ensure_ascii=False, allow_nan=False, indent=2).encode('utf-8'),
                   (path.resolve(), Path(str(path) + '-wal').resolve(), Path(str(path) + '-shm').resolve(),
-                   Path(diagnostic_path if diagnostic_path is not None else default_diag).resolve()))
+                   Path(diagnostic_path if diagnostic_path is not None else default_diag).resolve()),
+                  (path.parent.resolve(),))
 
 
 def publish(report: Report, destination, *, cancelled=lambda: False):
@@ -648,6 +675,8 @@ def publish(report: Report, destination, *, cancelled=lambda: False):
     target = Path(destination)
     if cancelled():
         raise Cancelled()
+    if any(target.resolve().is_relative_to(root) for root in report._source_roots):
+        raise SourceDestination()
     for source in report._source_files:
         if target.resolve() == source or (target.exists() and source.exists() and target.samefile(source)):
             raise SourceDestination()

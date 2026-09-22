@@ -28,7 +28,7 @@ class ReportJob(QtCore.QObject):
         except Cancelled:
             self.failed.emit('Cancelled. No new report was published.')
         except SourceDestination:
-            self.failed.emit('Choose a report destination separate from its database and diagnostic source files.')
+            self.failed.emit('Choose a report destination outside the source history folder and separate from its diagnostic source file.')
         except Exception:
             # Never echo paths, raw data or credential-bearing exceptions.
             self.failed.emit('Report could not be completed. Check source access, destination permissions and free space, then retry.')
@@ -77,6 +77,15 @@ class ReviewReportDialog(QtWidgets.QDialog):
                                 'Saving creates a ZIP you can share manually; it does not update history or send data.')
         intro.setWordWrap(True)
         layout.addWidget(intro)
+        source_bar = QtWidgets.QHBoxLayout()
+        self.source_label = QtWidgets.QLabel('Source: current app history')
+        self.choose_source = QtWidgets.QPushButton('Choose history folder...')
+        self.reset_source = QtWidgets.QPushButton('Use current app history')
+        self.choose_source.clicked.connect(self.choose_history)
+        self.reset_source.clicked.connect(self.use_current_history)
+        for widget in (self.source_label, self.choose_source, self.reset_source):
+            source_bar.addWidget(widget)
+        layout.addLayout(source_bar)
         filters = QtWidgets.QHBoxLayout()
         self.all_dates = QtWidgets.QCheckBox('All available dates')
         self.all_dates.setChecked(True)
@@ -92,7 +101,7 @@ class ReviewReportDialog(QtWidgets.QDialog):
         for widget in (self.all_dates, self.start, self.end, self.sport, self.kind):
             filters.addWidget(widget)
         layout.addLayout(filters)
-        self.detail = QtWidgets.QCheckBox('Include lineup details (player names, IDs and recorded roster slots)')
+        self.detail = QtWidgets.QCheckBox('Include lineup and build-player details (names, IDs, roster slots and recorded decisions)')
         self.detail.setChecked(False)
         layout.addWidget(self.detail)
         note = QtWidgets.QLabel('Unknown dates/formats are counted; range filters exclude unknown dates. '
@@ -140,6 +149,25 @@ class ReviewReportDialog(QtWidgets.QDialog):
             signal.connect(self.invalidate)
         self._enable_controls()
 
+    def choose_history(self):
+        if self._job:
+            return
+        folder = QtWidgets.QFileDialog.getExistingDirectory(self, 'Choose the existing history folder')
+        if folder:
+            self.db_path = Path(folder) / 'exports.sqlite'
+            self.diagnostic_path = Path(folder) / 'build-diagnostics.json'
+            self.source_label.setText('Source: selected history folder')
+            self.source_label.setToolTip(str(Path(folder)))
+            self.invalidate()
+
+    def use_current_history(self):
+        if self._job:
+            return
+        self.db_path = self.diagnostic_path = None
+        self.source_label.setText('Source: current app history')
+        self.source_label.setToolTip('')
+        self.invalidate()
+
     def options(self):
         return Options(start='' if self.all_dates.isChecked() else self.start.date().toString('yyyy-MM-dd'),
                        end='' if self.all_dates.isChecked() else self.end.date().toString('yyyy-MM-dd'),
@@ -165,7 +193,7 @@ class ReviewReportDialog(QtWidgets.QDialog):
 
     def _enable_controls(self):
         busy = self._job is not None
-        for widget in (self.all_dates, self.sport, self.kind, self.detail, self.observation, self.generate):
+        for widget in (self.all_dates, self.sport, self.kind, self.detail, self.observation, self.generate, self.choose_source, self.reset_source):
             widget.setEnabled(not busy)
         self.start.setEnabled(not busy and not self.all_dates.isChecked())
         self.end.setEnabled(not busy and not self.all_dates.isChecked())

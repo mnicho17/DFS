@@ -174,14 +174,14 @@ averages; this action does not add the missing E0 storage or lineage. Optional d
 numeric export observations without rescaling them. Recorded export slots are not certified submitted slots.
 
 Save errors preserve an existing destination; retry uses the same frozen report. Select a writable location
-with free space. Database/diagnostic source files and database WAL/SHM sidecars cannot be chosen as output.
+with free space. The source history folder, diagnostic file and database WAL/SHM sidecars cannot be chosen as output.
 Cancel or Close waits for owned worker cleanup. A save that already committed remains a successful save
 even if cancellation arrived immediately afterward. No automatic open-folder or upload action follows it.
 
-### Review ZIP schema 1
+### Review ZIP schema 2
 
 `evidence.json` is strict UTF-8 JSON with `schema_version`, `report_id`, `generated_at`, `generator`,
-`filters`, `options`, `database`, `diagnostics`, `observation`, `findings`, `limitations`, and
+`filters`, `options`, `database`, `diagnostics`, `build_evidence`, `observation`, `findings`, `limitations`, and
 `qualification_limits`. App version/revision remain null when not embedded; recorded export versions are
 separate. Source paths retained privately for overwrite protection never enter the archive.
 
@@ -211,6 +211,59 @@ Rows repeat per recorded slot; do not sum entry cash once per slot. Numeric entr
 for context. Formula-leading text is quoted and prefixed safely. Default reports omit detail entirely;
 opt-in still excludes account/entry/contest names, source paths, unknown keys and raw logs. Review optional
 observation/player text before sharing; redaction is not a guarantee of anonymity.
+
+### Saved build explanations (RL-02)
+
+The reader supports existing version-1 generated-output archives and input snapshots from the
+Deep-compute branch without importing that branch's code or changing the current app. Choose its
+`history` folder explicitly. Selecting a folder invalidates any preview. This is not a migration,
+launcher update, or integration of PR #37; absent files remain unavailable.
+
+`build_evidence.records` has report-local build references, original input hashes, recorded game dates,
+checksum state, settings and decision counts. Archives additionally disclose their code fingerprint,
+completion state and generated-output Captain concentration. Git revision, GUI application and submission
+remain unestablished where not recorded. Details expose only allowed player fields when opted in; raw
+reports, arbitrary metadata, filenames, paths, usernames and source files are never copied into the ZIP.
+
+`result_linkage` counts selected imported occurrences in mutually exclusive categories: one archived
+roster match, multiple archive matches, compatible snapshot only, tied conflicting snapshots, unsupported
+identity, or no supported evidence. Archive matching requires a completed output recorded before every
+game start, a valid matching input checksum, matching sport/format/date, and a complete Captain-aware
+normalized name roster. Name collisions within an input are rejected. Matches are roster equivalence,
+not certified player IDs or producing-build attribution. `certified_original_build_count` remains zero.
+Do not reuse these counts as cash, forecast-accuracy or independent-game denominators.
+
+Snapshot-only comparison picks the latest qualifying input among scanned files containing the roster;
+it never supplies proof of output, application or original forecasts. Existing matching tables are not
+read as authoritative or modified. Missing QB eligibility is unknown rather than recomputed. Zero limits
+remain zero. Locks/fades describe recorded settings, not verified user intent or real-world availability.
+
+Each directory scan stops at 1,000 entries, sorts discovered filenames descending, then reads at most 100
+matching files. Shared expanded bytes are capped at 64,000,000, individual files at 32,000,000, input players
+at 2,000, archived lineups at 1,000 and opt-in player details at 1,000 total. Limits and malformed/inaccessible
+files produce partial evidence. "One match" means among valid scanned archives, never complete history.
+ZIPs are not extracted; fixed members, per-member hashes, embedded metadata and input hashes are checked.
+Checksums establish consistency, not authenticity. Database and file captures are independently timed.
+
+RL-02 is a dependent change on PR #39 at `967907768c2ca2c9ac791ffa4878746ba61f4079`,
+whose accepted-main base is `ec292c1060d559f345e195d9d18de12894c6188d`.
+The scoped PR records the final revision and fresh verification outcomes. The Windows workflow also runs
+for PRs targeting `codex/rl01-review-report`, preserving automatic regression and packaging checks while
+the dependency is open. Neither prerequisite PR is merged by this change.
+
+Fresh local evidence on Windows 11 / Python 3.12.14 / PyQt 5.15.11 / Qt 5.15.2:
+the unchanged dependency base passed 195 tests (81.931 seconds); the isolated build-evidence
+acceptance assertion failed as expected because the field was absent. The changed focused suite
+passed 48 methods, including 17 new storage/UI cases. Final `python -m unittest discover -v`
+passed 212 tests in 79.735 seconds, with no failures or skips. An earlier full run passed 210 before
+the junction guard and denominator checks; the full suite was rerun after that change. Required
+assertions and performance limits were unchanged. Synthetic 10,000-row responsiveness remained
+covered (about 2.3 seconds and 10 MiB peak traced Python allocation on the final run, not process RAM).
+Archive checksums, wrong dates/Captain swaps, ambiguous builds, postgame/cancelled outputs, original
+byte preservation, privacy, bounded reads/details, source-folder protection and real offscreen Qt
+preview/save/close were exercised. No production history was used as an application test fixture.
+The rebuilt guide and updated synthetic screenshot were visually inspected. Visible desktop and
+packaged-executable runtime smoke remain unperformed; CI outcomes belong to the PR, not this local record.
 
 ### RL-01 verification record
 
