@@ -231,15 +231,25 @@ class OpponentAnalysisDialog(QtWidgets.QDialog):
         rows = sorted([p for p in rows if p[key] is not None], key=lambda p: p[key],
                       reverse=self._sort_order == QtCore.Qt.DescendingOrder) + [p for p in rows if p[key] is None]
         blocker = QtCore.QSignalBlocker(self.table)
-        self.table.setSortingEnabled(False)
-        self.table.setRowCount(min(len(rows), 1000))
-        for index, p in enumerate(rows[:1000]):
-            item = QtWidgets.QTableWidgetItem(p['username'])
-            item.setData(QtCore.Qt.UserRole, p['username_key'])
-            self.table.setItem(index, 0, item)
-            for col, (key, digits) in enumerate((('entries', 0), ('readable_rosters', 0), ('unique_lineups', 0),
-                     ('mean_shared_players', 2), ('captain_pool', 0), ('mean_points', 2), ('best_rank', 0), ('mean_field_copies', 2)), 1):
-                self.table.setItem(index, col, NumberItem(p[key], digits))
+        # ResizeToContents otherwise scans populated columns after each cell
+        # replacement: sorting a visible large table can stall for minutes.
+        header = self.table.horizontalHeader()
+        self.table.setUpdatesEnabled(False)
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Fixed)
+        try:
+            self.table.setSortingEnabled(False)
+            self.table.setRowCount(0)
+            self.table.setRowCount(min(len(rows), 1000))
+            for index, p in enumerate(rows[:1000]):
+                item = QtWidgets.QTableWidgetItem(p['username'])
+                item.setData(QtCore.Qt.UserRole, p['username_key'])
+                self.table.setItem(index, 0, item)
+                for col, (key, digits) in enumerate((('entries', 0), ('readable_rosters', 0), ('unique_lineups', 0),
+                         ('mean_shared_players', 2), ('captain_pool', 0), ('mean_points', 2), ('best_rank', 0), ('mean_field_copies', 2)), 1):
+                    self.table.setItem(index, col, NumberItem(p[key], digits))
+        finally:
+            header.setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+            self.table.setUpdatesEnabled(True)
         self.table.horizontalHeader().setSortIndicator(self._sort_column, self._sort_order)
         self.table_status.setText(f'{len(rows):,} matching entrants; showing the first {min(len(rows), 1000):,}. Filter to narrow; all-user JSON includes everyone.')
         if rows:

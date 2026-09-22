@@ -335,8 +335,13 @@ class OpponentDialogTests(StandingsFixture):
         self.dialog.result = result
         self.dialog.search.clear()
         self.dialog.populate()
+        self.dialog.show()
+        self.app.processEvents()
         self.assertEqual(self.dialog.table.rowCount(), 1000)
+        started = time.monotonic()
         self.dialog.sort_rows(6)
+        self.app.processEvents()
+        self.assertLess(time.monotonic()-started, 5, 'Sorting the visible 1,000-row page must not rescan columns for every cell')
         self.assertEqual(self.dialog.selected_username(), 'entrant1004')
         self.dialog.sort_rows(6)
         self.assertEqual(self.dialog.selected_username(), 'entrant0000')
