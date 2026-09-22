@@ -45,7 +45,8 @@ def _opponent(player: Mapping[str, Any]) -> str:
     direct = str(player.get("Opponent") or player.get("Opp") or "").strip().upper()
     if direct:
         return direct
-    game = str(player.get("GameKey") or player.get("GameInfo") or "").split()[0].upper()
+    tokens = str(player.get("GameKey") or player.get("GameInfo") or "").split()
+    game = tokens[0].upper() if tokens else ""
     if "@" not in game:
         return ""
     away, home = game.split("@", 1)

@@ -20,7 +20,7 @@ from contest_profiles import normalize_contest_profile, payout_for_tied_ranks
 INACTIVE_STATUSES = {"OUT", "IR", "PUP", "NFI", "SUSP", "SUSPENDED"}
 ROLE_LIMITS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1, "DST": 1}
 ROLE_POOL_BUILD_STYLES = {"strategic", "balanced", "contrarian", "chalk"}
-POSITION_CV = {"QB": 0.32, "RB": 0.55, "WR": 0.65, "TE": 0.70, "DST": 0.80}
+POSITION_CV = {"QB": 0.32, "RB": 0.55, "WR": 0.65, "TE": 0.70, "DST": 0.80, "K": 0.45}
 SCENARIO_ARCHETYPES = ("Ceiling", "Balanced", "Leverage", "Low-Dup")
 
 
@@ -174,9 +174,9 @@ def _salary(player: Dict[str, Any]) -> float:
 
 def _projection(player: Dict[str, Any]) -> float:
     base = _number(player.get("FlexProjection"), 0.0)
-    boost = _number(player.get("_PortfolioCandidateBoost"), 0.0)
     team_pct = _number(player.get("TeamAdjPct"), 0.0)
-    return max(0.0, base * max(0.05, 1.0 + team_pct / 100.0) + boost)
+    # Exposure preferences influence optimizer search, not scoring or opponents.
+    return max(0.0, base * max(0.05, 1.0 + team_pct / 100.0))
 
 
 def _status(player: Dict[str, Any]) -> str:
@@ -222,6 +222,7 @@ def _player_volatility_cv(player: Dict[str, Any]) -> float:
 def _is_active(player: Dict[str, Any]) -> bool:
     return (
         _salary(player) > 0
+        and player.get("NFLQBEligible") is not False
         and bool(_position(player))
         and not bool(player.get("FadeFlex"))
         and _status(player) not in INACTIVE_STATUSES
@@ -230,13 +231,15 @@ def _is_active(player: Dict[str, Any]) -> bool:
 
 def _role_rank(player: Dict[str, Any]) -> Tuple[float, ...]:
     depth = int(_number(player.get("NFLDepthOrder"), 0.0))
-    # Depth 1 is authoritative. Unknown depth sits between 1 and 2 so a partial
-    # data match cannot incorrectly promote a known backup over an obvious DK starter.
+    # Verified rotation slots precede unknown depth. Unknown players with a
+    # forecast remain fallback options ahead of documented deep reserves.
     primary_depth = 1.0 if depth == 1 else 0.0
-    depth_rank = -float(depth) if depth > 0 else -1.5
+    rotation = 1.0 if 0 < depth <= ROLE_LIMITS.get(_position(player), 1) else 0.0
+    depth_rank = -float(depth) if depth > 0 else -0.5
     return (
         1.0 if player.get("LockFlex") else 0.0,
         primary_depth,
+        rotation,
         depth_rank,
         _number(player.get("NFLRoleScore"), 0.0),
         _projection(player),
@@ -258,6 +261,8 @@ def build_nfl_role_pool(
     preserved for lineup generation.
     """
 
+    from nfl_eligibility import eligible_players
+    players = eligible_players(list(players), reject_locks=preserve_locks)
     grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = defaultdict(list)
     preserve_keys = {str(key) for key in preserve_player_keys if str(key)}
     preserved: List[Dict[str, Any]] = []
@@ -512,7 +517,20 @@ def _build_field_lineup(
     return lineup
 
 
-def generate_nfl_field_lineups(
+def generate_nfl_field_lineups(players, count, *, match_ownership=True, **kwargs):
+    entries, pool = _generate_nfl_field_lineups(players, count, **kwargs)
+    if not match_ownership or kwargs.get('candidate_mode') or kwargs.get('unique'):
+        return entries, pool
+    from ownership_strategy import fit_field
+    base_seed = kwargs.get('seed', 20260809)
+    entries = fit_field(entries, pool,
+        lambda adjusted, attempt: _generate_nfl_field_lineups(adjusted, count,
+            **dict(kwargs, seed=base_seed+attempt*104729))[0],
+        cancelled=kwargs.get('cancel_callback') or (lambda: False))
+    return entries, pool
+
+
+def _generate_nfl_field_lineups(
     players: Sequence[Dict[str, Any]],
     count: int,
     *,
@@ -549,7 +567,7 @@ def generate_nfl_field_lineups(
             ownership = max(0.05, _number(player.get("ProjOwnPct"), 0.0))
             ownership_exponent = _number(config.get("ownership_exponent"), 0.55)
             weight *= ownership ** max(0.05, min(1.25, ownership_exponent))
-        precomputed_weights[id(player)] = max(1e-9, weight)
+        precomputed_weights[id(player)] = max(1e-9, weight * _number(player.get('_FieldOwnWeight'), 1.0))
     rng = random.Random(seed)
     lineups: List[List[Dict[str, Any]]] = []
     signatures: set[Tuple[str, ...]] = set()
@@ -762,6 +780,7 @@ def simulate_nfl_field_ownership(
     lineups, role_pool = generate_nfl_field_lineups(
         players,
         num_lineups,
+        match_ownership=False,
         salary_cap=salary_cap,
         min_salary=max(0.0, salary_cap - 1000.0),
         progress_callback=progress_callback,
@@ -796,6 +815,7 @@ def _scenario_outcomes(
     players: Sequence[Dict[str, Any]],
     *,
     script_counter: Optional[Counter[str]] = None,
+    specialist_model: str = 'events',
 ) -> Dict[str, float]:
     # Sorted inputs make seeded builds reproducible across separate app runs;
     # set iteration order varies with Python's per-process hash seed.
@@ -891,6 +911,8 @@ def _scenario_outcomes(
         for team in teams
     }
 
+    from nfl_workload import sample_workloads, forecast as workload_points
+    sampled_workloads = sample_workloads(rng, players)
     outcomes: Dict[str, float] = {}
     for player in players:
         pos = _position(player)
@@ -908,11 +930,18 @@ def _scenario_outcomes(
             z = 0.32 * game_z + 0.43 * pass_z + 0.12 * env_z + math.sqrt(0.699) * idio
         elif pos == "RB":
             z = 0.22 * game_z + 0.38 * rush_z + 0.15 * env_z + math.sqrt(0.785) * idio
+        elif pos == "K":
+            # Kicker scoring follows opportunities on its own offense, unlike DST.
+            z = 0.15 * game_z + 0.30 * env_z + math.sqrt(0.8875) * idio
         else:  # DST: own rushing success helps; opposing offense and game scoring hurt.
             opp_env = team_environment.get(opponent, 0.0)
             z = -0.20 * game_z + 0.18 * rush_z - 0.38 * opp_env + math.sqrt(0.783) * idio
 
         mean = max(0.10, _projection(player))
+        if player.get('ProjectionSource') == 'Automatic workload estimate' and id(player) in sampled_workloads:
+            baseline = _number(player.get('WorkloadProjection'), 0.0)
+            if baseline > 0:
+                mean *= workload_points(sampled_workloads[id(player)]) / baseline
         cv = _player_volatility_cv(player)
         if pos == "DST":
             score = max(-4.0, mean + max(3.0, mean * cv) * z)
@@ -928,6 +957,11 @@ def _scenario_outcomes(
                 score *= 1.35 + 0.55 * rng.random()
             score = min(score, mean * 6.0 + 20.0)
         outcomes[player_key(player)] = score
+    if specialist_model == 'events':
+        from nfl_specialists import specialist_outcomes
+        outcomes.update(specialist_outcomes(rng, players, outcomes, game_factor, team_environment))
+    elif specialist_model != 'legacy':
+        raise ValueError('Unknown specialist model')
     return outcomes
 
 
@@ -950,9 +984,12 @@ def _opponent_field_banks(
 
 
 def _percentile_rank(values: Sequence[float], value: float) -> float:
-    if len(values) <= 1:
+    return _percentile_rank_sorted(sorted(values), value)
+
+
+def _percentile_rank_sorted(ordered: Sequence[float], value: float) -> float:
+    if len(ordered) <= 1:
         return 0.5
-    ordered = sorted(values)
     left = bisect.bisect_left(ordered, value)
     right = bisect.bisect_right(ordered, value)
     return ((left + right - 1) / 2.0) / float(len(ordered) - 1)
@@ -1199,6 +1236,10 @@ def simulate_nfl_contest(
     field_size: Optional[int] = None,
     field_config: Optional[Dict[str, Any]] = None,
     seed: int = 90210,
+    opponent_players: Optional[Sequence[Dict[str, Any]]] = None,
+    outcome_transform: Optional[Callable] = None,
+    capture_distributions: bool = False,
+    scenario_cache: bool = False,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     cancel_callback: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
@@ -1236,13 +1277,17 @@ def simulate_nfl_contest(
         salary_cap * _number(config.get("min_salary_pct"), 0.98),
     )
     field_lineups, role_pool = generate_nfl_field_lineups(
-        players,
+        opponent_players if opponent_players is not None else players,
         field_lineup_count,
         salary_cap=salary_cap,
         seed=seed + 1,
         cancel_callback=cancel_callback,
         field_config=config,
     )
+    field_used_fallback = not bool(field_lineups)
+    field_input_pool = role_pool
+    if opponent_players is not None:
+        role_pool = build_nfl_role_pool(players, preserve_locks=False)
     if not field_lineups:
         # A tiny or heavily locked fixture can still be graded against candidates.
         field_lineups = [list(lineup) for lineup in candidate_lists]
@@ -1262,14 +1307,21 @@ def simulate_nfl_contest(
         for key, count in field_appearances.items()
     }
     generated_field_summary = _summarize_generated_field(field_lineups)
+    from field_diagnostics import summarize_field
+    field_diagnostic = summarize_field(field_lineups, field_input_pool, salary_cap=salary_cap,
+                                      fallback=field_used_fallback)
+    from build_snapshots import fingerprint
 
     scenario_count = max(1, int(scenarios or 1))
+    from scoring_distributions import DistributionCapture
+    distribution = DistributionCapture(sim_players, "classic", scenario_count, seed) if capture_distributions and outcome_transform is None else None
     rng = random.Random(seed)
     scores_by_candidate: List[List[float]] = [[] for _ in candidate_lists]
     top_hits: List[set[int]] = [set() for _ in candidate_lists]
     top_five_hits: List[set[int]] = [set() for _ in candidate_lists]
     win_hits: List[set[int]] = [set() for _ in candidate_lists]
     scenario_values: List[Dict[int, float]] = [dict() for _ in candidate_lists]
+    top_two_counts = [0 for _ in candidate_lists]
     wins = [0 for _ in candidate_lists]
     cashes = [0 for _ in candidate_lists]
     busts = [0 for _ in candidate_lists]
@@ -1280,18 +1332,25 @@ def simulate_nfl_contest(
     batch = max(10, scenario_count // 25)
     script_counts: Counter[str] = Counter()
 
+    from scenario_cache import ScenarioReplay
+    replay = ScenarioReplay(sim_players, opponent_field_banks, kind='classic', seed=seed,
+        count=scenario_count, enabled=scenario_cache and outcome_transform is None, cancelled=cancel_callback,
+        context=dict(players=list(players),opponent_players=opponent_players,config=config,salary_cap=salary_cap,field_size=effective_field_size))
     for scenario_index in range(scenario_count):
         if cancel_callback and cancel_callback():
             break
-        outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
-        active_field_keys = opponent_field_banks[scenario_index % len(opponent_field_banks)]
-        field_scores = sorted(
-            sum(outcomes.get(key, 0.0) for key in signature)
-            for signature in active_field_keys
-        )
+        def compute_frame():
+            outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
+            if outcome_transform is not None:
+                outcomes = outcome_transform(outcomes)
+            active_field_keys = opponent_field_banks[scenario_index % len(opponent_field_banks)]
+            return outcomes, sorted(sum(outcomes.get(key, 0.0) for key in signature)
+                for signature in active_field_keys)
+        outcomes, field_scores = replay.frame(scenario_index, compute_frame, script_counts)
         if not field_scores:
             continue
         top_one_threshold = field_scores[max(0, int(math.floor(0.99 * (len(field_scores) - 1))))]
+        top_two_threshold = field_scores[max(0, int(math.floor(0.98 * (len(field_scores) - 1))))]
         top_five_threshold = field_scores[max(0, int(math.floor(0.95 * (len(field_scores) - 1))))]
         cash_threshold = field_scores[max(0, int(math.floor(0.80 * (len(field_scores) - 1))))]
         bust_threshold = field_scores[max(0, int(math.floor(0.40 * (len(field_scores) - 1))))]
@@ -1305,6 +1364,8 @@ def simulate_nfl_contest(
             percentile_sums[index] += percentile
             if score >= top_one_threshold:
                 top_hits[index].add(scenario_index)
+            if score >= top_two_threshold:
+                top_two_counts[index] += 1
             if score >= top_five_threshold:
                 top_five_hits[index].add(scenario_index)
             if score < bust_threshold:
@@ -1354,14 +1415,20 @@ def simulate_nfl_contest(
             return_scores[index] += scenario_value
             if scenario_value >= 1.5:
                 scenario_values[index][scenario_index] = scenario_value
+        if distribution is not None: distribution.record(outcomes)
         completed += 1
         if progress_callback and ((scenario_index + 1) % batch == 0 or scenario_index + 1 == scenario_count):
             progress_callback(scenario_index + 1, scenario_count, "Ranking candidates against simulated NFL fields")
 
+    cache_report = replay.finish(completed)
     denominator = float(max(1, completed))
+    if progress_callback:
+        progress_callback(0, len(candidate_lists), "Summarizing candidate scores")
     preliminary: List[Dict[str, Any]] = []
     winning_ownership_target = dict(config.get("winning_ownership_profile") or {})
     for index, lineup in enumerate(candidate_lists):
+        if progress_callback and index and index % 250 == 0:
+            progress_callback(index, len(candidate_lists), "Summarizing candidate scores")
         signature = candidate_keys[index]
         ownership_values = [max(0.05, field_ownership.get(key, 0.05)) / 100.0 for key in signature]
         log_product = sum(math.log(value) for value in ownership_values)
@@ -1371,6 +1438,7 @@ def simulate_nfl_contest(
         learned_profile_fit = _learned_ownership_profile_fit(lineup, winning_ownership_target)
         row = {
             "sim_win_rate": wins[index] / denominator * 100.0,
+            "sim_top_two_pct": top_two_counts[index] / denominator * 100.0,
             "sim_top_one_pct": len(top_hits[index]) / denominator * 100.0,
             "sim_top_five_pct": len(top_five_hits[index]) / denominator * 100.0,
             "sim_cash_rate": cashes[index] / denominator * 100.0,
@@ -1397,21 +1465,25 @@ def simulate_nfl_contest(
             })
         preliminary.append(row)
 
-    top_values = [item["sim_top_one_pct"] for item in preliminary]
-    top_five_values = [item["sim_top_five_pct"] for item in preliminary]
-    win_values = [item["sim_win_rate"] for item in preliminary]
-    ceiling_values = [item["sim_ceiling"] for item in preliminary]
-    return_values = [item["sim_return_score"] for item in preliminary]
-    dup_values = [item["duplication_raw"] for item in preliminary]
+    top_values = sorted([item["sim_top_one_pct"] for item in preliminary])
+    top_five_values = sorted([item["sim_top_five_pct"] for item in preliminary])
+    win_values = sorted([item["sim_win_rate"] for item in preliminary])
+    ceiling_values = sorted([item["sim_ceiling"] for item in preliminary])
+    return_values = sorted([item["sim_return_score"] for item in preliminary])
+    dup_values = sorted([item["duplication_raw"] for item in preliminary])
+    if progress_callback:
+        progress_callback(0, len(candidate_lists), "Finalizing candidate ratings")
     wrapped: List[SimLineup] = []
     for index, lineup in enumerate(candidate_lists):
+        if progress_callback and index and index % 250 == 0:
+            progress_callback(index, len(candidate_lists), "Finalizing candidate ratings")
         metrics = preliminary[index]
-        top_rank = _percentile_rank(top_values, metrics["sim_top_one_pct"])
-        top_five_rank = _percentile_rank(top_five_values, metrics["sim_top_five_pct"])
-        win_rank = _percentile_rank(win_values, metrics["sim_win_rate"])
-        ceiling_rank = _percentile_rank(ceiling_values, metrics["sim_ceiling"])
-        return_rank = _percentile_rank(return_values, metrics["sim_return_score"])
-        duplicate_rank = _percentile_rank(dup_values, metrics["duplication_raw"])
+        top_rank = _percentile_rank_sorted(top_values, metrics["sim_top_one_pct"])
+        top_five_rank = _percentile_rank_sorted(top_five_values, metrics["sim_top_five_pct"])
+        win_rank = _percentile_rank_sorted(win_values, metrics["sim_win_rate"])
+        ceiling_rank = _percentile_rank_sorted(ceiling_values, metrics["sim_ceiling"])
+        return_rank = _percentile_rank_sorted(return_values, metrics["sim_return_score"])
+        duplicate_rank = _percentile_rank_sorted(dup_values, metrics["duplication_raw"])
         base_edge = (
             0.32 * top_rank
             + 0.12 * win_rank
@@ -1514,6 +1586,8 @@ def simulate_nfl_contest(
         "lineups": wrapped,
         "report": {
             "scenarios": completed,
+            "scenario_cache": cache_report,
+            "player_distributions": distribution.finish(completed) if distribution is not None else None,
             "field_lineups": len(field_lineups),
             "field_size": effective_field_size,
             "role_pool_size": len(role_pool),
@@ -1522,6 +1596,8 @@ def simulate_nfl_contest(
             "learned_field_model": bool(config.get("learned")),
             "learned_entries": int(config.get("learned_entries", 0) or 0),
             "field_comparison": field_comparison,
+            "field_diagnostic": field_diagnostic,
+            "sensitivity_field_id": fingerprint(field_keys) if outcome_transform is not None else None,
             "field_model_preset_comparison": field_model_preset_comparison,
             "contest_aware": bool(contest_profile),
             "contest_profile": dict(contest_profile or {}),
@@ -1530,6 +1606,7 @@ def simulate_nfl_contest(
                 label: count / max(1, sum(script_counts.values())) * 100.0
                 for label, count in sorted(script_counts.items())
             },
+            "specialist_model": "shared-specialist-events-v1",
             "volatility_model": "role-aware-player-volatility-v1",
             "rare_event_model": "guardrailed-breakout-tails-v1",
             "payout_model": "exact-rank-tie-split-v1" if contest_profile else "payout-shape-proxy-v1",
@@ -1774,7 +1851,8 @@ def simulate_nfl_portfolio_contest(
             label: count / script_total * 100.0
             for label, count in sorted(script_counts.items())
         },
-        "volatility_model": "role-aware-player-volatility-v1",
+        "specialist_model": "shared-specialist-events-v1",
+            "volatility_model": "role-aware-player-volatility-v1",
         "rare_event_model": "guardrailed-breakout-tails-v1",
     }
     return {"lineups": wrapped, "report": report}

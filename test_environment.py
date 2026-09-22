@@ -7,6 +7,7 @@ reach native storage. Each window starts with its own empty INI settings file.
 from __future__ import annotations
 
 import atexit
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -33,9 +34,16 @@ def install():
 
     class IsolatedSettings(real_settings):
         def __init__(self, *args):
-            if args != ("DFS Optimizer", "DFS Optimizer"):
+            if args == ("DFS Optimizer", "DFS Optimizer"):
+                filename = _root / f"settings-{len(settings_stores)}.ini"
+            elif len(args) == 2 and args[1] == real_settings.IniFormat:
+                # Existing tests supply their own disposable INI identities.
+                # Preserve reopen semantics while keeping every store here.
+                identity = hashlib.sha256(str(Path(args[0]).resolve()).encode()).hexdigest()
+                filename = _root / f"explicit-{identity}.ini"
+            else:
                 raise AssertionError(f"Unexpected settings constructor: {args!r}")
-            super().__init__(str(_root / f"settings-{len(settings_stores)}.ini"), real_settings.IniFormat)
+            super().__init__(str(filename), real_settings.IniFormat)
             self.setFallbacksEnabled(False)
             assert self.format() == real_settings.IniFormat
             assert Path(self.fileName()).parent == _root
@@ -66,8 +74,12 @@ def install():
     def cleanup():
         # Test cases own worker retirement. Never tear down isolation around a
         # surviving worker; failing cases must drain before they return.
+        from PyQt5 import sip
         for settings in settings_stores:
-            settings.sync()
+            # Standalone documentation captures may have already destroyed
+            # QApplication and its settings objects before atexit runs.
+            if not sip.isdeleted(settings):
+                settings.sync()
         settings_stores.clear()
         logging.shutdown()
         os.chdir(previous_cwd)

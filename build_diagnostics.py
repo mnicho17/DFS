@@ -8,6 +8,8 @@ reproducible. They never include salary-file paths or API keys.
 
 import datetime as _dt
 import json
+import re
+from ranked_diagnostics import ranked_group_summaries, format_ranked_groups
 import math
 import os
 import sys
@@ -45,6 +47,17 @@ def _aggregate_warning(value: Any) -> str:
     lower = text.casefold()
     if not text:
         return ""
+    if lower.startswith("selection used the sim-scored compliant set preserved before shortlisting") or lower.startswith("bounded feasibility repair completed the portfolio without weakening"):
+        return ""  # Successful recovery is disclosed in build details, not a failed rule.
+    if lower.startswith("individual ranking uses simulated finish rates"):
+        return ""  # Selection-mode information is not a failed rule.
+    relaxation = re.match(r"Automatic Showdown exposure guardrails were relaxed (\d+) times", text)
+    if relaxation:
+        return f"Automatic Showdown exposure caps were raised {relaxation.group(1)} times to fill the output; the listed caps are starting limits."
+    if "did not complete independent validation" in lower:
+        return "Independent validation did not complete; results use the best available simulation stage."
+    if lower.startswith("built ") and "requested lineups" in lower:
+        return "Fewer lineups were selected than requested because the available pool or configured rules prevented filling the output."
     if "captain exposure" in lower:
         return "A player Captain exposure constraint was not met."
     if "total exposure" in lower or "player exposure" in lower:
@@ -56,6 +69,9 @@ def _aggregate_warning(value: Any) -> str:
     if "group" in lower:
         return "A player-group rule was not satisfied."
     if "minimum unique" in lower:
+        relaxed = re.search(r"relaxed to (\d+)", lower)
+        if relaxed:
+            return f"Minimum uniqueness was reduced to {relaxed.group(1)} to fill the requested output."
         return "Minimum uniqueness was relaxed to finish the portfolio."
     return "A portfolio or simulation rule could not be fully satisfied."
 
@@ -247,6 +263,15 @@ def create_build_diagnostic(
         }
 
     warnings: List[str] = []
+    projection_reviews = _integer(context.get('projection_review_count'))
+    coverage = dict(sim.get('projection_coverage') or {})
+    forecast_review = (coverage.get('forecast_checks') or {}).get('review_players',0)
+    if forecast_review:
+        warnings.append(f'{forecast_review} players have automatic forecast review signals. See Automatic forecast checks; no projections were changed.')
+    if coverage.get('missing_count'):
+        warnings.append(f"{coverage['missing_count']} eligible players have missing or invalid forecasts. See Projection and usage coverage.")
+    elif projection_reviews and not coverage:
+        warnings.append(f'{projection_reviews} player inputs use estimates or lack a forecast. Review Base projection sources before relying on rankings.')
     for source in (portfolio.get("warnings") or [], sim.get("warnings") or []):
         items = [source] if isinstance(source, str) else source
         for item in items:
@@ -288,6 +313,17 @@ def create_build_diagnostic(
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
     diagnostic = {
         "schema_version": 4,
+        "input_id": str(context.get('input_id') or ''),
+        "candidate_library": dict(sim.get("candidate_library") or {}),
+        "salary_filter": dict(sim.get("salary_filter") or {}),
+        "portfolio_feasibility": dict((sim.get('deep_build') or timing).get('portfolio_feasibility') or {}),
+        "feasible_shortlist_fallback_used": bool(portfolio.get('feasible_shortlist_fallback_used')),
+        "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
+        "ranking_bank": dict((sim.get('deep_build') or {}).get('ranking_bank') or {}),
+        "field_diagnostic": dict(sim.get('field_diagnostic') or {}),
+        "ownership_leverage": dict(sim.get('ownership_leverage') or {}),
+        "projection_coverage": coverage,
+        "data_freshness": str(context.get('data_freshness') or ''),
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
         "sport": str(context.get("sport") or "NFL").strip().upper(),
@@ -301,6 +337,8 @@ def create_build_diagnostic(
             "eligible": max(0, _integer(space.get("eligible"))),
             "omitted": max(0, _integer(space.get("omitted"))),
             "locked": max(0, _integer(space.get("locked"))),
+            "captain_locked": max(0, _integer(space.get("captain_locked"))),
+            "flex_locked": max(0, _integer(space.get("flex_locked"))),
             "structural_combinations": max(0, _integer(space.get("structural_combinations"))),
             "exact": bool(space.get("exact")),
             "explanation": str(space.get("explanation") or ""),
@@ -328,6 +366,8 @@ def create_build_diagnostic(
             "sim_enabled": bool(settings.get("sim_enabled")),
             "sim_scenarios": max(0, _integer(settings.get("sim_scenarios"))),
             "field_preset": str(settings.get("field_preset") or ""),
+            "entry_target": str(settings.get("entry_target") or ""),
+            "auto_entry_target": bool(settings.get("auto_entry_target")),
             "contest_profile_name": str(contest_profile.get("name") or ""),
             "contest_field_size": max(0, _integer(contest_profile.get("field_size"))),
             "contest_entry_fee": max(0.0, _number(contest_profile.get("entry_fee"))),
@@ -356,10 +396,12 @@ def create_build_diagnostic(
                 portfolio.get("automatic_showdown_guardrails") or {}
             ),
         },
+        "ranked_groups": ranked_group_summaries(lineups, contest_type, salary_cap, salary_strategy),
         "exposures": exposure_summary,
         "lineup_details": lineup_details,
         "lineup_details_total": len(list(lineups or [])),
         "sim": {
+            "scenario_cache": dict(sim.get("scenario_cache") or {}),
             "preset_fit": _number(preset.get("fit_score")) if preset.get("available") else None,
             "field_lineups": max(0, _integer(sim.get("field_lineups"), _integer(sim.get("field_lineup_count")))),
             "opponent_field_samples": max(
@@ -367,6 +409,8 @@ def create_build_diagnostic(
             ),
             "game_script_mix": dict(joint.get("game_script_mix") or sim.get("game_script_mix") or {}),
             "volatility_model": str(joint.get("volatility_model") or sim.get("volatility_model") or ""),
+            "kicker_opportunity_count": _integer(sim.get("kicker_opportunity_count")),
+            "specialist_model": str(joint.get("specialist_model") or sim.get("specialist_model") or ""),
             "rare_event_model": str(joint.get("rare_event_model") or sim.get("rare_event_model") or ""),
             "average_edge": _number(sim_summary.get("average_edge")) if sim_summary else None,
             "average_return_index": _number(sim_summary.get("average_return_index")) if sim_summary else None,
@@ -387,6 +431,8 @@ def create_build_diagnostic(
             "top_one_scenarios_covered": max(0, _integer(sim_summary.get("top_one_scenarios_covered"))),
             "generated_sources": aggregate_counts(candidate_sources.get("generated")),
             "selected_sources": aggregate_counts(candidate_sources.get("selected")),
+            "quarterback_pipeline": dict(sim.get("quarterback_pipeline") or {}),
+            "defense_pipeline": dict(sim.get("defense_pipeline") or {}),
             "screening_scenarios": max(0, _integer(timing.get("screening_scenarios"))),
             "validation_scenarios": max(0, _integer(timing.get("validation_scenarios"))),
             "portfolio_simulation_scenarios": max(
@@ -420,6 +466,9 @@ def create_build_diagnostic(
             "time_remaining_seconds": max(0.0, _number(timing.get("time_remaining_seconds"))),
             "deep_time_limit_seconds": max(0.0, _number(timing.get("deep_time_limit_seconds"))),
             "deep_time_limit_reached": bool(timing.get("time_limit_reached")),
+            "deep_options": dict(timing.get("deep_options") or {}),
+            "style_candidate_counts": dict(timing.get("style_candidate_counts") or {}),
+            "generation_allocation_seconds": _number(timing.get("generation_allocation_seconds")),
             "validation_top_overlap_pct": (
                 _number(timing.get("validation_top_overlap_pct"))
                 if timing.get("validation_top_overlap_pct") is not None
@@ -427,6 +476,8 @@ def create_build_diagnostic(
             ),
         },
     }
+    diagnostic["distribution_capture"] = dict(sim.get("distribution_capture") or {})
+    diagnostic['captain_coverage'] = dict(sim.get('captain_coverage') or {})
     return diagnostic
 
 
@@ -464,6 +515,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     is_showdown = str(record.get("contest_type") or "").casefold() == "showdown"
     sim_ran = bool(settings.get("sim_enabled") and _integer(sim.get("scenario_count")) > 0)
 
+    archive = dict(record.get('generated_archive') or {})
+
     phase_times = {
         "Generate": _number(timing.get("generation_seconds")),
         "SIM": _number(timing.get("simulation_seconds")),
@@ -496,6 +549,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
 
     lines = [
         "DFS Optimizer Build Report",
+        f"Input ID: {record.get('input_id') or 'not recorded'}",
+        f"Data: {record.get('data_freshness') or 'freshness not recorded'}",
         f"Run: {_created_label(record.get('created_at'))}",
         f"Status: {str(record.get('status') or 'completed').title()}",
         *([f"Saved repair: {record['application'].get('status', 'unknown')} ({record['application'].get('reason', 'unknown')})"]
@@ -515,6 +570,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     ]
     if str(pool.get("explanation") or "").strip():
         lines.append(f"- Note: {str(pool.get('explanation')).strip()}")
+    if is_showdown:
+        lines.append(f"- Slot locks: Captain {_integer(pool.get('captain_locked'))}; FLEX {_integer(pool.get('flex_locked'))}.")
     if deep_mode:
         lines.append(
             f"- Deep shortlist: {_integer(candidates.get('shortlisted')):,} candidates after "
@@ -546,6 +603,25 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Balance ownership/dup risk: {'On' if rules.get('balance_ownership') else 'Off'}",
         f"- Player groups: {_integer(rules.get('group_count'))} | Player limits: {_integer(rules.get('constrained_player_count'))}",
     ])
+    if deep_mode:
+        options = sim.get("deep_options") or {}
+        if sim.get("generation_allocation_seconds"):
+            lines.append(f"- Generation time allowance: {_number(sim['generation_allocation_seconds']) / 60:g} min; remaining phases have reserved time")
+        lines.append("- Search styles: " + ("All five styles (shared budget)" if options.get("all_styles") else "Selected style"))
+        library = record.get("candidate_library") or {}
+        if library:
+            lines.append(f"- Candidate library: {library.get('saved', 0):,} saved; {library.get('accepted', 0):,} accepted; {library.get('rejected', 0):,} rejected by current eligibility/rules. Scores recalculated with current inputs.")
+        if sim.get("style_candidate_counts"):
+            lines.append("- Style candidates before deduplication: " + "; ".join(f"{name} {int(count):,}" for name, count in sim["style_candidate_counts"].items()))
+        lines.append("- Output selection: " + str(options.get("selection_mode") or "Portfolio selection"))
+        lines.append("- Display order: top-1%, top-2%, top-5%, first-place rate, then mean points (descending)")
+        def pool_limit(key):
+            return f"{_integer(options.get(key)):,}" if options.get(key) else "Auto"
+        lines.append(
+            f"- Deep limits: {_number(sim.get('deep_time_limit_seconds')) / 60:g} min; "
+            f"candidates {pool_limit('candidates')}; shortlist {pool_limit('shortlist')}; "
+            f"opponent sample {pool_limit('field')}; search seeds {_integer(options.get('seeds'), 4)}"
+        )
     if settings.get("contest_profile_name"):
         lines.insert(
             lines.index(f"- Compute: {compute_mode}"),
@@ -584,10 +660,38 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             f"expected payout ${_number(sim.get('average_expected_payout')):,.2f} • "
             f"expected profit ${_number(sim.get('average_expected_profit')):+,.2f} per entry"
         )
+    if sim.get("kicker_opportunity_count"):
+        lines.append(f"- Kicker opportunity forecasts: {sim['kicker_opportunity_count']} players use weekly attempts, accuracy and distance data (experimental)")
+    if sim.get("specialist_model"):
+        lines.append("- Specialist scoring: shared possession events (experimental); K/DST projections guide event rates, not guaranteed SIM means")
+        lines.append("- Specialist limits: offense remains projection-based; event rates await historical calibration")
     if sim.get("volatility_model"):
         lines.append("- Scenario model: game scripts, role-aware player ranges, and guarded rare ceiling outcomes")
+        cache = sim.get('scenario_cache') or {}
+        if cache and cache.get('status') != 'disabled':
+            lines.append(f"- Reusable scenarios: {cache.get('status')}; {_integer(cache.get('reused_scenarios')):,}/{_integer(cache.get('requested_scenarios')):,} reused. Current lineup scoring and rules still apply; independent audits remain fresh.")
+    capture = record.get('distribution_capture') or {}
+    from captain_coverage import format_coverage
+    lines.extend(format_coverage(record.get('captain_coverage') or {}))
+    if capture:
+        lines.append(f"- Scoring distributions: {capture.get('status')}; {capture.get('scenarios', 0):,} scenarios; {capture.get('players', 0)} players. {capture.get('reason', '')}")
     if deep_mode:
         stop_reason = str(sim.get("refinement_stop_reason") or "").strip()
+        from ranking_stability import format_stability
+        lines.extend(format_stability(record.get('ranking_audit') or {}))
+        bank = record.get('ranking_bank') or {}
+        if bank.get('status') == 'saved':
+            lines.append(f"- Repeatability shortlist saved: {bank['candidates']:,} candidates; bank {bank['bank_id'][:12]}. Open Settings > Ranking Repeatability.")
+        elif bank:
+            lines.append('- Repeatability shortlist was not saved; check local storage and rerun Deep.')
+        salary_filter = record.get('salary_filter') or {}
+        if salary_filter:
+            lines.append(f"- Showdown salary filter: {salary_filter.get('excluded', 0):,} candidates excluded before screening; minimum ${salary_filter.get('minimum', 0):,.0f}.")
+        feasibility = record.get('portfolio_feasibility') or {}
+        if feasibility:
+            lines.append(f"- Portfolio feasibility before shortlist: {feasibility.get('status')}; {feasibility.get('lineups', 0)} lineups preserved from {feasibility.get('searched', 0):,} candidates; {feasibility.get('seconds', 0):.2f}s")
+            if record.get('feasible_shortlist_fallback_used'):
+                lines.append("- Selection recovered using the SIM-scored preserved portfolio; no limits were changed.")
         time_remaining = max(0.0, _number(sim.get("time_remaining_seconds")))
         if sim.get("deep_time_limit_reached"):
             deep_status = "time budget used"
@@ -664,12 +768,24 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             )
         )
 
+    if settings.get("entry_target"):
+        lines.append(f"- Entry target: {settings["entry_target"]}; {"automatic from requested count" if settings.get("auto_entry_target") else "manual"}. Preset field assumptions are defaults, not verified contest details.")
     warnings = [str(warning) for warning in portfolio.get("warnings") or [] if str(warning).strip()]
     lines.extend(["", "Warnings"])
     if warnings:
         lines.extend(f"- {warning}" for warning in warnings)
     else:
         lines.append("- None")
+    from pipeline_audit import format_quarterback_pipeline, format_defense_pipeline
+    lines.extend(format_quarterback_pipeline(sim.get("quarterback_pipeline") or {}))
+    lines.extend(format_defense_pipeline(sim.get("defense_pipeline") or {}))
+    from field_diagnostics import format_field
+    from projection_coverage import format_projection_coverage
+    lines.extend(format_projection_coverage(record.get('projection_coverage') or {}))
+    lines.extend(format_field(record.get('field_diagnostic') or {}))
+    from ownership_strategy import format_leverage
+    lines.extend(format_leverage(record.get('ownership_leverage') or {}))
+    lines.extend(format_ranked_groups(record.get("ranked_groups") or []))
     if is_showdown and exposures.get("total"):
         selected_count = max(1, _integer(candidates.get("selected")))
         lines.extend(["", "Full portfolio exposures"])
@@ -724,10 +840,16 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     lines.extend(["", (
         "Privacy: This report includes lineup names and strategy inputs for troubleshooting; "
         "it excludes file paths and API keys."
-        if lineup_details else
+        if lineup_details or record.get("ranked_groups") or record.get('field_diagnostic') or record.get('projection_coverage') or record.get('captain_coverage') else
         "Privacy: This report contains aggregate settings and counts only; no players, "
         "lineups, file paths, or API keys."
     )])
+    if archive:
+        lines += ['', 'Automatic generated-lineup archive',
+            f"- Status: {archive.get('status')}; outputs: {archive.get('lineups', 0)}."]
+        if archive.get('status') == 'saved':
+            lines.append(f"- File: {archive.get('filename')}; snapshot: {archive.get('snapshot')}.")
+            lines.append('- Settings > Open Automatic Build Archives. Generated outputs are not proof of export or submission.')
     return "\n".join(lines)
 
 
@@ -762,6 +884,9 @@ def format_build_comparison(first: Mapping[str, Any], second: Mapping[str, Any])
 
     lines = [
         "DFS Optimizer Build Comparison",
+        ('Matching build inputs' if earlier.get('input_id') == later.get('input_id') else 'Different build inputs')
+        if earlier.get('input_id') and later.get('input_id') else 'Input comparison unavailable for older reports',
+        'Matching inputs do not guarantee identical timing-limited searches or real-world accuracy.',
         f"A: {_created_label(earlier.get('created_at'))}",
         f"B: {_created_label(later.get('created_at'))}",
         "",
@@ -816,4 +941,3 @@ def format_build_comparison(first: Mapping[str, Any], second: Mapping[str, Any])
         "Privacy: This comparison contains aggregate settings and counts only; no players, lineups, file paths, or API keys.",
     ])
     return "\n".join(lines)
-

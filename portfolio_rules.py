@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import time
 from collections import Counter
+from itertools import combinations
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
@@ -178,6 +179,9 @@ def _uniqueness_keys(lineup: Any, kind: str) -> set[str]:
     return keys
 
 
+from lineup_ranking import finish_rank
+
+
 def select_portfolio(
     candidates: Iterable[Any],
     requested: int,
@@ -188,14 +192,33 @@ def select_portfolio(
     refinement_passes: int = 0,
     refinement_stop_callback: Optional[Any] = None,
     refinement_polish_duplication: bool = False,
+    individual_ranking: bool = False,
+    core_penalty: float = 0.0,
+    selection_cancel_callback: Optional[Any] = None,
+    allow_relaxation: bool = True,
+    repair_time_limit: float = 15,
+    feasibility_only: bool = False,
+    fallback_lineups: Optional[Sequence[Any]] = None,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
     Maximums and player groups remain hard rules. Minimum exposure is prioritized
     during selection and reported as a shortfall when the candidate pool cannot
-    satisfy it. Lineup uniqueness relaxes one player at a time only when needed so
-    an aggressive setting cannot freeze or crash a large build.
+    satisfy it. Desktop builds disable legacy relaxation and attempt a bounded
+    feasibility repair before reporting a shortage; diagnostic callers may opt
+    into the legacy fill behavior.
     """
+    selection_started = time.perf_counter()
+    def feasibility_checkpoint():
+        if feasibility_only:
+            from bounded_solver import check
+            check(selection_started + max(0, repair_time_limit), selection_cancel_callback or (lambda: False))
+    if individual_ranking:
+        refinement_passes = 0
+        refinement_polish_duplication = False
+    core_penalty = 0.0 if individual_ranking else float(core_penalty)
+    if not math.isfinite(core_penalty) or not 0 <= core_penalty <= 10:
+        raise ValueError("Core penalty must be between 0 and 10")
     requested = max(1, int(requested or 1))
     normalized = normalize_rules(rules)
     kind = str(kind or "classic").lower()
@@ -209,6 +232,7 @@ def select_portfolio(
 
     unique_candidates: Dict[Tuple[str, ...], Any] = {}
     for lineup in candidates or []:
+        feasibility_checkpoint()
         signature = _candidate_signature(lineup, kind)
         if signature and signature not in retained_by_signature and signature not in unique_candidates:
             unique_candidates[signature] = lineup
@@ -219,6 +243,7 @@ def select_portfolio(
         key: dict(value) for key, value in normalized["player_constraints"].items()
     }
     for lineup in all_lineups:
+        feasibility_checkpoint()
         for player in lineup_players(lineup, kind):
             key = player_key(player)
             if key:
@@ -237,7 +262,7 @@ def select_portfolio(
     max_total = {key: _max_count(player.get("MaxPct"), requested) for key, player in player_lookup.items()}
     min_cpt = {key: _min_count(player.get("MinCptPct"), requested) for key, player in player_lookup.items()}
     max_cpt = {key: _max_count(player.get("MaxCptPct"), requested) for key, player in player_lookup.items()}
-    auto_guardrails = kind == "showdown" and normalized["balance_ownership"]
+    auto_guardrails = kind == "showdown" and normalized["balance_ownership"] and not individual_ranking
     if requested <= 20:
         auto_total_pct, auto_cpt_pct = 80.0, 35.0
     elif requested < 100:
@@ -290,6 +315,9 @@ def select_portfolio(
         )
         if pairwise_unique:
             report = portfolio_report(pool, normalized, kind=kind, requested=requested)
+            if individual_ranking:
+                report.update(refinement_stop_reason="disabled in individual ranking",
+                              refinement_seconds=0.0, refinement_swaps=0, refinement_attempts=0)
             if len(pool) < requested:
                 warning = (
                     f"Built {len(pool)} of {requested} requested lineups; "
@@ -310,9 +338,11 @@ def select_portfolio(
     # player dictionaries millions of times dominated the v1 selector.
     candidate_meta: Dict[int, Dict[str, Any]] = {}
     for lineup in all_lineups:
+        feasibility_checkpoint()
         keys, teams, games = _lineup_sets(lineup, kind)
         captain = lineup_captain(lineup, kind)
         candidate_meta[id(lineup)] = {
+            "cores": tuple(combinations(sorted(keys), 2)) + tuple(combinations(sorted(keys), 3)) if core_penalty else (),
             "keys": keys,
             "teams": teams,
             "games": games,
@@ -329,14 +359,15 @@ def select_portfolio(
                 or _sim_metrics(lineup).get("candidate_archetype")
                 or ""
             ),
-            "top_hits": set(getattr(lineup, "sim_top_hits", set()) or set()),
-            "top_five_hits": set(getattr(lineup, "sim_top_five_hits", set()) or set()),
-            "win_hits": set(getattr(lineup, "sim_win_hits", set()) or set()),
-            "scenario_values": dict(getattr(lineup, "sim_scenario_values", {}) or {}),
+            "top_hits": set() if feasibility_only else set(getattr(lineup, "sim_top_hits", set()) or set()),
+            "top_five_hits": set() if feasibility_only else set(getattr(lineup, "sim_top_five_hits", set()) or set()),
+            "win_hits": set() if feasibility_only else set(getattr(lineup, "sim_win_hits", set()) or set()),
+            "scenario_values": {} if feasibility_only else dict(getattr(lineup, "sim_scenario_values", {}) or {}),
         }
 
     selected: List[Any] = list(retained)
     selected_candidate_ids: set[int] = {id(lineup) for lineup in retained}
+    core_counts = Counter()
     total_counts: Counter[str] = Counter()
     cpt_counts: Counter[str] = Counter()
     team_counts: Counter[str] = Counter()
@@ -352,6 +383,7 @@ def select_portfolio(
 
     for lineup in retained:
         meta = candidate_meta[id(lineup)]
+        core_counts.update(meta["cores"])
         total_counts.update(meta["keys"])
         team_counts.update(meta["teams"])
         game_counts.update(meta["games"])
@@ -366,22 +398,15 @@ def select_portfolio(
         if meta["archetype"]:
             archetype_counts[meta["archetype"]] += 1
 
-    uniqueness_cache: Dict[int, Dict[int, set[int]]] = {}
+    uniqueness_cache = {}
+    uniqueness_groups = {}
 
-    def uniqueness_conflicts(min_unique: int) -> Dict[int, set[int]]:
-        if min_unique <= 1:
-            return {}
+    def uniqueness_conflicts(min_unique):
         if min_unique not in uniqueness_cache:
-            conflicts: Dict[int, set[int]] = {id(lineup): set() for lineup in all_lineups}
-            for index, lineup in enumerate(all_lineups):
-                lineup_id = id(lineup)
-                keys = _uniqueness_keys(lineup, kind)
-                for previous in all_lineups[:index]:
-                    previous_id = id(previous)
-                    if len(keys - _uniqueness_keys(previous, kind)) < min_unique:
-                        conflicts[lineup_id].add(previous_id)
-                        conflicts[previous_id].add(lineup_id)
-            uniqueness_cache[min_unique] = conflicts
+            from portfolio_feasibility import conflict_index
+            edges, groups = conflict_index(all_lineups, lambda lu: _uniqueness_keys(lu, kind), min_unique, feasibility_checkpoint, expand=not feasibility_only)
+            uniqueness_cache[min_unique] = edges
+            uniqueness_groups[min_unique] = groups
         return uniqueness_cache[min_unique]
 
     current_uniqueness_conflicts = uniqueness_conflicts(current_min_unique)
@@ -418,6 +443,8 @@ def select_portfolio(
         return True
 
     def score(lineup: Any) -> float:
+        if individual_ranking:
+            return finish_rank(lineup)
         meta = candidate_meta[id(lineup)]
         keys = meta["keys"]
         teams = meta["teams"]
@@ -439,9 +466,9 @@ def select_portfolio(
             # Reward the first few lineups from a distinct Showdown story, then
             # taper naturally so quality still controls the complete portfolio.
             archetype_bonus = 14.0 / (1.0 + archetype_counts[meta["archetype"]])
-        # Exposure concentration already captures repeated player overlap and
-        # is much cheaper than comparing every candidate to every selected set.
-        overlap_penalty = 0.0
+        # The diagnostic-only core penalty uses cached pairs/trios. Its maximum
+        # marginal cost is core_penalty; default production behavior stays off.
+        overlap_penalty = core_penalty * sum(core_counts[c] for c in meta["cores"]) / max(1, len(meta["cores"])) / max(1, requested - 1) if core_penalty else 0.0
         sim = meta["sim"]
         sim_edge = _pct(sim.get("sim_edge"), None)
         if sim_edge is None:
@@ -503,9 +530,24 @@ def select_portfolio(
 
     remaining = list(pool)
     auto_relaxations = 0
+    feasibility_limits = dict(requested=requested, total=max_total, captain=max_cpt,
+        team=max_team, game=max_game, specialist=specialist_cpt_limit)
+    if feasibility_only:
+        from portfolio_feasibility import repair
+        witness = repair(pool, retained, [], candidate_meta, current_uniqueness_conflicts,
+            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), finish_rank,
+            seconds=max(0, repair_time_limit - (time.perf_counter() - selection_started)),
+            conflict_groups=uniqueness_groups.get(current_min_unique),
+            cancelled=selection_cancel_callback or (lambda: False))
+        return {'lineups': witness or [], 'report': {}, 'candidate_count': len(pool)}
+
     while len(selected) < requested and remaining:
+        if selection_cancel_callback and selection_cancel_callback():
+            raise ValueError("Selection cancelled")
         eligible = [lineup for lineup in remaining if admissible(lineup, current_min_unique)]
         if not eligible:
+            if not allow_relaxation:
+                break
             if current_min_unique > 1:
                 current_min_unique -= 1
                 current_uniqueness_conflicts = uniqueness_conflicts(current_min_unique)
@@ -536,6 +578,7 @@ def select_portfolio(
         games = chosen_meta["games"]
         selected.append(chosen)
         selected_candidate_ids.add(id(chosen))
+        core_counts.update(chosen_meta["cores"])
         total_counts.update(keys)
         team_counts.update(teams)
         game_counts.update(games)
@@ -553,6 +596,43 @@ def select_portfolio(
         sim_value_counts.update(chosen_values.keys())
         if chosen_meta["archetype"]:
             archetype_counts[chosen_meta["archetype"]] += 1
+
+    feasibility_repaired = False
+    fallback_used = False
+    if len(selected) < requested and not allow_relaxation:
+        from portfolio_feasibility import repair
+        from portfolio_feasibility import valid_portfolio
+        fallback_keys = {_candidate_signature(lu, kind) for lu in (fallback_lineups or [])}
+        fallback = [lu for lu in all_lineups if _candidate_signature(lu, kind) in fallback_keys]
+        fallback_used = valid_portfolio(fallback, retained, candidate_meta, current_uniqueness_conflicts,
+            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']))
+        repaired = fallback if fallback_used else repair(pool, retained, selected, candidate_meta, current_uniqueness_conflicts,
+            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), score, seconds=repair_time_limit,
+            conflict_groups=uniqueness_groups.get(current_min_unique),
+            cancelled=selection_cancel_callback or (lambda: False))
+        if repaired is None:
+            from selection_shortage import PortfolioSelectionShortage, describe
+            raise PortfolioSelectionShortage(describe(requested, selected, remaining, candidate_meta,
+                current_uniqueness_conflicts,
+                dict(total=max_total, captain=max_cpt, team=max_team, game=max_game, specialist=specialist_cpt_limit),
+                dict(total=total_counts, captain=cpt_counts, team=team_counts, game=game_counts, specialist=specialist_cpt_count),
+                player_lookup, current_min_unique, auto_total_keys, auto_cpt_keys,
+                lambda keys: _group_ok(keys, normalized['groups'])))
+        selected = repaired
+        feasibility_repaired = True
+        selected_candidate_ids = {id(lu) for lu in selected}
+        remaining = [lu for lu in pool if id(lu) not in selected_candidate_ids]
+        for counter in (core_counts,total_counts,team_counts,game_counts,cpt_counts,sim_top_counts,sim_top_five_counts,sim_win_counts,sim_value_counts,archetype_counts):
+            counter.clear()
+        specialist_cpt_count = 0
+        for lu in selected:
+            m = candidate_meta[id(lu)]
+            core_counts.update(m['cores']);total_counts.update(m['keys']);team_counts.update(m['teams']);game_counts.update(m['games'])
+            if m['captain_key']:cpt_counts[m['captain_key']] += 1
+            specialist_cpt_count += int(m['specialist_captain'])
+            sim_top_counts.update(m['top_hits']);sim_top_five_counts.update(m['top_five_hits']);sim_win_counts.update(m['win_hits'])
+            sim_value_counts.update(m['scenario_values'].keys())
+            if m['archetype']:archetype_counts[m['archetype']] += 1
 
     # Deep builds have enough candidates to benefit from a small local-search
     # pass after the greedy portfolio is complete.  Only non-retained lineups
@@ -710,6 +790,8 @@ def select_portfolio(
             for key in touched_players
         )
         delta += 500.0 * float(before_shortfall - after_shortfall)
+        core_weight = core_penalty / max(1, len(in_meta["cores"])) / max(1, requested - 1)
+        delta += counter_swap_delta(core_counts, set(out_meta["cores"]), set(in_meta["cores"]), core_weight)
         delta += counter_swap_delta(total_counts, out_meta["keys"], in_meta["keys"], 0.08)
         delta += counter_swap_delta(team_counts, out_meta["teams"], in_meta["teams"], 0.04)
         delta += counter_swap_delta(game_counts, out_meta["games"], in_meta["games"], 0.03)
@@ -738,6 +820,7 @@ def select_portfolio(
         selected_candidate_ids.remove(id(outgoing))
         selected_candidate_ids.add(id(incoming))
         for counts, out_values, in_values in (
+            (core_counts, set(out_meta["cores"]), set(in_meta["cores"])),
             (total_counts, out_meta["keys"], in_meta["keys"]),
             (team_counts, out_meta["teams"], in_meta["teams"]),
             (game_counts, out_meta["games"], in_meta["games"]),
@@ -840,13 +923,23 @@ def select_portfolio(
             f"Built {len(selected)} of {requested} requested lineups; hard exposure, group, team, or game limits exhausted the feasible candidate pool."
         )
 
+    if auto_relaxations:
+        warnings.append(f"Automatic Showdown exposure guardrails were relaxed {auto_relaxations} times to fill the requested portfolio; displayed starting caps are not final limits.")
+    if not refinement_passes:
+        refinement_stop_reason = "disabled in individual ranking" if individual_ranking else "disabled"
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
     report["effective_min_unique"] = current_min_unique
+    report["feasible_shortlist_fallback_used"] = fallback_used
+    if fallback_used:
+        report["warnings"].append("Selection used the SIM-scored compliant set preserved before shortlisting; rules were unchanged.")
+    report["feasibility_repaired"] = feasibility_repaired
+    if feasibility_repaired and not fallback_used:
+        warnings.append("Bounded feasibility repair completed the portfolio without weakening uniqueness or exposure limits.")
     report["refinement_swaps"] = refinement_swaps
     report["duplication_refinement_swaps"] = duplication_refinement_swaps
     report["refinement_attempts"] = refinement_attempts
     report["refinement_stop_reason"] = refinement_stop_reason
-    report["refinement_seconds"] = max(0.0, time.perf_counter() - refinement_started)
+    report["refinement_seconds"] = max(0.0, time.perf_counter() - refinement_started) if refinement_passes else 0.0
     report["automatic_showdown_guardrails"] = (
         {
             "total_player_pct": auto_total_pct,
@@ -1122,4 +1215,3 @@ def _report_text(report: Dict[str, Any]) -> str:
 def format_portfolio_report_text(report: Dict[str, Any]) -> str:
     """Refresh the readable summary after callers add aggregate warnings."""
     return _report_text(report)
-

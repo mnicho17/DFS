@@ -38,6 +38,10 @@ class ResultsLearningUITests(unittest.TestCase):
     def test_dialog_starts_with_local_empty_state(self):
         dialog = ResultsLearningDialog()
         self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "importResultsButton"))
+        copy_button = dialog.findChild(QtWidgets.QPushButton, "copyLearningReportButton")
+        self.assertIsNotNone(copy_button)
+        copy_button.click()
+        self.assertEqual(QtWidgets.QApplication.clipboard().text(), dialog.report.toPlainText())
         self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "attachFieldSalaryButton"))
         self.assertIsNotNone(dialog.findChild(QtWidgets.QProgressBar, "resultsImportProgress"))
         self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "cancelResultsImportButton"))
@@ -64,7 +68,9 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertIsNotNone(window.findChild(QtWidgets.QSpinBox, "nflSimScenarios"))
         preset = window.findChild(QtWidgets.QComboBox, "nflFieldPreset")
         self.assertIsNotNone(preset)
-        self.assertEqual(preset.currentText(), "150-Max")
+        from entry_target import entry_target
+        count=window.spin_sd.value() if window._contest_mode()=="showdown" else window.spin_cl.value()
+        self.assertEqual(preset.currentText(), entry_target(count)["preset"])
         compute = window.findChild(QtWidgets.QComboBox, "nflComputeMode")
         self.assertIsNotNone(compute)
         self.assertEqual(compute.currentText(), "Fast (default)")
@@ -286,7 +292,7 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(window.tabs_workspace_controls.count(), 3)
         self.assertEqual(
             [window.tabs_workspace_controls.tabText(i) for i in range(3)],
-            ["Build Strategy", "Portfolio Rules", "Data and Learning"],
+            ["Build", "Portfolio Rules", "Data and Learning"],
         )
         self.assertTrue(window.tabs_workspace_controls.isHidden())
         self.assertIn("Strategic", window.lbl_workspace_summary.text())
@@ -394,8 +400,12 @@ class ResultsLearningUITests(unittest.TestCase):
         window.tabs_lineups.setCurrentIndex(1)
         total_column = window.tbl_cl.columnCount() - 2
         grade_column = window.tbl_cl.columnCount() - 1
-        self.assertEqual(window.tbl_cl.horizontalHeader().sectionSize(total_column), 88)
-        self.assertEqual(window.tbl_cl.horizontalHeader().sectionSize(grade_column), 92)
+        self.assertGreaterEqual(window.tbl_cl.horizontalHeader().sectionSize(total_column), 88)
+        self.assertGreaterEqual(window.tbl_cl.horizontalHeader().sectionSize(grade_column), 92)
+        self.assertEqual(window.tbl_cl.horizontalHeader().sectionResizeMode(1), QtWidgets.QHeaderView.Interactive)
+        window.tbl_cl.horizontalHeader().resizeSection(1,245)
+        window._fit_lineup_table_columns(window.tbl_cl)
+        self.assertEqual(window.tbl_cl.columnWidth(1),245)
         self.assertEqual(
             window.tbl_cl.horizontalHeaderItem(total_column).textAlignment() & horizontal_mask,
             int(QtCore.Qt.AlignRight),
@@ -830,6 +840,13 @@ class ResultsLearningUITests(unittest.TestCase):
     def test_deep_worker_keeps_best_completed_stage_under_a_short_time_budget(self):
         progress = []
         finished = []
+        clock = [0.0]
+
+        def record_progress(done, total, text):
+            progress.append(text)
+            # Expire after real screening results exist, independent of CPU speed.
+            if "Phase 2 of 4" in text and done > 0:
+                clock[0] = 5.0
         worker = LineupBuildWorker(
             _fixture_players(),
             kind="classic",
@@ -850,12 +867,15 @@ class ResultsLearningUITests(unittest.TestCase):
             sim_scenarios=250,
             compute_mode="Deep (up to 5 min)",
             deep_time_limit_seconds=4.0,
+            deep_options={"candidates": 100, "shortlist": 50, "field": 100},
         )
-        worker.progress.connect(lambda done, total, text: progress.append(text))
+        worker.progress.connect(record_progress)
         worker.finished.connect(finished.append)
 
-        worker.run()
+        with mock.patch("main_window.time.perf_counter", side_effect=lambda: clock[0]):
+            worker.run()
 
+        self.assertEqual(clock[0], 5.0)
         self.assertTrue(finished)
         payload = finished[0]
         timing = payload["timing_report"]
@@ -985,6 +1005,24 @@ class ResultsLearningUITests(unittest.TestCase):
         self.assertEqual(rows[1][5:10], [str(player["FlexID"]) for player in lineup["Flex"]])
         self.assertEqual(rows[1][11], "keep")
         window.close()
+
+    def test_update_entries_targets_one_contest_and_preserves_other(self):
+        import csv
+        window=MainWindow();lineup=_showdown_lineup();window.saved_showdown=[lineup]
+        source=os.path.join(self.temp.name,'multi.csv');dest=os.path.join(self.temp.name,'multi-updated.csv')
+        original=[['Entry ID','Contest Name','Contest ID','Entry Fee','CPT']+['FLEX']*5+['','Notes'],
+                  ['101','First','77','$1']+['old']*6+['','keep'],
+                  ['102','Second','88','$2']+['other']*6+['','keep too']]
+        with open(source,'w',newline='',encoding='utf-8-sig') as f:csv.writer(f).writerows(original)
+        with mock.patch.object(window,'_confirm_portfolio_export',return_value=True), mock.patch.object(
+            QtWidgets.QFileDialog,'getOpenFileName',return_value=(source,'')), mock.patch.object(
+            QtWidgets.QFileDialog,'getSaveFileName',return_value=(dest,'')), mock.patch(
+            'entries_scope_ui.choose_scope',return_value=(True,'77')), mock.patch.object(QtWidgets.QMessageBox,'information'):
+            window.on_update_entries('showdown')
+        with open(dest,newline='',encoding='utf-8-sig') as f:actual=list(csv.reader(f))
+        self.assertEqual(actual[2],original[2]);self.assertEqual(actual[1][:4],original[1][:4])
+        self.assertEqual(actual[1][4],str(lineup['Captain']['CptID']))
+        self.assertEqual(actual[1][10:],original[1][10:]);window.close()
 
 
 if __name__ == "__main__":

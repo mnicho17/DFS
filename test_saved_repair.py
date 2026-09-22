@@ -31,6 +31,9 @@ class SavedRepairTests(unittest.TestCase):
         self.held = []
         self.network_start = len(network_attempts)
         self.patches = []
+        error_dialog = mock.patch("main_window.show_build_error")
+        error_dialog.start()
+        self.patches.append(error_dialog)
         for name, value in (("question", QtWidgets.QMessageBox.Yes), ("critical", None), ("warning", None)):
             patch = mock.patch.object(QtWidgets.QMessageBox, name, return_value=value)
             patch.start()
@@ -160,8 +163,9 @@ class SavedRepairTests(unittest.TestCase):
                 self.assertEqual(errors, [])
                 self.assertEqual(len(finished), 1)
                 self.assertTrue(finished[0]['cancelled'])
-                # Classic's real fallback can return 20 even after cancellation.
-                self.assertEqual(len(finished[0]['lineups']), 17 if kind == 'showdown' else 20)
+                # The constrained selector rejects cancelled shortages in both formats;
+                # the real worker delivers its 17 retained entries as a cancelled proposal.
+                self.assertEqual(len(finished[0]['lineups']), 17)
                 self.unchanged(window, kind, states['source_A'], report)
                 self.assertEqual(receipt.disposition, 'cancelled')
                 self.assertTrue(receipt.thread_finished)
@@ -245,7 +249,7 @@ class SavedRepairTests(unittest.TestCase):
                 window.chk_nfl_contest_sim.setChecked(True)
                 window.spin_nfl_sim_scenarios.setValue(100)
                 window.combo_nfl_compute_mode.setCurrentText('Deep (background)')
-                # Use the actual accepted label, without importing PR #37 tiers.
+                # Select the accepted Deep label without coupling to display text.
                 for index in range(window.combo_nfl_compute_mode.count()):
                     if window.combo_nfl_compute_mode.itemText(index).startswith('Deep'):
                         window.combo_nfl_compute_mode.setCurrentIndex(index)
@@ -261,6 +265,72 @@ class SavedRepairTests(unittest.TestCase):
                 else:
                     self.assertEqual(len(window.saved_classic), 20)
                     self.assertEqual(receipt.disposition, 'applied')
+
+    def test_integrated_showdown_deep_cancel_and_apply(self):
+        for cancel in (True, False):
+            with self.subTest(cancel=cancel):
+                window, states = self.fixture('showdown')
+                window.chk_nfl_contest_sim.setChecked(True)
+                window.spin_nfl_sim_scenarios.setValue(100)
+                for index in range(window.combo_nfl_compute_mode.count()):
+                    if window.combo_nfl_compute_mode.itemText(index).startswith('Deep'):
+                        window.combo_nfl_compute_mode.setCurrentIndex(index)
+                report = window.last_portfolio_report
+                finished, errors, receipt = self.launch(window, 'showdown', cancel=cancel, deep_seconds=10)
+                self.assertEqual(errors, [])
+                self.assertEqual(len(finished), 1)
+                self.assertEqual(finished[0]['timing_report']['compute_mode'], 'Deep')
+                if cancel:
+                    self.unchanged(window, 'showdown', states['source_A'], report)
+                    self.assertEqual(receipt.disposition, 'cancelled')
+                else:
+                    self.assertEqual(len(window.saved_showdown), 20)
+                    self.assertEqual(receipt.disposition, 'applied')
+                    self.assertFalse(Counter(signatures(states['retained_17'], 'showdown')) -
+                                     Counter(signatures(window.saved_showdown, 'showdown')))
+
+    def test_integrated_compute_or_library_change_rejects_without_archiving(self):
+        for kind in ('classic', 'showdown'):
+            for change in ('deep', 'library'):
+                with self.subTest(kind=kind, change=change):
+                    window, states = self.fixture(kind)
+                    original_report = window.last_portfolio_report
+                    _, _, receipt = self.launch(window, kind, hold=True)
+                    if change == 'deep':
+                        current = window.deep_compute_settings['selection_mode']
+                        window.deep_compute_settings['selection_mode'] = (
+                            'Portfolio selection' if current == 'Individual ranking' else 'Individual ranking')
+                    else:
+                        window._candidate_library = 'new-library.sqlite'
+                    with mock.patch('build_archives.save_build_archive') as archive:
+                        window._on_lineup_build_finished(self.payload(kind, states), receipt=receipt)
+                    self.assertEqual(receipt.disposition, 'context_changed')
+                    self.unchanged(window, kind, states['source_A'], original_report)
+                    archive.assert_not_called()
+
+    def test_integrated_ranked_repair_keeps_order_and_archives_once(self):
+        from optimizers import ShowdownLineup
+        for kind in ('classic', 'showdown'):
+            with self.subTest(kind=kind):
+                window, states = self.fixture(kind)
+                _, _, receipt = self.launch(window, kind, hold=True)
+                payload = self.payload(kind, states)
+                rows = payload['lineups']
+                if kind == 'showdown':
+                    rows = [ShowdownLineup(lu['Captain'], lu['Flex']) for lu in rows]
+                for index, lineup in enumerate(rows):
+                    lineup.sim_metrics = dict(sim_scenarios=100, sim_top_one_pct=index + 1)
+                payload['lineups'] = rows
+                from build_archives import save_build_archive
+                with mock.patch('build_archives.save_build_archive', wraps=save_build_archive) as archive:
+                    window._on_lineup_build_finished(payload, receipt=receipt)
+                    window._on_lineup_build_finished(payload, receipt=receipt)
+                self.assertEqual(receipt.disposition, 'applied')
+                archive.assert_called_once()
+                saved = getattr(window, 'saved_' + kind)
+                self.assertEqual([lu.sim_metrics['sim_top_one_pct'] for lu in saved], list(range(20, 0, -1)))
+                self.assertEqual(signatures(saved, kind), signatures(getattr(window, 'last_' + kind), kind))
+                self.assertEqual(window.last_build_diagnostic['generated_archive']['status'], 'saved')
 
     def test_C05_queued_success_cannot_override_GUI_cancel(self):
         class Emitter(QtCore.QObject):

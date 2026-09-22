@@ -387,12 +387,12 @@ class ReviewReportTests(unittest.TestCase):
             self.capture(cancelled=event.is_set, progress=lambda _: event.set())
         parent = ResultsLearningDialog()
         self.dialogs.append(parent)
+        job = parent._import_job = {'completion': None}
         parent._import_thread = object()
         with mock.patch('review_report_ui.ReviewReportDialog') as constructor:
             parent.export_review_report()
             constructor.assert_not_called()
-        parent._import_thread = None
-        parent._on_import_thread_finished()
+        parent._on_import_thread_finished(job)
         self.assertTrue(parent.review_report_button.isEnabled())
 
     def test_bounds_keep_totals_independent_of_detail_and_field_separation(self):
@@ -635,16 +635,24 @@ class ReviewReportTests(unittest.TestCase):
             (parent.import_results, 'getOpenFileNames', (['synthetic.csv'], '')),
             (parent.attach_matching_salaries, 'getOpenFileName', ('synthetic.csv', '')),
         ):
-            # Exercise production launch handlers while substituting only the
-            # separate import worker: this action does not change import policy.
+            # Keep the production job/control wiring and defer only execution.
             with mock.patch.object(QtWidgets.QFileDialog, chooser, return_value=choice), \
-                 mock.patch.object(parent, '_start_background_import') as start:
+                 mock.patch.object(QtCore.QThread, 'start') as start:
                 action()
             start.assert_called_once()
             self.assertFalse(parent.review_report_button.isEnabled())
             parent._finish_import_ui()
             self.assertFalse(parent.review_report_button.isEnabled())
-            parent._on_import_thread_finished()
+            thread, worker = parent._import_thread, parent._import_worker
+            thread.started.disconnect(worker.run)
+            thread.started.connect(thread.quit, QtCore.Qt.DirectConnection)
+            thread.finished.connect(worker.deleteLater)
+            thread.start()
+            deadline = time.monotonic() + 5
+            while parent._import_thread is not None and time.monotonic() < deadline:
+                self.app.processEvents()
+                time.sleep(.002)
+            self.assertIsNone(parent._import_thread)
             self.assertTrue(parent.review_report_button.isEnabled())
 
     def test_save_cannot_replace_report_sources(self):
