@@ -16,8 +16,13 @@ os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "0")
 os.environ.setdefault("QT_SCALE_FACTOR", "1")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+CAPTURE_CWD = Path.cwd()
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+if '--isolated' in sys.argv:
+    from test_environment import install
+    install()
 
 from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: E402
 
@@ -794,13 +799,57 @@ def capture_output_columns(output_dir):
             window.close()
 
 
+def capture_opponents(output_dir):
+    import csv
+    import time
+    from opponent_analysis_ui import OpponentAnalysisDialog
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    for filename in ('arial.ttf', 'consola.ttf'):
+        font_path = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts' / filename
+        if font_path.exists():
+            QtGui.QFontDatabase.addApplicationFont(str(font_path))
+    app.setFont(QtGui.QFont('Arial', 10))
+    app.setStyle('Fusion')
+    app.setStyleSheet(DARK_QSS)
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / 'Example NFL Showdown standings.csv'
+        players = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel']
+        with path.open('w', newline='', encoding='utf-8') as handle:
+            writer = csv.writer(handle)
+            writer.writerow(['Rank', 'EntryId', 'EntryName', 'Points', 'Lineup'])
+            for index in range(30):
+                roster = players[index % 8:] + players[:index % 8]
+                writer.writerow([1+index % 8, index+1, ['Example_User', 'Entrant_B', 'Entrant_C'][index % 3], 90-2*(index % 8),
+                                 'CPT ' + roster[0] + ''.join(' FLEX '+name for name in roster[1:6])])
+        dialog = OpponentAnalysisDialog()
+        dialog.show()
+        dialog.start(str(path))
+        deadline = time.monotonic() + 10
+        while dialog._thread is not None and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(.005)
+        if dialog._thread is not None:
+            dialog.cancel()
+            while dialog._thread is not None:
+                app.processEvents()
+            raise RuntimeError('Screenshot analysis did not finish')
+        assert dialog.result is not None
+        app.processEvents()
+        save_widget(dialog, output_dir / 'opponent-portfolios.png')
+        dialog.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns", "opponents"), default="all")
+    parser.add_argument('--isolated', action='store_true', help='Use disposable data/settings and disable network before DFS imports')
     args = parser.parse_args()
-    output_dir = Path(args.output_dir)
-    if args.only == 'lineup-columns':
+    output_dir = (CAPTURE_CWD / args.output_dir).resolve()
+    if args.only == 'opponents':
+        capture_opponents(output_dir)
+    elif args.only == 'lineup-columns':
         capture_output_columns(output_dir)
     elif args.only == 'overnight':
         capture_overnight_controls(output_dir)

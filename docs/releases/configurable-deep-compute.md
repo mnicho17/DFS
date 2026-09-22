@@ -1,5 +1,9 @@
 # Configurable Deep compute (test branch)
 
+### Opponent portfolios
+
+Results & Learning adds **Opponent Portfolios…** for one original NFL Classic/Showdown standings CSV. Compare usernames, observed entry counts, lineup variety, Captain choices, player/pair concentration and field duplication, including peers with exactly the same entry count. The reader preserves missing-versus-zero values, separates entry Points from player-side-table FPTS, excludes conflicting EntryIds and reports coverage. It reads locally without changing history or generation settings. Copy a selected summary or save JSON, with detailed lineups and all usernames opt-in. Cancellation/close waits for worker retirement and preserves earlier completed results. See the guide and [staged learning plan](../RESULTS_LEARNING_PLAN.md).
+
 ### Projection sensitivity
 
 Classic and Showdown saved banks now support baseline, 15% lower production for the five most-used skill players, and mean-preserving 0.75/1.25x outcome variation for explicit rookies or limited/missing recorded usage. These are scoring stress assumptions, not fitted workload corrections. Identical opponent roster and pre-stress outcome fingerprints enforce paired comparisons. Transformed player scores apply equally to candidates and opponents, preserving Captain 1.5x scoring. No touch redistribution or specialist/game-script recalculation is claimed. Full target reasons, player-mean changes, per-lineup batch scores and evidence save automatically; Copy Report and sortable review are available. Separate projection columns can coexist with ownership columns through the renamed Comparisons menu, without claiming a joint stress. Old reports remain historical reviews; current-model matching is required for live attachments. Guide and inspected controls screenshot updated.

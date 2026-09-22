@@ -1400,6 +1400,32 @@ Only the selected contest's roster cells change, in existing entry order. Entry 
 
 ## Results plus username: automatic snapshot comparisons
 
+### Opponent portfolios from one standings file
+
+Choose **Results & Learning > Opponent Portfolios…**, select **NFL Showdown** or **NFL Classic**, then **Open standings CSV…**. Use the original downloaded file (or its copy under `history/imported_results`). This separate analysis reads locally without importing, rematching, refreshing sources or changing history.
+
+The sortable table shows each username's observed entry count, readable rosters, unique lineups, average shared players, Captain variety, mean points, best rank and field copies. Filter by username or entry-count range. The table displays up to 1,000 matching entrants; narrow the filter to find any entrant in a larger field. Clear your saved username from the filter to see opponents.
+
+Selecting an entrant shows total/Captain/FLEX exposure, common player pairs, field exposure and same-entry-count peer medians. Peers include every observed entrant at that entry count, including losing entrants, with each entrant weighted equally. These are descriptive comparisons, not proof that a construction predicts future success. Shared game outcomes are not independent samples.
+
+**Copy selected report** shares that entrant's summaries and data-quality notes. **Save analysis JSON…** also includes every player-pair count for the selected entrant. Both omit detailed lineups by default; enable **Include detailed lineups** to share them. **All usernames in JSON (summary only)** exports aggregate table metrics for every entrant; select one entrant for exposure/pair details or lineups. Exports contain usernames and the source filename, so review before sharing.
+
+![Opponent portfolios with synthetic example entrants](images/opponent-portfolios.png)
+
+Metric definitions and limits:
+
+- Exposure uses readable rosters as its denominator. Unknown rosters and missing scores remain unknown; a recorded zero score remains zero. A single entry has no pairwise-overlap value.
+- Showdown identity retains Captain. Classic rearrangements of the same athletes across eligible slots count as one identity. Slot shape is checked, but salary and eligibility are not validated here.
+- Player matching uses exact case-insensitive names, stripping appended numeric IDs because Captain/FLEX IDs can differ. There is no fuzzy matching; namesakes cannot be disambiguated and ID-only rosters are unreadable.
+- Average shared players includes every pair of entries, including repetitions. Shared role slots treats Captain and FLEX separately.
+- Field copies include the entrant's own entries. “Shared with other users” specifically requires another username with the same lineup. Both cover only the supplied readable field.
+- Identical repeated EntryIds count once. Conflicting copies are excluded entirely. Missing EntryId/username rows are excluded and counted in the quality report. Multiple explicit contests are rejected.
+- Without an explicit field size, completeness remains unverified. Ranks are reported as supplied; this tool does not infer payouts, ROI, finish percentiles, injuries or the mathematically optimal lineup.
+
+Cancel or close waits for the reader to stop. A cancelled or failed analysis preserves the previous completed result.
+
+See the [Results & Learning implementation sequence](RESULTS_LEARNING_PLAN.md) for injury exposure, hindsight optimization and overnight compute work.
+
 For NFL Classic and Showdown, open **Results & Learning**, save your DraftKings username once, then **Import DraftKings Results** or **Import New Results** from your chosen folder. The app identifies your submitted entries directly from standings, including DraftKings entry-counter suffixes. No salary upload or lineup export is required to analyze your scores, ownership versus the field, repeated rosters and available constructions. If files were imported before you saved a username, importing again or **Analyze Saved Results** finds your entries without duplicating the contest. **Copy Report** includes the analysis and comparison diagnostics.
 
 Forecast comparisons automatically search local pre-game snapshots. Ordinary NFL builds save these automatically; repeating identical inputs preserves the original snapshot timestamp. **Update Entries** also records the selected contest ID with the current inputs so future standard `contest-standings-ID.csv` downloads can be linked. Older imports can match a date in their filename (for example `09_10_2026_NFL_Showdown_Results.csv`). No second file is required. A date or previously saved contest-ID association is needed; unknown dates are not guessed from scores or player names.

@@ -3901,6 +3901,10 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.analyze_button.setObjectName("analyzeSavedResults")
         self.analyze_button.clicked.connect(lambda: self.start_performance_review(False))
         analysis_row.addWidget(self.analyze_button)
+        self.opponents_button = QtWidgets.QPushButton("Opponent Portfolios…")
+        self.opponents_button.setObjectName("opponentPortfolios")
+        self.opponents_button.clicked.connect(self.open_opponent_portfolios)
+        analysis_row.addWidget(self.opponents_button)
         self.stats_season = QtWidgets.QSpinBox()
         self.stats_season.setRange(2000, QtCore.QDate.currentDate().year())
         self.stats_season.setValue(QtCore.QDate.currentDate().year() - (1 if QtCore.QDate.currentDate().month() <= 2 else 0))
@@ -4027,6 +4031,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.refresh_report()
 
 
+
+    def open_opponent_portfolios(self):
+        from opponent_analysis_ui import OpponentAnalysisDialog
+        dialog = OpponentAnalysisDialog(self.username_edit.text().strip(), self.results_folder.text(), self)
+        dialog.exec_()
 
     def start_performance_review(self, stats=False):
         if self._import_thread is not None and self._import_thread.isRunning():
