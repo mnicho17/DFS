@@ -276,11 +276,11 @@ The app can compare exact exported rosters with DraftKings standings or contest-
 
 Choose **Export Review Report** to prepare a local report of performance, recorded build settings, data quality, and available issues for review with an assistant or developer.
 
-1. Choose all available dates or an inclusive date range, sport, and Classic/Showdown/all formats. Results use their recorded slate date; settings and diagnostics use their own recorded timestamps. Unknown dates/formats stay labelled; a specific filter excludes records it cannot qualify.
-2. Leave **Include lineup details** unchecked for summaries only. Checking it includes bounded player names, IDs and recorded roster slots. Legacy matched rosters are labelled recorded exports; their submitted lineup and Captain-role identity are unverified.
+1. Use current app history, or choose an existing **history folder** from another checkout. This reads its database, diagnostics, snapshots and build archives without moving files or changing the launcher. Choose dates, sport and format. Results use recorded slate dates; build evidence uses recorded game dates; settings and diagnostics use their own timestamps. Specific filters exclude unknown values.
+2. Leave **Include lineup and build-player details** unchecked for summaries only. Checking it includes bounded player names, IDs, recorded roster slots and saved player decisions. Legacy matched rosters are labelled recorded exports; their submitted lineup and Captain-role identity are unverified.
 3. Optionally describe what you did, expected, and observed (up to 2,000 characters). Obvious paths and credentials are redacted, but review the text for personal information.
 4. Choose **Generate Preview**. Inspect the `summary.md` and `evidence.json` tabs and, when included, `lineups.csv`. Changing an option or observation requires a new preview.
-5. Choose **Save Report ZIP**, select a destination, and share that file manually. Nothing is uploaded. Save retries use the same captured report; Generate Preview captures a new one. Cancel/Close waits for the current worker to clean up.
+5. Choose **Save Report ZIP**, select a destination outside the source history folder, and share that file manually. Nothing is uploaded. Save retries use the same captured report; Generate Preview captures a new one. Cancel/Close waits for the current worker to clean up.
 
 ![Review report preview with synthetic data and lineup details off](images/review-report.png){medium}
 
@@ -289,6 +289,12 @@ The ZIP always contains `summary.md` and `evidence.json`; `lineups.csv` is opt-i
 Explicit zero winnings means a known loss when fee/currency are supported. Missing winnings stays unknown. Cash needs original amounts and explicit compatible currency; many older imports lack that evidence. Paid-subset fees, winnings, net and weighted ROI share the same qualified rows. The report shows missing coverage and does not reinterpret the old net-currency field as ROI percent.
 
 Legacy forecasts and ownership remain unverified where original run, completion, timing, role or outcome identity is absent. Stored numeric observations can survive missing Edge, but are not certified simulations or validated prediction comparisons. Export settings and recent diagnostic records are separate observations. The running app version/revision is unavailable when it has not been embedded in the source.
+
+**Original build evidence** explains recorded Captain locks, exposure limits, selection mode and QB eligibility when saved inputs exist. A positive forecast does not mean the player was eligible. A Captain lock can explain concentrated outputs without proving that the user intended that lock. Missing eligibility flags remain unknown; current rules are never applied to old snapshots.
+
+Completed pregame archives can match imported results by normalized player names, with Captain identity preserved and the same recorded slate date. Multiple matching archives stay ambiguous. A compatible pregame snapshot is listed separately and does not identify the producing build. Neither match certifies submission or GUI application. Archive code fingerprints are shown where recorded; they are not Git revisions. This reader does not create missing archives or rewrite history, and no projections or strategy settings are adjusted.
+
+Build evidence reads at most 100 archives and 100 snapshots, with a shared 64 MB expanded-byte budget and at most 1,000 optional player-detail rows. Missing, damaged, filtered and capped evidence is disclosed. Build counts can overlap; use the result-linkage denominator, not the sum of counts across builds.
 
 Capture scans at most 100,000 rows per source table, shows up to 500 breakdown groups and, optionally, 1,000 result-detail rows with up to 12 recorded slots each. Diagnostic input is limited to 8 MB and 100 records. Counts/truncation are recorded; detail limits do not change performance totals. Imported occurrences and opponent-field summaries are not proof of personal submissions or a bankroll ledger. Entries from one contest are correlated.
 
