@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/configurable-deep-compute
   push:
     tags:
       - "v*"
@@ -34,7 +35,7 @@ jobs:
           python -m pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: python -m unittest discover -v
+        run: python scripts/run_isolated_tests.py
 
       - name: Build user guide
         run: python scripts/build_user_guide_pdf.py --output dist\DFS-Optimizer-User-Guide.pdf
