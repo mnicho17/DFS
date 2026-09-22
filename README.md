@@ -336,7 +336,7 @@ Every release must also update the user-facing guide and release notes, recaptur
 
 ```powershell
 
-python -m unittest discover -v
+python scripts/run_isolated_tests.py
 
 ```
 

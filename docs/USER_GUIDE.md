@@ -250,7 +250,17 @@ Portfolio rules shape the whole set rather than one lineup at a time.
 
 
 
-Locks, fades, salary, roster eligibility, and hard maximums remain hard rules. Some minimums and uniqueness targets may be relaxed when the requested portfolio is impossible. The completion message and **Portfolio Insights** disclose those shortfalls.
+Locks, fades, salary, roster eligibility, explicit exposure maxima, configured minimum uniqueness, team/game caps, and player groups remain hard rules. Minimum-exposure goals remain advisory and unmet goals are reported.
+
+### Automatic recovery when selection gets stuck
+
+Before simulation, the app can spend up to 20 seconds exploring additional candidates around overrepresented capped players. Classic can also retry a short candidate pool with a different search seed. Deep recovery uses its remaining generation time and candidate budget; loading a saved candidate library does not add new candidates. New candidates pass through the ordinary scoring stages.
+
+Final selection first tries the unchanged rules and a bounded feasibility repair. If automatic Showdown exposure targets still prevent completion, it tries up to three recovery stages, raising only automatic total-player, Captain and combined K/DST Captain limits. The increases are 10% of the requested lineup count, 25%, then up to the full count, rounded up to whole entries. It stops at the first complete portfolio. Individual ranking has no automatic caps to relax. Your explicit limits and configured uniqueness are never eased by this fallback.
+
+Recovery is bounded and cancellable. It does not guarantee a full portfolio; an unresolved hard-rule shortage produces an explanation instead of applying a trial portfolio. No new candidates enter after simulation. **Build History** records starting and effective automatic caps and warns about increased concentration, which can reach 100%. Review exposures before using the output.
+
+![Build History discloses an automatic-cap fallback on synthetic lineups](images/portfolio-fallback.png)
 
 
 

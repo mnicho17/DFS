@@ -287,6 +287,17 @@ def run_deep_showdown(worker, shortlist_fn):
             if key not in retained_keys:
                 bank.setdefault(key, lu)
                 exclusions.add((key[0][4:], tuple(key[1:])))
+    if requested and not library_build:
+        from portfolio_recovery import expand_candidates
+        extra = expand_candidates(worker, players, list(bank.values()),
+            deadline=generation_end, max_extra=max(0, budget-len(bank)))
+        added = 0
+        for lu in attach_showdown_metrics(extra, worker.salary_cap):
+            key = showdown_signature(lu)
+            if key not in retained_keys and key not in bank:
+                bank[key] = lu
+                added += 1
+        style_counts['Exposure coverage'] = added
     from pipeline_audit import quarterback_mix, defense_mix
     qb_stages = {"generated": quarterback_mix(list(bank.values()) + retained)}
     dst_stages = {"generated": defense_mix(list(bank.values()) + retained)}
@@ -372,8 +383,16 @@ def run_deep_showdown(worker, shortlist_fn):
     simulation_seconds = time.perf_counter() - sim_start
     selection_start = time.perf_counter()
     worker.progress.emit(0, worker.num_lineups, "Phase 4 of 4 - selecting and refining Showdown portfolio")
-    selected = select_portfolio(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
-        allow_relaxation=worker._cancel_event.is_set(),
+    from portfolio_recovery import select_with_fallback
+    # Preserve the existing cancelled-worker receipt/retained-row behavior.
+    # Cancelled work must never enter a new recovery stage.
+    cancelled_selection = worker._cancel_event.is_set()
+    selector = select_portfolio if cancelled_selection else select_with_fallback
+    selection_options = ({'allow_relaxation': True} if cancelled_selection else {
+        'deadline': deadline,
+        'progress_callback': lambda text: worker.progress.emit(0, worker.num_lineups, text)})
+    selected = selector(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
+        **selection_options,
         fallback_lineups=feasible_fallback,
         selection_cancel_callback=worker._cancel_event.is_set,
         repair_time_limit=max(0,min(15,deadline-time.perf_counter())),

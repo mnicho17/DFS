@@ -19,6 +19,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+if '--isolated' in sys.argv:
+    from test_environment import install
+    install()
+
 from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: E402
 
 from app import DARK_QSS  # noqa: E402
@@ -794,13 +798,68 @@ def capture_output_columns(output_dir):
             window.close()
 
 
+def capture_portfolio_fallback(output_dir: Path) -> None:
+    """Run the real Fast worker on six synthetic players in disposable stores."""
+    from main_window import LineupBuildWorker
+    from portfolio_rules import normalize_rules
+    players = [dict(FlexID=str(i), CptID='c'+str(i), Name='Example '+str(i+1),
+        Team='A' if i%2 else 'B', Position='RB', FlexSalary=7000, CptSalary=10500,
+        FlexProjection=10+i, CptProjection=(10+i)*1.5, NFLDepthOrder=1) for i in range(6)]
+    worker = LineupBuildWorker(players, kind='showdown', num_lineups=4,
+        salary_cap=50000, salary_strategy='Balanced Spend', sim_enabled=True, compute_mode='Fast')
+    finished, errors = [], []
+    worker.finished.connect(finished.append)
+    worker.error.connect(errors.append)
+    worker.run()
+    if errors or len(finished) != 1:
+        raise RuntimeError('Synthetic fallback capture failed: ' + str(errors))
+    result = finished[0]
+    record = create_build_diagnostic(context={'sport':'NFL', 'kind':'showdown',
+        'num_lineups':4, 'salary_cap':50000, 'portfolio_rules':normalize_rules(worker.portfolio_rules),
+        'settings':{'build_style':worker.build_style, 'salary_strategy':worker.salary_strategy,
+                    'ownership_mode':worker.own_mode, 'ownership_weight':worker.own_weight}},
+        timing_report=result['timing_report'], portfolio_report=result['portfolio_report'],
+        sim_report=result['sim_report'], lineups=result['lineups'], displayed_count=4)
+    save_build_diagnostic(record)
+    dialog = BuildDiagnosticsDialog()
+    dialog.resize(1240, 820)
+    dialog.report.setFont(QtGui.QFont('Consolas', 10))
+    dialog.show()
+    dialog.report.moveCursor(QtGui.QTextCursor.Start)
+    dialog.report.find('Starting automatic guardrails')
+    cursor = dialog.report.textCursor()
+    cursor.clearSelection()
+    dialog.report.setTextCursor(cursor)
+    dialog.report.centerCursor()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    save_widget(dialog, output_dir / 'portfolio-fallback.png')
+    dialog.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns", "portfolio-fallback"), default="all")
+    parser.add_argument('--isolated', action='store_true', help='Use disposable data, logs and Qt settings; block network.')
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    if args.only == 'lineup-columns':
+    if args.isolated and not output_dir.is_absolute():
+        output_dir = REPO_ROOT / output_dir
+    if args.only == 'portfolio-fallback':
+        if not args.isolated:
+            parser.error('Portfolio fallback capture requires --isolated')
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+        if sys.platform == 'win32':
+            for font in ('arial.ttf', 'consola.ttf'):
+                QtGui.QFontDatabase.addApplicationFont(str(Path(os.environ['WINDIR']) / 'Fonts' / font))
+        app.setFont(QtGui.QFont('Arial', 10))
+        app.setStyle('Fusion')
+        app.setStyleSheet(DARK_QSS)
+        capture_portfolio_fallback(output_dir)
+        from test_environment import network_attempts
+        if network_attempts:
+            raise RuntimeError(f'Unexpected external calls: {network_attempts}')
+    elif args.only == 'lineup-columns':
         capture_output_columns(output_dir)
     elif args.only == 'overnight':
         capture_overnight_controls(output_dir)

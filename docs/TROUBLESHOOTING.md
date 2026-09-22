@@ -38,7 +38,11 @@ Choose **Game-Day Check** immediately before generating and again near lock. The
 
 ## Fewer lineups were returned than requested
 
-Open **Portfolio Insights** and read the review flags. The available player pool, locks, fades, exposures, uniqueness, team/game caps, and groups may not allow the requested count. The app returns the feasible portfolio it found rather than hiding the shortfall.
+Open **Portfolio Insights** and read the review flags. The available player pool, locks, fades, exposures, uniqueness, team/game caps, and groups may not allow the requested count. A unique-candidate shortage can still return fewer ordinary generated entries. A hard-rule selection shortage stops without applying a trial portfolio.
+
+Candidate recovery can explore additional choices before simulation, followed by strict selection and bounded feasibility repair. Showdown then tries progressively higher automatic exposure caps while preserving explicit player limits, configured uniqueness, groups, locks, exclusions, salary and roster rules. This does not run in Individual ranking, where automatic caps are disabled. Cancellation stops recovery. Deep stays within its remaining generation/selection budgets; saved libraries are not extended.
+
+**Build History** shows starting and effective automatic limits and the concentration warning. A successful fallback is not evidence that the new concentration will perform better. If hard rules still prevent a complete portfolio, review the named constraints or deliberately change the request; the app does not silently rewrite them.
 
 ## Selected replacement lineups were not filled
 

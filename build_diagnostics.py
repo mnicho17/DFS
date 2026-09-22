@@ -51,6 +51,10 @@ def _aggregate_warning(value: Any) -> str:
         return ""  # Successful recovery is disclosed in build details, not a failed rule.
     if lower.startswith("individual ranking uses simulated finish rates"):
         return ""  # Selection-mode information is not a failed rule.
+    fallback = re.match(r"Automatic fallback completed (\d+)/(\d+) lineups\.", text)
+    if fallback:
+        return (f"Automatic fallback completed {fallback.group(1)}/{fallback.group(2)} lineups; "
+                "automatic exposure targets were eased. Explicit rules stayed fixed; review concentration.")
     relaxation = re.match(r"Automatic Showdown exposure guardrails were relaxed (\d+) times", text)
     if relaxation:
         return f"Automatic Showdown exposure caps were raised {relaxation.group(1)} times to fill the output; the listed caps are starting limits."
@@ -395,6 +399,7 @@ def create_build_diagnostic(
             "automatic_showdown_guardrails": dict(
                 portfolio.get("automatic_showdown_guardrails") or {}
             ),
+            "automatic_fallback": dict(portfolio.get("automatic_fallback") or {}),
         },
         "ranked_groups": ranked_group_summaries(lineups, contest_type, salary_cap, salary_strategy),
         "exposures": exposure_summary,
@@ -746,10 +751,17 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         guardrails = dict(portfolio.get("automatic_showdown_guardrails") or {})
         if guardrails:
             lines.append(
-                f"- Automatic guardrails: player { _number(guardrails.get('total_player_pct')):.0f}% max; "
+                f"- Starting automatic guardrails: player { _number(guardrails.get('total_player_pct')):.0f}% max; "
                 f"Captain {_number(guardrails.get('captain_pct')):.0f}% max; "
                 f"combined K/DST Captain {_number(guardrails.get('specialist_captain_pct')):.0f}% max"
             )
+            if guardrails.get('fallback_cap_increase'):
+                lines.append(
+                    f"- Effective automatic fallback limits (of {guardrails.get('requested_lineups')} requested): "
+                    f"player {guardrails.get('effective_total_max_count')}; "
+                    f"Captain {guardrails.get('effective_captain_max_count')}; "
+                    f"K/DST Captain {guardrails.get('effective_specialist_captain_max_count')}. "
+                    "Explicit player limits remain unchanged.")
     selected_sources = dict(sim.get("selected_sources") or {})
     if selected_sources:
         source_labels = {

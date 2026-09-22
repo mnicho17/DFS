@@ -199,6 +199,8 @@ def select_portfolio(
     repair_time_limit: float = 15,
     feasibility_only: bool = False,
     fallback_lineups: Optional[Sequence[Any]] = None,
+    automatic_cap_increase: int = 0,
+    selection_deadline: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
@@ -210,6 +212,8 @@ def select_portfolio(
     """
     selection_started = time.perf_counter()
     def feasibility_checkpoint():
+        if selection_deadline is not None and time.perf_counter() >= selection_deadline:
+            raise TimeoutError('Automatic selection fallback budget exhausted')
         if feasibility_only:
             from bounded_solver import check
             check(selection_started + max(0, repair_time_limit), selection_cancel_callback or (lambda: False))
@@ -220,6 +224,9 @@ def select_portfolio(
     if not math.isfinite(core_penalty) or not 0 <= core_penalty <= 10:
         raise ValueError("Core penalty must be between 0 and 10")
     requested = max(1, int(requested or 1))
+    automatic_cap_increase = max(0, min(requested, int(automatic_cap_increase)))
+    if automatic_cap_increase and allow_relaxation:
+        raise ValueError("Automatic fallback requires strict explicit rules")
     normalized = normalize_rules(rules)
     kind = str(kind or "classic").lower()
 
@@ -287,6 +294,12 @@ def select_portfolio(
         max(1, int(math.floor(requested * 0.15 + 1e-9)))
         if auto_guardrails else None
     )
+    if auto_guardrails and automatic_cap_increase:
+        for key in auto_total_keys:
+            max_total[key] = min(requested, max_total[key] + automatic_cap_increase)
+        for key in auto_cpt_keys:
+            max_cpt[key] = min(requested, max_cpt[key] + automatic_cap_increase)
+        specialist_cpt_limit = min(requested, specialist_cpt_limit + automatic_cap_increase)
     max_team = _max_count(normalized["max_team_pct"], requested)
     max_game = _max_count(normalized["max_game_pct"], requested)
 
@@ -542,6 +555,7 @@ def select_portfolio(
         return {'lineups': witness or [], 'report': {}, 'candidate_count': len(pool)}
 
     while len(selected) < requested and remaining:
+        feasibility_checkpoint()
         if selection_cancel_callback and selection_cancel_callback():
             raise ValueError("Selection cancelled")
         eligible = [lineup for lineup in remaining if admissible(lineup, current_min_unique)]
@@ -599,7 +613,14 @@ def select_portfolio(
 
     feasibility_repaired = False
     fallback_used = False
-    if len(selected) < requested and not allow_relaxation:
+    needs_repair = len(selected) < requested
+    if not allow_relaxation:
+        from portfolio_feasibility import valid_portfolio
+        # Retained rows count against the same explicit limits as new rows.
+        needs_repair = not valid_portfolio(selected, retained, candidate_meta,
+            current_uniqueness_conflicts, feasibility_limits,
+            lambda keys: _group_ok(keys, normalized['groups']))
+    if needs_repair and not allow_relaxation:
         from portfolio_feasibility import repair
         from portfolio_feasibility import valid_portfolio
         fallback_keys = {_candidate_signature(lu, kind) for lu in (fallback_lineups or [])}
@@ -607,7 +628,8 @@ def select_portfolio(
         fallback_used = valid_portfolio(fallback, retained, candidate_meta, current_uniqueness_conflicts,
             feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']))
         repaired = fallback if fallback_used else repair(pool, retained, selected, candidate_meta, current_uniqueness_conflicts,
-            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), score, seconds=repair_time_limit,
+            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), score,
+            seconds=min(repair_time_limit, max(0, selection_deadline-time.perf_counter())) if selection_deadline is not None else repair_time_limit,
             conflict_groups=uniqueness_groups.get(current_min_unique),
             cancelled=selection_cancel_callback or (lambda: False))
         if repaired is None:
@@ -946,6 +968,11 @@ def select_portfolio(
             "captain_pct": auto_cpt_pct,
             "specialist_captain_pct": 15.0,
             "relaxations": auto_relaxations,
+            "fallback_cap_increase": automatic_cap_increase,
+            "requested_lineups": requested,
+            "effective_total_max_count": min(requested, _max_count(auto_total_pct, requested) + automatic_cap_increase + auto_relaxations),
+            "effective_captain_max_count": min(requested, _max_count(auto_cpt_pct, requested) + automatic_cap_increase + auto_relaxations),
+            "effective_specialist_captain_max_count": specialist_cpt_limit,
         }
         if auto_guardrails else {}
     )

@@ -1609,13 +1609,8 @@ class LineupBuildWorker(QtCore.QObject):
 
                     )
 
-                    from showdown_coverage import expand_capped_candidates
-                    self.progress.emit(len(lineups), candidate_budget,
-                        "Phase 1 - exploring alternatives for capped players (up to 20 seconds)")
-                    coverage = expand_capped_candidates(lineups, build_players, self.num_lineups,
-                        self.portfolio_rules, salary_cap=self.salary_cap, own_mode=self.own_mode,
-                        own_weight=self.own_weight, build_style=self.build_style,
-                        cancelled=self._cancel_event.is_set)
+                    from portfolio_recovery import expand_candidates
+                    coverage = expand_candidates(self, build_players, lineups)
                     lineups.extend(coverage)
                     candidate_target += len(coverage)
                     candidate_budget += len(coverage)
@@ -1782,6 +1777,16 @@ class LineupBuildWorker(QtCore.QObject):
                             minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
 
                         )
+
+            if self.kind != 'showdown' and not self.library_candidates:
+                from portfolio_recovery import expand_candidates
+                coverage = expand_candidates(self, build_players, lineups,
+                    deadline=generation_deadline if deep_build else None,
+                    max_extra=max(0, candidate_target-len(lineups)) if deep_build else 600)
+                lineups.extend(coverage)
+                if not deep_build:
+                    candidate_target += len(coverage)
+                    candidate_budget += len(coverage)
 
             generation_seconds = time.perf_counter() - build_started
 
@@ -2385,7 +2390,8 @@ class LineupBuildWorker(QtCore.QObject):
 
             )
 
-            selected = select_portfolio(
+            from portfolio_recovery import select_with_fallback
+            selected = select_with_fallback(
 
                 lineups,
 
@@ -2393,6 +2399,8 @@ class LineupBuildWorker(QtCore.QObject):
 
                 rules=self.portfolio_rules,
                 allow_relaxation=False,
+                deadline=deep_deadline if deep_build else None,
+                progress_callback=lambda text: self.progress.emit(0, self.num_lineups, text),
                 fallback_lineups=feasible_fallback,
                 selection_cancel_callback=self._cancel_event.is_set,
                 repair_time_limit=max(0,min(15,deep_deadline-time.perf_counter())) if deep_build else 15,
