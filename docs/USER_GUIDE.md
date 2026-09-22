@@ -272,6 +272,30 @@ Before submitting:
 
 The app can compare exact exported rosters with DraftKings standings or contest-history CSV files. It can also measure the whole opponent field when the selected file contains complete standings.
 
+### Export a review report
+
+Choose **Export Review Report** to prepare a local report of performance, recorded build settings, data quality, and available issues for review with an assistant or developer.
+
+1. Choose all available dates or an inclusive date range, sport, and Classic/Showdown/all formats. Results use their recorded slate date; settings and diagnostics use their own recorded timestamps. Unknown dates/formats stay labelled; a specific filter excludes records it cannot qualify.
+2. Leave **Include lineup details** unchecked for summaries only. Checking it includes bounded player names, IDs and recorded roster slots. Legacy matched rosters are labelled recorded exports; their submitted lineup and Captain-role identity are unverified.
+3. Optionally describe what you did, expected, and observed (up to 2,000 characters). Obvious paths and credentials are redacted, but review the text for personal information.
+4. Choose **Generate Preview**. Inspect the `summary.md` and `evidence.json` tabs and, when included, `lineups.csv`. Changing an option or observation requires a new preview.
+5. Choose **Save Report ZIP**, select a destination, and share that file manually. Nothing is uploaded. Save retries use the same captured report; Generate Preview captures a new one. Cancel/Close waits for the current worker to clean up.
+
+![Review report preview with synthetic data and lineup details off](images/review-report.png){medium}
+
+The ZIP always contains `summary.md` and `evidence.json`; `lineups.csv` is opt-in. Summary defaults omit player/account/entry/contest names, source paths, raw logs and databases. Optional detail still excludes account names, raw input rows and credentials.
+
+Explicit zero winnings means a known loss when fee/currency are supported. Missing winnings stays unknown. Cash needs original amounts and explicit compatible currency; many older imports lack that evidence. Paid-subset fees, winnings, net and weighted ROI share the same qualified rows. The report shows missing coverage and does not reinterpret the old net-currency field as ROI percent.
+
+Legacy forecasts and ownership remain unverified where original run, completion, timing, role or outcome identity is absent. Stored numeric observations can survive missing Edge, but are not certified simulations or validated prediction comparisons. Export settings and recent diagnostic records are separate observations. The running app version/revision is unavailable when it has not been embedded in the source.
+
+Capture scans at most 100,000 rows per source table, shows up to 500 breakdown groups and, optionally, 1,000 result-detail rows with up to 12 recorded slots each. Diagnostic input is limited to 8 MB and 100 records. Counts/truncation are recorded; detail limits do not change performance totals. Imported occurrences and opponent-field summaries are not proof of personal submissions or a bankroll ledger. Entries from one contest are correlated.
+
+The new capture/save is read-only to history. Opening this existing Results & Learning screen or choosing **Refresh Report** retains its legacy matching behavior. Export Review Report is disabled until an import or salary attachment finishes. A report can still be saved when a source is missing or unavailable; read its source states before drawing conclusions.
+
+### Import results and use the existing learning summary
+
 ![Results and Learning controls used after a contest](images/results-learning.png){compact}
 
 1. Export the lineups you actually plan to use.

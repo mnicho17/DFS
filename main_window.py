@@ -1877,6 +1877,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         buttons.addWidget(close_button)
         layout.addLayout(buttons)
 
+        self.review_report_button = QtWidgets.QPushButton("Export Review Report")
+        self.review_report_button.setObjectName("exportReviewReportButton")
+        self.review_report_button.clicked.connect(self.export_review_report)
+        layout.addWidget(self.review_report_button)
+
         import_status = QtWidgets.QHBoxLayout()
         self.import_progress = QtWidgets.QProgressBar(self)
         self.import_progress.setObjectName("resultsImportProgress")
@@ -1926,6 +1931,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.import_button.setEnabled(False)
         self.attach_salary_button.setEnabled(False)
         self.refresh_button.setEnabled(False)
+        self.review_report_button.setEnabled(False)
         self.import_progress.setRange(0, 0)
         self.import_progress.setVisible(True)
         self.import_cancel.setEnabled(True)
@@ -1954,6 +1960,12 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_thread.finished.connect(self._import_thread.deleteLater)
         self._import_thread.start()
 
+    def export_review_report(self) -> None:
+        if self._import_thread is not None:
+            return
+        from review_report_ui import ReviewReportDialog
+        ReviewReportDialog(self).exec_()
+
     def attach_matching_salaries(self) -> None:
         if self._import_thread is not None and self._import_thread.isRunning():
             return
@@ -1968,6 +1980,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.import_button.setEnabled(False)
         self.attach_salary_button.setEnabled(False)
         self.refresh_button.setEnabled(False)
+        self.review_report_button.setEnabled(False)
         self.import_progress.setRange(0, 0)
         self.import_progress.setVisible(True)
         self.import_cancel.setEnabled(True)
@@ -2050,6 +2063,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
     def _on_import_thread_finished(self) -> None:
         self._import_thread = None
         self._import_worker = None
+        self.review_report_button.setEnabled(True)
         if self._close_after_import:
             QtCore.QTimer.singleShot(0, self.accept)
 
