@@ -3849,6 +3849,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_worker: Optional[QtCore.QObject] = None
 
         self._close_after_import = False
+        self._import_job = None
 
         layout = QtWidgets.QVBoxLayout(self)
 
@@ -3872,6 +3873,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.username_edit.setMaxLength(100)
         username_row.addWidget(self.username_edit, 1)
         save_username = QtWidgets.QPushButton("Save username")
+        self.save_username_button = save_username
         save_username.setObjectName("saveDraftKingsUsername")
         save_username.clicked.connect(self._save_username)
         username_row.addWidget(save_username)
@@ -3884,13 +3886,28 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.results_folder.setPlaceholderText("Choose a folder for downloaded results")
         folder_row.addWidget(self.results_folder, 1)
         choose_folder = QtWidgets.QPushButton("Choose folder")
+        self.choose_results_button = choose_folder
         choose_folder.clicked.connect(self.choose_results_folder)
         folder_row.addWidget(choose_folder)
-        self.import_new_button = QtWidgets.QPushButton("Import New Results")
+        self.import_new_button = QtWidgets.QPushButton("Import Results && Salaries")
         self.import_new_button.setObjectName("importNewResultsButton")
         self.import_new_button.clicked.connect(self.import_new_results)
-        folder_row.addWidget(self.import_new_button)
         layout.addLayout(folder_row)
+        salary_row = QtWidgets.QHBoxLayout()
+        salary_row.addWidget(QtWidgets.QLabel("Salary folder"))
+        self.salary_folder = QtWidgets.QLineEdit(str(self.learning_settings.value("learning/salary_folder", "") or ""))
+        self.salary_folder.setObjectName("salaryFolderPath")
+        self.salary_folder.setReadOnly(True)
+        self.salary_folder.setPlaceholderText("Optional: choose a folder of historical NFL salary CSVs")
+        salary_row.addWidget(self.salary_folder, 1)
+        self.choose_salary_button = QtWidgets.QPushButton("Choose folder")
+        self.choose_salary_button.clicked.connect(self.choose_salary_folder)
+        salary_row.addWidget(self.choose_salary_button)
+        self.clear_salary_button = QtWidgets.QPushButton("Clear")
+        self.clear_salary_button.clicked.connect(self.clear_salary_folder)
+        salary_row.addWidget(self.clear_salary_button)
+        layout.addLayout(salary_row)
+        layout.addWidget(self.import_new_button)
 
 
 
@@ -3954,17 +3971,17 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
 
-        self.attach_salary_button = QtWidgets.QPushButton("Optional Salaries")
+        self.attach_salary_button = QtWidgets.QPushButton("Review Salary Matches")
 
         self.attach_salary_button.setObjectName("attachFieldSalaryButton")
 
         self.attach_salary_button.setToolTip(
 
-            "Attach the DraftKings salary CSV from the same historical slate to the latest complete NFL field."
+            "Review each imported contest's compatible salary snapshots and resolve ambiguous matches."
 
         )
 
-        self.attach_salary_button.clicked.connect(self.attach_matching_salaries)
+        self.attach_salary_button.clicked.connect(self.review_salary_matches)
 
         buttons.addWidget(self.attach_salary_button)
 
@@ -4038,7 +4055,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         dialog.exec_()
 
     def start_performance_review(self, stats=False):
-        if self._import_thread is not None and self._import_thread.isRunning():
+        if self._import_thread is not None:
             return
         from performance_review_ui import PerformanceReviewWorker
         self.import_progress.setRange(0,0)
@@ -4106,15 +4123,56 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.learning_settings.setValue("learning/results_folder", folder)
             self.learning_settings.sync()
 
+    def choose_salary_folder(self) -> None:
+        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Choose salary folder", self.salary_folder.text())
+        if folder:
+            self.salary_folder.setText(folder)
+            self.learning_settings.setValue("learning/salary_folder", folder)
+            self.learning_settings.sync()
+
+    def clear_salary_folder(self) -> None:
+        self.salary_folder.clear()
+        self.learning_settings.setValue("learning/salary_folder", "")
+        self.learning_settings.sync()
+
+    def review_salary_matches(self) -> None:
+        if self._import_thread is not None:
+            return
+        from analysis_imports_ui import SalaryMatchesDialog, CombinedImportWorker
+        dialog = SalaryMatchesDialog(self)
+        if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selection:
+            self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip()), self._on_combined_import_finished)
+
+    def _on_combined_import_finished(self, result) -> None:
+        from analysis_imports_ui import import_summary
+        message = import_summary(result)
+        self.import_status_label.setText(
+            ("Import cancelled. " if result.get('cancelled') else "Import complete. ") +
+            f"{result.get('results_imported', 0)} new results, {result.get('salaries_imported', 0)} new salaries, "
+            f"{result.get('duplicates_skipped', 0)} skipped, {len(result.get('errors', []))} need retry/review.")
+        self.import_status_label.setVisible(True)
+        payload = result.get('report')
+        if payload:
+            self.report.setPlainText(payload['text'])
+            self.summary.setText(f"{payload.get('personal_results_count', 0):,} your results  |  "
+                f"{payload.get('field_entries', 0):,} field entries  |  Salary matches listed in the report")
+        QtWidgets.QMessageBox.information(self, "Results & Salaries", message)
+
     def import_new_results(self) -> None:
-        if not self.results_folder.text():
+        if self._import_thread is not None:
+            return
+        if not (self.results_folder.text() or self.salary_folder.text()):
             self.choose_results_folder()
-        if self.results_folder.text():
-            self._begin_results_import([], folder=self.results_folder.text())
+        if self.results_folder.text() or self.salary_folder.text():
+            from analysis_imports_ui import CombinedImportWorker
+            self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())
+            self.learning_settings.sync()
+            self._start_background_import(CombinedImportWorker(self.results_folder.text(), self.salary_folder.text(),
+                self.username_edit.text().strip()), self._on_combined_import_finished)
 
     def import_results(self) -> None:
 
-        if self._import_thread is not None and self._import_thread.isRunning():
+        if self._import_thread is not None:
 
             return
 
@@ -4136,7 +4194,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._begin_results_import(paths)
 
     def _begin_results_import(self, paths, folder="") -> None:
-        if self._import_thread is not None and self._import_thread.isRunning():
+        if self._import_thread is not None:
             return
         self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())
         self.import_new_button.setEnabled(False)
@@ -4171,40 +4229,52 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def _start_background_import(self, worker: QtCore.QObject, finished_slot: Any) -> None:
-
+        if self._import_thread is not None:
+            worker.deleteLater()
+            return
+        self._set_import_controls(False)
+        self.import_progress.setRange(0, 0)
+        self.import_progress.setVisible(True)
+        self.import_cancel.setEnabled(True)
+        self.import_cancel.setVisible(True)
+        self.import_status_label.setText("Inspecting selected files...")
+        self.import_status_label.setVisible(True)
         self._import_thread = QtCore.QThread(self)
-
         self._import_worker = worker
-
+        job = dict(thread=self._import_thread, completion=None)
+        self._import_job = job
         self._import_worker.moveToThread(self._import_thread)
-
         self._import_thread.started.connect(self._import_worker.run)
-
-        self._import_worker.progress.connect(self._on_import_progress)
-
-        self._import_worker.finished.connect(finished_slot)
-
-        self._import_worker.error.connect(self._on_import_error)
-
+        self._import_worker.progress.connect(lambda done, total, text: self._job_progress(job, done, total, text))
+        self._import_worker.finished.connect(lambda result: self._job_completed(job, finished_slot, result))
+        self._import_worker.error.connect(lambda message: self._job_completed(job, self._on_import_error, message))
         self._import_worker.finished.connect(self._import_thread.quit)
-
         self._import_worker.error.connect(self._import_thread.quit)
-
         self._import_worker.finished.connect(self._import_worker.deleteLater)
-
         self._import_worker.error.connect(self._import_worker.deleteLater)
-
-        self._import_thread.finished.connect(self._on_import_thread_finished)
-
+        self._import_thread.finished.connect(lambda: self._on_import_thread_finished(job))
         self._import_thread.finished.connect(self._import_thread.deleteLater)
-
         self._import_thread.start()
 
+    def _set_import_controls(self, enabled):
+        for control in (self.import_new_button, self.import_button, self.attach_salary_button,
+                        self.refresh_button, self.analyze_button, self.stats_button, self.opponents_button,
+                        self.choose_results_button, self.choose_salary_button, self.clear_salary_button,
+                        self.save_username_button, self.username_edit, self.stats_season):
+            control.setEnabled(enabled)
+
+    def _job_progress(self, job, done, total, text):
+        if self._import_job is job and self.import_cancel.isEnabled():
+            self._on_import_progress(done, total, text)
+
+    def _job_completed(self, job, handler, payload):
+        if self._import_job is job and job['completion'] is None:
+            job['completion'] = (handler, payload)
 
 
     def attach_matching_salaries(self) -> None:
 
-        if self._import_thread is not None and self._import_thread.isRunning():
+        if self._import_thread is not None:
 
             return
 
@@ -4281,13 +4351,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def _finish_import_ui(self) -> None:
-        self.import_new_button.setEnabled(True)
-
-        self.import_button.setEnabled(True)
-
-        self.attach_salary_button.setEnabled(True)
-
-        self.refresh_button.setEnabled(True)
+        self._set_import_controls(self._import_thread is None)
 
         self.import_progress.setVisible(False)
 
@@ -4385,21 +4449,24 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
 
-    def _on_import_thread_finished(self) -> None:
-
+    def _on_import_thread_finished(self, job) -> None:
+        if self._import_job is not job:
+            return
         self._import_thread = None
-
         self._import_worker = None
-
+        self._import_job = None
+        self._finish_import_ui()
         if self._close_after_import:
-
             QtCore.QTimer.singleShot(0, self.accept)
+        elif job['completion'] is not None:
+            handler, payload = job['completion']
+            handler(payload)
 
 
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
 
-        if self._import_thread is not None and self._import_thread.isRunning():
+        if self._import_thread is not None:
 
             self._close_after_import = True
 
@@ -4415,7 +4482,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
     def reject(self) -> None:
 
-        if self._import_thread is not None and self._import_thread.isRunning():
+        if self._import_thread is not None:
 
             self._close_after_import = True
 

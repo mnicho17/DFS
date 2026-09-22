@@ -548,7 +548,7 @@ The app can compare exact exported rosters with DraftKings standings or contest-
 
 4. Choose **Import DraftKings Results** and select the file.
 
-5. For complete NFL Classic or Showdown standings, choose **Attach Matching Salaries** and select the DKSalaries CSV or DKEntries CSV containing its embedded player salary table from that exact historical slate. Showdown Captain and FLEX prices and lineup identities remain distinct. An entry-only file without a player salary table is not sufficient. Attachment applies to the latest eligible complete field; Showdown fields do not train the Classic construction calibration.
+5. Choose a **Salary folder**, then **Import Results & Salaries** to save historical NFL Classic/Showdown salaries alongside results. Standard DKSalaries files and DKEntries files with embedded salary tables are supported. **Review Salary Matches** shows the association for each results contest. Captain and FLEX prices and IDs remain distinct. An entry-only file without a salary table is not sufficient. Saved matches supply descriptive salary/construction detail; they do not update strategy calibration.
 
 6. Review the match rate, ROI, cash rate, finish percentile, projection error, and guarded breakdowns.
 
@@ -1027,7 +1027,7 @@ The selected-player panel groups lineup status, portfolio exposure, and team adj
 
 Open **Results & Learning**, enter your **DraftKings username**, and choose **Save username**. The setting stays on this computer and is not included in shared source code. Import the complete contest standings CSV to identify your submitted entries by exact username (case-insensitive, ignoring the trailing entry counter), save their scores and ranks, and compare your regular-slot and Captain exposure with the observed field. No salary or entry-upload file is required for these comparisons.
 
-If you previously imported the same file without a username, save your username and import it again; the field and personal entries are not duplicated. Different username spellings are not guessed. **Optional Salaries** adds salary/construction detail when desired. Forecast validation still requires original saved forecasts; winnings/cash rate require payout data. This update stores empirical results and ownership comparisons; it does not automatically retrain projections or tune Showdown from a single contest.
+If you previously imported the same file without a username, save your username and use **Analyze Saved Results** or select it with **Import DraftKings Results**; the field and personal entries are not duplicated. The combined folder button skips previously imported files. Different username spellings are not guessed. A saved salary match adds salary/construction detail when desired. Forecast validation still requires original saved forecasts; winnings/cash rate require payout data. This update stores empirical results and ownership comparisons; it does not automatically retrain projections or tune Showdown from a single contest.
 
 ![Saved username and single-file results import](images/username-results.png)
 
@@ -1043,13 +1043,23 @@ Identical player-score tables across contests indicate shared outcomes; the coun
 The same audit supports **NFL Classic and Showdown**. Classic checks all nine roster slots against player scores; Showdown also checks Captain scoring separately. Reimporting an identical standings file after moving or renaming it refreshes its readable location without duplicating results.
 
 
-### Results folder
+### Import results and salaries together
 
-In **Results & Learning**, choose or create a folder with **Choose folder**. The location is saved on this computer. Store downloaded standings there, then click **Import New Results**. The app scans that folder and subfolders, ignores non-result CSVs, and imports contents it has not already saved. Identical contents are skipped even after a rename; moved files refresh their audit location. Your saved username identifies your entries. An unavailable USB drive is reported without changing saved results.
+In **Results & Learning**, save your DraftKings username and choose a **Results folder** and optional **Salary folder**. Both locations are remembered on this computer. Put downloaded files in those folders, then click **Import Results & Salaries**. One click scans both folders and their subfolders. The folders may overlap or be the same. Results-only and salary-only scans are also supported; **Clear** removes the optional salary-folder setting.
 
-The scan runs only when clicked. Keep **Import DraftKings Results** for selecting individual files or reprocessing an existing field after changing your username. File-content identity prevents duplicate imports of identical files; changed contents are treated as a new import.
+Identical contents are skipped even after a rename or move, without rerunning result analysis. New contents are a new source revision. The completion message lists new results, new salaries, skipped duplicates, ignored CSVs, saved matches and errors. Unrecognized CSVs are ignored; malformed supported files are reported and can be retried. Salary import supports NFL Classic/Showdown DKSalaries and embedded DKEntries salary tables, preserving original rows and separate Captain/FLEX IDs and prices. Entry-template rosters are not imported as contest results.
 
-![Saved results folder](images/results-folder.png)
+The scan runs only when clicked. Cancel or close waits for the current worker to retire. Completed files remain saved, and an interrupted active results file rolls back; rerunning skips completed files. If a configured folder is unavailable, reconnect its drive or choose another folder before retrying. This check happens before import writes. Other file-level errors allow the remaining files to continue. Source files are never moved or edited; new imports keep hashed snapshots under local history. Include the entire history folder in backups.
+
+![Combined results and salary folder import](images/combined-import.png)
+
+Each results file has its own saved salary association. A unique compatible candidate can match automatically when the result date agrees with one salary slate and every observed readable player/role identity maps unambiguously. Explicit game/team conflicts, mixed formats, missing identities, namesakes and conflicting dates block a match. One salary snapshot can serve several contests on the same slate, with separate associations.
+
+Use **Review Salary Matches** when several revisions qualify or the results lack a date. Select the exact contest and salary snapshot; an unknown result date needs explicit confirmation. Review shows unresolved identities and unreadable roster counts. Existing pairings cannot be silently replaced by a new salary revision. Salary files with multiple game dates currently remain unpaired. A pairing establishes coverage of readable observed rosters, not a complete eligible pool, a hindsight optimum or contest payouts.
+
+![Review explicit contest salary matches](images/salary-matches.png)
+
+New result files receive the existing descriptive analysis. After pairing older imported results or adding salaries later, use **Analyze Saved Results** to apply the association to construction reports. Importing folders does not automatically rebuild historical reports. Saved salaries are historical prices, not forecasts; ownership, cash and payout information are never inferred from them. A changed saved snapshot is withheld from analysis. Keep **Import DraftKings Results** for individual files or use **Analyze Saved Results** after changing your username; the combined button deliberately skips already imported contents.
 
 
 ### Longer Acer searches and candidate libraries
@@ -1426,7 +1436,7 @@ Cancel or close waits for the reader to stop. A cancelled or failed analysis pre
 
 See the [Results & Learning implementation sequence](RESULTS_LEARNING_PLAN.md) for injury exposure, hindsight optimization and overnight compute work.
 
-For NFL Classic and Showdown, open **Results & Learning**, save your DraftKings username once, then **Import DraftKings Results** or **Import New Results** from your chosen folder. The app identifies your submitted entries directly from standings, including DraftKings entry-counter suffixes. No salary upload or lineup export is required to analyze your scores, ownership versus the field, repeated rosters and available constructions. If files were imported before you saved a username, importing again or **Analyze Saved Results** finds your entries without duplicating the contest. **Copy Report** includes the analysis and comparison diagnostics.
+For NFL Classic and Showdown, open **Results & Learning**, save your DraftKings username once, then **Import DraftKings Results** or **Import Results & Salaries** from your chosen folders. The app identifies your submitted entries directly from standings, including DraftKings entry-counter suffixes. No salary upload or lineup export is required to analyze your scores, ownership versus the field, repeated rosters and available constructions. If files were imported before you saved a username, use **Analyze Saved Results** or the individual-file import to find your entries without duplicating the contest. **Copy Report** includes the analysis, salary-catalog counts and comparison diagnostics.
 
 Forecast comparisons automatically search local pre-game snapshots. Ordinary NFL builds save these automatically; repeating identical inputs preserves the original snapshot timestamp. **Update Entries** also records the selected contest ID with the current inputs so future standard `contest-standings-ID.csv` downloads can be linked. Older imports can match a date in their filename (for example `09_10_2026_NFL_Showdown_Results.csv`). No second file is required. A date or previously saved contest-ID association is needed; unknown dates are not guessed from scores or player names.
 
