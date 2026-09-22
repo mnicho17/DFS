@@ -74,8 +74,12 @@ def install():
     def cleanup():
         # Test cases own worker retirement. Never tear down isolation around a
         # surviving worker; failing cases must drain before they return.
+        from PyQt5 import sip
         for settings in settings_stores:
-            settings.sync()
+            # Standalone documentation captures may have already destroyed
+            # QApplication and its settings objects before atexit runs.
+            if not sip.isdeleted(settings):
+                settings.sync()
         settings_stores.clear()
         logging.shutdown()
         os.chdir(previous_cwd)

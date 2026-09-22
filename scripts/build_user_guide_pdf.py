@@ -68,11 +68,11 @@ def styles_for_guide():
         ),
         "h2": ParagraphStyle(
             "H2", parent=base["Heading2"], fontName="Helvetica-Bold",
-            fontSize=17, leading=22, textColor=NAVY, spaceAfter=10,
+            fontSize=17, leading=22, textColor=NAVY, spaceAfter=10, keepWithNext=True,
         ),
         "h3": ParagraphStyle(
             "H3", parent=base["Heading3"], fontName="Helvetica-Bold",
-            fontSize=12, leading=16, textColor=TEAL, spaceBefore=6, spaceAfter=6,
+            fontSize=12, leading=16, textColor=TEAL, spaceBefore=6, spaceAfter=6, keepWithNext=True,
         ),
         "body": ParagraphStyle(
             "Body", parent=base["BodyText"], fontName="Helvetica",
@@ -161,6 +161,7 @@ def markdown_story(markdown: str, styles, source_dir: Path):
     paragraph_lines = []
     list_items = []
     list_kind = None
+    list_start = 1
     seen_h2 = False
 
     def flush_paragraph():
@@ -188,7 +189,7 @@ def markdown_story(markdown: str, styles, source_dir: Path):
                 "spaceAfter": 8,
             }
             if list_kind == "number":
-                list_options["start"] = "1"
+                list_options["start"] = str(list_start)
             story.append(ListFlowable(flow, **list_options))
             list_items.clear()
         list_kind = None
@@ -265,15 +266,17 @@ def markdown_story(markdown: str, styles, source_dir: Path):
             caption = Paragraph(f"Figure: {inline_markup(alt_text)}", styles["caption"])
             story.append(KeepTogether([figure, Spacer(1, 5), caption, Spacer(1, 10)]))
             continue
-        numbered = re.match(r"^\d+\.\s+(.*)$", line)
+        numbered = re.match(r"^(\d+)\.\s+(.*)$", line)
         bulleted = re.match(r"^-\s+(.*)$", line)
         if numbered or bulleted:
             flush_paragraph()
             kind = "number" if numbered else "bullet"
             if list_kind and list_kind != kind:
                 flush_list()
+            if numbered and not list_items:
+                list_start = int(numbered.group(1))
             list_kind = kind
-            list_items.append((numbered or bulleted).group(1))
+            list_items.append(numbered.group(2) if numbered else bulleted.group(1))
             continue
         if list_items:
             flush_list()
@@ -302,7 +305,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", default="docs/USER_GUIDE.md")
     parser.add_argument("--output", default="dist/DFS-Optimizer-User-Guide.pdf")
-    parser.add_argument("--version", default="1.19.0")
+    parser.add_argument("--version", default="1.23.0")
     args = parser.parse_args()
     build_pdf(Path(args.source), Path(args.output), args.version)
     print(Path(args.output).resolve())

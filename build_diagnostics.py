@@ -553,6 +553,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"Data: {record.get('data_freshness') or 'freshness not recorded'}",
         f"Run: {_created_label(record.get('created_at'))}",
         f"Status: {str(record.get('status') or 'completed').title()}",
+        *([f"Saved repair: {record['application'].get('status', 'unknown')} ({record['application'].get('reason', 'unknown')})"]
+          if isinstance(record.get("application"), dict) else []),
         "",
         "Build",
         f"- Contest: {str(record.get('sport') or 'NFL').upper()} {str(record.get('contest_type') or 'classic').title()}",

@@ -403,6 +403,7 @@ class CombinedImportGuiTests(unittest.TestCase):
         self.configure()
         self.dialog.import_new_button.click()
         self.assertFalse(self.dialog.analyze_button.isEnabled())
+        self.assertFalse(self.dialog.review_report_button.isEnabled())
         self.drain()
         self.assertEqual(self.critical.call_count,0)
         self.assertIn('New result files: 1',self.info.call_args.args[2])
@@ -415,6 +416,7 @@ class CombinedImportGuiTests(unittest.TestCase):
             self.drain()
         self.assertIn('Already imported files skipped: 2',self.info.call_args.args[2])
         self.assertTrue(self.dialog.import_new_button.isEnabled())
+        self.assertTrue(self.dialog.review_report_button.isEnabled())
 
     def test_close_cancels_real_import_without_late_dialog_or_deleted_thread(self):
         from analysis_imports_ui import CombinedImportWorker
@@ -446,6 +448,7 @@ class CombinedImportGuiTests(unittest.TestCase):
         self.assertIn('Folder unavailable',self.critical.call_args.args[2])
         self.assertTrue(self.dialog.stats_button.isEnabled())
         self.assertTrue(self.dialog.choose_salary_button.isEnabled())
+        self.assertTrue(self.dialog.review_report_button.isEnabled())
 
     def test_folder_choices_are_saved_in_verified_temporary_settings(self):
         from PyQt5 import QtCore

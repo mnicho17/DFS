@@ -1,8 +1,6 @@
 # DFS Optimizer User Guide
 
-
-
-Version 1.19.0 | Windows desktop app
+Version 1.23.0 | Windows desktop app | [Release notes](https://github.com/mnicho17/DFS/releases/tag/v1.23.0)
 
 
 
@@ -330,7 +328,21 @@ The sortable **Lineup details** tab identifies the exact rows behind those signa
 
 - Closing the window without choosing an action leaves the portfolio unchanged.
 
+Saved repairs apply only when the complete replacement portfolio still matches the saved set and rules that
+launched it. Cancelling before application preserves the current saved entries, even if computation already
+finished. A shortage, changed saved set, changed player eligibility, or obsolete result also leaves current
+entries intact. Live news updates remain current; unchanged saved entries can still need an Entry Safety review.
+Successful repairs apply once. Closing the main window during a build requests cancellation and waits for its
+worker to finish safely. Ordinary generated-only builds keep their existing partial-result behavior.
 
+Build History records whether a saved repair was applied and why a proposal was rejected. Rejected attempts do
+not replace the current portfolio's report. A diagnostic-write or display error after application does not undo
+the committed repair. No repair automatically exports a file. These checks do not provide process-crash recovery.
+
+![Illustrative cancelled Showdown repair: 17 proposed entries were not applied and 20 saved entries remain](images/saved-repair-history.png){medium}
+
+This synthetic Build History example illustrates the application status. It is separate from the real-worker
+cancellation and successful-repair acceptance tests.
 
 The **Player exposure** tab lists every player's count, percentage, and lineup numbers. Select a player and choose **Show selected player's lineups** to jump back to the exact affected rows. This is useful for reviewing a concentrated core before deciding whether individual lineups need replacement.
 
@@ -534,9 +546,39 @@ Before submitting:
 
 The app can compare exact exported rosters with DraftKings standings or contest-history CSV files. It can also measure the whole opponent field when the selected file contains complete standings.
 
+### Export a review report
 
+Choose **Export Review Report** to prepare a local report of performance, recorded build settings, data quality, and available issues for review with an assistant or developer.
 
-![Results and Learning controls used after a contest](images/results-learning.png){compact}
+1. Use current app history, or choose an existing **history folder** from another checkout. This reads its database, diagnostics, snapshots and build archives without moving files or changing the launcher. Choose dates, sport and format. Results use recorded slate dates; build evidence uses recorded game dates; settings and diagnostics use their own timestamps. Specific filters exclude unknown values.
+2. Leave **Include lineup and build-player details** unchecked for summaries only. Checking it includes bounded player names, IDs, recorded roster slots and saved player decisions. Legacy matched rosters are labelled recorded exports; their submitted lineup and Captain-role identity are unverified.
+3. Optionally describe what you did, expected, and observed (up to 2,000 characters). Obvious paths and credentials are redacted, but review the text for personal information.
+4. Choose **Generate Preview**. Inspect the `summary.md` and `evidence.json` tabs and, when included, `lineups.csv`. Changing an option or observation requires a new preview.
+5. Choose **Save Report ZIP**, select a destination outside the source history folder, and share that file manually. Nothing is uploaded. Save retries use the same captured report; Generate Preview captures a new one. Cancel/Close waits for the current worker to clean up.
+
+![Review report preview with synthetic data and lineup details off](images/review-report.png){medium}
+
+The ZIP always contains `summary.md` and `evidence.json`; `lineups.csv` is opt-in. Summary defaults omit player/account/entry/contest names, source paths, raw logs and databases. Optional detail still excludes account names, raw input rows and credentials.
+
+Explicit zero winnings means a known loss when fee/currency are supported. Missing winnings stays unknown. Cash needs original amounts and explicit compatible currency; many older imports lack that evidence. Paid-subset fees, winnings, net and weighted ROI share the same qualified rows. The report shows missing coverage and does not reinterpret the old net-currency field as ROI percent.
+
+Legacy forecasts and ownership remain unverified where original run, completion, timing, role or outcome identity is absent. Stored numeric observations can survive missing Edge, but are not certified simulations or validated prediction comparisons. Export settings and recent diagnostic records are separate observations. The running app version/revision is unavailable when it has not been embedded in the source.
+
+**Original build evidence** explains recorded Captain locks, exposure limits, selection mode and QB eligibility when saved inputs exist. A positive forecast does not mean the player was eligible. A Captain lock can explain concentrated outputs without proving that the user intended that lock. Missing eligibility flags remain unknown; current rules are never applied to old snapshots.
+
+Completed pregame archives can match imported results by normalized player names, with Captain identity preserved and the same recorded slate date. Multiple matching archives stay ambiguous. A compatible pregame snapshot is listed separately and does not identify the producing build. Neither match certifies submission or GUI application. Archive code fingerprints are shown where recorded; they are not Git revisions. This reader does not create missing archives or rewrite history, and no projections or strategy settings are adjusted.
+
+Build evidence reads at most 100 archives and 100 snapshots, with a shared 64 MB expanded-byte budget and at most 1,000 optional player-detail rows. Missing, damaged, filtered and capped evidence is disclosed. Build counts can overlap; use the result-linkage denominator, not the sum of counts across builds.
+
+Capture scans at most 100,000 rows per source table, shows up to 500 breakdown groups and, optionally, 1,000 result-detail rows with up to 12 recorded slots each. Diagnostic input is limited to 8 MB and 100 records. Counts/truncation are recorded; detail limits do not change performance totals. Imported occurrences and opponent-field summaries are not proof of personal submissions or a bankroll ledger. Entries from one contest are correlated.
+
+The new capture/save is read-only to history. Opening this existing Results & Learning screen or choosing **Refresh Report** retains its legacy matching behavior. Export Review Report is disabled until an import or salary attachment finishes. A report can still be saved when a source is missing or unavailable; read its source states before drawing conclusions.
+
+### Import results and use the existing learning summary
+
+Importing standings identifies submitted results using your saved username. Original exports or qualified snapshots are needed for forecast comparisons.
+
+![Results and Learning controls used after a contest](images/combined-import.png){compact}
 
 
 
@@ -554,7 +596,7 @@ The app can compare exact exported rosters with DraftKings standings or contest-
 
 
 
-![Results and Learning summary after matched entries are imported](images/results-learning.png){compact}
+![Illustrative Results and Learning summary after importing standings](images/combined-import.png){compact}
 
 
 
@@ -598,7 +640,7 @@ After generating and exporting an NFL Classic SIM build for the same preset, reo
 
 
 
-![Results and Learning keeps validation and real-field comparisons on this computer](images/results-learning.png){thumb}
+![Results and Learning keeps validation and real-field comparisons on this computer](images/combined-import.png){thumb}
 
 
 
@@ -654,7 +696,7 @@ The optimizer stores exports, imported results, slate snapshots, build diagnosti
 
 
 
-![Local history controls in Results and Learning](images/results-learning.png){medium}
+![Local history controls in Results and Learning](images/combined-import.png){medium}
 
 
 
