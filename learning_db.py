@@ -1127,6 +1127,8 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
         lines.extend(build_results_audit(conn, username=username))
         from performance_review import review_report
         lines.extend(review_report(conn, username=username))
+        from analysis_imports import report_lines
+        lines.extend(report_lines(conn))
         return {
             "text": "\n".join(lines), "db_path": path, "export_count": export_count,
             "exported_lineups": exported_lineups, "historical_rows": imported_rows,
@@ -2476,6 +2478,7 @@ def import_historical_result_csvs(
     archive_files: bool = True,
     progress_callback: Optional[Any] = None,
     cancel_callback: Optional[Any] = None,
+    atomic_file: bool = False,
 ) -> Dict[str, Any]:
     """Import old DK-ish result/entry CSV files into the learning DB.
 
@@ -2553,9 +2556,18 @@ def import_historical_result_csvs(
                                 import_id,
                             ),
                         )
-                    if username:
+                        if atomic_file:
+                            file_personal_added = 0
+                            if username:
+                                file_personal_added = _import_username_entries(conn, path, import_id, username, preflight, cancel_callback)
+                            if cancel_callback and cancel_callback():
+                                raise _ImportCancelled()
+                    if atomic_file:
+                        personal_added += file_personal_added
+                    if username and not atomic_file:
                         with conn:
                             personal_added += _import_username_entries(conn, path, import_id, username, preflight, cancel_callback)
+                    if username:
                         imported_import_ids.append(import_id)
                     total_files += 1
                     field_only_files += 1
@@ -2664,6 +2676,8 @@ def import_historical_result_csvs(
                         )
                         _finalize_import_outcomes(conn, import_id)
                         field_analysis = _analyze_imported_fields(conn, import_id)
+                        if atomic_file and cancel_callback and cancel_callback():
+                            raise _ImportCancelled()
                 if rows_for_file > 0:
                     imported_import_ids.append(import_id)
                     total_files += 1

@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feature/configurable-deep-compute
+      - codex/rl03-opponent-portfolios
   push:
     tags:
       - "v*"

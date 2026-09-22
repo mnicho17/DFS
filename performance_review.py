@@ -105,7 +105,8 @@ def add(b,signature,meta,ownership):
     features=construction(signature,meta)
     if features is not None:b['mapped']+=1;b['features'].update(features)
     salaries=[_number((meta.get(k) or {}).get('salary')) for k in signature]
-    if all(v is not None and v>0 for v in salaries):b['salary_n']+=1;b['salary_sum']+=sum(salaries)
+    if all(v is not None and (v>0 or (v==0 and meta[k].get('salary_known') is True)) for k,v in zip(signature,salaries)):
+        b['salary_n']+=1;b['salary_sum']+=sum(salaries)
     if all(k in ownership for k in signature):b['own_n']+=1;b['own_sum']+=statistics.mean(ownership[k] for k in signature)
 
 
@@ -120,7 +121,7 @@ def result_date(name):
     except ValueError:return ''
 
 
-def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,progress=lambda text:None):
+def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,progress=lambda text:None,import_ids=None):
     from learning_db import _connect,init_historical_import_tables,_field_roster_signature,_normalize_roster_token,_dk_username
     conn=_connect(db_path)
     messages=[];completed=0
@@ -128,11 +129,21 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
         init_historical_import_tables(conn);ensure_tables(conn)
         imports=conn.execute('SELECT import_id,source_path,file_name FROM historical_imports').fetchall()
         for import_id,path,name in imports:
+            if import_ids is not None and import_id not in import_ids:continue
             if cancelled():break
             field=conn.execute('SELECT MAX(field_size),MAX(roster_size),MAX(sport) FROM contest_field_summaries WHERE import_id=?',(import_id,)).fetchone()
             if not field or not field[0] or field[1] not in (6,9) or field[2] not in ('NFL','UNKNOWN'):
                 messages.append(name+': complete NFL field unavailable');continue
             progress('Analyzing '+name)
+            from analysis_imports import paired_metadata, ImportCancelled
+            try:
+                salary_meta,salary_receipt=paired_metadata(conn,import_id,cancelled)
+            except ImportCancelled:
+                break
+            except (ValueError,OSError) as exc:
+                messages.append(name+': '+str(exc));continue
+            if salary_receipt:
+                path=conn.execute('SELECT snapshot FROM analysis_sources WHERE hash=?',(salary_receipt['result_hash'],)).fetchone()[0]
             if not path or not os.path.isfile(path):messages.append(name+': original file unavailable; previous cached review retained');continue
             from results_field_ownership import refresh_cached_profile
             with conn:
@@ -142,6 +153,7 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             with conn:
                 _import_username_entries(conn,path,import_id,username,dict(field_size=field[0],sport=field[2]),cancelled)
             meta=scoped_metadata(conn,import_id)
+            meta.update(salary_meta)
             scores,own,problem=_player_results(path,_normalize_roster_token)
             from results_field_ownership import observed_ownership
             own,ownership_source=observed_ownership(conn,import_id,scores)
@@ -174,7 +186,7 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             digest=hashlib.sha256()
             with open(path,'rb') as handle:
                 for block in iter(lambda:handle.read(1024*1024),b''):digest.update(block)
-            meta_key=hashlib.sha256(json.dumps(dict(metadata=meta,date=inferred_date,observed_ownership=own),sort_keys=True).encode()).hexdigest()
+            meta_key=hashlib.sha256(json.dumps(dict(metadata=meta,date=inferred_date,observed_ownership=own,salary_receipt=salary_receipt),sort_keys=True).encode()).hexdigest()
             cached=conn.execute('SELECT file_hash,payload FROM construction_reviews WHERE import_id=?',(import_id,)).fetchone()
             if cached and cached[0]==digest.hexdigest():
                 previous=json.loads(cached[1])
@@ -203,7 +215,8 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             groups['field']['duplicates']=sum(n for n in duplicates.values() if n>1)
             for target,counts in subsets.items():groups[target]['duplicates']=sum(n for k,n in counts.items() if duplicates[k]>1)
             payload=dict(construction_version=CONSTRUCTION_VERSION,name=name,groups=groups,username=_dk_username(username),format='Showdown' if field[1]==6 else 'Classic',
-                         date=inferred_date,score_gap=problem,metadata_key=meta_key,metadata_source='matched exports and date-matched snapshot consensus')
+                         date=inferred_date,score_gap=problem,metadata_key=meta_key,salary_receipt=salary_receipt,
+                         metadata_source='explicit saved salary/results pair; matched exports and snapshot consensus for other identities' if salary_receipt else 'matched exports and date-matched snapshot consensus')
             # FLEX scores are the base observations. Captain is never counted as another game.
             base={k:v for k,v in scores.items() if not k.startswith('@cpt:')}
             with conn:

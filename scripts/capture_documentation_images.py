@@ -840,14 +840,52 @@ def capture_opponents(output_dir):
         dialog.close()
 
 
+def capture_combined_import(output_dir):
+    from analysis_imports import import_folders
+    from analysis_imports_ui import SalaryMatchesDialog
+    from test_analysis_imports import results_file, salary_file
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
+    for filename in ('arial.ttf', 'consola.ttf'):
+        font_path = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts' / filename
+        if font_path.exists():
+            QtGui.QFontDatabase.addApplicationFont(str(font_path))
+    app.setStyle('Fusion')
+    app.setStyleSheet(DARK_QSS)
+    app.setFont(QtGui.QFont('Arial', 10))
+    with tempfile.TemporaryDirectory() as folder:
+        root = Path(folder)
+        results_file(root/'results'/'9_21_2026_NFL Showdown.csv')
+        salary_file(root/'salaries'/'NFL salaries.csv')
+        salary_file(root/'salaries'/'NFL salaries revised.csv', offset=100)
+        imported = import_folders(str(root/'results'), str(root/'salaries'), username='Example_User')
+        assert imported['errors'] == []
+        dialog = ResultsLearningDialog()
+        dialog.resize(1000, 740)
+        dialog.results_folder.setText('C:/DFS/Results')
+        dialog.salary_folder.setText('D:/DFS/Salary Files')
+        dialog.username_edit.setText('Example_User')
+        dialog.refresh_report()
+        dialog.show()
+        save_widget(dialog, output_dir/'combined-import.png')
+        review = SalaryMatchesDialog(dialog)
+        review.show()
+        save_widget(review, output_dir/'salary-matches.png')
+        review.close(); dialog.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns", "opponents"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns", "opponents", "combined-import"), default="all")
     parser.add_argument('--isolated', action='store_true', help='Use disposable data/settings and disable network before DFS imports')
     args = parser.parse_args()
     output_dir = (CAPTURE_CWD / args.output_dir).resolve()
-    if args.only == 'opponents':
+    if args.only == 'combined-import':
+        if not args.isolated:
+            parser.error('Combined import screenshots require --isolated.')
+        capture_combined_import(output_dir)
+    elif args.only == 'opponents':
         capture_opponents(output_dir)
     elif args.only == 'lineup-columns':
         capture_output_columns(output_dir)
