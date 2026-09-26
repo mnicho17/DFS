@@ -11,10 +11,11 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
+import re
 import sqlite3
 import zipfile
 
-from analysis_imports import ImportCancelled, _check, _name, _sources, _verify, _pairing_state
+from analysis_imports import ImportCancelled, _check, _name, _sources, _verify, _pairing_state, qualify_pair
 from contest_objectives import recorded_objective
 from results_audit import _number
 
@@ -137,11 +138,30 @@ def _snapshot_compatible(snap, salary):
                 str(p.get('Position') or '').upper().replace('D/ST', 'DST') != row['position']):
             return False
         # The same date and salary pool with different games is conflicting evidence.
-        import re
         game = re.search(r'\b[A-Z]{2,3}@[A-Z]{2,3}\b', str(p.get('GameInfo', '')).upper())
         if not game or game.group(0) not in salary['games']:
             return False
     return True
+
+
+def _stored_role_coverage(rows, manifest, salary, cancelled):
+    """Check additional stored entry observations through the same salary matcher."""
+    from opponent_analysis import _MARKERS, _roster
+    observed = set()
+    texts = {text for r in rows if isinstance(text := r['raw'].get('lineup') or r['raw'].get('roster'), str)}
+    for text in sorted(texts):
+        _check(cancelled)
+        if not isinstance(text, str) or not _roster(text, salary['format']):
+            continue  # Unreadable rows have their own explicit coverage blocker.
+        markers = list(_MARKERS.finditer(text))
+        for index, marker in enumerate(markers):
+            label = text[marker.end():markers[index+1].start() if index+1<len(markers) else len(text)].strip()
+            role = marker.group(1).upper().replace('CAPTAIN','CPT').replace('D/ST','DST')
+            numeric = re.search(r'\((\d+)\)\s*$',label)
+            observed.add((role,_name(label),numeric.group(1) if numeric else ''))
+    if not observed:
+        return dict(compatible=True, matched=0, observed=0)
+    return qualify_pair({'manifest':dict(manifest,observed=sorted(observed))},{'manifest':salary})
 
 
 def _outcomes(source, salary, cancelled):
@@ -286,6 +306,15 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
     result['identity'].update(sport=salary['sport'], format=salary['format'], slate_date=salary['dates'][0])
     result['player_evidence'] = [{k:p[k] for k in ('name','id','role','position','team','opponent','salary')}
                                  for p in salary['players']]
+    stored_coverage = _stored_role_coverage(rows, manifest, salary, cancelled)
+    result['results_evidence']['stored_player_role_coverage'] = dict(
+        matched=stored_coverage['matched'], observed=stored_coverage['observed'])
+    if not stored_coverage['compatible']:
+        result['state'] = 'CANDIDATE'
+        result['salary_evidence']['qualified'] = False
+        conflicts.append('stored_result_player_role_conflict')
+        blockers.append('incomplete_stored_player_role_coverage')
+        return result
     outcome = _outcomes(source, salary, cancelled)
     result['actual_score_evidence'] = outcome
     try:

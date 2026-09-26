@@ -255,6 +255,13 @@ class HistoricalIdentityTests(unittest.TestCase):
         self.assertEqual(d['state'],'BUILD_QUALIFIED')
         self.assertIn('unreadable_stored_result_rosters',d['blockers'])
 
+    def test_readable_stored_roster_still_requires_salary_player_role_coverage(self):
+        self.fixture();self.snapshot();self.archive()
+        self.change("UPDATE historical_results SET raw_json=replace(raw_json,'CPT Alpha','CPT Alpha (100)')")
+        d=self.one()
+        self.assertEqual(d['state'],'CANDIDATE')
+        self.assertIn('stored_result_player_role_conflict',d['conflicts'])
+
     def test_duplicate_reconciliation_preserves_rows_and_timestamps(self):
         self.fixture();self.one(True)
         before=self.query('SELECT * FROM historical_contest_identities')
