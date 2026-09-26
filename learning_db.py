@@ -57,16 +57,10 @@ def _pkey(p: Dict[str, Any]) -> str:
 
 
 def _base_dir() -> str:
-    override = str(os.environ.get("DFS_OPTIMIZER_DATA_DIR") or "").strip()
-    if override:
-        os.makedirs(override, exist_ok=True)
-        return override
-    if getattr(sys, "frozen", False):
-        local = str(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")).strip()
-        path = os.path.join(local, "DFS Optimizer")
-        os.makedirs(path, exist_ok=True)
-        return path
-    return os.path.dirname(os.path.abspath(__file__))
+    from data_paths import data_root
+    path = str(data_root())
+    os.makedirs(path, exist_ok=True)
+    return path
 
 
 def history_db_path() -> str:
@@ -1127,10 +1121,12 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
         lines.extend(build_results_audit(conn, username=username))
         from performance_review import review_report
         lines.extend(review_report(conn, username=username))
-        from analysis_imports import report_lines
-        lines.extend(report_lines(conn))
+        from analysis_imports import pairing_state, report_lines
+        pairings = pairing_state(path, conn=conn)
+        lines.extend(report_lines(state=pairings))
         return {
             "text": "\n".join(lines), "db_path": path, "export_count": export_count,
+            "pairing_state": pairings,
             "exported_lineups": exported_lineups, "historical_rows": imported_rows,
             "personal_results_count": len(own_rows),
             "username_finishes": finish_summary,

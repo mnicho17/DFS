@@ -13,6 +13,7 @@ import math
 import os
 from pathlib import Path
 import re
+import sqlite3
 import tempfile
 
 
@@ -284,22 +285,101 @@ def _verify(source, cancelled=lambda: False):
         raise ValueError(source['name'] + ': saved source changed; pairing withheld. Restore the original snapshot.')
 
 
+def pairing_state(db_path=None, *, conn=None, cancelled=lambda: False):
+    """Authoritative persisted/qualified state; never initialize or repair history.
+
+    Counts include every persisted pair, including orphans. Orphans therefore
+    expose broken count invariants rather than disappearing from diagnostics.
+    One salary hash may belong to any number of distinct result hashes.
+    """
+    from data_paths import history_source_paths
+    _check(cancelled)
+    expected = Path(db_path or history_source_paths()[0]).resolve()
+    if conn is None:
+        if not expected.exists():
+            return _pairing_state(None, expected, cancelled)
+        with closing(sqlite3.connect(expected.as_uri() + '?mode=ro', uri=True)) as reader:
+            return pairing_state(expected, conn=reader, cancelled=cancelled)
+    actual = next((row[2] for row in conn.execute('PRAGMA database_list') if row[1] == 'main'), '')
+    path = Path(actual).resolve() if actual else None
+    # A single read transaction prevents source/pair queries seeing different
+    # commits. A savepoint also preserves a caller's existing transaction.
+    conn.execute('SAVEPOINT pairing_state_read')
+    try:
+        state = _pairing_state(conn, path, cancelled)
+    finally:
+        conn.execute('RELEASE pairing_state_read')
+    if db_path is not None and path != expected:
+        state['warnings'].append('Pairing database identity mismatch: the open database differs from the requested history.')
+    return state
+
+
+def _pairing_state(conn, path, cancelled):
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")} if conn else set()
+    sources = _sources(conn) if 'analysis_sources' in tables else []
+    pairs = dict(conn.execute('SELECT result_hash,salary_hash FROM analysis_salary_pairs ORDER BY result_hash')) if 'analysis_salary_pairs' in tables else {}
+    by_hash = {s['hash']: s for s in sources}
+    salaries = [s for s in sources if s['kind'] == 'salary']
+    verification = {}
+    for source in sources:
+        _check(cancelled)
+        try:
+            _verify(source, cancelled)
+            verification[source['hash']] = ''
+        except OSError:
+            verification[source['hash']] = 'Saved source snapshot is missing or unreadable.'
+        except ValueError:
+            verification[source['hash']] = 'Saved source snapshot changed; restore the original revision.'
+
+    def candidate(result, salary):
+        _check(cancelled)
+        reason = verification[result['hash']] or verification[salary['hash']]
+        q = dict(compatible=False, automatic=False, reason=reason) if reason else qualify_pair(result, salary)
+        return dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'],
+                    automatic=q['automatic'], reason=q['reason'])
+
+    output, qualified = [], 0
+    for result in (s for s in sources if s['kind'] == 'results'):
+        candidates = [candidate(result, salary) for salary in salaries]
+        saved_hash = pairs.get(result['hash'])
+        saved = None
+        if result['hash'] in pairs:
+            saved = next((c for c in candidates if c['hash'] == saved_hash),
+                         dict(hash=saved_hash, name='Unavailable salary source', compatible=False,
+                              automatic=False, reason='Saved salary revision is missing from the salary catalog.'))
+            status = 'PAIRED' if saved['compatible'] else 'INVALID_SAVED_PAIR'
+            qualified += int(saved['compatible'])
+        else:
+            status = 'READY_TO_PAIR' if any(c['compatible'] for c in candidates) else 'NO_COMPATIBLE_MATCH'
+        manifest = result['manifest']
+        entries, unreadable = manifest.get('entries'), manifest.get('unreadable', 0)
+        readable = max(0, entries - unreadable) if entries is not None else None
+        output.append(dict(hash=result['hash'], name=result['name'], salary_hash=saved_hash,
+                           status=status, saved_pair=saved, candidates=candidates, entries=entries,
+                           unreadable=unreadable, readable=readable,
+                           readable_pct=100.0 * readable / entries if entries else None))
+    orphans = [dict(result_hash=r, salary_hash=s) for r, s in pairs.items()
+               if by_hash.get(r, {}).get('kind') != 'results' or by_hash.get(s, {}).get('kind') != 'salary']
+    state = dict(results_cataloged=len(output), salary_snapshots=len(salaries), saved_pairings=len(pairs),
+                 qualified_saved_pairings=qualified, invalid_saved_pairings=len(pairs) - qualified,
+                 unpaired_results=sum(r['hash'] not in pairs for r in output),
+                 orphaned_pairings=len(orphans), orphaned_pairs=orphans, results=output,
+                 database_path=str(path) if path else None,
+                 database_identity=hashlib.sha256(os.path.normcase(str(path or ':memory:')).encode()).hexdigest()[:16],
+                 warnings=[])
+    if state['saved_pairings'] + state['unpaired_results'] != state['results_cataloged']:
+        state['warnings'].append('Pairing counts need review: saved pairings + unpaired results differs from results cataloged; inspect orphaned pairings.')
+    if state['qualified_saved_pairings'] + state['invalid_saved_pairings'] != state['saved_pairings']:
+        state['warnings'].append('Pairing counts need review: qualified + invalid saved pairings differs from saved pairings.')
+    if orphans:
+        state['warnings'].append(f'Orphaned pairings: {len(orphans)}. Saved rows are preserved; inspect the missing catalog sources.')
+    _check(cancelled)
+    return state
+
+
 def pairing_rows(db_path=None):
-    from learning_db import _connect
-    with closing(_connect(db_path)) as conn:
-        ensure_tables(conn)
-        sources = _sources(conn)
-        pairs = dict(conn.execute('SELECT result_hash,salary_hash FROM analysis_salary_pairs'))
-        salaries = [s for s in sources if s['kind'] == 'salary']
-        output = []
-        for result in (s for s in sources if s['kind'] == 'results'):
-            candidates = []
-            for salary in salaries:
-                q = qualify_pair(result, salary)
-                candidates.append(dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'], reason=q['reason']))
-            output.append(dict(hash=result['hash'], name=result['name'], salary_hash=pairs.get(result['hash']), candidates=candidates,
-                               unreadable=result['manifest']['unreadable']))
-        return output
+    """Compatibility wrapper for existing consumers; state has one authority."""
+    return pairing_state(db_path)['results']
 
 
 def save_pair(result_hash, salary_hash, *, db_path=None, confirm_date=False, cancelled=lambda: False, automatic=False):
@@ -476,12 +556,14 @@ def paired_metadata(conn, import_id, cancelled=lambda: False):
     return metadata, dict(salary_hash=salary['hash'], result_hash=result['hash'], source='explicit saved salary/results pair')
 
 
-def report_lines(conn):
-    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='analysis_sources'").fetchone():
-        return []
-    counts = dict(conn.execute('SELECT kind,COUNT(*) FROM analysis_sources GROUP BY kind'))
-    pairs = conn.execute('SELECT COUNT(*) FROM analysis_salary_pairs').fetchone()[0]
-    return ['', 'Saved salary / results sources',
-            f"- Results cataloged: {counts.get('results', 0)}; salary snapshots: {counts.get('salary', 0)}; contest pairings: {pairs}.",
-            f"- Results awaiting a salary match: {counts.get('results', 0) - pairs}. Use Review Salary Matches to inspect candidates.",
-            '- Pairing validates observed roster identities and source revisions; full eligible-pool coverage and payouts remain unverified.']
+def report_lines(conn=None, *, state=None):
+    state = pairing_state(conn=conn) if state is None else state
+    lines = ['', 'Saved salary / results sources',
+             f"- Results cataloged: {state['results_cataloged']}; salary snapshots: {state['salary_snapshots']}; contest pairings: {state['saved_pairings']}.",
+             f"- Qualified saved pairings: {state['qualified_saved_pairings']}; Invalid saved pairings: {state['invalid_saved_pairings']}."]
+    label = 'Unpaired cataloged results' if state['warnings'] else 'Results awaiting a salary match'
+    lines.append(f"- {label}: {state['unpaired_results']}. Compatible candidates are not saved pairings. Use Review Salary Matches.")
+    lines.extend('- WARNING: ' + warning for warning in state['warnings'])
+    lines.extend([f"- Pairing database identity: {state['database_identity']}.",
+                  '- Pairing validates observed roster identities and source revisions; full eligible-pool coverage and payouts remain unverified.'])
+    return lines

@@ -59,14 +59,8 @@ def now() -> str:
 
 def source_paths() -> tuple[Path, Path]:
     """Resolve the accepted profile without creating directories or settings."""
-    override = os.environ.get('DFS_OPTIMIZER_DATA_DIR', '').strip()
-    if override:
-        root = Path(override)
-    elif getattr(sys, 'frozen', False):
-        root = Path(os.environ.get('LOCALAPPDATA') or os.path.expanduser('~')) / 'DFS Optimizer'
-    else:
-        root = Path(__file__).resolve().parent
-    return root / 'history' / 'exports.sqlite', root / 'history' / 'build-diagnostics.json'
+    from data_paths import history_source_paths
+    return history_source_paths()
 
 
 @dataclass(frozen=True)

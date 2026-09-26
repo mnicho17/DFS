@@ -3895,6 +3895,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Results & Learning")
+        from learning_db import history_db_path
+        self.db_path = history_db_path()
 
         self.resize(820, 700)
 
@@ -4140,7 +4142,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         try:
 
-            payload = generate_learning_report(username=self.username_edit.text().strip())
+            payload = generate_learning_report(username=self.username_edit.text().strip(), db_path=self.db_path)
 
             roi = payload.get("roi_pct")
 
@@ -4196,9 +4198,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if self._import_thread is not None:
             return
         from analysis_imports_ui import SalaryMatchesDialog, CombinedImportWorker
-        dialog = SalaryMatchesDialog(self)
+        dialog = SalaryMatchesDialog(self, db_path=self.db_path)
         if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selection:
-            self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip()), self._on_combined_import_finished)
+            self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip(), db_path=self.db_path), self._on_combined_import_finished)
 
     def _on_combined_import_finished(self, result) -> None:
         from analysis_imports_ui import import_summary
@@ -4225,7 +4227,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())
             self.learning_settings.sync()
             self._start_background_import(CombinedImportWorker(self.results_folder.text(), self.salary_folder.text(),
-                self.username_edit.text().strip()), self._on_combined_import_finished)
+                self.username_edit.text().strip(), db_path=self.db_path), self._on_combined_import_finished)
 
     def import_results(self) -> None:
 
@@ -4333,7 +4335,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if self._import_thread is not None:
             return
         from review_report_ui import ReviewReportDialog
-        ReviewReportDialog(self).exec_()
+        ReviewReportDialog(self, db_path=self.db_path).exec_()
 
     def attach_matching_salaries(self) -> None:
 

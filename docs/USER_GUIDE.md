@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.23.0 | Windows desktop app | [Release notes](https://github.com/mnicho17/DFS/releases/tag/v1.23.0)
+Version 1.23.1 (maintenance review) | Windows desktop app | [Maintenance notes](releases/v1.23.1.md)
 
 
 
@@ -554,7 +554,7 @@ Choose **Export Review Report** to prepare a local report of performance, record
 2. Leave **Include lineup and build-player details** unchecked for summaries only. Checking it includes bounded player names, IDs, recorded roster slots and saved player decisions. Legacy matched rosters are labelled recorded exports; their submitted lineup and Captain-role identity are unverified.
 3. Optionally describe what you did, expected, and observed (up to 2,000 characters). Obvious paths and credentials are redacted, but review the text for personal information.
 4. Choose **Generate Preview**. Inspect the `summary.md` and `evidence.json` tabs and, when included, `lineups.csv`. Changing an option or observation requires a new preview.
-5. Choose **Save Report ZIP**, select a destination outside the source history folder, and share that file manually. Nothing is uploaded. Save retries use the same captured report; Generate Preview captures a new one. Cancel/Close waits for the current worker to clean up.
+5. Choose **Save Report ZIP**. The Save dialog defaults to the external user-data **review-reports** folder (normally `%LOCALAPPDATA%/DFS Optimizer/review-reports` on Windows, beside **history**). An external `DFS_OPTIMIZER_DATA_DIR` uses its own **review-reports** folder. Source checkouts and the captured history folder are never default destinations. You can choose another location; the normal Save dialog confirms replacement of an existing file. The final saved path appears in the dialog. Share that ZIP manually; nothing is uploaded. Save retries use the same captured report; Generate Preview captures a new one. Cancel/Close waits for the current worker to clean up.
 
 ![Review report preview with synthetic data and lineup details off](images/review-report.png){medium}
 
@@ -1097,9 +1097,22 @@ The scan runs only when clicked. Cancel or close waits for the current worker to
 
 Each results file has its own saved salary association. A unique compatible candidate can match automatically when the result date agrees with one salary slate and every observed readable player/role identity maps unambiguously. Explicit game/team conflicts, mixed formats, missing identities, namesakes and conflicting dates block a match. One salary snapshot can serve several contests on the same slate, with separate associations.
 
-Use **Review Salary Matches** when several revisions qualify or the results lack a date. Select the exact contest and salary snapshot; an unknown result date needs explicit confirmation. Review shows unresolved identities and unreadable roster counts. Existing pairings cannot be silently replaced by a new salary revision. Salary files with multiple game dates currently remain unpaired. A pairing establishes coverage of readable observed rosters, not a complete eligible pool, a hindsight optimum or contest payouts.
+Use **Review Salary Matches** when several revisions qualify or the results lack a date. The report and dialog now share the same persisted pairing state and database identity:
+
+- **PAIRED** means a saved association exists and still qualifies. The salary filename, revision and qualification are shown; existing pairings stay fixed.
+- **READY_TO_PAIR** means compatible candidates exist, but no pairing is saved yet. Select the exact revision and Save; an unknown result date needs explicit confirmation.
+- **NO_COMPATIBLE_MATCH** shows why the available revisions were rejected.
+- **INVALID_SAVED_PAIR** preserves the saved revision and explains why source verification or qualification failed. It is never automatically replaced.
+
+One historical salary slate may be reused for multiple compatible contest result files. Three results paired with one salary count as three saved pairings and one salary snapshot. With 24 cataloged results and 16 saved pairs, exactly eight remain unpaired even if all eight have compatible candidates. Saving a pair updates the report immediately; Refresh Report and reopening Review Salary Matches show the same counts. Invalid and orphaned saved pairs are flagged separately.
+
+Review shows readable rosters as a count and percentage of total entries, plus the unreadable count; unreadable rows remain excluded. Rejected unrelated candidates are behind the optional diagnostics view for a correctly paired result. Salary files with multiple game dates currently remain unpaired. A pairing establishes coverage of readable observed rosters, not a complete eligible pool, a hindsight optimum or contest payouts.
 
 ![Review explicit contest salary matches](images/salary-matches.png)
+
+![Saved pairing with its verified revision](images/salary-matches-paired.png)
+
+![Invalid saved revision is preserved for review](images/salary-matches-invalid.png)
 
 New result files receive the existing descriptive analysis. After pairing older imported results or adding salaries later, use **Analyze Saved Results** to apply the association to construction reports. Importing folders does not automatically rebuild historical reports. Saved salaries are historical prices, not forecasts; ownership, cash and payout information are never inferred from them. A changed saved snapshot is withheld from analysis. Keep **Import DraftKings Results** for individual files or use **Analyze Saved Results** after changing your username; the combined button deliberately skips already imported contents.
 
