@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.23.1 (maintenance review) | Windows desktop app | [Maintenance notes](releases/v1.23.1.md)
+Version 1.23.1 | Windows desktop app | [Release notes](https://github.com/mnicho17/DFS/releases/tag/v1.23.1)
 
 
 
@@ -1556,7 +1556,9 @@ Full NFL data refreshes retry a transient weekly-statistics download failure onc
 
 Reload the salary file for a full data refresh after updating; the lightweight pre-build status check does not download weekly usage again. Snapshot replay continues to preserve its original inputs. Results & Learning's **Refresh Free NFL Stats** uses the same download cache and labels cached refreshes. Back up the history folder to retain this cache with snapshots and results.
 
-Normal desktop Classic and Showdown builds no longer automatically weaken minimum uniqueness or raise automatic Showdown exposure caps to fill an output request. If greedy selection gets stuck, a bounded feasibility repair can rearrange candidates under the same maximums, group rules, team/game limits, retained entries and uniqueness. It prioritizes retaining greedy selections, then their quality order, and does not fit or change scoring models. The repair has a 15-second maximum, limited by remaining Deep time. A solver result is accepted only when it is integral and satisfies every modeled constraint; it need not be proven optimal. Existing minimum-exposure shortfalls remain reported rather than guaranteed.
+Normal desktop builds run candidate generation and scoring, strict portfolio selection, and strict repair first. If a Showdown portfolio is still short, AR-02 can try bounded increases to automatic total-player, Captain, and combined K/DST Captain guardrails. Recovery stops at the first complete valid portfolio. Explicit exposure limits (including zero), Captain limits, locks, fades, minimum uniqueness, groups, team/game limits, salary/roster eligibility, and retained rows remain hard constraints.
+
+Build diagnostics record the requested count, strict count, whether automatic recovery ran, starting/effective automatic caps, recovery stage, and final count. Increased automatic concentration is clearly flagged as a review item; it is not described as relaxing a user rule. Classic and Showdown candidate coverage can improve before final scoring. Deep uses only its remaining budget, never extends saved candidate libraries, and adds no candidates after final scoring. Cancellation never starts automatic recovery; AR-01 saved-repair safeguards and the cancelled Deep Showdown receipt behavior remain intact.
 
 If no complete compliant portfolio is found, the build explains the shortage instead of releasing the incomplete constrained portfolio or silently changing its limits. This is a search limitation, not proof of mathematical infeasibility. Increase candidate/shortlist coverage or explicitly change the requested count or rules before rebuilding. Evaluated Deep banks and pre-game scoring summaries saved before selection remain available. Cancellation still preserves retained entries. Unconstrained generator shortages may still return fewer entries with a warning.
 
@@ -1576,7 +1578,7 @@ A constrained portfolio shortage now opens a **Lineup limits** warning instead o
 
 Classic and Showdown Deep builds now search the full screened candidate pool for a complete set satisfying the current maximum exposures, uniqueness, groups, team/game limits and retained entries **before** narrowing the SIM shortlist. The check uses the same limits as final selection, including automatic Showdown caps, with up to 20 seconds from remaining build time. A verified complete set is reserved ahead of optional shortlist reservations; it receives the same later SIM evaluation as other shortlisted candidates. The rest of the shortlist still follows the selected ranking/search mode. No scoring forecasts or exposure limits are changed.
 
-If final greedy selection gets stuck, the app rechecks the preserved set against the current candidates and rules and can use it as a complete fallback, followed by normal refinement where enabled. Output ordering still uses the final SIM ranking. This is a feasible portfolio, not proof of the best possible portfolio. Build reports disclose preservation and fallback use. If no complete set is found within the available pool/time, existing strict shortage handling remains. More scenarios alone cannot replace missing candidate alternatives. Run a fresh Deep build after updating; old saved shortlists are not expanded or rewritten.
+If final greedy selection gets stuck, the app rechecks the preserved set against the current candidates and rules and can use it as a complete fallback, followed by normal refinement where enabled. Output ordering still uses the final SIM ranking. This is a feasible portfolio, not proof of the best possible portfolio. Build reports disclose preservation and fallback use. If strict selection and repair remain short, bounded automatic Showdown recovery may run within the remaining budget as described above. If recovery cannot complete a valid set, shortage handling explains the stop. More scenarios alone cannot replace missing candidate alternatives. Run a fresh Deep build after updating; old saved shortlists are not expanded or rewritten.
 
 
 ### Responsive portfolio feasibility checks
