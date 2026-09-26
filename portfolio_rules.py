@@ -71,11 +71,13 @@ def normalize_rules(rules: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             "MaxCptPct": item.get("MaxCptPct"),
             "LockFlex": bool(item.get("LockFlex")),
             "LockCpt": bool(item.get("LockCpt")),
+            **{field: bool(item[field]) for field in ('FadeFlex', 'FadeCpt') if field in item},
+            **({'MaxFlexPct': item['MaxFlexPct']} if 'MaxFlexPct' in item else {}),
         }
     return {
         "min_unique": max(1, min(8, int(raw.get("min_unique", 1) or 1))),
-        "max_team_pct": _pct(raw.get("max_team_pct"), 100.0) or 100.0,
-        "max_game_pct": _pct(raw.get("max_game_pct"), 100.0) or 100.0,
+        "max_team_pct": _pct(raw.get("max_team_pct"), 100.0),
+        "max_game_pct": _pct(raw.get("max_game_pct"), 100.0),
         "balance_ownership": bool(raw.get("balance_ownership", True)),
         "groups": groups,
         "player_constraints": constraints,
@@ -199,16 +201,21 @@ def select_portfolio(
     repair_time_limit: float = 15,
     feasibility_only: bool = False,
     fallback_lineups: Optional[Sequence[Any]] = None,
+    automatic_recovery: bool = False,
+    recovery_deadline: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Choose a deterministic, constraint-aware portfolio from generated candidates.
 
     Maximums and player groups remain hard rules. Minimum exposure is prioritized
     during selection and reported as a shortfall when the candidate pool cannot
-    satisfy it. Desktop builds disable legacy relaxation and attempt a bounded
-    feasibility repair before reporting a shortage; diagnostic callers may opt
-    into the legacy fill behavior.
+    satisfy it in legacy diagnostic mode. Desktop builds use strict selection,
+    strict repair, then bounded automatic-cap recovery. Explicit rules remain
+    hard throughout recovery, including minimum exposure and retained rows.
     """
     selection_started = time.perf_counter()
+    if automatic_recovery:
+        allow_relaxation = False
+    cancelled = selection_cancel_callback or (lambda: False)
     def feasibility_checkpoint():
         if feasibility_only:
             from bounded_solver import check
@@ -254,12 +261,21 @@ def select_portfolio(
                         for field, value in player_lookup[key].items()
                         if value not in (None, "")
                     })
+                    if automatic_recovery:
+                        for field in ('LockFlex', 'LockCpt', 'FadeFlex', 'FadeCpt'):
+                            if player.get(field):
+                                merged[field] = True
                     player_lookup[key] = merged
                 else:
                     player_lookup[key] = player
 
     min_total = {key: _min_count(player.get("MinPct"), requested) for key, player in player_lookup.items()}
     max_total = {key: _max_count(player.get("MaxPct"), requested) for key, player in player_lookup.items()}
+    max_flex = {key: _max_count(player.get('MaxFlexPct'), requested) for key, player in player_lookup.items()}
+    if automatic_recovery and kind != 'showdown':
+        for key, cap in max_flex.items():
+            if cap is not None and max_total[key] is None:
+                max_total[key] = cap
     min_cpt = {key: _min_count(player.get("MinCptPct"), requested) for key, player in player_lookup.items()}
     max_cpt = {key: _max_count(player.get("MaxCptPct"), requested) for key, player in player_lookup.items()}
     auto_guardrails = kind == "showdown" and normalized["balance_ownership"] and not individual_ranking
@@ -289,6 +305,9 @@ def select_portfolio(
     )
     max_team = _max_count(normalized["max_team_pct"], requested)
     max_game = _max_count(normalized["max_game_pct"], requested)
+    from portfolio_recovery import automatic_caps, recovery_diagnostics, explicit_lineup_ok
+    starting_caps = automatic_caps(dict(total=max_total, captain=max_cpt, specialist=specialist_cpt_limit),
+                                    auto_total_keys, auto_cpt_keys)
 
     # If generation returned no surplus candidates and there are no hard
     # portfolio rules, every candidate must be selected. Avoid repeatedly
@@ -302,8 +321,12 @@ def select_portfolio(
         and not any(value is not None for value in max_total.values())
         and not any(value > 0 for value in min_cpt.values())
         and not any(value is not None for value in max_cpt.values())
+        and (not automatic_recovery or not any(value is not None for value in max_flex.values()))
         and (max_team is None or max_team >= requested)
         and (max_game is None or max_game >= requested)
+        and (not automatic_recovery or all(explicit_lineup_ok(
+            _lineup_sets(lu, kind)[0], player_key(lineup_captain(lu, kind) or {}), player_lookup)
+            for lu in pool))
     )
     if unrestricted_full_pool:
         key_sets = [_uniqueness_keys(lineup, kind) for lineup in pool]
@@ -315,6 +338,9 @@ def select_portfolio(
         )
         if pairwise_unique:
             report = portfolio_report(pool, normalized, kind=kind, requested=requested)
+            if automatic_recovery:
+                report['portfolio_recovery'] = recovery_diagnostics(requested, len(pool), starting_caps)
+                report['text'] = _report_text(report)
             if individual_ranking:
                 report.update(refinement_stop_reason="disabled in individual ranking",
                               refinement_seconds=0.0, refinement_swaps=0, refinement_attempts=0)
@@ -342,8 +368,10 @@ def select_portfolio(
         keys, teams, games = _lineup_sets(lineup, kind)
         captain = lineup_captain(lineup, kind)
         candidate_meta[id(lineup)] = {
+            "eligible": not automatic_recovery or explicit_lineup_ok(keys, player_key(captain or {}), player_lookup),
             "cores": tuple(combinations(sorted(keys), 2)) + tuple(combinations(sorted(keys), 3)) if core_penalty else (),
             "keys": keys,
+            "flex_keys": keys - {player_key(captain or {})},
             "teams": teams,
             "games": games,
             "projection": _projection(lineup, kind),
@@ -421,7 +449,7 @@ def select_portfolio(
         keys = meta["keys"]
         teams = meta["teams"]
         games = meta["games"]
-        if not keys or not _group_ok(keys, normalized["groups"]):
+        if not meta['eligible'] or not keys or not _group_ok(keys, normalized["groups"]):
             return False
         if min_unique > 1 and current_uniqueness_conflicts.get(id(lineup), set()).intersection(selected_candidate_ids):
             return False
@@ -430,6 +458,9 @@ def select_portfolio(
             if limit is not None and total_counts[key] >= limit:
                 return False
         captain_key = meta["captain_key"]
+        if automatic_recovery and any(max_flex.get(key) is not None and total_counts[key] - cpt_counts[key] >= max_flex[key]
+                                      for key in meta['flex_keys']):
+            return False
         if captain_key:
             limit = max_cpt.get(captain_key)
             if limit is not None and cpt_counts[captain_key] >= limit:
@@ -532,6 +563,8 @@ def select_portfolio(
     auto_relaxations = 0
     feasibility_limits = dict(requested=requested, total=max_total, captain=max_cpt,
         team=max_team, game=max_game, specialist=specialist_cpt_limit)
+    if automatic_recovery:
+        feasibility_limits.update(min_total=min_total, min_captain=min_cpt, flex=max_flex)
     if feasibility_only:
         from portfolio_feasibility import repair
         witness = repair(pool, retained, [], candidate_meta, current_uniqueness_conflicts,
@@ -599,7 +632,14 @@ def select_portfolio(
 
     feasibility_repaired = False
     fallback_used = False
-    if len(selected) < requested and not allow_relaxation:
+    from portfolio_feasibility import valid_portfolio
+    recovery = recovery_diagnostics(requested, len(selected), starting_caps)
+    needs_repair = len(selected) < requested or (automatic_recovery and not valid_portfolio(
+        selected, retained, candidate_meta, current_uniqueness_conflicts, feasibility_limits,
+        lambda keys: _group_ok(keys, normalized['groups'])))
+    if needs_repair and not allow_relaxation:
+        if cancelled():
+            raise ValueError('Selection cancelled')
         from portfolio_feasibility import repair
         from portfolio_feasibility import valid_portfolio
         fallback_keys = {_candidate_signature(lu, kind) for lu in (fallback_lineups or [])}
@@ -607,17 +647,46 @@ def select_portfolio(
         fallback_used = valid_portfolio(fallback, retained, candidate_meta, current_uniqueness_conflicts,
             feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']))
         repaired = fallback if fallback_used else repair(pool, retained, selected, candidate_meta, current_uniqueness_conflicts,
-            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), score, seconds=repair_time_limit,
+            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), score,
+            seconds=min(repair_time_limit, max(0, recovery_deadline-time.perf_counter())) if recovery_deadline is not None else repair_time_limit,
             conflict_groups=uniqueness_groups.get(current_min_unique),
             cancelled=selection_cancel_callback or (lambda: False))
+        if cancelled():
+            raise ValueError('Selection cancelled')
+        if repaired is not None:
+            recovery['strict_selected_count'] = len(repaired)
+        elif automatic_recovery and (recovery_deadline is None or time.perf_counter() < recovery_deadline):
+            from portfolio_recovery import recover
+            end = min(time.perf_counter() + 15, recovery_deadline if recovery_deadline is not None else float('inf'))
+            repaired, effective = recover(pool, retained, selected, candidate_meta,
+                current_uniqueness_conflicts, feasibility_limits,
+                lambda keys: _group_ok(keys, normalized['groups']), score,
+                total_keys=auto_total_keys, captain_keys=auto_cpt_keys, diagnostics=recovery,
+                deadline=end, cancelled=cancelled, conflict_groups=uniqueness_groups.get(current_min_unique))
+            if repaired is not None:
+                max_total, max_cpt = effective['total'], effective['captain']
+                specialist_cpt_limit = effective['specialist']
+                if recovery['effective_automatic_caps'] != recovery['starting_automatic_caps']:
+                    from portfolio_recovery import CONCENTRATION_WARNING
+                    warnings.append(CONCENTRATION_WARNING)
+                else:
+                    warnings.append('Bounded feasibility repair completed the portfolio without weakening uniqueness or exposure limits.')
         if repaired is None:
             from selection_shortage import PortfolioSelectionShortage, describe
-            raise PortfolioSelectionShortage(describe(requested, selected, remaining, candidate_meta,
+            message = describe(requested, selected, remaining, candidate_meta,
                 current_uniqueness_conflicts,
                 dict(total=max_total, captain=max_cpt, team=max_team, game=max_game, specialist=specialist_cpt_limit),
                 dict(total=total_counts, captain=cpt_counts, team=team_counts, game=game_counts, specialist=specialist_cpt_count),
                 player_lookup, current_min_unique, auto_total_keys, auto_cpt_keys,
-                lambda keys: _group_ok(keys, normalized['groups'])))
+                lambda keys: _group_ok(keys, normalized['groups']))
+            if recovery['automatic_recovery_ran']:
+                message += '\nBounded automatic-cap recovery also found no complete valid portfolio. No changed caps or partial portfolio were applied.'
+            if automatic_recovery:
+                from portfolio_recovery import format_recovery
+                message += '\n' + '\n'.join(format_recovery(recovery))
+            error = PortfolioSelectionShortage(message)
+            error.recovery_diagnostics = recovery
+            raise error
         selected = repaired
         feasibility_repaired = True
         selected_candidate_ids = {id(lu) for lu in selected}
@@ -709,7 +778,7 @@ def select_portfolio(
         out_meta = candidate_meta[id(outgoing)]
         in_meta = candidate_meta[id(incoming)]
         keys = in_meta["keys"]
-        if not keys or not _group_ok(keys, normalized["groups"]):
+        if not in_meta['eligible'] or not keys or not _group_ok(keys, normalized["groups"]):
             return False
         other_selected = selected_candidate_ids - {id(outgoing)}
         if current_min_unique > 1 and current_uniqueness_conflicts.get(id(incoming), set()).intersection(other_selected):
@@ -719,12 +788,22 @@ def select_portfolio(
             after = total_counts[key] - int(key in out_meta["keys"]) + int(key in keys)
             if limit is not None and after > limit:
                 return False
+            if automatic_recovery and after < min_total.get(key, 0):
+                return False
         out_captain = out_meta["captain_key"]
         in_captain = in_meta["captain_key"]
+        if automatic_recovery:
+            for key in out_meta['flex_keys'] | in_meta['flex_keys']:
+                cap = max_flex.get(key)
+                after = total_counts[key] - cpt_counts[key] - int(key in out_meta['flex_keys']) + int(key in in_meta['flex_keys'])
+                if cap is not None and after > cap:
+                    return False
         for key in {out_captain, in_captain} - {""}:
             limit = max_cpt.get(key)
             after = cpt_counts[key] - int(key == out_captain) + int(key == in_captain)
             if limit is not None and after > limit:
+                return False
+            if automatic_recovery and after < min_cpt.get(key, 0):
                 return False
         specialist_after = (
             specialist_cpt_count
@@ -928,12 +1007,15 @@ def select_portfolio(
     if not refinement_passes:
         refinement_stop_reason = "disabled in individual ranking" if individual_ranking else "disabled"
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
+    recovery['final_selected_count'] = len(selected)
+    if automatic_recovery:
+        report['portfolio_recovery'] = recovery
     report["effective_min_unique"] = current_min_unique
     report["feasible_shortlist_fallback_used"] = fallback_used
     if fallback_used:
         report["warnings"].append("Selection used the SIM-scored compliant set preserved before shortlisting; rules were unchanged.")
     report["feasibility_repaired"] = feasibility_repaired
-    if feasibility_repaired and not fallback_used:
+    if feasibility_repaired and not fallback_used and not recovery['automatic_recovery_ran']:
         warnings.append("Bounded feasibility repair completed the portfolio without weakening uniqueness or exposure limits.")
     report["refinement_swaps"] = refinement_swaps
     report["duplication_refinement_swaps"] = duplication_refinement_swaps
@@ -1161,6 +1243,8 @@ def _report_text(report: Dict[str, Any]) -> str:
         "",
         "Top player exposure:",
     ]
+    from portfolio_recovery import format_recovery
+    lines[3:3] = format_recovery(report.get('portfolio_recovery'))
     sim = report.get("sim_summary") or {}
     if sim:
         contest_line = []

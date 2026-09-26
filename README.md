@@ -130,7 +130,7 @@ The optimizer can shape the complete set of generated lineups, not just each lin
 
 
 
-The app generates a larger candidate pool and selects a compliant portfolio from it. If aggressive settings cannot all be satisfied, it returns the feasible lineups it found and clearly reports any relaxed uniqueness or minimum-exposure shortfall.
+The app generates a larger candidate pool and selects a compliant portfolio from it. Explicit rules remain fixed. After strict selection and repair, a short Showdown portfolio can recover by increasing only automatic concentration caps, with a clear warning. If no complete valid portfolio is found, the build stops without publishing a partial portfolio.
 
 
 
@@ -861,8 +861,12 @@ Deep Showdown reports now trace defense counts through generation, salary filter
 
 Lineup-limit warnings and optimization errors include **Copy Error**. Click it to copy the complete message, including any traceback, for troubleshooting.
 
-## Capped-player alternatives in Fast Showdown
+## Portfolio recovery (AR-02)
 
-Fast Showdown builds now add a bounded exploration pass when a capped player is overrepresented in the generated candidates. It keeps the original bank, explores alternatives without up to four overrepresented players, then applies the same final portfolio limits. This adds at most 20 seconds of exploration and up to 600 candidates for large requests. Locks and original player tags are preserved; final selection still rejects incomplete or noncompliant portfolios. This addresses candidate coverage, not proof that every requested portfolio is feasible.
+Builds generate candidates and score them normally, then select under strict portfolio rules and try the existing strict repair. If the portfolio is still short, Showdown can increase only its automatic total-player, Captain, and combined K/DST Captain caps. Recovery tries ceilings of 10% and 25% above the starting counts, then the amount needed to finish. It stops at the first complete valid portfolio and warns that concentration increased. Explicit player minimums and maximums (including zero), Captain caps, locks, fades, uniqueness, groups, team/game limits, salary/roster eligibility, and retained entries stay fixed. Incompatible explicit rules still stop the build.
+
+Before scoring, bounded candidate exploration covers insufficient alternatives around capped players in Classic and Showdown. Captain-only coverage excludes the targeted player only from Captain, leaving FLEX available. Fast exploration has a 20-second limit and adds at most 600 candidates; Deep uses only remaining generation time and candidate capacity. Saved candidate libraries are never extended, and selection never generates unscored candidates. Recovery shares a 15-second solver budget across its three stages, further bounded by the remaining Deep deadline.
+
+The portfolio summary and build diagnostics record requested, strict, and final counts; whether recovery ran; starting and effective automatic caps; and the successful stage. Failed recovery publishes no partial portfolio or changed caps. Cancellation never starts recovery. Saved-repair cancellation, retained rows, callback guards, and the existing cancelled Deep Showdown receipt are preserved.
 
 Fast Showdown also skips the Classic-only field comparison when finishing its report, preventing a roster-format error after successful selection.
