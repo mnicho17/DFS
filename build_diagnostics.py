@@ -7,6 +7,7 @@ reproducible. They never include salary-file paths or API keys.
 """
 
 import datetime as _dt
+from contest_objectives import normalize_objective, objective_report_label
 import json
 import re
 from ranked_diagnostics import ranked_group_summaries, format_ranked_groups
@@ -316,6 +317,7 @@ def create_build_diagnostic(
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
     diagnostic = {
         "schema_version": 4,
+        "contest_objective": normalize_objective(settings.get("contest_objective", context.get("contest_objective"))),
         "input_id": str(context.get('input_id') or ''),
         "candidate_library": dict(sim.get("candidate_library") or {}),
         "salary_filter": dict(sim.get("salary_filter") or {}),
@@ -562,6 +564,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         "",
         "Build",
         f"- Contest: {str(record.get('sport') or 'NFL').upper()} {str(record.get('contest_type') or 'classic').title()}",
+        f"- Objective: {objective_report_label(record.get('contest_objective'))}",
         f"- Salary cap: ${_number(record.get('salary_cap'), 50000.0):,.0f}",
         f"- Requested: {_integer(record.get('requested_count')):,}",
         f"- Candidates: {_integer(candidates.get('generated')):,} generated / {_integer(candidates.get('target')):,} budget{candidate_detail}",

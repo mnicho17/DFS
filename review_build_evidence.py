@@ -15,6 +15,7 @@ import zipfile
 from zoneinfo import ZoneInfo
 
 from review_report import Cancelled, accepted, enum, now, number, safe_text
+from contest_objectives import recorded_objective, objective_evidence_label
 
 MAX_FILES = 100
 MAX_DIRECTORY_ENTRIES = 1000
@@ -153,6 +154,9 @@ def explanation(snap, details_left):
     recipe = snap['recipe']
     deep = recipe.get('deep_compute') if isinstance(recipe.get('deep_compute'), dict) else {}
     return {'input_id': snap['raw']['input_id'], 'input_recorded_at': snap['raw'].get('created_at') if snap['created'] else None,
+            'contest_objective': recorded_objective(recipe.get('contest_objective',
+                snap['raw']['inputs']['contest'].get('objective',
+                    snap['raw']['inputs']['contest'].get('contest_objective')))),
             'sport': 'NFL', 'format': snap['kind'], 'slate_date': snap['day'],
             'pregame_input': snap['pregame'], 'checksum_state': 'consistent_not_authenticated',
             'recorded_settings': {'selection_mode': enum(deep.get('selection_mode'), ('Individual ranking','Portfolio selection')),
@@ -285,6 +289,7 @@ def capture_build_evidence(root, options, results, cancelled, progress):
                 record['source'] = 'generated_output_archive' if meta is not None else 'input_snapshot_only'
                 record['matched_result_occurrences'] = 0
                 if meta is not None:
+                    record['contest_objective'] = recorded_objective(meta.get('contest_objective'))
                     created = timestamp(meta.get('created_at'))
                     status = enum(meta.get('build_status'), ('completed', 'cancelled', 'error'))
                     record.update(recorded_code_fingerprint=meta.get('app_code_id') if HASH.fullmatch(str(meta.get('app_code_id',''))) else None,
@@ -302,6 +307,7 @@ def capture_build_evidence(root, options, results, cancelled, progress):
                         archives.append((snap['kind'], snap['day'], sigs, record))
                 else:
                     inputs.append((snap, record))
+                record['contest_objective_label'] = objective_evidence_label(record['contest_objective'])
                 records.append(record)
             except OverflowError:
                 reader.issues['byte_limit'] += 1

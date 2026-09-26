@@ -430,6 +430,36 @@ Choose the preset that matches the contest's maximum entries per person. Presets
 
 When the contest lobby provides the actual economics, open **Settings > Contest-Aware SIM**. Enter the contest name, total field size, entry fee, how many entries you plan to submit, and the payout table. Use one rank or range per line, such as `1 = $100,000` or `2-10 = $5,000`. **Save and Use** keeps the profile for later slates and turns on NFL SIM Edge. **Use Preset Only** removes the contest profile from the build without deleting it. If the requested build count differs from the profile's planned entries, the app stops before generation and lets you use the profile count, keep the requested count with a visible warning, or cancel.
 
+### Contest objective (unreleased CO-01)
+
+In the **Contest** section of **Settings**, open **Contest-Aware SIM...** and choose
+**Tournament**, **Double-Up**, or **Multiplier**. Tournament is the default and
+continues to use the existing strategy. Double-Up and Multiplier currently record
+intent only; objective-specific strategy arrives later in CO-02. They do not yet
+provide cash lineup construction, paid-rate optimization, multiplier EV
+optimization, or a different ownership strategy.
+
+The objective does not require an exact payout profile. **Use Preset Only** keeps
+your choice while disabling the exact profile. **Save and Use** saves the objective
+with the profile; selecting that saved profile restores it. Build recipes and new
+snapshots also record the objective, and replay restores it without rewriting the
+source snapshot. Legacy execution settings default to Tournament.
+
+Build reports display the objective and explain the framework-only status of
+Double-Up/Multiplier as information, not an error. New generated archives and
+exports record the choice. Results & Learning counts Tournament, Double-Up,
+Multiplier, and **Not recorded** separately. Old exports and artifacts without
+recorded intent remain Not recorded; contest names, payout shapes, fees, or results
+are not evidence of the selected objective.
+
+Changing only the objective does not change candidates, SIM scores, lineup order,
+portfolio construction, or DraftKings export rows. Candidate libraries keep their
+exact original snapshot identity and can be reused across objective choices under
+the same compatible app code. Slate, generation inputs, current rules, and code
+checks still apply. Projections, ownership, payout calculations, AR-01 saved repair,
+and AR-02 portfolio recovery are unchanged.
+
+
 
 
 ![Attaching an exact field, entry fee, and payout table to NFL SIM Edge](images/contest-aware-sim.png){medium}

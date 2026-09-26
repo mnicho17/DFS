@@ -1025,6 +1025,8 @@ class LineupBuildWorker(QtCore.QObject):
 
         contest_profile: Optional[Dict[str, Any]] = None,
 
+        contest_objective: Optional[str] = None,
+
         compute_mode: str = "Fast",
 
         deep_time_limit_seconds: float = 300.0,
@@ -1080,6 +1082,11 @@ class LineupBuildWorker(QtCore.QObject):
             else None
 
         )
+
+        self.contest_objective = normalize_objective(contest_objective if contest_objective is not None
+            else (self.contest_profile or {}).get("objective"))
+        if self.contest_profile:
+            self.contest_profile["objective"] = self.contest_objective
 
         self.compute_mode = str(compute_mode or "Fast").strip()
 
@@ -1137,7 +1144,10 @@ class LineupBuildWorker(QtCore.QObject):
 
                 from showdown_simulation import run_deep_showdown
 
-                self.finished.emit(run_deep_showdown(self, _deep_shortlist))
+                result = run_deep_showdown(self, _deep_shortlist)
+                result["contest_objective"] = self.contest_objective
+                result.setdefault("sim_report", {})["contest_objective"] = self.contest_objective
+                self.finished.emit(result)
 
                 return
 
@@ -2689,6 +2699,7 @@ class LineupBuildWorker(QtCore.QObject):
             )
 
             sim_report["candidate_library"] = dict(self.library_report)
+            sim_report["contest_objective"] = self.contest_objective
             if self.sport == "NFL":
                 from projection_coverage import summarize_projection_coverage
                 sim_report["projection_coverage"] = summarize_projection_coverage(build_players)
@@ -2711,6 +2722,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "scenario_candidate_target": int(scenario_candidate_target),
 
                 "candidate_count": reported_candidate_count,
+                "contest_objective": self.contest_objective,
 
                 "selected_count": len(lineups),
 
@@ -2801,6 +2813,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "portfolio_report": selected["report"],
 
                 "candidate_count": reported_candidate_count,
+                "contest_objective": self.contest_objective,
 
                 "sim_report": sim_report,
 
@@ -2896,6 +2909,9 @@ from entry_safety import build_entry_safety_report
 from game_day_safety import build_final_lock_report
 
 from build_recipes import dump_recipes_json, load_recipes_json, normalize_recipe
+
+from contest_objectives import (TOURNAMENT, OBJECTIVES, FRAMEWORK_NOTE,
+    normalize_objective, objective_label)
 
 from contest_profiles import (
 
@@ -5331,7 +5347,8 @@ class BuildRecipesDialog(QtWidgets.QDialog):
 
             f"{int(recipe.get('requested_lineups', 1) or 1)} lineups • {sim_text} • "
 
-            f"minimum unique {int(recipe.get('min_unique', 1) or 1)}"
+            f"minimum unique {int(recipe.get('min_unique', 1) or 1)} • "
+            f"Objective: {objective_label(recipe.get('contest_objective'))}"
 
         )
 
@@ -5403,6 +5420,8 @@ class ContestProfileDialog(QtWidgets.QDialog):
 
         parent: Optional[QtWidgets.QWidget] = None,
 
+        *, objective: Optional[str] = None,
+
     ):
 
         super().__init__(parent)
@@ -5412,6 +5431,7 @@ class ContestProfileDialog(QtWidgets.QDialog):
         self.active_name = str(active_name or "").strip()
 
         self.selected_profile: Optional[Dict[str, Any]] = None
+        self.initial_objective = normalize_objective(objective)
 
         self.changed = False
 
@@ -5438,6 +5458,21 @@ class ContestProfileDialog(QtWidgets.QDialog):
         layout.addWidget(intro)
 
 
+
+        objective_form = QtWidgets.QFormLayout()
+        self.objective_combo = QtWidgets.QComboBox(self)
+        self.objective_combo.setObjectName("contestObjective")
+        for value in OBJECTIVES:
+            self.objective_combo.addItem(objective_label(value), value)
+        self.objective_combo.setCurrentIndex(OBJECTIVES.index(self.initial_objective))
+        objective_form.addRow("Contest objective", self.objective_combo)
+        layout.addLayout(objective_form)
+        self.objective_note = QtWidgets.QLabel(self)
+        self.objective_note.setObjectName("contestObjectiveNote")
+        self.objective_note.setWordWrap(True)
+        layout.addWidget(self.objective_note)
+        self.objective_combo.currentIndexChanged.connect(self._update_objective_note)
+        self._update_objective_note()
 
         saved_row = QtWidgets.QHBoxLayout()
 
@@ -5596,8 +5631,17 @@ class ContestProfileDialog(QtWidgets.QDialog):
         self.user_entries.valueChanged.connect(self._update_preview)
 
         self._refresh_profiles(self.active_name)
+        if objective is not None:
+            self.objective_combo.setCurrentIndex(OBJECTIVES.index(self.initial_objective))
 
 
+
+    @property
+    def objective(self):
+        return normalize_objective(self.objective_combo.currentData())
+
+    def _update_objective_note(self, *_args):
+        self.objective_note.setText(FRAMEWORK_NOTE if self.objective != TOURNAMENT else "Tournament uses the existing lineup strategy.")
 
     def _selected_name(self) -> str:
 
@@ -5641,6 +5685,8 @@ class ContestProfileDialog(QtWidgets.QDialog):
 
         if profile:
 
+            self.objective_combo.setCurrentIndex(OBJECTIVES.index(normalize_objective(profile.get("objective"))))
+
             self.name_edit.setText(name)
 
             self.field_size.setValue(int(profile.get("field_size", 100_000) or 100_000))
@@ -5672,6 +5718,8 @@ class ContestProfileDialog(QtWidgets.QDialog):
         return normalize_contest_profile({
 
             "name": self.name_edit.text(),
+
+            "objective": self.objective,
 
             "field_size": self.field_size.value(),
 
@@ -8901,6 +8949,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
+    def _current_contest_objective(self):
+        return normalize_objective(self.app_settings.value("contest/objective", TOURNAMENT))
+
+    def _set_contest_objective(self, objective):
+        self.app_settings.setValue("contest/objective", normalize_objective(objective))
+        self.app_settings.sync()
+
     def _load_contest_profiles(self) -> Dict[str, Dict[str, Any]]:
 
         try:
@@ -8971,13 +9026,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             str(getattr(self, "_active_contest_profile_name", "") or ""),
 
-            self,
+            self, objective=self._current_contest_objective(),
 
         )
 
         if dialog.exec_() != QtWidgets.QDialog.Accepted:
 
             return
+
+        self._set_contest_objective(dialog.objective)
 
         if dialog.changed:
 
@@ -9024,6 +9081,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "sport": self._current_sport(),
 
             "contest_kind": kind,
+
+            "contest_objective": self._current_contest_objective(),
 
             "requested_lineups": requested,
 
@@ -9336,6 +9395,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
     def _apply_build_recipe(self, name: str, recipe: Dict[str, Any]) -> None:
 
         value = normalize_recipe(recipe)
+
+        self._set_contest_objective(value["contest_objective"])
 
         self._set_recipe_combo(self.combo_sport, value.get("sport"))
 
@@ -13186,6 +13247,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 "contest_profile": dict(contest_profile or {}),
 
+                "contest_objective": self._current_contest_objective(),
+
                 "compute_mode": (
 
                     "Deep" if effective_sim_enabled and compute_mode.casefold().startswith("deep") else "Fast"
@@ -13304,6 +13367,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             field_calibration=field_calibration,
 
             contest_profile=contest_profile,
+
+            contest_objective=self._active_build_context["settings"]["contest_objective"],
 
             compute_mode=compute_mode,
 
@@ -15249,6 +15314,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         try:
 
             settings = {
+
+                "contest_objective": self._current_contest_objective(),
 
                 "build_style": self.combo_build_style.currentText(),
 
