@@ -1,7 +1,7 @@
 """Warm the ordinary Deep pipeline from an overnight library's frozen inputs."""
 import copy
 import time
-from build_snapshots import validate_snapshot
+from build_snapshots import validate_snapshot, snapshot_objective
 from compute_settings import normalize_deep_settings
 
 
@@ -18,7 +18,8 @@ def prepare_scenarios(path, snapshot, *, seconds, cancelled=lambda:False, progre
         build_style=recipe.get('build_style','Strategic'), salary_strategy=recipe.get('salary_strategy','Near Cap'),
         portfolio_rules=inputs['rules'], sim_enabled=True, sim_scenarios=recipe.get('nfl_sim_scenarios',5000),
         field_preset=recipe.get('nfl_field_preset','150-Max'), field_calibration=inputs.get('calibration'),
-        contest_profile=inputs.get('contest'), compute_mode='Deep', deep_options=options,
+        contest_profile=inputs.get('contest'), contest_objective=snapshot_objective(snapshot),
+        compute_mode='Deep', deep_options=options,
         deep_time_limit_seconds=min(seconds,options['minutes']*60), candidate_library=str(path), scenario_cache=True)
     deadline=time.monotonic()+seconds
     class Stop:

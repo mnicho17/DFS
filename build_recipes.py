@@ -3,12 +3,13 @@ from __future__ import annotations
 """Serialization helpers for reusable, slate-independent build settings."""
 
 import json
+from contest_objectives import normalize_objective
 from compute_settings import normalize_deep_settings
 from typing import Any, Dict, Mapping
 
 
 RECIPE_KEYS = (
-    "sport", "contest_kind", "requested_lineups", "salary_cap",
+    "sport", "contest_kind", "contest_objective", "requested_lineups", "salary_cap",
     "ownership_sims", "showdown_field_templates", "ownership_mode", "ownership_weight",
     "build_style", "mlb_stack_preference", "salary_strategy", "nfl_sim_enabled",
     "nfl_sim_scenarios", "nfl_field_preset", "nfl_compute_mode", "min_unique",
@@ -19,6 +20,7 @@ RECIPE_KEYS = (
 def normalize_recipe(recipe: Mapping[str, Any]) -> Dict[str, Any]:
     """Keep only portable build settings; never retain player-specific rules."""
     cleaned = {key: recipe[key] for key in RECIPE_KEYS if key in recipe}
+    cleaned["contest_objective"] = normalize_objective(cleaned.get("contest_objective"))
     cleaned["sport"] = str(cleaned.get("sport") or "NFL").strip().upper()
     cleaned["contest_kind"] = (
         "showdown" if str(cleaned.get("contest_kind") or "classic").lower() == "showdown" else "classic"

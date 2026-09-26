@@ -17,6 +17,18 @@ from optimizers import (ShowdownOptimizer, ShowdownLineup, MultiSportClassicOpti
 STYLES = ('Strategic', 'Balanced', 'Contrarian', 'Chalk', 'Randomized')
 MAX_CANDIDATES = 100000
 
+def candidate_generation_id(snapshot):
+    """Objective-neutral compatibility; the full input ID remains provenance.
+
+    Only recorded intent is excluded. All player, salary, game, roster, rules,
+    calibration and other recipe inputs still participate in this fingerprint.
+    """
+    inputs = validate_snapshot(snapshot)['inputs']
+    inputs['recipe'].pop('contest_objective', None)
+    inputs['contest'].pop('objective', None)
+    inputs['contest'].pop('contest_objective', None)
+    return fingerprint(inputs)
+
 def code_id():
     if getattr(sys, 'frozen', False):
         digest=hashlib.sha256()
@@ -53,10 +65,14 @@ def initialize(path, snapshot):
         con.execute('CREATE TABLE IF NOT EXISTS batches (id INTEGER PRIMARY KEY, style TEXT NOT NULL, seed INTEGER NOT NULL, count INTEGER NOT NULL, elapsed REAL NOT NULL)')
         meta = dict(con.execute('SELECT key,value FROM library_meta'))
         if meta:
-            if meta.get('schema') != '1' or meta.get('input_id') != snapshot['input_id'] or meta.get('code_id') != code_id():
+            saved = metadata(path)
+            if (saved['candidate_generation_id'] != candidate_generation_id(snapshot)
+                    or saved.get('code_id') != code_id()
+                    or saved['slate_id'] != slate_id(snapshot['inputs']['players'], snapshot['inputs']['recipe']['contest_kind'])):
                 raise ValueError('This library uses different inputs or app code. Resume using the original version, or start a new library.')
         else:
             con.executemany('INSERT INTO library_meta VALUES (?,?)', dict(schema='1',input_id=snapshot['input_id'],
+                candidate_generation_id=candidate_generation_id(snapshot),
                 code_id=code_id(),snapshot=json.dumps(snapshot),
                 slate_id=slate_id(snapshot['inputs']['players'],snapshot['inputs']['recipe']['contest_kind'])).items())
 
@@ -70,6 +86,15 @@ def metadata(path):
         meta['count'] = con.execute('SELECT count(*) FROM candidates').fetchone()[0]
         meta['batches'] = con.execute('SELECT count(*) FROM batches').fetchone()[0]
         meta['snapshot'] = validate_snapshot(json.loads(meta['snapshot']))
+        original = meta['snapshot']
+        generation_id = candidate_generation_id(original)
+        if (meta.get('input_id') != original['input_id']
+                or meta.get('candidate_generation_id', generation_id) != generation_id
+                or meta.get('slate_id') != slate_id(original['inputs']['players'], original['inputs']['recipe']['contest_kind'])):
+            raise ValueError('Candidate library identity does not match its original snapshot.')
+        # Derive old metadata without modifying the database or original snapshot.
+        # initialize/load still require exactly the same code ID.
+        meta['candidate_generation_id'] = generation_id
         return meta
 
 def roster_keys(lineup, kind):
@@ -132,6 +157,8 @@ def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress
 
 def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Cap', rules=None):
     meta=metadata(path)
+    if meta.get('code_id') != code_id():
+        raise ValueError('This library uses different app code. Use the original version, or start a new library.')
     if slate_id(players,kind) != meta['slate_id']:
         raise ValueError('Candidate library belongs to a different player slate or contest type. Load the matching slate first.')
     current=apply_qb_eligibility(copy.deepcopy(players))

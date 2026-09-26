@@ -8,6 +8,7 @@ attach actual fantasy points/ROI to these same records.
 """
 
 import datetime as _dt
+from contest_objectives import normalize_objective, objective_counts
 import csv
 import hashlib
 import json
@@ -183,6 +184,7 @@ def init_db(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_lineup_players_player_id ON lineup_players(player_id);
         """
     )
+    _ensure_column(conn, "exports", "contest_objective", "TEXT")
     _ensure_column(conn, "lineups", "base_projection", "REAL")
     _ensure_column(conn, "lineups", "context_adjustment", "REAL")
     for column, definition in (
@@ -364,8 +366,8 @@ def record_export(
                 INSERT INTO exports (
                     export_id, created_at, app_version, sport, contest_type, salary_cap,
                     lineup_count, export_path, build_style, own_mode, own_weight,
-                    field_preset, mlb_stack_pref, salary_strategy, validation_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    field_preset, mlb_stack_pref, salary_strategy, validation_json, contest_objective
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     export_id,
@@ -383,6 +385,7 @@ def record_export(
                     str(settings.get("mlb_stack_pref", "") or ""),
                     str(settings.get("salary_strategy", "") or ""),
                     json.dumps(validation or {}, default=str),
+                    normalize_objective(settings.get("contest_objective")),
                 ),
             )
 
@@ -1117,6 +1120,10 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
         if imported_rows and matched_rows < imported_rows:
             lines.append("- Missing export links do not prevent username-based results analysis or automatic snapshot comparisons below.")
 
+        recorded_objectives = objective_counts(row[0] for row in cur.execute(
+            "SELECT contest_objective FROM exports"))
+        lines.extend(["", "Recorded contest objective"] + [
+            f"- {label}: {count} exports" for label, count in recorded_objectives.items()])
         from results_audit import build_results_audit
         lines.extend(build_results_audit(conn, username=username))
         from performance_review import review_report
@@ -1127,6 +1134,7 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
         return {
             "text": "\n".join(lines), "db_path": path, "export_count": export_count,
             "pairing_state": pairings,
+            "contest_objectives": recorded_objectives,
             "exported_lineups": exported_lineups, "historical_rows": imported_rows,
             "personal_results_count": len(own_rows),
             "username_finishes": finish_summary,
