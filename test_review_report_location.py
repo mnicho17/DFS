@@ -25,7 +25,9 @@ class ReviewLocationTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        # Windows runners may expose TEMP through an 8.3 alias (RUNNER~1).
+        # Compare canonical locations, just as the publication resolver does.
+        self.root = Path(self.temp.name).resolve()
         self.env = patch.dict(os.environ, {'DFS_OPTIMIZER_DATA_DIR': str(self.root / 'data'),
                                           'LOCALAPPDATA': str(self.root / 'local')})
         self.env.start(); self.addCleanup(self.env.stop)
