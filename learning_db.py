@@ -1483,6 +1483,18 @@ def init_historical_import_tables(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS username_result_scans(import_id TEXT, username TEXT, PRIMARY KEY(import_id,username));
+        CREATE TABLE IF NOT EXISTS historical_contest_identities (
+            identity_id TEXT PRIMARY KEY,
+            import_id TEXT NOT NULL,
+            contest_key TEXT NOT NULL,
+            schema_version INTEGER NOT NULL,
+            state TEXT NOT NULL,
+            evidence_hash TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(import_id, contest_key)
+        );
         CREATE TABLE IF NOT EXISTS historical_imports (
             import_id TEXT PRIMARY KEY,
             created_at TEXT NOT NULL,

@@ -413,6 +413,19 @@ def _database(path, options, cancelled, progress):
                                **{k: number(row[k], nonnegative=True) for k in ('entry_count', 'field_size', 'roster_size', 'metadata_coverage_pct')}})
             else:
                 coverage['field_detail_limit_rows'] += 1
+        from historical_identity import derive_contests, coverage as identity_coverage
+        from analysis_imports import ImportCancelled
+        identity_exclusions = Counter()
+        try:
+            identities = derive_contests(db.connection, Path(path).parent, cancelled=cancelled)
+        except ImportCancelled:
+            raise Cancelled() from None
+        selected_identities = [c for c in identities if accepted(options,
+            c.data['identity']['sport'] or 'unknown', c.data['identity']['format'] or 'unknown',
+            c.data['identity']['slate_date'], identity_exclusions)]
+        historical_identity = identity_coverage(selected_identities)
+        historical_identity.update(filter_exclusions=dict(identity_exclusions),
+            filter_basis='qualified identity date/sport/format where established; otherwise original observations')
         sources = db.sources
 
     measures = []
@@ -449,7 +462,8 @@ def _database(path, options, cancelled, progress):
                                     0, coverage['recorded_rosters'], 'lineage_unverified', 'selected_export_rosters'),
                            'observed_counts': dict(recorded_counts[name])}
                     for name, unit in RECORDED_METRICS.items()}
-    return {'_build_link_rows': build_link_rows, 'sources': sources, 'coverage': dict(coverage), 'filter_exclusions': dict(excluded),
+    return {'_build_link_rows': build_link_rows, 'historical_identity': historical_identity,
+            'sources': sources, 'coverage': dict(coverage), 'filter_exclusions': dict(excluded),
             'match_methods': dict(methods), 'distinct_recorded_contest_labels': len(contests),
             'groups': measures, 'settings': settings_rows, 'settings_filter_exclusions': dict(settings_excluded),
             'imports': dict(imports), 'import_filter_exclusions': dict(import_excluded),
@@ -539,6 +553,15 @@ class Report:
                   'Source tables and scan coverage:']
         for name, source in db.get('sources', {}).items():
             lines.append(f'- {name}: {source["state"]}; {source.get("scanned_rows", 0)}/{source.get("total_rows", "unknown")} scanned; truncated: {source.get("truncated", False)}.')
+        identities = db.get('historical_identity', {})
+        lines += ['', '## Historical evidence identity',
+                  f"{identities.get('total_historical_contests', 0)} import/contest groups; exclusive qualification states:",
+                  *[f'- {state}: {count}' for state, count in identities.get('states', {}).items()],
+                  'Later salary/slate evidence can qualify missing identity without rewriting original observations. '
+                  'This section filters by qualified identity where available; imported-row counts retain their original date basis. '
+                  'Generated archives do not certify submission. Unknown scores remain unknown.',
+                  'Blockers: ' + json.dumps(identities.get('blockers', {})),
+                  'Conflicts: ' + json.dumps(identities.get('conflicts', {}))]
         lines += ['', '## Performance']
         for g in db.get('groups', []):
             lines.append(f'### {g["cohort_id"]}: {g["sport"]} / {g["format"]} / {g["date"] or "date unknown"} / {g["contest_ref"] or "contest unknown"}')
