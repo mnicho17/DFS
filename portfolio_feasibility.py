@@ -46,15 +46,22 @@ def valid_portfolio(rows, retained, meta, conflicts, limits, group_ok):
         return False
     if not {id(lu) for lu in retained} <= ids:
         return False
-    if any(not group_ok(meta[key]['keys']) or conflicts.get(key, set()) & ids for key in ids):
+    if any(not meta[key].get('eligible', True) or not group_ok(meta[key]['keys']) or conflicts.get(key, set()) & ids for key in ids):
         return False
     for field, label in [('keys', 'total'), ('teams', 'team'), ('games', 'game')]:
         counts = Counter(value for key in ids for value in meta[key][field])
+        if label == 'total' and any(counts[key] < floor for key, floor in limits.get('min_total', {}).items()):
+            return False
         for value, count in counts.items():
             cap = limits[label].get(value) if label == 'total' else limits[label]
             if cap is not None and count > cap:
                 return False
     counts = Counter(meta[key]['captain_key'] for key in ids)
+    flex_counts = Counter(value for key in ids for value in meta[key].get('flex_keys', ()))
+    if any(cap is not None and flex_counts[key] > cap for key, cap in limits.get('flex', {}).items()):
+        return False
+    if any(counts[key] < floor for key, floor in limits.get('min_captain', {}).items()):
+        return False
     if any(cap is not None and counts[key] > cap for key, cap in limits['captain'].items()):
         return False
     cap = limits['specialist']
@@ -83,7 +90,7 @@ def repair(pool,retained,selected,meta,conflicts,limits,group_ok,score,seconds=1
         for lu in all_rows:
             checkpoint()
             key=id(lu)
-            if not group_ok(meta[key]['keys']):problem += variables[key] == 0
+            if not meta[key].get('eligible', True) or not group_ok(meta[key]['keys']):problem += variables[key] == 0
             for other in (conflicts.get(key,set()) if conflict_groups is None else ()):
                 if other in variables and other<key:problem += variables[key]+variables[other] <= 1
         for group in conflict_groups or []:
@@ -95,6 +102,15 @@ def repair(pool,retained,selected,meta,conflicts,limits,group_ok,score,seconds=1
                 problem.addConstraint(pulp.lpSum(variables[id(lu)] for lu in all_rows
                     if key in meta[id(lu)][field]) <= limit)
         for key,value in limits['total'].items():maximum('keys',key,value)
+        for key,value in limits.get('flex', {}).items():maximum('flex_keys',key,value)
+        for key,value in limits.get('min_total', {}).items():
+            checkpoint()
+            if value:
+                problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if key in meta[id(lu)]['keys']) >= value
+        for key,value in limits.get('min_captain', {}).items():
+            checkpoint()
+            if value:
+                problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if meta[id(lu)]['captain_key']==key) >= value
         for key,value in limits['captain'].items():
             checkpoint()
             if value is not None:problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if meta[id(lu)]['captain_key']==key) <= value

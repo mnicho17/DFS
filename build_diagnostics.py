@@ -10,6 +10,7 @@ import datetime as _dt
 import json
 import re
 from ranked_diagnostics import ranked_group_summaries, format_ranked_groups
+from portfolio_recovery import aggregate_recovery
 import math
 import os
 import sys
@@ -51,6 +52,8 @@ def _aggregate_warning(value: Any) -> str:
         return ""  # Successful recovery is disclosed in build details, not a failed rule.
     if lower.startswith("individual ranking uses simulated finish rates"):
         return ""  # Selection-mode information is not a failed rule.
+    if lower.startswith('portfolio concentration increased'):
+        return 'Portfolio concentration increased through automatic-cap recovery; all explicit user rules were preserved.'
     relaxation = re.match(r"Automatic Showdown exposure guardrails were relaxed (\d+) times", text)
     if relaxation:
         return f"Automatic Showdown exposure caps were raised {relaxation.group(1)} times to fill the output; the listed caps are starting limits."
@@ -395,6 +398,7 @@ def create_build_diagnostic(
             "automatic_showdown_guardrails": dict(
                 portfolio.get("automatic_showdown_guardrails") or {}
             ),
+            "portfolio_recovery": aggregate_recovery(portfolio.get("portfolio_recovery")),
         },
         "ranked_groups": ranked_group_summaries(lineups, contest_type, salary_cap, salary_strategy),
         "exposures": exposure_summary,
@@ -748,10 +752,12 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         guardrails = dict(portfolio.get("automatic_showdown_guardrails") or {})
         if guardrails:
             lines.append(
-                f"- Automatic guardrails: player { _number(guardrails.get('total_player_pct')):.0f}% max; "
+                f"- Starting automatic guardrails: player { _number(guardrails.get('total_player_pct')):.0f}% max; "
                 f"Captain {_number(guardrails.get('captain_pct')):.0f}% max; "
                 f"combined K/DST Captain {_number(guardrails.get('specialist_captain_pct')):.0f}% max"
             )
+    from portfolio_recovery import format_recovery
+    lines.extend('- ' + line for line in format_recovery(portfolio.get('portfolio_recovery')))
     selected_sources = dict(sim.get("selected_sources") or {})
     if selected_sources:
         source_labels = {

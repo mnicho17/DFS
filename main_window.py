@@ -1561,6 +1561,19 @@ class LineupBuildWorker(QtCore.QObject):
 
             style_counts = {}
 
+            def expand_classic_coverage(rows, allowance=None):
+                if self.library_candidates or self.candidate_library:
+                    return []
+                from candidate_recovery import expand_candidates
+                return expand_candidates(rows, build_players, self.num_lineups,
+                    self.portfolio_rules, kind='classic', sport=self.sport,
+                    salary_cap=self.salary_cap, own_mode=self.own_mode, own_weight=self.own_weight,
+                    build_style=self.build_style, salary_strategy=self.salary_strategy,
+                    mlb_stack_pref=self.mlb_stack_pref, retained=self.retained_lineups,
+                    cancelled=self._cancel_event.is_set,
+                    seconds=max(0, min(20, generation_deadline-time.perf_counter())) if deep_build else 20,
+                    max_additions=allowance)
+
             if self.library_candidates:
                 lineups = list(self.library_candidates)
                 candidate_target = len(lineups)
@@ -1616,7 +1629,7 @@ class LineupBuildWorker(QtCore.QObject):
                     coverage = expand_capped_candidates(lineups, build_players, self.num_lineups,
                         self.portfolio_rules, salary_cap=self.salary_cap, own_mode=self.own_mode,
                         own_weight=self.own_weight, build_style=self.build_style,
-                        cancelled=self._cancel_event.is_set)
+                        cancelled=self._cancel_event.is_set, retained=self.retained_lineups)
                     lineups.extend(coverage)
                     candidate_target += len(coverage)
                     candidate_budget += len(coverage)
@@ -1728,6 +1741,13 @@ class LineupBuildWorker(QtCore.QObject):
 
                             lineups.extend(batch_lineups)
 
+                            if batch_index == 0:
+                                coverage = expand_classic_coverage(lineups, max(0, candidate_target-len(lineups)))
+                                lineups.extend(coverage)
+                                optimizer_seen.update(tuple(sorted(player_key(p) for p in lu)) for lu in coverage)
+                                completed_optimizer += len(coverage)
+                                style_counts['Portfolio coverage'] = len(coverage)
+
                             completed_optimizer += len(batch_lineups)
 
                             remaining_optimizer = max(0, candidate_target - completed_optimizer)
@@ -1783,6 +1803,13 @@ class LineupBuildWorker(QtCore.QObject):
                             minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
 
                         )
+
+            if self.kind != 'showdown' and not self.library_candidates and not self.candidate_library:
+                coverage = expand_classic_coverage(lineups, max(0, candidate_target-len(lineups)) if deep_build else None)
+                lineups.extend(coverage)
+                if not deep_build:
+                    candidate_target += len(coverage)
+                    candidate_budget += len(coverage)
 
             generation_seconds = time.perf_counter() - build_started
 
@@ -2394,6 +2421,8 @@ class LineupBuildWorker(QtCore.QObject):
 
                 rules=self.portfolio_rules,
                 allow_relaxation=False,
+                automatic_recovery=True,
+                recovery_deadline=deep_deadline if deep_build else None,
                 fallback_lineups=feasible_fallback,
                 selection_cancel_callback=self._cancel_event.is_set,
                 repair_time_limit=max(0,min(15,deep_deadline-time.perf_counter())) if deep_build else 15,
