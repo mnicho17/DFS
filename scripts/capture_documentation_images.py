@@ -842,7 +842,7 @@ def capture_opponents(output_dir):
 
 
 def capture_combined_import(output_dir):
-    from analysis_imports import import_folders
+    from analysis_imports import import_folders, save_pair
     from analysis_imports_ui import SalaryMatchesDialog
     from test_analysis_imports import results_file, salary_file
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -872,7 +872,25 @@ def capture_combined_import(output_dir):
         review = SalaryMatchesDialog(dialog)
         review.show()
         save_widget(review, output_dir/'salary-matches.png')
-        review.close(); dialog.close()
+        row = review.rows[0]
+        chosen = row['candidates'][0]['hash']
+        review.close()
+        save_pair(row['hash'], chosen)
+        paired = SalaryMatchesDialog(dialog)
+        paired.show()
+        save_widget(paired, output_dir/'salary-matches-paired.png')
+        paired.close()
+        # Only the disposable synthetic snapshot is modified for this example.
+        from contextlib import closing
+        import sqlite3
+        from learning_db import history_db_path
+        with closing(sqlite3.connect(history_db_path())) as conn:
+            snapshot = conn.execute('SELECT snapshot FROM analysis_sources WHERE hash=?', (chosen,)).fetchone()[0]
+        Path(snapshot).write_bytes(b'Synthetic changed salary revision')
+        invalid = SalaryMatchesDialog(dialog)
+        invalid.show()
+        save_widget(invalid, output_dir/'salary-matches-invalid.png')
+        invalid.close(); dialog.close()
 
 
 def capture_saved_repair(output_dir: Path) -> None:
