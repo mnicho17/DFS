@@ -59,7 +59,7 @@ receipts before publication. SQLite reader sidecars are owned by SQLite; tests
 compare logical database state separately from immutable CSV/JSON/ZIP bytes.
 
 Existing limits remain: 1,000 directory entries, 100 matching files per evidence
-folder, 32 MiB per bounded read, 64 MiB total evidence-read budget, 2,000 snapshot
+folder, 32,000,000 bytes per bounded read, 64,000,000 bytes total evidence-read budget, 2,000 snapshot
 players and 1,000 archive outputs. Receipt rereads use the same budget. Archive
 truncation/ambiguity fails closed; saved exports explicitly disclose occurrences
 omitted by the 1,000-row limit. Cached source choice lists display at most 1,000
