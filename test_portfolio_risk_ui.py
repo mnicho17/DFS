@@ -13,7 +13,7 @@ from PyQt5 import QtCore, QtWidgets, QtTest
 import portfolio_risk_ui as ui
 from portfolio_risk import calculate, summary
 from test_portfolio_risk import make_capture
-from test_portfolio_risk_evidence import logical_db, source_bytes, repeat_archive
+from test_portfolio_risk_evidence import logical_db, source_bytes, repeat_archive, rewrite_archive
 import test_historical_identity as fixtures
 
 
@@ -121,6 +121,25 @@ class PortfolioRiskQtTests(unittest.TestCase):
         self.assertIs(self.risk.report,prior);self.assertFalse(self.risk.copy_button.isEnabled())
         self.assertIn('Synthetic source changed',self.risk.status.text());self.assertTrue(self.risk.isEnabled())
         self.assertEqual(before,logical_db(self.f.db));self.assertEqual(files,source_bytes(self.f.root))
+
+    def test_invalid_archive_role_preserves_prior_report_and_sources_after_real_worker(self):
+        self.start();self.drain();prior=self.risk.report;original=self.archive.read_bytes()
+        before=logical_db(self.f.db)
+        for role in ('UNKNOWN','FLEX','Captain'):
+            with self.subTest(role=role):
+                self.archive.write_bytes(original)
+                def invalid(payload):
+                    # Keep a valid first occurrence: no partial report may leak out.
+                    import copy
+                    bad=copy.deepcopy(payload['lineups'][0]);bad['slots'][1 if role=='Captain' else 0]['slot']=role
+                    payload['lineups'].append(bad);payload['metadata']['output_count']=2
+                rewrite_archive(self.archive,invalid)
+                files=source_bytes(self.f.root)
+                self.start();self.assertFalse(self.risk.isEnabled());self.drain()
+                self.assertIs(self.risk.report,prior);self.assertFalse(self.risk.copy_button.isEnabled())
+                self.assertIn('Prior completed output retained',self.risk.status.text())
+                self.assertTrue(self.risk.isEnabled())
+                self.assertEqual(before,logical_db(self.f.db));self.assertEqual(files,source_bytes(self.f.root))
 
     def test_job_pins_database_root_source_and_detached_assumptions(self):
         request=self.risk.request();worker=ui.RiskWorker(self.f.db,request);self.addCleanup(worker.deleteLater)

@@ -120,6 +120,138 @@ class RiskArchiveEvidenceTests(unittest.TestCase):
     def capture(self,selection,**kwargs):
         return evidence.capture(self.f.db,selection,**kwargs)
 
+    def captain_source(self, captain_projection=30):
+        self.f.fixture(dated=False)
+        from build_snapshots import fingerprint
+        self.f.snap['inputs']['players'][0].update(FlexProjection=20,CptProjection=captain_projection)
+        self.f.snap['inputs']['players'][1].update(FlexProjection=10,CptProjection=15)
+        self.f.snap['input_id']=fingerprint(self.f.snap['inputs'])
+        self.snap_path=self.f.snapshot();self.path=self.f.archive()
+        return self.selection()
+
+    def test_integrated_captain_aliases_preserve_canonical_identity_and_27_5(self):
+        selection=self.captain_source();original=self.path.read_bytes()
+        canonical=calculate(self.capture(selection),['100','101']).data
+        before=logical_db(self.f.db)
+        original_reader=be.Reader(lambda:False).archive(self.path)
+        for captain in ('CPT','CAPTAIN','cpt','Captain',' \tcPt\n '):
+            with self.subTest(captain=captain):
+                self.path.write_bytes(original)
+                def edit(payload):
+                    slots=payload['lineups'][0]['slots']
+                    slots[0]['slot']=captain
+                    for slot in slots[1:]:slot['slot']=' \tfLeX  '
+                    slots.insert(3,slots.pop(0))  # Captain need not be stored first.
+                rewrite_archive(self.path,edit)
+                files=source_bytes(self.f.root)
+                legacy=be.Reader(lambda:False).archive(self.path)
+                self.assertEqual(len(legacy),4);self.assertEqual(legacy,original_reader)
+                self.assertEqual(be.archive_identity(legacy[1],legacy[2]),selection['archive_id'])
+                d=calculate(self.capture(selection),['100','101']).data
+                case=next(s for s in d['scenarios'] if s['retention']==[.25,.5])
+                exposure=d['target_exposures'][0]
+                observed=(exposure['captain']['count'],exposure['noncaptain']['count'],case['direct_change']['mean'])
+                print(f'Integrated Captain alias {captain!r}: Captain/regular/direct change = {observed}')
+                self.assertEqual(logical_db(self.f.db),before);self.assertEqual(source_bytes(self.f.root),files)
+                self.assertEqual(observed,(1,0,27.5))
+                self.assertEqual(d['capture']['rosters'],canonical['capture']['rosters'])
+                for field in ('R','N','U','M','M_delta','exposures','scenarios'):
+                    self.assertEqual(d[field],canonical[field],field)
+
+    def test_captain_aliases_cannot_bypass_conflicting_projection_gate(self):
+        selection=self.captain_source(captain_projection=31);original=self.path.read_bytes()
+        for captain in ('CPT','cpt',' Captain '):
+            with self.subTest(captain=captain):
+                self.path.write_bytes(original)
+                rewrite_archive(self.path,lambda p:p['lineups'][0]['slots'][0].update(slot=captain))
+                before=logical_db(self.f.db);files=source_bytes(self.f.root)
+                d=calculate(self.capture(selection),['100','101']).data
+                self.assertEqual((d['N'],d['U'],d['M'],d['M_delta']),(1,1,0,0))
+                self.assertEqual(d['target_exposures'][0]['captain']['pct'],100)
+                self.assertFalse(d['capture']['pool']['100']['captain_ok'])
+                for case in d['scenarios']:
+                    self.assertIsNone(case['baseline_mean']);self.assertIsNone(case['stressed_mean'])
+                    self.assertIsNone(case['direct_change']['mean'])
+                self.assertEqual(before,logical_db(self.f.db));self.assertEqual(files,source_bytes(self.f.root))
+
+    def test_normalized_repeats_captain_swaps_and_archive_copies_preserve_weights(self):
+        self.captain_source()
+        def repeated(payload):
+            first=payload['lineups'][0]
+            swapped=copy.deepcopy(first)
+            swapped['slots'][0]['slot']='FLEX';swapped['slots'][1]['slot']='CPT'
+            payload['lineups']=[first,copy.deepcopy(first),swapped]
+            payload['metadata']['output_count']=3
+        rewrite_archive(self.path,repeated)
+        selection=self.selection();canonical=calculate(self.capture(selection),['100','101']).data
+        legacy=be.Reader(lambda:False).archive(self.path)
+        def aliases(payload):
+            for row in payload['lineups']:
+                for slot in row['slots']:slot['slot']=' Captain ' if slot['slot']=='CPT' else ' flex '
+                row['slots'].append(row['slots'].pop(next(i for i,s in enumerate(row['slots']) if s['slot']==' Captain ')))
+        rewrite_archive(self.path,aliases)
+        shutil.copyfile(self.path,self.path.with_name('copied-archive.zip'))
+        before=logical_db(self.f.db);files=source_bytes(self.f.root)
+        d=calculate(self.capture(selection),['100','101']).data
+        self.assertEqual((d['R'],d['N'],d['U'],d['M'],d['M_delta']),(3,3,2,3,3))
+        self.assertEqual([e['captain']['count'] for e in d['target_exposures']],[2,1])
+        self.assertEqual([e['noncaptain']['count'] for e in d['target_exposures']],[1,2])
+        self.assertEqual(d['scenarios'],canonical['scenarios']);self.assertEqual(d['exposures'],canonical['exposures'])
+        self.assertEqual(be.Reader(lambda:False).archive(self.path),legacy)
+        self.assertEqual(be.archive_identity(legacy[1],legacy[2]),selection['archive_id'])
+        self.assertEqual(before,logical_db(self.f.db));self.assertEqual(files,source_bytes(self.f.root))
+
+    def test_classic_role_case_whitespace_and_dst_alias_preserve_reader_and_capture(self):
+        selection=self.setup_source('classic');canonical=calculate(self.capture(selection),['100','101']).data
+        legacy=be.Reader(lambda:False).archive(self.path)
+        def aliases(payload):
+            for slot in payload['lineups'][0]['slots']:
+                slot['slot']=' \tD/St ' if slot['slot']=='DST' else ' '+slot['slot'].lower()+'\t'
+        rewrite_archive(self.path,aliases)
+        before=logical_db(self.f.db);files=source_bytes(self.f.root)
+        d=calculate(self.capture(selection),['100','101']).data
+        self.assertEqual(be.Reader(lambda:False).archive(self.path),legacy)
+        self.assertEqual(be.archive_identity(legacy[1],legacy[2]),selection['archive_id'])
+        self.assertEqual(d['capture']['rosters'],canonical['capture']['rosters'])
+        for field in ('R','N','U','M','M_delta','exposures','scenarios'):self.assertEqual(d[field],canonical[field])
+        self.assertEqual(before,logical_db(self.f.db));self.assertEqual(files,source_bytes(self.f.root))
+        # A valid global Classic slot count does not waive individual position checks.
+        def wrong_position(payload):
+            slots=payload['lineups'][0]['slots']
+            slots[0]['slot'],slots[1]['slot']=slots[1]['slot'],slots[0]['slot']
+        rewrite_archive(self.path,wrong_position)
+        self.assertEqual(be.Reader(lambda:False).archive(self.path),legacy)
+        with self.assertRaisesRegex(ValueError,'frozen position'):self.capture(selection)
+
+    def test_unknown_and_invalid_role_shapes_reject_entire_checksum_valid_archive(self):
+        selection=self.captain_source();original=self.path.read_bytes()
+        for role,which in (('FLEX',0),('Captain',1),('QB',1),('FLEX1',1),(None,1),(123,1)):
+            with self.subTest(role=role,which=which):
+                self.path.write_bytes(original)
+                def invalid(payload):
+                    bad=copy.deepcopy(payload['lineups'][0]);bad['slots'][which]['slot']=role
+                    payload['lineups'].append(bad);payload['metadata']['output_count']=2
+                rewrite_archive(self.path,invalid)
+                before=logical_db(self.f.db);files=source_bytes(self.f.root)
+                with self.assertRaises(ValueError):be.Reader(lambda:False).archive_details(self.path)
+                with self.assertRaises(ValueError):self.capture(selection)
+                self.assertEqual(before,logical_db(self.f.db));self.assertEqual(files,source_bytes(self.f.root))
+
+    def test_adapter_explicit_shape_and_distinct_identity_guards(self):
+        self.captain_source()
+        snap,_,_,_,rows=be.Reader(lambda:False).archive_details(self.path)
+        original=copy.deepcopy(rows)
+        for role in ('FLEX','QB','CPT FLEX','UNKNOWN',None,{},1):
+            with self.subTest(role=role):
+                invalid=copy.deepcopy(rows);invalid[0]['slots'][0]['slot']=role
+                with self.assertRaisesRegex(ValueError,'invalid slot shape'):
+                    evidence._archive_rosters(invalid,snap['players'],'showdown',lambda:False)
+        duplicate=copy.deepcopy(rows)
+        duplicate[0]['slots'][1]['player']=duplicate[0]['slots'][0]['player']
+        with self.assertRaisesRegex(ValueError,'Duplicate athlete'):
+            evidence._archive_rosters(duplicate,snap['players'],'showdown',lambda:False)
+        self.assertEqual(rows,original)
+
     def test_legacy_reader_api_and_occurrence_weighted_full_report(self):
         for kind in ('showdown','classic'):
             with self.subTest(kind=kind):

@@ -50,6 +50,25 @@ def name_key(value):
     return ' '.join(parts)
 
 
+def normalize_role(value):
+    """Canonical supported slot token; no coercion of arbitrary objects/labels."""
+    if not isinstance(value, str):
+        return None
+    role = value.strip().upper()
+    role = {'CAPTAIN':'CPT', 'D/ST':'DST'}.get(role, role)
+    return role if role in {'CPT','FLEX','QB','RB','WR','TE','DST'} else None
+
+
+def roster_kind(roles):
+    """Identify an exact canonical role shape, shared by parsing and adaptation."""
+    slots = Counter(roles)
+    if slots == {'CPT':1, 'FLEX':5}:
+        return 'showdown'
+    if slots == {'QB':1, 'RB':2, 'WR':3, 'TE':1, 'FLEX':1, 'DST':1}:
+        return 'classic'
+    return None
+
+
 def roster_key(text):
     """Names only; reject malformed, ambiguous or ID-only rosters, never guess."""
     if not isinstance(text, str) or len(text) > 4000:
@@ -57,20 +76,16 @@ def roster_key(text):
     matches = list(re.finditer(r'\b(CPT|CAPTAIN|FLEX|QB|RB|WR|TE|DST|D/ST)\s+', text, re.I))
     if not matches or text[:matches[0].start()].strip():
         return None
-    rows = [(m.group(1).upper(), name_key(text[m.end():matches[n+1].start()
+    rows = [(normalize_role(m.group(1)), name_key(text[m.end():matches[n+1].start()
               if n+1 < len(matches) else len(text)].strip(' ,;|/')))
             for n, m in enumerate(matches)]
     names = [n for _, n in rows]
     if any(not n or n.isdigit() for n in names) or len(set(names)) != len(names):
         return None
-    slots = Counter(s for s, _ in rows)
-    if len(rows) == 6 and slots.get('CPT', 0) + slots.get('CAPTAIN', 0) == 1 and slots['FLEX'] == 5:
-        kind = 'showdown'
-    elif len(rows) == 9 and slots['QB'] == 1 and slots['RB'] == 2 and slots['WR'] == 3 and slots['TE'] == 1 and slots['FLEX'] == 1 and slots.get('DST', 0) + slots.get('D/ST', 0) == 1:
-        kind = 'classic'
-    else:
+    kind = roster_kind(s for s, _ in rows)
+    if kind is None:
         return None
-    return kind, tuple(sorted(('@cpt:' if s in {'CPT', 'CAPTAIN'} else '') + n for s, n in rows))
+    return kind, tuple(sorted(('@cpt:' if s == 'CPT' else '') + n for s, n in rows))
 
 
 def timestamp(value):

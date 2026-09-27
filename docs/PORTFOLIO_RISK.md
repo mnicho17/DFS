@@ -26,6 +26,15 @@ agree with the frozen salary/snapshot pool. Absent redundant fields do not trigg
 enrichment. Whole-archive validity still applies. No fuzzy/name-first fallback is
 used for archive athlete identity.
 
+Slot interpretation shares the reader's supported string normalization: trim
+surrounding whitespace, ignore case, map `CAPTAIN` to `CPT` and `D/ST` to `DST`.
+The adapter explicitly requires one canonical CPT plus five FLEX slots and six
+distinct athletes for Showdown, and preserves Classic's exact shape and individual
+position checks. Captain is ordered first regardless of stored slot order and
+retains its exposure identity, once-only 1.5 weighting and conflicting-projection
+gate. Unsupported labels reject the entire capture. This does not rewrite source
+roles or change archive identity digests or the four-value reader API.
+
 **Recorded saved export** reads one explicit export ID and its original lineup and
 player rows. Submission and original pregame input are not established. Recorded
 base-player keys retain Captain/FLEX identity; malformed slots, duplicate athletes

@@ -119,10 +119,12 @@ def _archive_rosters(rows, players, kind, cancelled):
     result = []
     for row in rows:
         check(cancelled)
+        roles = [be.normalize_role(slot.get('slot')) for slot in row['slots']]
+        if be.roster_kind(roles) != kind:
+            raise ValueError('Archive roster has invalid slot shape')
         slots = []
-        for slot in row['slots']:
-            raw,role = slot['player'],slot['slot']
-            role = 'CPT' if role in ('CAPTAIN','CPT') else role.replace('D/ST','DST')
+        for slot,role in zip(row['slots'],roles):
+            raw = slot['player']
             flex = by_flex.get(str(raw.get('FlexID'))) if raw.get('FlexID') is not None else None
             captain = by_cpt.get(str(raw.get('CptID'))) if raw.get('CptID') is not None else None
             player = flex or captain
