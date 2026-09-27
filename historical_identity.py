@@ -87,11 +87,11 @@ def _groups(conn, sources, cancelled):
 
 
 @phase('historical_evidence_inventory', output_size=lambda result: len(result[0]) + len(result[1]))
-def _inventory(root, cancelled):
-    from review_build_evidence import Reader, snapshot, timestamp
+def _inventory(root, cancelled, evidence_reader=None):
+    from review_build_evidence import Reader, snapshot, timestamp, archive_identity
     # Use one cancellation exception throughout the reconciliation API, including
     # directory enumeration before individual files are opened.
-    reader = Reader(lambda: _check(cancelled))
+    reader = evidence_reader or Reader(lambda: _check(cancelled))
     snapshots, archives, issues = {}, {}, Counter()
     for folder, suffix in (('snapshots', '.json'), ('build-archives', '.zip')):
         for path in reader.paths(Path(root) / folder, suffix):
@@ -103,7 +103,7 @@ def _inventory(root, cancelled):
                     snap, meta, rosters, _ = reader.archive(path)
                     stamp = timestamp(meta.get('created_at'))
                     pregame = bool(snap['pregame'] and stamp and snap['created'] <= stamp < snap['earliest'])
-                    archive = dict(archive_id=_digest([meta, sorted(rosters)]), input_id=snap['raw']['input_id'],
+                    archive = dict(archive_id=archive_identity(meta, rosters), input_id=snap['raw']['input_id'],
                         generated_rosters=[list(r) for r in sorted(rosters)], output_count=meta['output_count'],
                         recorded_at=meta.get('created_at'), completed=meta.get('build_status') == 'completed',
                         pregame=pregame, contest_objective=recorded_objective(meta.get('contest_objective')),
@@ -414,7 +414,7 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
 
 
 @phase("historical_identity_derivation")
-def derive_contests(conn, root, *, cancelled=lambda: False, progress=lambda text: None):
+def derive_contests(conn, root, *, cancelled=lambda: False, progress=lambda text: None, evidence_reader=None):
     """Read a consistent caller-owned DB snapshot; perform no SQL/file writes."""
     _check(cancelled)
     sources = _sources(conn) if 'analysis_sources' in _tables(conn) else []
@@ -431,7 +431,7 @@ def derive_contests(conn, root, *, cancelled=lambda: False, progress=lambda text
         if s['kind']=='results':
             by_import[s['import_id']].append(s)
     progress('Reading pregame snapshots and build archives')
-    snapshots, archives, issues = _inventory(root, cancelled)
+    snapshots, archives, issues = _inventory(root, cancelled, evidence_reader)
     resolutions = {}
     if 'historical_evidence_resolutions' in _tables(conn):
         for ident, digest, input_id, salary_hash, method, version, stamp in conn.execute(

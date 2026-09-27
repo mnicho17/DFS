@@ -91,7 +91,7 @@ def aggregate(contests):
         supported.update({k:int(v) for k,v in capabilities(data).items()})
     result.update(coverage_version=1, evidence_levels=dict(levels), categories=dict(groups),
         capability_evidence=dict(supported),
-        capability_basis='prerequisites only; RL-06/RL-07 are not implemented; generated input/output evidence does not establish phase timings or submission')
+        capability_basis='prerequisites only; Portfolio Risk revalidates its selected archive; RL-07 is not implemented; generated input/output evidence does not establish phase timings or submission')
     return result
 
 
@@ -210,7 +210,7 @@ def detail_text(data):
     for label, key in (('Ordinary historical results','results'),('Portfolio Risk / RL-06','portfolio_risk'),
                        ('Hindsight / RL-07','hindsight'),('Compute input/output comparison','compute_input_output')):
         lines.append(f"  {label}: {'evidence available' if capabilities(data)[key] else 'unavailable — evidence incomplete'}")
-    lines += ['RL-06/RL-07 tools are not implemented. Compute phase timings and submitted-build identity are not established by these archives.']
+    lines += ['Portfolio Risk revalidates one explicitly selected archive. RL-07 is not implemented. Compute phase timings and submitted-build identity are not established by these archives.']
     for field in ('conflicts','blockers','limitations'):
         codes = data.get(field, [])
         if codes:
