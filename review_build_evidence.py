@@ -7,6 +7,7 @@ not authenticity. No original inputs are reconstructed or upgraded.
 from collections import Counter, defaultdict
 from datetime import datetime
 import hashlib
+import io
 import itertools
 import json
 from pathlib import Path
@@ -32,6 +33,11 @@ MEMBERS = {'manifest.json', 'input-snapshot.json', 'lineups.json',
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'),
                                      allow_nan=False).encode()).hexdigest()
+
+
+def archive_identity(metadata, signatures):
+    """RL-05A identity, unchanged; signatures alone are not occurrence weights."""
+    return digest([metadata, sorted(signatures)])
 
 
 def name_key(value):
@@ -170,6 +176,7 @@ class Reader:
         self.cancelled = cancelled
         self.bytes = 0
         self.issues = Counter()
+        self.receipts = {}
 
     def check(self):
         if self.cancelled():
@@ -212,13 +219,24 @@ class Reader:
             raise OverflowError('file size changed')
         if len(raw) > declared:
             self.consume(len(raw) - declared)
-        return json.loads(raw)
+        value = json.loads(raw)
+        self.receipts[str(path)] = hashlib.sha256(raw).hexdigest()
+        return value
 
     def archive(self, path):
+        # Keep the established four-value API for all existing consumers.
+        return self.archive_details(path)[:4]
+
+    def archive_details(self, path):
+        """Also return validated output occurrences from the same captured bytes."""
         self.check()
         if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
             raise ValueError('unsupported archive')
-        with zipfile.ZipFile(path) as z:
+        with path.open('rb') as handle:
+            captured = handle.read(MAX_FILE_BYTES + 1)
+        if len(captured) > MAX_FILE_BYTES:
+            raise ValueError('archive size changed')
+        with zipfile.ZipFile(io.BytesIO(captured)) as z:
             entries = z.infolist()
             names = [x.filename for x in entries]
             if len(names) != len(set(names)) or not set(names) <= MEMBERS or not {'manifest.json', 'lineups.json', 'input-snapshot.json'} <= set(names):
@@ -261,7 +279,8 @@ class Reader:
             for k in parsed[1]:
                 if k.startswith('@cpt:'):
                     cpts[k[5:]] += 1
-        return snap, meta, sigs, cpts
+        self.receipts[str(path)] = hashlib.sha256(captured).hexdigest()
+        return snap, meta, sigs, cpts, rows
 
 
 def capture_build_evidence(root, options, results, cancelled, progress):

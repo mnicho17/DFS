@@ -6,6 +6,11 @@ import math
 from portfolio_insights import _position, _team, _opponent
 
 
+def roster_signature(keys, kind):
+    """Shared pure identity convention: Captain first; repeated rows stay rows."""
+    return (keys[0],tuple(sorted(keys[1:]))) if kind=='showdown' else tuple(sorted(keys))
+
+
 def review_entries(lineups, kind='classic', salary_cap=50000, source='Generated outputs'):
     counts={k:Counter() for k in ('Players','Pairs','Trios','Captain + FLEX','Constructions','Salary unused','Repeated rosters')}
     labels={}; salaries=[]; unknown_salary=0; excluded=0; valid=0; unknown_context=0
@@ -27,7 +32,7 @@ def review_entries(lineups, kind='classic', salary_cap=50000, source='Generated 
         for key in keys:counts['Players'][key]+=1
         for size,title in ((2,'Pairs'),(3,'Trios')):
             for group in combinations(sorted(keys),size):counts[title][group]+=1
-        signature=(keys[0],tuple(sorted(keys[1:]))) if kind=='showdown' else tuple(sorted(keys))
+        signature=roster_signature(keys,kind)
         counts['Repeated rosters'][signature]+=1
         values=[money(p.get('CptSalary') if kind=='showdown' and i==0 else p.get('FlexSalary')) for i,p in enumerate(players)]
         if any(v is None for v in values):unknown_salary+=1

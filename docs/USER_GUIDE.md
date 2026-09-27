@@ -1555,10 +1555,10 @@ Neither section identifies an original or submitted build.
 
 ![Qualified archive and a candidate from another snapshot](images/historical-build-candidates.png)
 
-Downstream labels describe evidence prerequisites, not available new tools.
-RL-06 Portfolio Risk and RL-07 Hindsight are not implemented in this slice. Missing
+Downstream labels describe evidence prerequisites and require fresh verification.
+Portfolio Risk is available in its separate tab; RL-07 Hindsight remains future work. Missing
 actual scores can block hindsight while leaving generated-portfolio evidence
-available for future risk review. Generated archives never identify the submitted
+available for risk review. Generated archives never identify the submitted
 build, and alone do not establish compute phase timings. Unknown evidence stays
 unknown; unavailable protects historical accuracy and does not mean an import failed.
 
@@ -1578,6 +1578,83 @@ Later evidence can establish a missing date or format without changing the origi
 A completed pregame archive must share the qualified snapshot's exact input ID. Multiple matching builds remain candidates; an archive does not prove which portfolio was submitted. Outcome coverage is assessed separately across the eligible salary pool. Unknown scores stay unknown; zero and negative scores remain valid. Captain/FLEX IDs and scoring stay separate. Legacy contest objectives remain unknown unless recorded.
 
 The new shareable section contains only state and limitation counts. Its filters use qualified identity where available; original result metrics keep their recorded-date basis. Projections, ownership, SIM formulas, payouts and automatic learning are unchanged. See [Historical Evidence Identity](HISTORICAL_IDENTITY.md) for developer details and read limits.
+
+## Portfolio Risk: concentration and early-exit assumptions
+
+Open **Results & Learning > Portfolio Risk**. Choose a source and click
+**Capture / Update Risk Report**. The selected Historical Coverage contest may be
+suggested, but multiple archives require your explicit choice. Each report covers
+one portfolio; separate builds and export batches are never combined.
+
+- **Qualified historical generated archive** revalidates the salary revision, exact pregame snapshot and completed pregame archive. It does not certify a submitted portfolio. Incomplete actual scores do not block qualified forecasts. Other archive candidates remain in Historical Coverage and cannot enable risk.
+- **Recorded saved export (descriptive only)** reads the original recorded roster keys and Captain slots. Submission, slate/game identity and exact original pregame inputs may be unknown. Stress and qualified historical roles are **Unavailable: no exact qualified pregame input association**. Legacy recorded forecasts/status remain unqualified metadata; zeros do not fill missing evidence.
+
+Capture populates athlete choices from the source's identity pool. No risk targets
+are selected by default. Choose one or two athletes and optional alternatives,
+then capture again. Alternatives can have zero appearances. They are diagnostic
+choices, not recommendations, exposure changes or automatic replacement lineups.
+
+![Synthetic Portfolio Risk overview with four distinct occurrence patterns](images/portfolio-risk-overview.png)
+
+**Overview** shows R source occurrences, N valid occurrences and U unique rosters.
+Repeated rows count repeatedly. Exposure uses N, with separate Captain/FLEX counts
+for Showdown and roster appearances for Classic. Selected pair buckets are both,
+A only, B only and neither. **Either (at least one)** includes both; **exactly one**
+does not. Team and QB-WR/TE dependencies show their own context coverage. These
+are shared roster dependencies, not measured correlations. Concentration is not
+an error, and neither selected player does not mean safe.
+
+**Stress Test** uses retained production of 100%, 75%, 50%, 25% and 0%. One target
+has five cases; two have a 25-case grid. These are point-production assumptions,
+not exact minutes played, injury probabilities or equally likely scenarios. Each
+athlete keeps the same factor across the portfolio. Captain scaling is 1.5 once;
+unselected players keep their forecasts, and alternatives inherit no production.
+
+![Synthetic joint retained-production grid; additional columns scroll horizontally](images/portfolio-risk-stress.png)
+
+Signed change is baseline minus stressed points. M is the fixed complete-forecast
+cohort for baseline/stressed means and full-entry changes. M_delta is the separate
+cohort with known selected contributions; direct change can remain available when
+another player's forecast is missing. Min/median/p90/max describe entries under
+that one assumption, using sorted index floor((n-1)q); they are not probabilities
+or a simulated return distribution. Do not average cases as equally likely.
+
+Missing forecasts remain unknown, explicit zero and negative values remain known,
+and reducing a negative contribution can increase points. A declared Missing
+forecast overrides a numeric value. Missing redundant Captain projection may be
+transparently derived; a conflicting recorded Captain value blocks that role's
+forecast calculation. Projection share requires a positive total on M.
+
+**Coverage** lists rejected/omitted rows, read limits, forecast and context
+denominators, raw recorded roles, flags and evidence times. Role policy v1 requires
+an applicable role source and an aware role check at/before capture, before
+earliest kickoff, and no more than 24 hours old at that kickoff. Usage/news times
+are not substitutes. Missing, conflicting, future or stale role evidence is
+unknown; reviewing an old game today does not itself make timely archived roles
+stale. Non-QB depth uses **Other depth roles / rotation**, not an exclusive backup
+claim. Frozen QB exclusions remain visible and unchanged.
+
+Alternative pairs show exclusive buckets, union and Captain coverage, including
+when every alternative appearance coexists with the risk player. A known pool
+athlete absent from all entries has 0/N exposure; an identity outside the pool is
+unknown. Missing roles do not erase exposure, and missing forecasts do not erase
+roles. Alternative coverage does not prove injury compensation or prediction.
+
+![Saved export mode keeps unqualified historical stress visibly unavailable](images/portfolio-risk-export.png)
+
+Capture runs in the background with phase/elapsed status. **Cancel Operation**,
+Close/Escape or changing selections suppresses an unapplied read-only result,
+including one just completed. Controls unlock after worker retirement. Failure or
+cancel retains the prior output with a label and disables copying until a complete
+matching capture. Later source changes do not continuously update a frozen report;
+capture again to revalidate. Saved salary/snapshot associations, original files,
+lineups and committed reconciliation results remain unchanged.
+
+**Copy Summary** shares aggregates without names, source IDs, paths or rosters.
+Use **Include player names and lineup details (private)** only when you intend to
+share them. No risk report file, persistent history, solver, SIM, learning adjustment
+or money metric is created. See [Portfolio Risk](PORTFOLIO_RISK.md) for evidence
+gates, arithmetic examples and validation details.
 
 ## Results plus username: automatic snapshot comparisons
 

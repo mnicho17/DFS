@@ -4052,6 +4052,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.results_tabs = QtWidgets.QTabWidget()
         self.results_tabs.addTab(self.report, 'Results Report')
         self.results_tabs.addTab(self.coverage, 'Historical Coverage')
+        from portfolio_risk_ui import PortfolioRiskWidget
+        self.risk = PortfolioRiskWidget(self.db_path,self)
+        self.risk.requested.connect(self.start_portfolio_risk)
+        self.results_tabs.addTab(self.risk,'Portfolio Risk')
+        self.results_tabs.currentChanged.connect(self._suggest_risk_source)
         layout.addWidget(self.results_tabs, 1)
 
 
@@ -4235,6 +4240,23 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.learning_settings.setValue("learning/salary_folder", "")
         self.learning_settings.sync()
 
+    def _suggest_risk_source(self, index) -> None:
+        if self.results_tabs.widget(index) is self.risk:
+            selected = self.coverage.selected()
+            if selected:
+                self.risk.suggest_contest(selected['identity_id'])
+
+    def start_portfolio_risk(self, request) -> None:
+        if self._import_thread is not None:
+            return
+        from portfolio_risk_ui import RiskWorker
+        worker = RiskWorker(self.db_path,request)
+        cancelled = worker.cancelled  # Plain token survives QObject destruction.
+        self.risk.begin(cancelled)
+        def ready(result):
+            self.risk.finish(result,cancelled=cancelled.is_set())
+        self._start_background_import(worker,ready)
+
     def reconcile_history(self, snapshot_choices=None) -> None:
         if self._import_thread is not None:
             return
@@ -4380,6 +4402,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
     def _set_import_controls(self, enabled):
         self.coverage.setEnabled(enabled)
+        self.risk.setEnabled(enabled)
         for control in (self.import_new_button, self.import_button, self.attach_salary_button,
                         self.refresh_button, self.analyze_button, self.stats_button, self.opponents_button,
                         self.choose_results_button, self.choose_salary_button, self.clear_salary_button,
@@ -4391,6 +4414,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if self._import_job is job and self.import_cancel.isEnabled():
             self._on_import_progress(done, total, text)
             self.coverage.progress(text)
+            self.risk.progress(text)
 
     def _job_completed(self, job, handler, payload):
         if self._import_job is job and job['completion'] is None:
@@ -4474,6 +4498,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
             self._import_worker.request_cancel()
             self.coverage.progress('Cancellation requested; waiting for the transaction to finish')
+            self.risk.progress('Cancellation requested; waiting for worker retirement')
 
             self.import_cancel.setEnabled(False)
 
@@ -4591,6 +4616,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._finish_import_ui()
         self.coverage.reload()
         if self._close_after_import:
+            if self.risk.started is not None:
+                self.risk.finish({},cancelled=True)
             if self.coverage.started is not None:
                 self.coverage.finish('Reconciliation stopped; reopen coverage to inspect committed evidence.')
             QtCore.QTimer.singleShot(0, self.accept)
