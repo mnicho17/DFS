@@ -1,14 +1,16 @@
 # Results & Learning: staged implementation
 
-## RL-05A review slice
+## Historical evidence foundation
 
 Historical Evidence Identity is implemented against latest main as an additive
 backend layer, described in [Historical Evidence Identity](HISTORICAL_IDENTITY.md).
 It adds atomic reconciliation, a normalized read model, exclusive qualification
 states and aggregate review-report coverage. Original observations and source
-files are preserved. The historical coverage UI (RL-05B), portfolio risk and
-hindsight remain later slices. Validation and Windows packaging results are
-recorded in the RL-05A review PR.
+files are preserved. RL-05B adds the Historical Coverage tab, background atomic
+reconciliation, explicit ambiguous snapshot resolution, and shareable coverage
+counts. Portfolio risk and hindsight remain later slices. Validation and Windows
+packaging results are recorded in their review PRs. See
+[Historical Coverage](HISTORICAL_COVERAGE.md).
 
 Requested September 22, 2026. Work targets the launcher's `feature/configurable-deep-compute` branch, beginning at `4532e728b45f62469dd7479be1602d66a1a5ca78`. Version 1.23.0 integrates the full feature branch with main, including the published saved-repair safeguards and shareable review reports. Each numbered slice gets focused tests, isolated full regression, documentation and its own review before integration. Existing history and strategy formulas remain unchanged unless a later named change explicitly authorizes them.
 

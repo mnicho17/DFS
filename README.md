@@ -874,3 +874,7 @@ Before scoring, bounded candidate exploration covers insufficient alternatives a
 The portfolio summary and build diagnostics record requested, strict, and final counts; whether recovery ran; starting and effective automatic caps; and the successful stage. Failed recovery publishes no partial portfolio or changed caps. Cancellation never starts recovery. Saved-repair cancellation, retained rows, callback guards, and the existing cancelled Deep Showdown receipt are preserved.
 
 Fast Showdown also skips the Classic-only field comparison when finishing its report, preventing a roster-format error after successful selection.
+
+### Historical Coverage (RL-05B, unreleased)
+
+**Results & Learning > Historical Coverage** shows the saved evidence ladder, state/format filters, concrete blockers and downstream prerequisites. **Reconcile All Evidence** revalidates sources in a cancellable background transaction; combined imports and salary confirmations use the same reconciliation. Saved coverage opens without reparsing original standings. Ambiguous salary revisions use Review Salary Matches; ambiguous pregame snapshots support explicit, versioned confirmation that later automatic reconciliation cannot replace. **Share Coverage Report** uses the existing privacy-preserving review export. Portfolio Risk and Hindsight tools remain later work. See the [guide](docs/USER_GUIDE.md#historical-evidence-identity) and [storage/validation notes](docs/HISTORICAL_COVERAGE.md).

@@ -4044,7 +4044,15 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         self.report.setReadOnly(True)
 
-        layout.addWidget(self.report, 1)
+        from historical_coverage_ui import HistoricalCoverageWidget
+        self.coverage = HistoricalCoverageWidget(self.db_path, self)
+        self.coverage.reconcile_requested.connect(self.reconcile_history)
+        self.coverage.salary_requested.connect(self.review_salary_matches)
+        self.coverage.report_requested.connect(self.export_review_report)
+        self.results_tabs = QtWidgets.QTabWidget()
+        self.results_tabs.addTab(self.report, 'Results Report')
+        self.results_tabs.addTab(self.coverage, 'Historical Coverage')
+        layout.addWidget(self.results_tabs, 1)
 
 
 
@@ -4117,7 +4125,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         import_status.addWidget(self.import_progress, 1)
 
-        self.import_cancel = QtWidgets.QPushButton("Cancel Import")
+        self.import_cancel = QtWidgets.QPushButton("Cancel Operation")
 
         self.import_cancel.setObjectName("cancelResultsImportButton")
 
@@ -4227,13 +4235,35 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.learning_settings.setValue("learning/salary_folder", "")
         self.learning_settings.sync()
 
-    def review_salary_matches(self) -> None:
+    def reconcile_history(self, snapshot_choices=None) -> None:
         if self._import_thread is not None:
             return
-        from analysis_imports_ui import SalaryMatchesDialog, CombinedImportWorker
-        dialog = SalaryMatchesDialog(self, db_path=self.db_path)
-        if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selection:
-            self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip(), db_path=self.db_path), self._on_combined_import_finished)
+        from historical_coverage_ui import CoverageWorker
+        self.coverage.start_progress()
+        self._start_background_import(CoverageWorker(self.db_path, snapshot_choices), self._on_coverage_finished)
+
+    def _on_coverage_finished(self, result) -> None:
+        text = result.get('message','Reconciliation finished.')
+        if result.get('committed'):
+            text += f" Elapsed: {result['seconds']:.1f}s. Timing recorded by the compute ledger when storage is available."
+        self.coverage.finish(text)
+
+    def review_salary_matches(self, result_hash='') -> None:
+        if self._import_thread is not None:
+            return
+        from analysis_imports_ui import SalaryMatchReviewWorker
+        worker = SalaryMatchReviewWorker(self.db_path)
+        # Keep this job's plain Event alive through retirement, without reading
+        # the deleted QObject. A queued payload predates a later Cancel click.
+        cancelled = worker.cancelled
+        def ready(result):
+            if result.get('cancelled') or cancelled.is_set():
+                return
+            from analysis_imports_ui import SalaryMatchesDialog, CombinedImportWorker
+            dialog = SalaryMatchesDialog(self, db_path=self.db_path, state=result['state'], result_hash=result_hash)
+            if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selection:
+                self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip(), db_path=self.db_path), self._on_combined_import_finished)
+        self._start_background_import(worker, ready)
 
     def _on_combined_import_finished(self, result) -> None:
         from analysis_imports_ui import import_summary
@@ -4349,6 +4379,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_thread.start()
 
     def _set_import_controls(self, enabled):
+        self.coverage.setEnabled(enabled)
         for control in (self.import_new_button, self.import_button, self.attach_salary_button,
                         self.refresh_button, self.analyze_button, self.stats_button, self.opponents_button,
                         self.choose_results_button, self.choose_salary_button, self.clear_salary_button,
@@ -4359,6 +4390,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
     def _job_progress(self, job, done, total, text):
         if self._import_job is job and self.import_cancel.isEnabled():
             self._on_import_progress(done, total, text)
+            self.coverage.progress(text)
 
     def _job_completed(self, job, handler, payload):
         if self._import_job is job and job['completion'] is None:
@@ -4441,6 +4473,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if self._import_worker is not None:
 
             self._import_worker.request_cancel()
+            self.coverage.progress('Cancellation requested; waiting for the transaction to finish')
 
             self.import_cancel.setEnabled(False)
 
@@ -4538,6 +4571,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def _on_import_error(self, message: str) -> None:
+        if self.coverage.started is not None:
+            self.coverage.finish(message)
 
         self._finish_import_ui()
 
@@ -4554,7 +4589,10 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_worker = None
         self._import_job = None
         self._finish_import_ui()
+        self.coverage.reload()
         if self._close_after_import:
+            if self.coverage.started is not None:
+                self.coverage.finish('Reconciliation stopped; reopen coverage to inspect committed evidence.')
             QtCore.QTimer.singleShot(0, self.accept)
         elif job['completion'] is not None:
             handler, payload = job['completion']
