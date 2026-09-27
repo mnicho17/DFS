@@ -286,6 +286,8 @@ Candidate provenance survives NFL contest simulation and portfolio selection, so
 
 After lineup generation, **Settings > Copy Last Build Report** copies a shareable snapshot of the build-space count, pool size, candidate flow, phase timing, active strategy, portfolio rules, preset fit, selected source mix, SIM quality, scenario coverage, and generalized warnings. The NFL SIM Edge candidate budget distinguishes projection-led optimizer candidates, realistic field-shaped candidates, and correlated scenario-built candidates. **Settings > Build History…** keeps the 25 most recent runs available, compares two selected runs side by side, and lets the user copy or clear the local reports.
 
+The **Compute ledger** adds a compact wall/CPU, candidate/reuse and peak-observed-memory summary. Bounded aggregate receipts are stored separately in external user data, with approximately 250 runs retained. Saved repairs and preparation are identified separately. It observes existing work without changing budgets or optimizer decisions. Results & Learning also reports recorded pregame SIM quantile coverage and error by game, position, role and model, without automatic tuning. See [Compute ledger and calibration](docs/COMPUTE_LEDGER.md) for count definitions, compatibility, privacy and limitations.
+
 
 
 Unexpected interface exceptions are caught by an application-level safety handler. The user can copy the technical details and retain any valid on-screen lineups instead of losing the entire session without an explanation.

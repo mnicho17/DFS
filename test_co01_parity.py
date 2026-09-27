@@ -1,8 +1,10 @@
 """Frozen latest-main evidence and objective-only computational parity.
 
 The fixture was captured from 46a501f6b35add46bcb1650d3d795f1216ed1584.
-Only wall-clock measurements, creation timestamps, and objective metadata are
-excluded. Candidate identities, numeric metrics and output ordering are exact.
+Wall-clock measurements, creation timestamps, objective metadata and additive
+DC-02A quartiles/ledger summaries are excluded. The original source provenance
+ID is pinned. All original candidate identities, numeric metrics, exports and
+output ordering remain exact; DC-02A separately tests its metadata and parity.
 """
 from test_environment import install, network_attempts
 install()
@@ -30,14 +32,14 @@ def stable(value):
     if isinstance(value, dict):
         return {k: stable(v) for k, v in value.items()
                 if k not in {'created_at', 'started_at', 'finished_at', 'seconds',
-                             'contest_objective', 'objective'}
+                             'contest_objective', 'objective', 'p25', 'p75'}
                 and not k.endswith('_seconds')}
     if isinstance(value, (list, tuple)):
         return [stable(v) for v in value]
     return value
 
 
-def evidence(kind, objective=None):
+def evidence(kind, objective=None, compute_telemetry=False):
     players = _fixture_players() if kind == 'classic' else _showdown_players()
     original = copy.deepcopy(players)
     kwargs = {} if objective is None else {'contest_objective': objective}
@@ -45,7 +47,7 @@ def evidence(kind, objective=None):
         players, kind=kind, num_lineups=4, salary_cap=50000,
         salary_strategy='Balanced Spend', sim_enabled=True, sim_scenarios=250,
         compute_mode='Fast' if kind == 'classic' else 'Deep',
-        deep_time_limit_seconds=300,
+        deep_time_limit_seconds=300, compute_telemetry=compute_telemetry,
         deep_options=dict(candidates=40, shortlist=20, field=80, screening=250),
         **kwargs)
     stages = []
@@ -65,12 +67,17 @@ def evidence(kind, objective=None):
     finished, errors = [], []
     worker.finished.connect(finished.append)
     worker.error.connect(errors.append)
-    with patch.object(target, name, side_effect=simulate):
+    # Source-byte provenance changes when observational hooks are added. Pin the
+    # original model ID in this frozen fixture only; bank contents, scores and
+    # ordering still participate in the exact comparison. Runtime IDs stay strict.
+    with patch.object(target, name, side_effect=simulate), patch('repeatability.model_version',
+            return_value='88112796771aa83e4212aef834f3ffb2674d78df0a8a711e488b1083b7809ae5'):
         worker.run()
     assert not errors, errors
     assert len(finished) == 1 and len(finished[0]['lineups']) == 4
     assert players == original, 'worker mutated fixture inputs'
     result = finished[0]
+    result['sim_report'].pop('compute_ledger', None)
     rows = result['lineups']
     exports = [_expected_export_row(row, kind, 'NFL') for row in rows]
     context = dict(sport='NFL', kind=kind, requested_count=4, salary_cap=50000,

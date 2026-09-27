@@ -46,7 +46,7 @@ class DistributionCapture:
             ordered=sorted(values)
             q=lambda fraction:ordered[int((completed-1)*fraction)]
             lo,hi=q(.1),q(.9)
-            rows.append(dict(self.players[key],mean=statistics.mean(values),p10=lo,p50=q(.5),p90=hi,p025=q(.025),p975=q(.975),
+            rows.append(dict(self.players[key],mean=statistics.mean(values),p10=lo,p25=q(.25),p50=q(.5),p75=q(.75),p90=hi,p025=q(.025),p975=q(.975),
                 expected_below_p10=bisect_left(ordered,lo)/completed,expected_above_p90=(completed-bisect_right(ordered,hi))/completed))
         return dict(status='complete',kind=self.kind,scenarios=completed,seed=self.seed,started_at=self.started_at,
             finished_at=dt.datetime.now(dt.timezone.utc).isoformat(),players=rows)
@@ -89,5 +89,8 @@ def load_distribution(path):
         vals=[row.get(k) for k in ('mean','p025','p10','p50','p90','p975','expected_below_p10','expected_above_p90')]
         if not all(isinstance(v,(int,float)) and math.isfinite(v) for v in vals):raise ValueError('Invalid player distribution')
         if not row['p025']<=row['p10']<=row['p50']<=row['p90']<=row['p975']:raise ValueError('Invalid quantiles')
+        if any(k in row for k in ('p25','p75')):
+            if not all(isinstance(row.get(k),(int,float)) and math.isfinite(row[k]) for k in ('p25','p75')) or not row['p10']<=row['p25']<=row['p50']<=row['p75']<=row['p90']:
+                raise ValueError('Invalid additional quantiles')
         if not all(0<=row[k]<=1 for k in ('expected_below_p10','expected_above_p90')):raise ValueError('Invalid tail rates')
     return value

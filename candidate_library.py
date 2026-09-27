@@ -1,5 +1,7 @@
 """Transactional candidate libraries for bounded, resumable NFL searches."""
 from contextlib import contextmanager
+from compute_ledger import instrument_library, instrument_search
+
 import copy
 import hashlib
 import json
@@ -102,6 +104,7 @@ def roster_keys(lineup, kind):
         return [player_key(lineup['Captain'])] + sorted(player_key(p) for p in lineup['Flex'])
     return sorted(player_key(p) for p in lineup)
 
+@instrument_search
 def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress=lambda text:None, batch_size=200,
                candidate_limit=MAX_CANDIDATES):
     if not math.isfinite(float(seconds)) or not 0 < float(seconds) <= 12*3600:
@@ -119,7 +122,9 @@ def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress
     with connect(path) as con:
         index=con.execute('SELECT COALESCE(MAX(id),-1)+1 FROM batches').fetchone()[0]
         count=con.execute('SELECT count(*) FROM candidates').fetchone()[0]
+        from compute_ledger import safe, resumed
         saved_keys=[json.loads(row[0]) for row in con.execute('SELECT roster FROM candidates')]
+        safe(resumed, saved_keys, con.execute('SELECT count(*) FROM batches').fetchone()[0])
         exclusions=({(keys[0],tuple(keys[1:])) for keys in saved_keys} if kind=='showdown'
                     else {tuple(keys) for keys in saved_keys})
         stagnant=0
@@ -155,6 +160,7 @@ def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress
     progress(f'Search paused/completed: {count:,} unique candidates saved. Load the library and build to simulate current outcomes.')
     return count
 
+@instrument_library
 def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Cap', rules=None):
     meta=metadata(path)
     if meta.get('code_id') != code_id():

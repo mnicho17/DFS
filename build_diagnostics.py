@@ -484,6 +484,9 @@ def create_build_diagnostic(
     }
     diagnostic["distribution_capture"] = dict(sim.get("distribution_capture") or {})
     diagnostic['captain_coverage'] = dict(sim.get('captain_coverage') or {})
+    if sim.get('compute_ledger'):
+        diagnostic['compute_ledger'] = dict(sim['compute_ledger'])
+
     return diagnostic
 
 
@@ -859,6 +862,9 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         if archive.get('status') == 'saved':
             lines.append(f"- File: {archive.get('filename')}; snapshot: {archive.get('snapshot')}.")
             lines.append('- Settings > Open Automatic Build Archives. Generated outputs are not proof of export or submission.')
+    from compute_ledger import summary_lines
+    if record.get('compute_ledger'):
+        lines.extend([''] + summary_lines(record['compute_ledger']))
     return "\n".join(lines)
 
 

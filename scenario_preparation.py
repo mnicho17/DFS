@@ -21,6 +21,8 @@ def prepare_scenarios(path, snapshot, *, seconds, cancelled=lambda:False, progre
         contest_profile=inputs.get('contest'), contest_objective=snapshot_objective(snapshot),
         compute_mode='Deep', deep_options=options,
         deep_time_limit_seconds=min(seconds,options['minutes']*60), candidate_library=str(path), scenario_cache=True)
+    worker.build_purpose = "preparation"
+    worker.build_input_id = snapshot["input_id"]
     deadline=time.monotonic()+seconds
     class Stop:
         def is_set(self):return cancelled() or time.monotonic() >= deadline

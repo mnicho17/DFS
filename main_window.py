@@ -973,6 +973,8 @@ def _deep_shortlist(
 
 
 
+from compute_ledger import instrument_worker, finish_worker, safe as compute_safe, observe_dedup, candidate_budget as record_candidate_budget
+
 class LineupBuildWorker(QtCore.QObject):
 
     """Build lineups in a background thread so the UI/status bar stays responsive."""
@@ -1039,6 +1041,8 @@ class LineupBuildWorker(QtCore.QObject):
         candidate_library: str = "",
         scenario_cache: bool = False,
 
+        compute_telemetry: bool = True,
+
     ):
 
         super().__init__()
@@ -1097,6 +1101,8 @@ class LineupBuildWorker(QtCore.QObject):
         self.retained_lineups = list(retained_lineups or [])[:self.num_lineups]
 
         self.repair_source = str(repair_source or "")
+        self.compute_telemetry = bool(compute_telemetry)
+
         self.scenario_cache = scenario_cache
         self.candidate_library = candidate_library
         self.library_candidates = []
@@ -1116,6 +1122,7 @@ class LineupBuildWorker(QtCore.QObject):
 
     @QtCore.pyqtSlot()
 
+    @instrument_worker
     def run(self) -> None:
 
         try:
@@ -1147,7 +1154,7 @@ class LineupBuildWorker(QtCore.QObject):
                 result = run_deep_showdown(self, _deep_shortlist)
                 result["contest_objective"] = self.contest_objective
                 result.setdefault("sim_report", {})["contest_objective"] = self.contest_objective
-                self.finished.emit(result)
+                self._emit_finished(result)
 
                 return
 
@@ -1265,7 +1272,7 @@ class LineupBuildWorker(QtCore.QObject):
 
                 )
 
-                self.finished.emit({
+                self._emit_finished({
 
                     "kind": self.kind,
 
@@ -1512,6 +1519,7 @@ class LineupBuildWorker(QtCore.QObject):
                 candidate_target = build_request
 
             candidate_budget = candidate_target + ownership_candidate_target + scenario_candidate_target
+            compute_safe(record_candidate_budget, candidate_budget)
 
             if use_nfl_sim:
 
@@ -1588,6 +1596,7 @@ class LineupBuildWorker(QtCore.QObject):
                 lineups = list(self.library_candidates)
                 candidate_target = len(lineups)
                 candidate_budget = len(lineups)
+                compute_safe(record_candidate_budget, candidate_budget)
                 ownership_candidate_target = 0
                 scenario_candidate_target = 0
             else:
@@ -1983,6 +1992,8 @@ class LineupBuildWorker(QtCore.QObject):
 
                 # SIM sources pass through one exact-signature dedupe step.
 
+                compute_dedup_started = time.perf_counter()
+                compute_dedup_input = len(lineups) + len(extras) + len(scenario_extras)
                 unique_lineups: Dict[tuple[str, ...], List[Dict[str, Any]]] = {}
 
                 source_additions = {"optimizer": 0, "field_shaped": 0, "scenario_built": 0}
@@ -2020,6 +2031,7 @@ class LineupBuildWorker(QtCore.QObject):
                             source_additions[source] += 1
 
                 lineups = list(unique_lineups.values())
+                compute_safe(observe_dedup, compute_dedup_input, len(lineups), time.perf_counter() - compute_dedup_started)
 
                 scenario_candidate_report["unique_source_additions"] = source_additions
 
@@ -2798,7 +2810,7 @@ class LineupBuildWorker(QtCore.QObject):
 
             }
 
-            self.finished.emit({
+            self._emit_finished({
 
                 "kind": self.kind,
 
@@ -2839,7 +2851,7 @@ class LineupBuildWorker(QtCore.QObject):
         # Selection can stop with an exception after cooperative cancellation.
         # Deliver only this worker's retained proposal; the GUI receipt rejects
         # it without replacing the current saved portfolio or its reports.
-        self.finished.emit({
+        self._emit_finished({
             "kind": self.kind, "sport": self.sport,
             "lineups": list(self.retained_lineups), "requested": self.num_lineups,
             "cancelled": True, "repair_source": self.repair_source,
@@ -2856,6 +2868,11 @@ class LineupBuildWorker(QtCore.QObject):
 
 
 
+
+
+    def _emit_finished(self, payload):
+        finish_worker(payload)
+        self.finished.emit(payload)
 
 
 from data_io import read_players_csv
