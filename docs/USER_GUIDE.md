@@ -1493,7 +1493,21 @@ Only the selected contest's roster cells change, in existing entry order. Entry 
 ![Choosing one contest to update](images/entries-contest-selector.png)
 
 
+## Historical evidence identity
+
+**Analyze Saved Results** now reconciles a separate historical identity record. The review ZIP summarizes the evidence ladder: **Results > Salary/Slate > Pregame Snapshot > Build Archive > Outcome Coverage**. No new button is required.
+
+The states are **UNRESOLVED**, **CANDIDATE**, **SALARY_QUALIFIED**, **SNAPSHOT_QUALIFIED**, **BUILD_QUALIFIED** and **OUTCOME_QUALIFIED**. Counts describe import/contest groups, not independent games. Blockers explain missing or conflicting evidence. Review Salary Matches remains the place to resolve a salary association; a compatible candidate is not a saved pairing.
+
+Later evidence can establish a missing date or format without changing the original observation. A confirmed salary revision can qualify a legacy contest's date while its original missing date stays missing. Changed sources are rechecked; ambiguous revisions or snapshots are not resolved by choosing the first file. Cancellation preserves previous derived identity records.
+
+A completed pregame archive must share the qualified snapshot's exact input ID. Multiple matching builds remain candidates; an archive does not prove which portfolio was submitted. Outcome coverage is assessed separately across the eligible salary pool. Unknown scores stay unknown; zero and negative scores remain valid. Captain/FLEX IDs and scoring stay separate. Legacy contest objectives remain unknown unless recorded.
+
+The new shareable section contains only state and limitation counts. Its filters use qualified identity where available; original result metrics keep their recorded-date basis. Projections, ownership, SIM formulas, payouts and automatic learning are unchanged. See [Historical Evidence Identity](HISTORICAL_IDENTITY.md) for developer details and read limits.
+
 ## Results plus username: automatic snapshot comparisons
+
+Imported standings and your exact username can be compared with compatible saved pregame snapshots. These comparisons describe stored forecasts; they do not certify the original producing build or reconstruct missing inputs.
 
 ### Opponent portfolios from one standings file
 

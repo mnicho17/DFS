@@ -1,5 +1,15 @@
 # Results & Learning: staged implementation
 
+## RL-05A review slice
+
+Historical Evidence Identity is implemented against latest main as an additive
+backend layer, described in [Historical Evidence Identity](HISTORICAL_IDENTITY.md).
+It adds atomic reconciliation, a normalized read model, exclusive qualification
+states and aggregate review-report coverage. Original observations and source
+files are preserved. The historical coverage UI (RL-05B), portfolio risk and
+hindsight remain later slices. Validation and Windows packaging results are
+recorded in the RL-05A review PR.
+
 Requested September 22, 2026. Work targets the launcher's `feature/configurable-deep-compute` branch, beginning at `4532e728b45f62469dd7479be1602d66a1a5ca78`. Version 1.23.0 integrates the full feature branch with main, including the published saved-repair safeguards and shareable review reports. Each numbered slice gets focused tests, isolated full regression, documentation and its own review before integration. Existing history and strategy formulas remain unchanged unless a later named change explicitly authorizes them.
 
 1. **Opponent portfolios — integrated for v1.23.0.** Read one original NFL Classic/Showdown standings CSV. Compare usernames, observed entries, unique identities, athlete/role overlap, player/Captain variety, duplication, exposures and pair concentration. Include all entrants and exact-entry-count peers, not only winners. Share summaries by default and detailed lineups only on request. Record source hash, missing-data denominators and deduplication conflicts. No live data or database writes. See the user guide and `test_opponent_analysis.py`.

@@ -1,5 +1,22 @@
 # DFS Optimizer troubleshooting
 
+## Historical identity is unresolved or needs review
+
+Run Analyze Saved Results after importing the original results and matching salary
+sources. Review Salary Matches can confirm a compatible immutable salary revision;
+a missing result date still needs explicit confirmation. Ambiguous revisions,
+changed saved sources, incompatible roles or conflicting dates block qualification.
+Restore a missing original snapshot instead of replacing its bytes with a new revision.
+
+A snapshot must predate the earliest game and match the qualified salary pool,
+including Captain/FLEX IDs. A build must share its input ID and be completed before
+the game. Multiple archives do not prove which build was submitted. Unknown or
+conflicting player scores prevent complete outcome qualification; zero/negative
+scores do not. Read limits and missing evidence appear as blockers in review counts.
+Reconciliation can downgrade stale derived state but never rewrites original
+observations. Cancellation retains the previous derived records. See
+[Historical Evidence Identity](HISTORICAL_IDENTITY.md).
+
 ## Windows warns about an unknown publisher
 
 The app is not code-signed. Download it only from this repository's Releases page. You can compare the executable's SHA-256 value with the supplied `.sha256` file before opening it.

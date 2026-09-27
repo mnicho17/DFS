@@ -225,6 +225,14 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
                     conn.execute('DELETE FROM contest_player_scores WHERE import_id=?',(import_id,))
                     conn.executemany('INSERT INTO contest_player_scores VALUES (?,?,?,?,?)',[(import_id,k,v,payload['date'],date_source) for k,v in base.items()])
             completed+=1
+        if not cancelled():
+            from historical_identity import reconcile
+            from analysis_imports import ImportCancelled
+            progress('Reconciling historical evidence identity')
+            try:
+                reconcile(db_path, cancelled=cancelled)
+            except ImportCancelled:
+                return dict(completed=completed,cancelled=True,message='Historical identity reconciliation cancelled; previous derived state retained.')
         return dict(completed=completed,cancelled=cancelled(),message=f'Analyzed {completed} contests. '+ '; '.join(messages))
     finally:conn.close()
 
