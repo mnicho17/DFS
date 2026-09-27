@@ -138,6 +138,10 @@ def changes(before, after):
         previous = old.get(data['identity_id'])
         prior = evidence_levels(previous) if previous else {}
         current = evidence_levels(data)
+        # The completion summary says "newly outcome-qualified", which requires
+        # the full ladder. Independent complete-score coverage remains in overview.
+        prior['outcome'] = bool(previous and previous['state']=='OUTCOME_QUALIFIED')
+        current['outcome'] = data['state']=='OUTCOME_QUALIFIED'
         counts.update({k:int(current[k] and not prior.get(k)) for k in counts})
         downgraded += bool(previous and any(prior.get(k) and not current[k] for k in counts))
     return dict(newly_qualified=dict(counts), downgraded=downgraded,

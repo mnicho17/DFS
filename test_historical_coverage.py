@@ -261,6 +261,10 @@ class CoverageAcceptanceTests(unittest.TestCase):
         w=self.widget();w.filter.setCurrentIndex(w.filter.findData('ready'))
         self.assertEqual(w.table.rowCount(),3)
 
+    def test_newly_outcome_qualified_requires_full_chain_not_just_scores(self):
+        counts=hc.changes((),self.saved['contests'])['newly_qualified']
+        self.assertEqual(counts,dict(salary=13,snapshot=9,build=6,outcome=3))
+
     def test_needs_review_filter(self):
         w=self.widget();w.filter.setCurrentIndex(w.filter.findData('needs_review'))
         self.assertEqual(w.table.rowCount(),4)
