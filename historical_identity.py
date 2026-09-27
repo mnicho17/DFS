@@ -17,6 +17,7 @@ import zipfile
 
 from analysis_imports import ImportCancelled, _check, _name, _sources, _verify, _pairing_state, qualify_pair
 from contest_objectives import recorded_objective
+from compute_ledger import instrument_reconciliation, phase
 from results_audit import _number
 
 SCHEMA_VERSION = 1
@@ -85,6 +86,7 @@ def _groups(conn, sources, cancelled):
                 yield ident, _digest(key), [r for r in rows if r['key'] == key]
 
 
+@phase('historical_evidence_inventory', output_size=lambda result: len(result[0]) + len(result[1]))
 def _inventory(root, cancelled):
     from review_build_evidence import Reader, snapshot, timestamp
     # Use one cancellation exception throughout the reconciliation API, including
@@ -235,6 +237,7 @@ def _outcomes(source, salary, cancelled):
                 captain_handling='separate salary IDs; base scores counted once; Captain = 1.5x base')
 
 
+@phase('historical_contest_qualification', output_size=lambda result: 1)
 def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives, issues, root, cancelled):
     from learning_db import _normalize_roster_token
     from results_snapshot_learning import match_snapshot
@@ -391,6 +394,7 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
     return result
 
 
+@phase("historical_identity_derivation")
 def derive_contests(conn, root, *, cancelled=lambda: False):
     """Read a consistent caller-owned DB snapshot; perform no SQL/file writes."""
     _check(cancelled)
@@ -456,6 +460,8 @@ def qualified_contests(db_path=None, *, cancelled=lambda: False):
         return derive_contests(conn, path.parent, cancelled=cancelled)
 
 
+@instrument_reconciliation
+@phase("historical_identity_reconciliation")
 def reconcile(db_path=None, *, cancelled=lambda: False):
     """Rebuild derived state all-or-nothing. Source observations remain untouched."""
     from learning_db import _connect, history_db_path, init_historical_import_tables

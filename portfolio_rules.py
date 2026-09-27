@@ -1,4 +1,6 @@
 from __future__ import annotations
+from compute_ledger import phase
+
 
 import math
 import time
@@ -184,6 +186,7 @@ def _uniqueness_keys(lineup: Any, kind: str) -> set[str]:
 from lineup_ranking import finish_rank
 
 
+@phase("selection_refinement", selection=True)
 def select_portfolio(
     candidates: Iterable[Any],
     requested: int,

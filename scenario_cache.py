@@ -132,7 +132,10 @@ class ScenarioReplay:
         except Exception as exc:
             self.status = 'not saved'; self.reason = str(exc)
         finally:self.close()
-        return dict(status=self.status,reused_scenarios=self.hits,requested_scenarios=self.count,reason=self.reason)
+        report = dict(status=self.status,reused_scenarios=self.hits,requested_scenarios=self.count,reason=self.reason)
+        from compute_ledger import safe, cache_observation
+        safe(cache_observation, getattr(self, "key", None), report)
+        return report
 
     def close(self):
         if self.connection is not None:

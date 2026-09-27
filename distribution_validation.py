@@ -78,4 +78,6 @@ def validation_report(conn):
         for r in sorted(values,key=lambda r:abs(r['actual']-r['mean']),reverse=True)[:5]:
             lines.append(f"  Largest mean miss: {r['name']} [{r['position']}]; actual {r['actual']:.2f}; SIM mean {r['mean']:.2f}; p10/p50/p90 {r['p10']:.2f}/{r['p50']:.2f}/{r['p90']:.2f}; capture {r['capture_id'][:12]}.")
     lines.append('- p10/p90 are simulated percentiles, not hard floors/ceilings. Boundaries count inside the range; SIM tail rates account for discrete ties and zero masses. These small, correlated samples diagnose model behavior, not proven predictive accuracy or an automatic tuning recommendation.')
+    from distribution_calibration import summarize, report_lines
+    lines.extend(report_lines(summarize(all_rows)))
     return lines

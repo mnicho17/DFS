@@ -288,6 +288,24 @@ Choose **Settings > Build History…** to review the 25 most recent runs and cop
 
 
 
+### Compute ledger
+
+Build History and Copy Last Build Report include a compact **Compute ledger** summary: elapsed wall time, worker CPU time, returned/unique/duplicate candidates, accepted library candidates and **peak observed process memory**. Missing measurements are unknown. Process memory includes the app and other work; it is sampled and is not a precise per-build peak. CPU time is separate from elapsed time.
+
+The ledger observes existing Fast/Deep work. It does not change search budgets, scenarios, ranking, portfolio rules or cancellation behavior. Saved repairs and preparation have separate purposes. A library counts as reused only when candidates are actually accepted; a file merely existing is not proof of reuse.
+
+Detailed aggregate receipts live in the external user-data **compute-ledger** directory. Approximately 250 recent receipts are retained, with bounded batches and checkpoints and no candidate-level records. Ledger cleanup never removes results, salary associations, snapshots, build archives, exports or learning evidence. Build History keeps its separate 25-report limit. Checkpoints contain measurements and hashes, not reusable partial lineups, and do not enable automatic resume.
+
+Candidate compatibility and simulation compatibility are distinct: a roster may remain structurally valid after projections change while its earlier simulation is stale. Existing strict library/cache checks still decide reuse. Historical outcomes never feed a live build through this ledger.
+
+### SIM distribution calibration
+
+The **Recorded scoring-distribution validation** section of Results & Learning includes report-only calibration by model, format, recorded position and pregame role. It uses completed pregame simulation ranges already associated with imported results. It does not recreate missing historical forecasts or rerun simulations.
+
+P10/P25/P50/P75/P90 coverage measures how often actual scores were at or below each recorded percentile. Separate below/inside/above P10-P90 rates treat boundaries as inside. Mean absolute error (MAE) measures the size of mean-score misses; actual-minus-mean bias shows their direction. Equal-game summaries give each scheduled game one weight, alongside player-weighted measurements.
+
+Repeated contests, duplicate entries and Captain multipliers do not create extra independent outcomes. Models and formats remain separate and can share the same player-game results. Conflicting scores are excluded; zero and negative scores remain known. Legacy captures without P25/P75 show those values as unavailable. Players from the same game remain correlated, and a small number of games does not establish accuracy. These reports do not automatically tune projections, ownership, SIM or compute settings.
+
 ### Portfolio Insights
 
 

@@ -1,11 +1,14 @@
 """Generate bounded alternatives before scoring, without changing user inputs."""
 from collections import Counter
 from copy import deepcopy
+from compute_ledger import source
+
 import time
 
 from portfolio_rules import player_key, lineup_players, _candidate_signature, _max_count
 
 
+@source("exposure_recovery")
 def expand_candidates(rows, players, requested, rules, *, kind, salary_cap, own_mode,
                       own_weight, build_style, cancelled=lambda: False, seconds=20,
                       max_additions=None, sport='NFL', salary_strategy='Balanced Spend',

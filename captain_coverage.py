@@ -1,4 +1,6 @@
 """Bounded Showdown Captain exploration; never a final-portfolio exposure floor."""
+from compute_ledger import source
+
 import copy
 import math
 import time
@@ -35,6 +37,7 @@ def captain_targets(players):
     return sorted(targets, key=lambda p: (-_proj(p), player_key(p)))
 
 
+@source("captain_coverage")
 def seed_captains(players, targets, bank, retained_keys, budget, *, salary_cap, own_mode, own_weight,
                   deadline, cancelled, progress=lambda text: None):
     """Spend at most 10% of the candidate budget and the caller's short time slice."""

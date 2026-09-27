@@ -1,4 +1,6 @@
 """NFL Showdown Deep exploration and shared-outcome contest simulation."""
+from compute_ledger import phase
+
 import bisect
 import math
 import random
@@ -126,6 +128,7 @@ def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0,
     return field
 
 
+@phase("primary_sim", simulation=True)
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
                       seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False):
     if not candidates:
@@ -255,6 +258,8 @@ def run_deep_showdown(worker, shortlist_fn):
     jobs = [] if bank else search_jobs(seeds, worker.build_style, options["all_styles"])
     if bank:
         budget = len(bank)
+    from compute_ledger import safe as compute_safe, candidate_budget as record_candidate_budget
+    compute_safe(record_candidate_budget, budget)
     generation_fraction, screening_fraction = deep_phase_fractions(options)
     generation_end = start + limit * generation_fraction
     from captain_coverage import captain_targets, seed_captains, shortlist_reservations, coverage_report
@@ -311,6 +316,9 @@ def run_deep_showdown(worker, shortlist_fn):
     qb_stages = {"generated": quarterback_mix(list(bank.values()) + retained)}
     dst_stages = {"generated": defense_mix(list(bank.values()) + retained)}
     generated = len(bank)
+    from compute_ledger import safe as compute_safe, observe_dedup
+    # Dedup is interleaved with search; its separate duration/attempt count is unknown.
+    compute_safe(observe_dedup, None, generated)
     eligible_salary = filter_salary_candidates(list(bank.values()), worker.salary_cap, worker.salary_strategy)
     salary_excluded = generated - len(eligible_salary)
     bank = {showdown_signature(lu): lu for lu in eligible_salary}
