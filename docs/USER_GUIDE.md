@@ -1526,7 +1526,8 @@ full chain. Conflicts are included in **Needs review**.
 The tab opens saved coverage without reparsing original standings. Saved states
 may be stale. Choose **Reconcile All Evidence** to verify stored sources and
 recompute all contests in a background job. The phase and elapsed time stay visible;
-**Cancel Operation** rolls back the whole derived update. Source files and original
+**Cancel Operation** rolls back an uncommitted derived update. A reconciliation
+that has already committed remains saved. Source files and original
 observations remain unchanged. Completed source imports remain saved if their
 subsequent reconciliation is cancelled. Successful Results & Salaries imports and
 salary associations run the same reconciliation, including salary-only imports
@@ -1534,13 +1535,25 @@ that resolve older results. Duplicate scans leave history alone.
 
 Use **Review Salary Matches** for ambiguous salary revisions or missing-date
 confirmation. Choices show dates, format, games, player/role coverage, import time
-and revision. Existing saved pairs remain fixed. **Resolve Snapshot** appears only
+and revision. Cancel also suppresses a salary-review chooser that has not opened
+yet, even if verification has just finished. Existing saved pairs remain fixed.
+**Resolve Snapshot** appears only
 when compatible pregame snapshots are ambiguous. It shows recorded time, earliest
 game time, full-pool coverage and associated builds. Confirming saves the exact
 revision and time. Later reconciliation preserves that choice; missing or changed
 evidence becomes a conflict instead of silently selecting another snapshot.
 
 ![Choosing between compatible synthetic pregame snapshots](images/historical-snapshot-choice.png)
+
+Build details separate **Archives linked to the current qualified snapshot** from
+**Other generated archive candidates**. Each shows its archive ID, input ID,
+recording time and lineup count. Other candidates stay visible when snapshots are
+ambiguous or a newer selected snapshot has no archive; they do not qualify the
+build stage or enable analysis. Distinct archives sharing one input ID remain
+separate, and an archive listed in the qualified section is not repeated below.
+Neither section identifies an original or submitted build.
+
+![Qualified archive and a candidate from another snapshot](images/historical-build-candidates.png)
 
 Downstream labels describe evidence prerequisites, not available new tools.
 RL-06 Portfolio Risk and RL-07 Hindsight are not implemented in this slice. Missing

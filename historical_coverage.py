@@ -184,8 +184,24 @@ def detail_text(data):
     choice = data.get('snapshot_resolution')
     if choice:
         lines.append(f"User confirmed: {choice['confirmed_at']} (evidence version {choice['evidence_version']}); exact revision {choice['snapshot_digest'][:12]}")
-    for build in data.get('build_evidence',[]):
-        lines.append(f"Generated build {build['archive_id'][:12]} — input {build['input_id'][:12]}, {build['recorded_at']}, {build['output_count']} lineups")
+    seen_archives = set()
+    for heading, builds in (
+        ('Archives linked to the current qualified snapshot:', data.get('build_evidence', [])),
+        ('Other generated archive candidates (not qualified build evidence):', data.get('build_candidates', [])),
+    ):
+        lines += ['', heading]
+        shown = 0
+        for build in builds:
+            if build['archive_id'] in seen_archives:
+                continue
+            seen_archives.add(build['archive_id'])
+            shown += 1
+            lines += [f"  Generated archive {build['archive_id']}",
+                      f"  Input {build['input_id']}",
+                      f"  Recorded: {build['recorded_at']}; {build['output_count']} lineups"]
+        if not shown:
+            lines.append('  None recorded.')
+    lines.append('Other candidates do not qualify the current build stage or enable analysis.')
     lines.append('Exact original/submitted build: not established. Multiple generated builds remain separate.')
     outcome = data.get('actual_score_evidence') or {}
     if outcome:

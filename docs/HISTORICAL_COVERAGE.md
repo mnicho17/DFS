@@ -19,6 +19,9 @@ One `BEGIN IMMEDIATE` transaction covers all derived updates and explicit snapsh
 choices. Cancellation or failure before commit rolls everything back. A completed
 commit remains completed if cancellation arrives afterward. Controls unlock only
 after the worker retires; stale and duplicate callbacks do not apply.
+Salary-review continuations retain their worker's plain cancellation Event through
+retirement. Cancel suppresses an unopened chooser even if the successful read-only
+payload was already queued. It does not discard a committed reconciliation result.
 
 The UI displays source verification, inventory, contest qualification and commit
 phases, with an elapsed timer. This is progress, not an invented percent complete
@@ -60,9 +63,14 @@ Automatic reconciliation never replaces a saved choice. A later incompatibility
 is a conflict. Restoring the original revision can restore qualification; editing
 or clearing confirmed associations is not part of this slice.
 
-All compatible generated archives remain visible with timestamps and lineup
-counts. Selecting an arbitrary original/submitted build is deliberately unavailable
-because the archives do not prove submission.
+Details list archives linked to the current qualified snapshot separately from
+other generated archive candidates. Both sections use saved RL-05A evidence and
+show archive ID, input ID, timestamp and lineup count without source-file scans.
+An archive appears only once by archive ID; distinct builds sharing an input ID
+remain separate. Candidates remain visible when the snapshot is ambiguous or the
+selected newer snapshot has no archive. They never qualify a stage or change
+capability/aggregate counts. Selecting an arbitrary original/submitted build is
+unavailable because the archives do not prove submission.
 
 ## Shareable report and acceptance
 

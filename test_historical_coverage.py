@@ -232,6 +232,89 @@ class CoverageBackendTests(unittest.TestCase):
         self.assertTrue(done[0]['coverage_reconciled'])
         self.assertEqual(hc.load_saved(f.db)['contests'][0].data['state'],'SALARY_QUALIFIED')
 
+    def build_candidates(self, *, ambiguous=False, archive_latest=True):
+        f = self.f
+        f.fixture(scores=[0,-1,10,10,10,10]); f.snapshot(); f.archive('older.zip')
+        newer = copy.deepcopy(f.snap)
+        newer['inputs']['players'][0]['FlexProjection'] = 99
+        newer['input_id'] = hi._digest(newer['inputs'])
+        if not ambiguous:
+            newer['created_at'] = '2026-09-21T19:00:00-04:00'
+        f.snapshot(newer)
+        if archive_latest:
+            f.archive('newer.zip', snap=newer, created_at='2026-09-21T19:10:00-04:00')
+        return hi.reconcile(f.db)
+
+    def assert_build_details_are_read_only(self, contests, qualified, candidates):
+        before = [c.data for c in contests]
+        counts = hc.aggregate(contests)
+        def source_bytes():
+            # SQLite readers may create WAL/shared-memory sidecars; compare the
+            # database logically and the immutable source files byte for byte.
+            return {p.relative_to(self.f.root):p.read_bytes() for p in self.f.root.rglob('*')
+                    if p.is_file() and not p.name.startswith(self.f.db.name)}
+        files = source_bytes()
+        with closing(sqlite3.connect(self.f.db)) as conn:
+            database = tuple(conn.iterdump())
+        with patch('analysis_imports._verify', side_effect=AssertionError), patch('historical_identity._inventory', side_effect=AssertionError):
+            saved = hc.load_saved(self.f.db)['contests']
+            rendered = saved[0].data
+            text = hc.detail_text(rendered)
+        linked, other = text.split('Other generated archive candidates (not qualified build evidence):')
+        self.assertIn('Archives linked to the current qualified snapshot:', linked)
+        for section, builds in ((linked,qualified),(other,candidates)):
+            for build in builds:
+                self.assertIn(build['archive_id'], section)
+                self.assertEqual(text.count(build['archive_id']), 1)
+                self.assertIn(build['input_id'], section)
+                self.assertIn(build['recorded_at'], section)
+                self.assertIn(f"{build['output_count']} lineups", section)
+        self.assertIn('not established', text)
+        self.assertEqual(before, [c.data for c in saved])
+        self.assertEqual(before[0], rendered)
+        self.assertEqual(counts, hc.aggregate(saved))
+        self.assertEqual(files, source_bytes())
+        with closing(sqlite3.connect(self.f.db)) as conn:
+            self.assertEqual(database, tuple(conn.iterdump()))
+
+    def test_build_details_separate_two_snapshot_inputs(self):
+        contests = self.build_candidates()
+        data = contests[0].data
+        self.assertEqual(data['state'], 'OUTCOME_QUALIFIED')
+        qualified = data['build_evidence']
+        other = [b for b in data['build_candidates'] if b['input_id']!=qualified[0]['input_id']]
+        self.assertEqual((len(qualified),len(other)), (1,1))
+        self.assert_build_details_are_read_only(contests, qualified, other)
+
+    def test_newer_snapshot_does_not_promote_older_candidate_archive(self):
+        contests = self.build_candidates(archive_latest=False)
+        data = contests[0].data
+        self.assertEqual(data['state'], 'SNAPSHOT_QUALIFIED')
+        self.assertEqual(data['build_evidence'], [])
+        self.assertFalse(hc.capabilities(data)['portfolio_risk'])
+        self.assertEqual(len(data['build_candidates']), 1)
+        self.assert_build_details_are_read_only(contests, [], data['build_candidates'])
+
+    def test_ambiguous_snapshots_expose_candidates_without_qualifying_builds(self):
+        contests = self.build_candidates(ambiguous=True)
+        data = contests[0].data
+        self.assertEqual(data['state'], 'CANDIDATE')
+        self.assertIsNone(data['snapshot_evidence'])
+        self.assertEqual(data['build_evidence'], [])
+        self.assertEqual(len(data['build_candidates']), 2)
+        self.assertFalse(hc.capabilities(data)['portfolio_risk'])
+        self.assert_build_details_are_read_only(contests, [], data['build_candidates'])
+
+    def test_distinct_archives_sharing_one_input_remain_visible_once(self):
+        f = self.f
+        f.fixture(); f.snapshot(); f.archive('one.zip'); f.archive('two.zip',audit_id='second')
+        contests = hi.reconcile(f.db)
+        data = contests[0].data
+        self.assertEqual(data['state'], 'OUTCOME_QUALIFIED')
+        self.assertEqual(len(data['build_evidence']), 2)
+        self.assertEqual(len({b['input_id'] for b in data['build_evidence']}), 1)
+        self.assert_build_details_are_read_only(contests, data['build_evidence'], [])
+
 
 class CoverageAcceptanceTests(unittest.TestCase):
     @classmethod
@@ -346,6 +429,86 @@ class CoverageWorkerGuiTests(unittest.TestCase):
             self.app.processEvents();time.sleep(.002)
         self.assertIsNone(self.dialog._import_thread)
         self.app.processEvents()
+
+    def completed_before_retirement(self, start):
+        """Deliver a real worker payload but defer the GUI's retirement callback."""
+        retired = []
+        with patch.object(self.dialog, '_on_import_thread_finished', side_effect=retired.append):
+            start()
+            job = self.dialog._import_job
+            end = time.monotonic()+12
+            while not retired and time.monotonic()<end:
+                self.app.processEvents(); time.sleep(.002)
+            self.assertEqual(retired, [job])
+            self.assertIsNotNone(job['completion'])
+            self.assertFalse(self.dialog.import_new_button.isEnabled())
+        return job
+
+    def test_cancel_queued_salary_review_suppresses_dialog_and_follow_on_import(self):
+        with patch('analysis_imports_ui.SalaryMatchesDialog') as chooser, patch('analysis_imports_ui.CombinedImportWorker') as importer:
+            job = self.completed_before_retirement(self.dialog.review_salary_matches)
+            self.assertFalse(job['completion'][1]['cancelled'])
+            self.dialog.cancel_import()
+            self.assertFalse(self.dialog.import_new_button.isEnabled())
+            self.dialog._on_import_thread_finished(job)
+            self.drain()
+        chooser.assert_not_called(); importer.assert_not_called()
+        self.assertTrue(self.dialog.import_new_button.isEnabled())
+
+    def test_salary_review_normal_delivery_once_ignores_stale_and_duplicate_callbacks(self):
+        with patch('analysis_imports_ui.SalaryMatchesDialog') as chooser, patch('analysis_imports_ui.CombinedImportWorker') as importer:
+            chooser.return_value.exec_.return_value = QtWidgets.QDialog.Rejected
+            first = self.completed_before_retirement(self.dialog.review_salary_matches)
+            self.dialog._on_import_thread_finished(first)
+            self.assertEqual(chooser.call_count, 1)
+            second = self.completed_before_retirement(self.dialog.review_salary_matches)
+            completion = second['completion']
+            self.dialog._job_completed(first, lambda _:self.fail('stale completion applied'), {})
+            self.dialog._on_import_thread_finished(first)
+            self.dialog._job_completed(second, lambda _:self.fail('duplicate completion applied'), {})
+            self.assertIs(second['completion'], completion)
+            self.assertIs(self.dialog._import_job, second)
+            self.dialog._on_import_thread_finished(second)
+            self.dialog._on_import_thread_finished(second)
+            self.drain()
+            self.assertEqual(chooser.call_count, 2)
+        importer.assert_not_called()
+
+    def test_close_during_salary_review_suppresses_continuation(self):
+        import analysis_imports_ui as ui
+        entered, release = threading.Event(), threading.Event()
+        original = ui.pairing_state
+        def held(*args, **kwargs):
+            entered.set(); release.wait(5)
+            return original(*args, **kwargs)
+        with patch.object(ui, 'pairing_state', side_effect=held), patch.object(ui, 'SalaryMatchesDialog') as chooser, patch.object(ui, 'CombinedImportWorker') as importer:
+            self.dialog.show(); self.dialog.review_salary_matches()
+            try:
+                end = time.monotonic()+3
+                while not entered.is_set() and time.monotonic()<end:
+                    self.app.processEvents(); time.sleep(.002)
+                self.assertTrue(entered.is_set())
+                self.dialog.close()
+                self.assertFalse(self.dialog.import_new_button.isEnabled())
+            finally:
+                release.set(); self.drain()
+        chooser.assert_not_called(); importer.assert_not_called()
+        self.assertFalse(self.dialog.isVisible())
+
+    def test_late_cancel_preserves_committed_reconciliation_and_completion(self):
+        f = fixtures.HistoricalIdentityTests(); f.setUp(); self.addCleanup(f.tearDown)
+        f.fixture(); f.snapshot(); f.archive()
+        self.dialog.db_path = str(f.db); self.dialog.coverage.db_path = str(f.db)
+        job = self.completed_before_retirement(self.dialog.reconcile_history)
+        self.assertTrue(job['completion'][1]['committed'])
+        before = f.query('SELECT * FROM historical_contest_identities')
+        self.assertEqual(hc.load_saved(f.db)['contests'][0].data['state'], 'OUTCOME_QUALIFIED')
+        self.dialog.cancel_import()
+        self.assertFalse(self.dialog.import_new_button.isEnabled())
+        self.dialog._on_import_thread_finished(job)
+        self.drain()
+        self.assertEqual(before, f.query('SELECT * FROM historical_contest_identities'))
+        self.assertIn('Reconciliation committed', self.dialog.coverage.status.text())
 
     def test_existing_dialog_tab_runs_real_reconciliation(self):
         self.assertEqual(self.dialog.results_tabs.tabText(1),'Historical Coverage')

@@ -10,9 +10,9 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from test_environment import install, network_attempts
 install()
 from PyQt5 import QtGui, QtWidgets
-from test_historical_coverage import acceptance_history
+from test_historical_coverage import acceptance_history, CoverageBackendTests
 from historical_coverage import load_saved, aggregate
-from historical_coverage_ui import SnapshotChoiceDialog
+from historical_coverage_ui import SnapshotChoiceDialog, HistoricalCoverageWidget
 from main_window import ResultsLearningDialog
 
 
@@ -39,6 +39,18 @@ def main():
         choice.show();app.processEvents()
         choice.grab().save(str(out/'historical-snapshot-choice.png'))
         choice.close();dialog.close();app.processEvents()
+        example = CoverageBackendTests()
+        example.setUp()
+        try:
+            example.build_candidates()
+            builds = HistoricalCoverageWidget(str(example.f.db))
+            builds.resize(1120,1080)
+            builds.table.setMaximumHeight(130)
+            builds.show();app.processEvents()
+            builds.grab().save(str(out/'historical-build-candidates.png'))
+            builds.close();app.processEvents()
+        finally:
+            example.doCleanups()
         print(json.dumps(dict(coverage=aggregate(saved['contests']),show_seconds=elapsed,
                               network_attempts=network_attempts),indent=2))
 

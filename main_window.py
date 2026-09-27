@@ -4252,14 +4252,18 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if self._import_thread is not None:
             return
         from analysis_imports_ui import SalaryMatchReviewWorker
+        worker = SalaryMatchReviewWorker(self.db_path)
+        # Keep this job's plain Event alive through retirement, without reading
+        # the deleted QObject. A queued payload predates a later Cancel click.
+        cancelled = worker.cancelled
         def ready(result):
-            if result.get('cancelled'):
+            if result.get('cancelled') or cancelled.is_set():
                 return
             from analysis_imports_ui import SalaryMatchesDialog, CombinedImportWorker
             dialog = SalaryMatchesDialog(self, db_path=self.db_path, state=result['state'], result_hash=result_hash)
             if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selection:
                 self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip(), db_path=self.db_path), self._on_combined_import_finished)
-        self._start_background_import(SalaryMatchReviewWorker(self.db_path), ready)
+        self._start_background_import(worker, ready)
 
     def _on_combined_import_finished(self, result) -> None:
         from analysis_imports_ui import import_summary

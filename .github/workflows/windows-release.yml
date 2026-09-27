@@ -53,11 +53,17 @@ jobs:
           --collect-all pulp
           app.py
 
-      - name: Generate SHA-256 checksum
+      - name: Generate and verify SHA-256 checksum
         shell: pwsh
         run: |
           $hash = (Get-FileHash -LiteralPath "dist\DFS-Optimizer.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  DFS-Optimizer.exe" | Set-Content -LiteralPath "dist\DFS-Optimizer.exe.sha256" -Encoding ascii
+          $receipt = (Get-Content -LiteralPath "dist\DFS-Optimizer.exe.sha256" -Raw).Trim() -split '\s+'
+          $actual = (Get-FileHash -LiteralPath "dist\DFS-Optimizer.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($receipt.Count -ne 2 -or $receipt[1] -ne 'DFS-Optimizer.exe' -or $receipt[0] -ne $actual) {
+            throw 'Executable SHA-256 receipt verification failed.'
+          }
+          Write-Output "Verified DFS-Optimizer.exe SHA-256 receipt: $actual"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v6
