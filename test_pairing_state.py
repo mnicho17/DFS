@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -312,6 +313,13 @@ class PairingDialogTests(PairingFixture):
             parent.refresh_report()
             with patch('analysis_imports_ui.SalaryMatchesDialog', wraps=SalaryMatchesDialog) as factory, patch.object(SalaryMatchesDialog, 'exec_', return_value=QtWidgets.QDialog.Rejected):
                 parent.review_salary_matches()
+                # Candidate verification now runs off the GUI thread. Retire the
+                # real worker before checking the dialog's pinned database.
+                end = time.monotonic() + 10
+                while parent._import_thread is not None and time.monotonic() < end:
+                    self.app.processEvents()
+                    time.sleep(.005)
+                self.assertIsNone(parent._import_thread)
             self.assertEqual(factory.call_args.kwargs['db_path'], str(self.db))
         self.assertIn('Results awaiting a salary match: 0', parent.report.toPlainText())
         self.assertFalse((self.root / 'wrong-profile').exists())

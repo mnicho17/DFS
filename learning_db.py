@@ -1483,6 +1483,15 @@ def init_historical_import_tables(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS username_result_scans(import_id TEXT, username TEXT, PRIMARY KEY(import_id,username));
+        CREATE TABLE IF NOT EXISTS historical_evidence_resolutions (
+            identity_id TEXT PRIMARY KEY,
+            snapshot_digest TEXT NOT NULL,
+            input_id TEXT NOT NULL,
+            salary_hash TEXT NOT NULL,
+            method TEXT NOT NULL,
+            evidence_version INTEGER NOT NULL,
+            confirmed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE TABLE IF NOT EXISTS historical_contest_identities (
             identity_id TEXT PRIMARY KEY,
             import_id TEXT NOT NULL,

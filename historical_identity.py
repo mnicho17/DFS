@@ -21,7 +21,7 @@ from compute_ledger import instrument_reconciliation, phase
 from results_audit import _number
 
 SCHEMA_VERSION = 1
-METHOD_VERSION = 1
+METHOD_VERSION = 2
 STATES = ('UNRESOLVED', 'CANDIDATE', 'SALARY_QUALIFIED', 'SNAPSHOT_QUALIFIED',
           'BUILD_QUALIFIED', 'OUTCOME_QUALIFIED')
 MAX_RESULTS = 200_000
@@ -238,7 +238,7 @@ def _outcomes(source, salary, cancelled):
 
 
 @phase('historical_contest_qualification', output_size=lambda result: 1)
-def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives, issues, root, cancelled):
+def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives, issues, root, cancelled, resolution=None):
     from learning_db import _normalize_roster_token
     from results_snapshot_learning import match_snapshot
     from review_build_evidence import roster_key
@@ -248,7 +248,8 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
         results_evidence=dict(observed_rows=len(rows), source_hash=source['hash'] if source else None),
         salary_evidence=None, snapshot_evidence=None, snapshot_candidates=[], build_evidence=[],
         build_candidates=[], player_evidence=[],
-        actual_score_evidence=None, limitations=[], conflicts=[], blockers=[], source_issues=issues)
+        actual_score_evidence=None, limitations=[], conflicts=[], blockers=[], source_issues=issues,
+        snapshot_resolution=resolution)
     limitations, conflicts, blockers = result['limitations'], result['conflicts'], result['blockers']
     explicit_days = sorted({r['date'] for r in rows if r['date']})
     explicit_sports = sorted({r['sport'] for r in rows if r['sport'] and r['sport'] != 'UNKNOWN'})
@@ -345,19 +346,35 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
         blockers.append('unreadable_stored_result_rosters')
     compatible = [s for s in snapshots if _snapshot_compatible(s, salary)]
     candidate_ids = {s['raw']['input_id'] for s in compatible if s['pregame']}
-    result['snapshot_candidates'] = sorted([dict(input_id=s['raw']['input_id'],
-        recorded_at=s['raw']['created_at']) for s in compatible if s['pregame']],
-        key=lambda s:(s['recorded_at'],s['input_id']))
     result['build_candidates'] = [a for a in archives if a['input_id'] in candidate_ids and a['pregame'] and a['completed']]
     if any(not s['pregame'] for s in compatible):
         limitations.append('postgame_or_unknown_time_snapshots_rejected')
     if any(s['kind']==salary['format'] and s['day'] in salary['dates'] and s not in compatible for s in snapshots):
         limitations.append('snapshot_salary_pool_or_role_conflict')
     truncated = any('limit' in code for code in issues)
-    snapshot, reason = match_snapshot(root, salary['dates'][0], salary['format'],
-        {_normalize_roster_token(p['name']) for p in salary['players']}, '',
-        snapshots=[s['raw'] for s in compatible] if not truncated else [],
-        contest_ids=manifest.get('contest_ids', []), check=lambda: _check(cancelled))
+    def match(candidates):
+        return match_snapshot(root, salary['dates'][0], salary['format'],
+            {_normalize_roster_token(p['name']) for p in salary['players']}, '',
+            snapshots=candidates if not truncated else [],
+            contest_ids=manifest.get('contest_ids', []), check=lambda: _check(cancelled))
+    snapshot, reason = match([s['raw'] for s in compatible])
+    # The same matcher, including contest-ID precedence, qualifies every manual
+    # choice. A confirmation identifies exact content AND timestamp, not just input_id.
+    eligible = [s for s in compatible if match([s['raw']])[0] is not None]
+    result['snapshot_candidates'] = sorted([dict(input_id=s['raw']['input_id'],
+        snapshot_digest=_digest(s['raw']), recorded_at=s['raw']['created_at'],
+        earliest_game=s['earliest'].isoformat(), format=s['kind'], player_count=len(s['players']),
+        pregame=True, build_count=sum(a['input_id']==s['raw']['input_id'] for a in result['build_candidates']))
+        for s in eligible], key=lambda s:(s['recorded_at'],s['input_id'],s['snapshot_digest']))
+    if resolution:
+        chosen = [s for s in eligible if _digest(s['raw']) == resolution['snapshot_digest']
+                  and s['raw']['input_id'] == resolution['input_id']]
+        if resolution['salary_hash'] != selected or not chosen:
+            result['state'] = 'CANDIDATE'
+            conflicts.append('invalid_saved_snapshot_resolution')
+            blockers.append('restore_confirmed_snapshot_evidence')
+            return result
+        snapshot, reason = chosen[0]['raw'], 'user_confirmed'
     if not snapshot:
         blockers.append('snapshot_evidence_scan_incomplete' if truncated else 'no_unambiguous_pregame_snapshot')
         if reason.startswith('Conflicting latest'):
@@ -365,7 +382,7 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
             result['state'] = 'CANDIDATE'
         return result
     input_id = snapshot['input_id']
-    if len({_digest(s['raw']) for s in compatible if s['raw']['input_id']==input_id}) > 1:
+    if not resolution and len({_digest(s['raw']) for s in compatible if s['raw']['input_id']==input_id}) > 1:
         conflicts.append('snapshot_timestamp_conflict')
         result['state'] = 'CANDIDATE'
         blockers.append('no_unambiguous_pregame_snapshot')
@@ -375,7 +392,9 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
         inputs['contest'].get('objective', inputs['contest'].get('contest_objective'))))
     result['identity']['contest_objective'] = objective
     result['snapshot_evidence'] = dict(input_id=input_id, recorded_at=snapshot['created_at'],
-        association_method='contest_id' if reason=='contest-ID association' else 'qualified_salary_pool_and_latest_pregame',
+        association_method=('user_confirmed' if resolution else 'contest_id' if reason=='contest-ID association'
+                            else 'qualified_salary_pool_and_latest_pregame'),
+        earliest_game=next(s['earliest'].isoformat() for s in eligible if _digest(s['raw'])==_digest(snapshot)),
         contest_objective=objective, players=inputs['players'], rules=inputs['rules'], recipe=inputs['recipe'],
         original_build='not_established')
     result['state'] = 'SNAPSHOT_QUALIFIED'
@@ -395,13 +414,14 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
 
 
 @phase("historical_identity_derivation")
-def derive_contests(conn, root, *, cancelled=lambda: False):
+def derive_contests(conn, root, *, cancelled=lambda: False, progress=lambda text: None):
     """Read a consistent caller-owned DB snapshot; perform no SQL/file writes."""
     _check(cancelled)
     sources = _sources(conn) if 'analysis_sources' in _tables(conn) else []
     # The caller already holds a read/write transaction. Reuse the authoritative
     # evaluator without its connection/path/savepoint wrapper (report reads allow
     # SELECT/table_info only and must not create settings or history).
+    progress('Verifying saved results and salary revisions')
     state = _pairing_state(conn, None, cancelled)
     by_hash = {s['hash']:s for s in sources}
     pairs = {r['hash']:r for r in state['results']}
@@ -410,14 +430,26 @@ def derive_contests(conn, root, *, cancelled=lambda: False):
     for s in sources:
         if s['kind']=='results':
             by_import[s['import_id']].append(s)
+    progress('Reading pregame snapshots and build archives')
     snapshots, archives, issues = _inventory(root, cancelled)
+    resolutions = {}
+    if 'historical_evidence_resolutions' in _tables(conn):
+        for ident, digest, input_id, salary_hash, method, version, stamp in conn.execute(
+                'SELECT * FROM historical_evidence_resolutions'):
+            resolutions[ident] = dict(snapshot_digest=digest, input_id=input_id, salary_hash=salary_hash,
+                method=method, evidence_version=version, confirmed_at=stamp)
     output = []
     for ident, key, rows in _groups(conn, sources, cancelled):
         _check(cancelled)
+        progress(f'Qualifying historical contest {len(output)+1}')
         candidates = by_import[ident]
         source = candidates[0] if len(candidates)==1 else None
         data = _contest(ident, key, rows, source, pairs.get(source['hash']) if source else None,
-                        basis, by_hash, snapshots, archives, issues, root, cancelled)
+                        basis, by_hash, snapshots, archives, issues, root, cancelled,
+                        resolutions.get(_digest(['historical-contest', ident, key])))
+        if data['snapshot_resolution'] and not data['snapshot_evidence']:
+            data['state'] = 'CANDIDATE'
+            data['conflicts'].append('invalid_saved_snapshot_resolution')
         for field in ('limitations','conflicts','blockers'):
             data[field] = sorted(set(data[field]))
         output.append(data)
@@ -462,7 +494,7 @@ def qualified_contests(db_path=None, *, cancelled=lambda: False):
 
 @instrument_reconciliation
 @phase("historical_identity_reconciliation")
-def reconcile(db_path=None, *, cancelled=lambda: False):
+def reconcile(db_path=None, *, cancelled=lambda: False, progress=lambda text: None, snapshot_choices=None):
     """Rebuild derived state all-or-nothing. Source observations remain untouched."""
     from learning_db import _connect, history_db_path, init_historical_import_tables
     path = Path(db_path or history_db_path())
@@ -471,7 +503,32 @@ def reconcile(db_path=None, *, cancelled=lambda: False):
         init_historical_import_tables(conn)
         conn.execute('BEGIN IMMEDIATE')
         try:
-            contests = derive_contests(conn, path.parent, cancelled=cancelled)
+            contests = derive_contests(conn, path.parent, cancelled=cancelled, progress=progress)
+            if snapshot_choices:
+                indexed = {c.data['identity_id']: c.data for c in contests}
+                for ident, digest in snapshot_choices.items():
+                    _check(cancelled)
+                    data = indexed.get(ident, {})
+                    existing = data.get('snapshot_resolution')
+                    if existing:
+                        if existing['snapshot_digest'] != digest:
+                            raise ValueError('A snapshot is already confirmed. The saved choice was preserved.')
+                        continue
+                    if not set(data.get('conflicts', [])) & {'conflicting_latest_snapshots','snapshot_timestamp_conflict'}:
+                        raise ValueError('Snapshot evidence is no longer ambiguous. Refresh coverage before choosing.')
+                    candidate = next((c for c in data['snapshot_candidates'] if c['snapshot_digest']==digest), None)
+                    if not candidate:
+                        raise ValueError('The chosen snapshot no longer qualifies. No changes were saved.')
+                    conn.execute('''INSERT INTO historical_evidence_resolutions
+                        (identity_id,snapshot_digest,input_id,salary_hash,method,evidence_version)
+                        VALUES (?,?,?,?,?,?)''', (ident,digest,candidate['input_id'],
+                        data['salary_evidence']['revision_hash'],'user_confirmed',METHOD_VERSION))
+                contests = derive_contests(conn, path.parent, cancelled=cancelled, progress=progress)
+                for contest in contests:
+                    data = contest.data
+                    if data['identity_id'] in snapshot_choices and not data['snapshot_evidence']:
+                        raise ValueError('Confirmed evidence changed during reconciliation. No changes were saved.')
+            progress('Saving all derived evidence in one transaction')
             for contest in contests:
                 _check(cancelled)
                 d = contest.data

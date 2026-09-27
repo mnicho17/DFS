@@ -544,12 +544,16 @@ def instrument_reconciliation(fn):
     """
     @wraps(fn)
     def wrapped(*args, **kwargs):
-        ledger = safe(Ledger, players=[], recipe={}, rules={}, purpose='historical_reconciliation')
+        # UI jobs pin their telemetry destination alongside the database when
+        # created; later profile/environment changes cannot redirect the write.
+        options = dict(kwargs)
+        ledger_root = options.pop('ledger_root', None)
+        ledger = safe(Ledger, players=[], recipe={}, rules={}, purpose='historical_reconciliation', root=ledger_root)
         if ledger:
             ledger.data.update(input_id=None, candidate_compatibility_id=None, simulation_compatibility_id=None)
         token = _current.set(ledger)
         try:
-            result = fn(*args, **kwargs)
+            result = fn(*args, **options)
             if ledger:
                 from historical_identity import coverage
                 safe(lambda: ledger.data.update(historical_identity=coverage(result),

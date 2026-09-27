@@ -223,12 +223,14 @@ def ensure_tables(conn):
           salary_hash TEXT NOT NULL REFERENCES analysis_sources(hash),
           basis TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
     ''')
+    if 'evidence_version' not in {r[1] for r in conn.execute('PRAGMA table_info(analysis_salary_pairs)')}:
+        conn.execute('ALTER TABLE analysis_salary_pairs ADD COLUMN evidence_version INTEGER')
 
 
 def _sources(conn):
-    return [dict(hash=h, kind=k, snapshot=p, name=n, source_path=s, manifest=json.loads(m), import_id=i)
-            for h, k, p, n, s, m, i in conn.execute(
-                'SELECT hash,kind,snapshot,original_name,source_path,manifest,import_id FROM analysis_sources ORDER BY created_at,hash')]
+    return [dict(hash=h, kind=k, snapshot=p, name=n, source_path=s, manifest=json.loads(m), import_id=i, created_at=t)
+            for h, k, p, n, s, m, i, t in conn.execute(
+                'SELECT hash,kind,snapshot,original_name,source_path,manifest,import_id,created_at FROM analysis_sources ORDER BY created_at,hash')]
 
 
 def qualify_pair(result, salary):
@@ -336,7 +338,9 @@ def _pairing_state(conn, path, cancelled):
         reason = verification[result['hash']] or verification[salary['hash']]
         q = dict(compatible=False, automatic=False, reason=reason) if reason else qualify_pair(result, salary)
         return dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'],
-                    automatic=q['automatic'], reason=q['reason'])
+                    automatic=q['automatic'], reason=q['reason'], dates=salary['manifest'].get('dates',[]),
+                    format=salary['manifest'].get('format'), games=salary['manifest'].get('games',[]),
+                    player_roles=len(salary['manifest'].get('players',[])), imported_at=salary['created_at'])
 
     output, qualified = [], 0
     for result in (s for s in sources if s['kind'] == 'results'):
@@ -402,9 +406,10 @@ def save_pair(result_hash, salary_hash, *, db_path=None, confirm_date=False, can
                 if old[0] != salary_hash:
                     raise ValueError('A different salary revision is already paired. Existing analysis was preserved.')
                 return False
-            conn.execute('INSERT INTO analysis_salary_pairs(result_hash,salary_hash,basis) VALUES(?,?,?)',
+            conn.execute('INSERT INTO analysis_salary_pairs(result_hash,salary_hash,basis,evidence_version) VALUES(?,?,?,1)',
                          (result_hash, salary_hash, 'automatic-date-and-identities' if automatic else
                           'user-selected-compatible-revision' if q['automatic'] else 'user-confirmed-date-and-identities'))
+            _check(cancelled)
         return True
 
 

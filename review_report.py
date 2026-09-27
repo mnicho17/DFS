@@ -413,7 +413,8 @@ def _database(path, options, cancelled, progress):
                                **{k: number(row[k], nonnegative=True) for k in ('entry_count', 'field_size', 'roster_size', 'metadata_coverage_pct')}})
             else:
                 coverage['field_detail_limit_rows'] += 1
-        from historical_identity import derive_contests, coverage as identity_coverage
+        from historical_identity import derive_contests
+        from historical_coverage import aggregate as identity_coverage
         from analysis_imports import ImportCancelled
         identity_exclusions = Counter()
         try:
@@ -562,6 +563,10 @@ class Report:
                   'Generated archives do not certify submission. Unknown scores remain unknown.',
                   'Blockers: ' + json.dumps(identities.get('blockers', {})),
                   'Conflicts: ' + json.dumps(identities.get('conflicts', {}))]
+        lines += ['Evidence levels (independent stage counts): ' + json.dumps(identities.get('evidence_levels', {})),
+                  'Coverage filters: ' + json.dumps(identities.get('categories', {})),
+                  'Downstream prerequisite counts: ' + json.dumps(identities.get('capability_evidence', {})),
+                  identities.get('capability_basis', '')]
         lines += ['', '## Performance']
         for g in db.get('groups', []):
             lines.append(f'### {g["cohort_id"]}: {g["sport"]} / {g["format"]} / {g["date"] or "date unknown"} / {g["contest_ref"] or "contest unknown"}')

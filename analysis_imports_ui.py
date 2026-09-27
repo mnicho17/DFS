@@ -17,6 +17,8 @@ class CombinedImportWorker(QtCore.QObject):
         self.pair = pair
         from learning_db import history_db_path
         self.db_path = str(db_path or history_db_path())
+        from compute_ledger import folder
+        self.ledger_root = folder()
         self.cancelled = threading.Event()
 
     def request_cancel(self):
@@ -36,11 +38,25 @@ class CombinedImportWorker(QtCore.QObject):
                     from performance_review import analyze_saved_results
                     try:
                         review = analyze_saved_results(username=self.username, import_ids=set(ids), db_path=self.db_path,
-                            cancelled=self.cancelled.is_set, progress=lambda text: self.progress.emit(0, 0, text))
+                            cancelled=self.cancelled.is_set, progress=lambda text: self.progress.emit(0, 0, text), ledger_root=self.ledger_root)
                         result['analysis_message'] = review['message']
+                        result['coverage_reconciled'] = review.get('identity_reconciled',False)
                     except Exception as exc:
                         result['errors'].append('Files saved; Analyze Saved Results can retry analysis: ' + str(exc))
             result['cancelled'] = bool(result.get('cancelled') or self.cancelled.is_set())
+            if not result['cancelled'] and any(result.get(key) for key in ('results_imported','salaries_imported','pairs_added')):
+                # The same authoritative reconciliation also handles salary-only
+                # imports and explicit pair saves that resolve older contests.
+                from historical_identity import reconcile
+                try:
+                    if not result.get('coverage_reconciled'):
+                        reconcile(self.db_path, cancelled=self.cancelled.is_set,
+                                  progress=lambda text: self.progress.emit(0,0,text), ledger_root=self.ledger_root)
+                    result['coverage_reconciled'] = True
+                except ImportCancelled:
+                    result['cancelled'] = True
+                except Exception:
+                    result['errors'].append('Sources saved; Historical Coverage > Reconcile can retry evidence qualification.')
             if not result['cancelled'] and any(result.get(key) for key in ('results_imported','salaries_imported','pairs_added')):
                 from learning_db import generate_learning_report
                 try:
@@ -59,14 +75,38 @@ class CombinedImportWorker(QtCore.QObject):
             self.error.emit(traceback.format_exc())
 
 
+class SalaryMatchReviewWorker(QtCore.QObject):
+    progress = QtCore.pyqtSignal(int, int, str)
+    finished = QtCore.pyqtSignal(dict)
+    error = QtCore.pyqtSignal(str)
+
+    def __init__(self, db_path):
+        super().__init__()
+        self.db_path = db_path
+        self.cancelled = threading.Event()
+
+    def request_cancel(self):
+        self.cancelled.set()
+
+    def run(self):
+        try:
+            self.progress.emit(0,0,'Verifying saved salary matches…')
+            state = pairing_state(self.db_path, cancelled=self.cancelled.is_set)
+            self.finished.emit(dict(state=state, cancelled=self.cancelled.is_set()))
+        except ImportCancelled:
+            self.finished.emit(dict(cancelled=True))
+        except Exception:
+            self.error.emit('Salary matches could not be read. Check saved source access and retry.')
+
+
 class SalaryMatchesDialog(QtWidgets.QDialog):
     """Select an explicit compatible revision; verification runs in the parent worker."""
-    def __init__(self, parent=None, db_path=None):
+    def __init__(self, parent=None, db_path=None, *, state=None, result_hash=None):
         super().__init__(parent)
         self.setWindowTitle('Review Salary Matches')
         self.resize(780, 560)
         self.selection = None
-        self.state = pairing_state(db_path)
+        self.state = state if state is not None else pairing_state(db_path)
         self.rows = self.state['results']
         layout = QtWidgets.QVBoxLayout(self)
         label = QtWidgets.QLabel('Choose the exact contest and salary snapshot. Existing pairings stay fixed. '
@@ -86,6 +126,9 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         layout.addWidget(self.results)
         self.salaries = QtWidgets.QComboBox()
         layout.addWidget(self.salaries)
+        self.candidate_details = QtWidgets.QLabel()
+        self.candidate_details.setWordWrap(True)
+        layout.addWidget(self.candidate_details)
         self.details = QtWidgets.QPlainTextEdit()
         self.details.setReadOnly(True)
         layout.addWidget(self.details)
@@ -106,6 +149,11 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.results.currentIndexChanged.connect(self._update)
         self.salaries.currentIndexChanged.connect(self._candidate_changed)
         self._update()
+        if result_hash:
+            for index, row in enumerate(self.rows):
+                if row['hash'] == result_hash:
+                    self.results.setCurrentIndex(index)
+                    break
 
     def _update(self):
         self.salaries.clear()
@@ -151,6 +199,12 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
     def _candidate_changed(self):
         candidate = self.salaries.currentData()
         row = self.results.currentData()
+        self.candidate_details.setText('' if not candidate else
+            f"{candidate.get('format') or 'Unknown format'} | dates: {', '.join(candidate.get('dates',[])) or 'unknown'} | "
+            f"{candidate.get('player_roles','unknown')} player/role identities\n"
+            f"Games: {', '.join(candidate.get('games',[])) or 'unknown'}\n"
+            f"Imported: {candidate.get('imported_at','not recorded')} | revision {candidate['hash'][:12]}\n"
+            f"{candidate.get('reason','')}")
         self.confirm_date.setVisible(bool(row and row['status'] == 'READY_TO_PAIR' and candidate and not candidate['automatic']))
         self.confirm_date.setChecked(False)
 

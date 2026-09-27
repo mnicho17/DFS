@@ -67,5 +67,10 @@ blocks snapshot selection from a partial candidate set. Invalid files appear in
 source issues. Result and score scans permit 200,000 rows and 5,000 score identities;
 limits become explicit blockers, not zero scores.
 
-This slice adds no reconciliation UI, submitted-build selection, portfolio risk,
-hindsight optimization, compute instrumentation or strategy tuning.
+RL-05B now provides the [Historical Coverage UI](HISTORICAL_COVERAGE.md).
+Method version 2 adds explicitly confirmed ambiguous snapshots. The existing
+matcher still validates salary pool, roles, games, contest IDs and pregame timing.
+Confirmed choices bind the exact snapshot digest, input ID and salary revision;
+they are never automatically replaced. Compute instrumentation remains
+observational. Submitted-build selection, portfolio risk, hindsight optimization
+and strategy tuning remain outside these slices.
