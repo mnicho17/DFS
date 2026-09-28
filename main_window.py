@@ -4056,6 +4056,10 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.risk = PortfolioRiskWidget(self.db_path,self)
         self.risk.requested.connect(self.start_portfolio_risk)
         self.results_tabs.addTab(self.risk,'Portfolio Risk')
+        from hindsight_ui import HindsightWidget
+        self.hindsight = HindsightWidget(self.db_path,self)
+        self.hindsight.requested.connect(self.start_hindsight)
+        self.results_tabs.addTab(self.hindsight,'Hindsight')
         self.results_tabs.currentChanged.connect(self._suggest_risk_source)
         layout.addWidget(self.results_tabs, 1)
 
@@ -4245,6 +4249,21 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             selected = self.coverage.selected()
             if selected:
                 self.risk.suggest_contest(selected['identity_id'])
+        elif self.results_tabs.widget(index) is self.hindsight:
+            selected = self.coverage.selected()
+            if selected:
+                self.hindsight.suggest_contest(selected['identity_id'])
+
+    def start_hindsight(self, request) -> None:
+        if self._import_thread is not None:
+            return
+        from hindsight_ui import HindsightWorker
+        worker = HindsightWorker(self.db_path,request)
+        cancelled = worker.cancelled
+        self.hindsight.begin(cancelled)
+        def ready(result):
+            self.hindsight.finish(result,cancelled=cancelled.is_set())
+        self._start_background_import(worker,ready)
 
     def start_portfolio_risk(self, request) -> None:
         if self._import_thread is not None:
@@ -4403,6 +4422,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
     def _set_import_controls(self, enabled):
         self.coverage.setEnabled(enabled)
         self.risk.setEnabled(enabled)
+        self.hindsight.setEnabled(enabled)
         for control in (self.import_new_button, self.import_button, self.attach_salary_button,
                         self.refresh_button, self.analyze_button, self.stats_button, self.opponents_button,
                         self.choose_results_button, self.choose_salary_button, self.clear_salary_button,
@@ -4415,6 +4435,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self._on_import_progress(done, total, text)
             self.coverage.progress(text)
             self.risk.progress(text)
+            self.hindsight.progress(text)
 
     def _job_completed(self, job, handler, payload):
         if self._import_job is job and job['completion'] is None:
@@ -4499,6 +4520,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self._import_worker.request_cancel()
             self.coverage.progress('Cancellation requested; waiting for the transaction to finish')
             self.risk.progress('Cancellation requested; waiting for worker retirement')
+            self.hindsight.progress('Cancellation requested; waiting for solver and worker retirement')
 
             self.import_cancel.setEnabled(False)
 
@@ -4616,6 +4638,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._finish_import_ui()
         self.coverage.reload()
         if self._close_after_import:
+            if self.hindsight.started is not None:
+                self.hindsight.finish({},cancelled=True)
             if self.risk.started is not None:
                 self.risk.finish({},cancelled=True)
             if self.coverage.started is not None:

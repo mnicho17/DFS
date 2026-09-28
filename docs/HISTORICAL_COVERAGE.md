@@ -40,9 +40,11 @@ needs review. Sport/format filters use the derived identity or Unknown.
 
 Ordinary result observations stay available. Portfolio Risk and future compute
 input/output comparisons require qualified salary, snapshot and generated build
-evidence. Hindsight requires the complete RL-05A chain. These are prerequisites,
-not authorization from cached state. The RL-06 tab freshly verifies one selected
-archive; RL-07 remains unimplemented. Build archives do not establish submitted
+evidence. The legacy Hindsight count describes the complete RL-05A chain; it is
+not RL-07A solver readiness. These are cached prerequisites, not authorization.
+The RL-06 tab freshly verifies one selected archive. RL-07A independently qualifies
+the supplied salary universe, exact actuals and supported rules; its snapshot-local
+comparison is optional. RL-07B remains unimplemented. Build archives do not establish submitted
 portfolios or phase timings. Zero and negative scores remain known observations.
 
 ## Explicit choices

@@ -191,5 +191,6 @@ Actual baseline/focused/full/Windows counts, durations and artifact receipts bel
 to the review PR. Offscreen source-runtime checks and successful executable
 packaging are separate from launching the packaged executable.
 
-RL-07A/RL-07B, CO-02 and DC-02B remain future work. RL-06 changes no projection,
+RL-07A now provides the separate [Hindsight Solver](HINDSIGHT_SOLVER.md); actual
+scores never enter RiskCapture. RL-07B, CO-02 and DC-02B remain future work. RL-06 changes no projection,
 ownership, SIM/ranking, payout, Tournament, learning, AR-01/AR-02 or saved-lineup rules.
