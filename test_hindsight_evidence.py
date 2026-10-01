@@ -3,9 +3,10 @@ from test_environment import install
 install()
 import copy
 import csv
-from contextlib import closing
+from contextlib import closing, contextmanager
 import hashlib
 import json
+import itertools
 from pathlib import Path
 import sqlite3
 import tempfile
@@ -26,7 +27,7 @@ from test_portfolio_risk_evidence import logical_db,source_bytes
 
 
 class SourceFixture:
-    def __init__(self,kind='showdown',pool=None):
+    def __init__(self,kind='showdown',pool=None,edit_results=None):
         self.tmp=tempfile.TemporaryDirectory(prefix='rl07a-');self.root=Path(self.tmp.name);self.db=self.root/'history.sqlite'
         self.results=self.root/'results';self.results.mkdir();self.salaries=self.root/'salaries';self.salaries.mkdir()
         self.kind=kind;self.pool=pool or athletes(kind);self.raw_result=self.results/'synthetic.csv'
@@ -49,6 +50,10 @@ class SourceFixture:
                 w.writerow([1 if n==0 else '',1000 if n==0 else '','Synthetic_User' if n==0 else '',
                     total if n==0 else '',self.lineup if n==0 else '','synthetic' if n==0 else '',
                     '2026-09-21' if n==0 else '',p['name'],role,str(r['score_units']/SCALE),r['id'],1000 if n==0 else ''])
+        if edit_results:
+            with self.raw_result.open(newline='',encoding='utf-8-sig') as handle:rows=list(csv.reader(handle))
+            edit_results(rows)
+            with self.raw_result.open('w',newline='',encoding='utf-8-sig') as handle:csv.writer(handle).writerows(rows)
         result=ai.import_folders(self.results,self.salaries,db_path=str(self.db),username='Synthetic_User')
         assert not result['errors'],result
         with closing(sqlite3.connect(self.db)) as conn:sources=ai._sources(conn)
@@ -93,6 +98,134 @@ class SourceFixture:
         source['manifest']=(ai._results_manifest if kind=='results' else ai._salary_manifest)(path,lambda:False)
         self.change('UPDATE analysis_sources SET hash=?,manifest=? WHERE hash=?',(source['hash'],json.dumps(source['manifest']),old))
         self.change('UPDATE analysis_salary_pairs SET '+('result_hash' if kind=='results' else 'salary_hash')+'=? WHERE '+('result_hash' if kind=='results' else 'salary_hash')+'=?',(source['hash'],old))
+
+
+EXPLICIT_SHOWDOWN='CPT A (1100) FLEX B (101) FLEX C (102) FLEX D (103) FLEX E (104) FLEX F (105)'
+CLASSIC_ROSTER='QB Q1 RB R1 RB R2 WR W1 WR W2 WR W3 TE T1 FLEX R3 DST D1'
+
+
+def standings_entries(rows,entries,kind='showdown'):
+    """Write entry copies separately from the original per-player actuals."""
+    # Explicit format keeps observed-entry interpretation available even when
+    # original salary pairing correctly refuses a contradictory ID/role.
+    for row in rows:del row[12:]
+    rows[0].extend(['ContestType','Sport'])
+    for row in rows[1:]:row[:7]=['']*7;row[11]='';row.extend(['',''])
+    for ident,total,lineup in entries:
+        rows.append(['1',ident,'Synthetic_User',total,lineup,'synthetic','2026-09-21','','','','','1000',kind,'NFL'])
+
+
+class ObservedEntryIdentityTests(unittest.TestCase):
+    def report(self,entries,kind='showdown',qualified=True):
+        f=SourceFixture(kind,edit_results=lambda rows:standings_entries(rows,entries,kind));self.addCleanup(f.close)
+        selection=f.selection();authority=f.one();before=logical_db(f.db);files=source_bytes(f.root)
+        original=he.read_database;revalidated=[];revalidate=he.CaptureReader.revalidate
+        @contextmanager
+        def readonly(path):
+            with original(path) as conn:
+                self.assertEqual(conn.execute('PRAGMA query_only').fetchone()[0],1)
+                yield conn
+        def checked(reader):
+            revalidate(reader);revalidated.append(dict(reader.receipts))
+        with patch.object(he,'read_database',readonly),patch.object(he.CaptureReader,'revalidate',checked):
+            captured=he.capture(f.db,selection)
+        self.assertEqual(len(revalidated),1)
+        self.assertIn(f.source['hash'],revalidated[0].values())
+        report=hs.calculate(captured,seconds=5).data
+        self.assertEqual(before,logical_db(f.db));self.assertEqual(files,source_bytes(f.root));self.assertEqual(authority,f.one())
+        if qualified:
+            self.assertIn(f.salary['hash'],revalidated[0].values())
+            self.assertEqual(report['capture']['gates']['supplied'],dict(status='ready',blockers=[]))
+            self.assertEqual(report['scopes']['supplied']['status'],'optimal')
+            self.assertEqual(report['scopes']['supplied']['points'],'70' if kind=='showdown' else '111')
+            self.assertEqual(report['capture']['actual_coverage']['unknown'],0)
+        else:
+            self.assertEqual(report['capture']['gates']['supplied'],dict(status='unavailable_evidence',
+                blockers=['qualified_exact_salary_revision_required']))
+            self.assertIn('no_compatible_salary_revision',authority['blockers'])
+            self.assertEqual(report['scopes']['supplied']['status'],'unavailable_evidence')
+            self.assertIsNone(report['scopes']['supplied']['points']);self.assertFalse(report['capture']['pool'])
+        return report
+
+    def conflict(self,lineups,kind='showdown',extra=(),qualified=False):
+        reports=[]
+        for order in sorted(set(itertools.permutations(lineups))):
+            with self.subTest(kind=kind,order=order):
+                d=self.report([('1000','70' if kind=='showdown' else '111',text) for text in order]+list(extra),kind,qualified)
+                o=d['capture']['observed'];coverage=o['coverage']
+                self.assertEqual(coverage['conflicting_entry_ids'],1)
+                self.assertEqual(coverage.get('identical_duplicate_rows',0),0)
+                self.assertEqual(coverage['accepted_entries'],len(extra))
+                if not extra:
+                    self.assertIsNone(o['highest']);self.assertFalse(o['highest_witnesses'])
+                    self.assertFalse(o['highest_exact_validated']);self.assertIsNone(d['gaps']['observed_units'])
+                    self.assertEqual(o['highest_tied_entries'],0);self.assertEqual(d['gaps']['issues'],[])
+                reports.append(d)
+        return reports
+
+    def test_explicit_captain_id_conflict_in_both_orders(self):
+        self.conflict([EXPLICIT_SHOWDOWN,EXPLICIT_SHOWDOWN.replace('(1100)','(9999)')])
+
+    def test_explicit_flex_id_conflict_in_both_orders(self):
+        self.conflict([EXPLICIT_SHOWDOWN,EXPLICIT_SHOWDOWN.replace('(101)','(9999)')])
+
+    def test_classic_individual_roles_conflict_in_both_orders(self):
+        self.conflict([CLASSIC_ROSTER,CLASSIC_ROSTER.replace('QB Q1 RB R1','RB Q1 QB R1')],'classic')
+
+    def test_conflicting_copies_never_count_as_identical_in_any_order(self):
+        self.conflict([EXPLICIT_SHOWDOWN,EXPLICIT_SHOWDOWN,EXPLICIT_SHOWDOWN.replace('(1100)','(9999)')])
+
+    def test_conflict_exclusion_recomputes_highest_from_independent_entry(self):
+        lower=EXPLICIT_SHOWDOWN.replace('FLEX F (105)','FLEX G (106)')
+        other=EXPLICIT_SHOWDOWN.replace('CPT A (1100) FLEX B (101)','FLEX A (100) CPT B (1101)')
+        for d in self.conflict([EXPLICIT_SHOWDOWN,other],extra=[('1001','68',lower)],qualified=True):
+            o=d['capture']['observed'];self.assertEqual(o['highest'],'68');self.assertTrue(o['highest_exact_validated'])
+            self.assertEqual(o['highest_tied_entries'],1);self.assertEqual(d['gaps']['observed_units'],2*SCALE)
+            self.assertEqual(o['highest_witnesses'][0]['points'],'68')
+
+    def test_classic_eligible_role_changes_still_conflict_with_independent_solver(self):
+        baseline=self.report([('1000','111',CLASSIC_ROSTER)],'classic')
+        for d in self.conflict([CLASSIC_ROSTER,CLASSIC_ROSTER.replace('RB R1','FLEX R1').replace('FLEX R3','RB R3')],
+                               'classic',qualified=True):
+            for field in ('pool','universe_digest','actual_coverage','salary_coverage'):
+                self.assertEqual(d['capture'][field],baseline['capture'][field])
+
+    def test_identical_copies_and_decimal_equivalence_preserve_distinct_entries(self):
+        d=self.report([('1000','70',EXPLICIT_SHOWDOWN),('1000','70.0',EXPLICIT_SHOWDOWN),
+                       ('1000','70.00',EXPLICIT_SHOWDOWN),('1001','70',EXPLICIT_SHOWDOWN)])
+        o=d['capture']['observed'];self.assertEqual(o['coverage']['identical_duplicate_rows'],2)
+        self.assertEqual(o['coverage']['conflicting_entry_ids'],0);self.assertEqual(o['coverage']['accepted_entries'],2)
+        self.assertEqual((o['highest_tied_entries'],o['highest_tied_unique_valid_rosters']),(2,1))
+        self.assertEqual(d['gaps']['observed_units'],0)
+
+    def test_exact_decimal_difference_remains_conflicting_in_both_orders(self):
+        for scores in [('70','70.01'),('70.00000000000000000000000000001','70.00000000000000000000000000002')]:
+            for order in (scores,scores[::-1]):
+                with self.subTest(scores=order):
+                    d=self.report([('1000',value,EXPLICIT_SHOWDOWN) for value in order]);o=d['capture']['observed']
+                    self.assertEqual(o['coverage']['conflicting_entry_ids'],1);self.assertIsNone(o['highest'])
+                    self.assertIsNone(d['gaps']['observed_units'])
+
+    def test_role_aliases_and_slot_order_preserve_identical_copies(self):
+        for kind,a,b in [('showdown',EXPLICIT_SHOWDOWN,
+                'flex F (105) FLEX E (104) CAPTAIN A (1100) FLEX D (103) FLEX C (102) FLEX B (101)'),
+                ('classic',CLASSIC_ROSTER,'D/ST D1 FLEX R3 TE T1 WR W3 RB R2 QB Q1 WR W2 WR W1 RB R1')]:
+            for order in ((a,b),(b,a)):
+                with self.subTest(kind=kind,order=order):
+                    d=self.report([('1000','70' if kind=='showdown' else '111',text) for text in order],kind)
+                    o=d['capture']['observed'];self.assertEqual(o['coverage']['identical_duplicate_rows'],1)
+                    self.assertEqual(o['coverage']['conflicting_entry_ids'],0);self.assertTrue(o['highest_exact_validated'])
+                    self.assertEqual(d['gaps']['observed_units'],0)
+
+    def test_single_bad_id_retains_reported_score_without_lower_witness_substitution(self):
+        for highest in (EXPLICIT_SHOWDOWN.replace('(1100)','(9999)'),'hidden'):
+            with self.subTest(highest=highest):
+                d=self.report([('1000','70',highest),('1001','68',EXPLICIT_SHOWDOWN.replace('FLEX F (105)','FLEX G (106)'))],
+                              qualified=highest=='hidden')
+                o=d['capture']['observed'];self.assertEqual(o['highest'],'70');self.assertFalse(o['highest_witnesses'])
+                self.assertEqual(o['coverage']['accepted_entries'],2);self.assertEqual(o['coverage']['conflicting_entry_ids'],0)
+                self.assertFalse(o['highest_exact_validated']);self.assertIsNone(d['gaps']['observed_units'])
+                self.assertEqual(d['gaps']['issues'],[])
 
 
 class HindsightEvidenceTests(unittest.TestCase):

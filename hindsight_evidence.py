@@ -157,8 +157,23 @@ def _roster(text,pool,kind):
     return validate_roster(slots,pool,kind,require_scores=False)
 
 
+def _entry_roster_receipt(text,kind):
+    """Evidence identity, not the names-only overlap/solver-tie identity."""
+    from opponent_analysis import _roster as structural, _MARKERS
+    if not isinstance(text,str) or len(text)>4000 or kind not in ('classic','showdown') or not structural(text,kind):
+        return ('raw',text)
+    markers=list(_MARKERS.finditer(text));slots=[]
+    for n,m in enumerate(markers):
+        label=text[m.end():markers[n+1].start() if n+1<len(markers) else len(text)].strip()
+        ident=re.search(r'\((\d+)\)\s*$',label)
+        # Only spelling/spacing aliases and slot order are equivalent. Preserve
+        # every athlete's role and explicit ID, including absence of an ID.
+        slots.append((be.normalize_role(m[1]),ai._name(label),ident[1] if ident else ''))
+    return ('roles',tuple(sorted(slots)))
+
+
 def observed_entries(rows,pool,kind,cancelled):
-    from opponent_analysis import username_key, _roster as structural
+    from opponent_analysis import username_key
     entries={};conflicts=set();counts=Counter();sizes=set();invalid_size=False
     for line,row in rows:
         check(cancelled)
@@ -168,12 +183,11 @@ def observed_entries(rows,pool,kind,cancelled):
         raw=row.get('points',row.get('actualpoints',''));text=row.get('lineup',row.get('roster',''))
         try:value=decimal(raw)
         except ValueError:value=None
-        parsed=structural(text,kind) if kind in ('classic','showdown') else None
         receipt=(username_key(row.get('entryname','')),row.get('rank',''),value if value is not None else raw,
-                 parsed[0] if parsed else text)
+                 _entry_roster_receipt(text,kind))
         if ident in entries:
-            if entries[ident]['receipt']==receipt:counts['identical_duplicate_rows']+=1
-            else:conflicts.add(ident)
+            entries[ident]['copies']+=1
+            if entries[ident]['receipt']!=receipt:conflicts.add(ident)
             continue
         for key in ('fieldsize','contestentries','entries'):
             if row.get(key):
@@ -185,8 +199,11 @@ def observed_entries(rows,pool,kind,cancelled):
         witness=None;issue=None
         try:witness=_roster(text,pool,kind)
         except ValueError as exc:issue=str(exc)
-        entries[ident]=dict(receipt=receipt,value=value,witness=witness,issue=issue,raw_score=raw)
+        entries[ident]=dict(receipt=receipt,value=value,witness=witness,issue=issue,raw_score=raw,copies=1)
     accepted=[v for k,v in entries.items() if k not in conflicts]
+    # A repeated variant of a conflicting ID is not an accepted identical copy.
+    # Count only after all rows, so A/A/B and B/A/A have the same coverage.
+    counts['identical_duplicate_rows']=sum(v['copies']-1 for v in accepted)
     known=[v['value'] for v in accepted if v['value'] is not None];highest=max(known) if known else None
     best=[v for v in accepted if highest is not None and v['value']==highest]
     valid=[v for v in accepted if v['witness'] is not None]

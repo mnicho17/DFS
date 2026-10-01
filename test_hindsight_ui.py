@@ -14,7 +14,7 @@ from PyQt5 import QtCore,QtWidgets,QtTest
 import bounded_solver
 import hindsight_ui as ui
 import historical_identity as hi
-from test_hindsight_evidence import SourceFixture
+from test_hindsight_evidence import SourceFixture,standings_entries,EXPLICIT_SHOWDOWN
 from test_portfolio_risk_evidence import logical_db,source_bytes
 
 
@@ -117,6 +117,37 @@ class HindsightQtTests(unittest.TestCase):
         request=self.view.request();worker=ui.HindsightWorker(self.f.db,request);self.addCleanup(worker.deleteLater)
         original=copy.deepcopy(worker.request);request['selection']['contest_id']='changed';request['seconds']=0
         self.assertEqual(worker.request,original);self.assertEqual(worker.history_root,str(self.f.root))
+
+    def test_real_worker_excludes_conflicting_entry_copies_from_report_and_ui(self):
+        bad=EXPLICIT_SHOWDOWN.replace('(1100)','(9999)')
+        other=EXPLICIT_SHOWDOWN.replace('CPT A (1100) FLEX B (101)','FLEX A (100) CPT B (1101)')
+        for order in ((EXPLICIT_SHOWDOWN,bad),(bad,EXPLICIT_SHOWDOWN),(EXPLICIT_SHOWDOWN,other)):
+            with self.subTest(order=order):
+                self.f=SourceFixture(edit_results=lambda rows:standings_entries(rows,[('1000','70',text) for text in order]))
+                self.addCleanup(self.f.close);self.addCleanup(self.drain)
+                hi.reconcile(self.f.db)
+                self.dialog.db_path=str(self.f.db);self.dialog.coverage.db_path=str(self.f.db)
+                self.view.db_path=str(self.f.db);self.view.reload();self.view.source.setCurrentIndex(1)
+                before=logical_db(self.f.db);files=source_bytes(self.f.root)
+                with patch.object(self.view,'finish',wraps=self.view.finish) as finish:
+                    self.start();self.drain();self.assertEqual(finish.call_count,1)
+                    result=finish.call_args.args[0];self.assertIn('report',result)
+                    self.assertFalse(result.get('error'));self.assertFalse(result.get('cancelled'))
+                report=self.view.report.data;o=report['capture']['observed']
+                self.assertEqual(o['coverage']['conflicting_entry_ids'],1)
+                self.assertEqual(o['coverage']['accepted_entries'],0);self.assertIsNone(o['highest'])
+                self.assertIsNone(report['gaps']['observed_units'])
+                if bad in order:
+                    self.assertEqual(report['scopes']['supplied']['status'],'unavailable_evidence')
+                    self.assertEqual(report['scopes']['supplied']['blockers'],['qualified_exact_salary_revision_required'])
+                else:self.assertEqual(report['scopes']['supplied']['points'],'70')
+                overview=self.view.overview.toPlainText()
+                self.assertIn('0 accepted entries; 1 conflicting IDs; 0 reported scores',overview)
+                self.assertIn('Supplied-pool minus validated highest reported score: Unavailable; compatible exact scores are required',overview)
+                self.assertNotIn('Observed highest witness',[self.view.lineups.item(i,0).text() for i in range(self.view.lineups.rowCount())])
+                self.assertTrue(self.view.copy_button.isEnabled());self.view.copy_summary()
+                self.assertIn('Highest reported score in supplied entries: Unavailable.',self.app.clipboard().text())
+                self.assertEqual(before,logical_db(self.f.db));self.assertEqual(files,source_bytes(self.f.root))
 
     def test_copy_is_aggregate_by_default_and_points_sort_numerically(self):
         self.view.compare.setChecked(True);self.start();self.drain();self.view.copy_summary()

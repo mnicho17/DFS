@@ -59,9 +59,16 @@ exact salary-qualified name match, with whole-pool ambiguity checks.
   remain unchanged. They do not establish exact ties or exact agreement here.
 
 The original entry Points stay separate from a reconstructed player-score sum.
-Identical EntryId copies deduplicate; conflicting copies are excluded. Different
-EntryIds sharing a roster remain different entries. A hidden highest-scoring
-roster remains the highest reported score with an unavailable witness; a lower
+Identical EntryId copies deduplicate; all copies of a conflicting EntryId are
+excluded regardless of row order, including from the identical-duplicate count.
+Duplicate evidence retains every athlete's explicit ID and individual roster role;
+the names-only overlap/tie signature is not sufficient. Supported Captain/DST
+aliases and slot-order permutations agree, but changed IDs or athlete-role
+assignments conflict. Different EntryIds sharing a roster remain different entries.
+Existing salary qualification still rejects incompatible ID/eligibility evidence;
+observed-entry exclusion cannot override that gate or redefine a qualified solver
+universe. A hidden highest-scoring roster remains the highest reported score with
+an unavailable witness; a lower
 readable roster is never substituted. Player/FPTS side-table values do not become
 entry Points. Tied entries and distinct validated tied rosters have separate counts.
 Gaps require compatible exact validated scores. A reported entry above the scoped
@@ -178,7 +185,11 @@ roster witnesses. There is no upload, bank-save or report-file export action.
 independent exhaustive oracles, real CBC, original synthetic CSV/SQLite/ZIP
 fixtures, exact conflicts, preserved authority outputs, source/DB immutability,
 shared deadlines, process cleanup and real Qt cancellation/retirement. The focused
-suite includes historical identity/coverage, imports/pairing, readers/archives,
+duplicate regressions import original CSVs before read-only capture, cover both
+orders of Captain/FLEX ID and Classic individual-role conflicts, and check real
+worker delivery, report coverage and withheld gaps. The shared structural parser
+retains its separate overlap contract. The focused suite includes historical
+identity/coverage, imports/pairing, readers/archives,
 Portfolio Risk, entry review, AR-01/AR-02, CO-01 and compute-ledger parity. Counts,
 durations, solver versions, measured synthetic pools and Windows artifact receipts
 are recorded in the review PR. Packaging/static inspection is separate from an

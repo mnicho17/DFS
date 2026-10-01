@@ -1694,8 +1694,10 @@ personal fades and current depth charts do not shrink the supplied salary univer
 
 **Highest reported score in supplied entries** comes from original entry Points,
 not the Player/FPTS side table. Identical EntryId copies deduplicate and conflicting
-copies are excluded. Tied entries and distinct validated tied rosters have separate
-counts. An unreadable highest entry keeps its reported score and unavailable roster
+copies are all excluded regardless of row order. A changed explicit player ID or
+individual roster-role assignment is a conflict even when player names agree.
+Equivalent role aliases and slot order still deduplicate. Tied entries and distinct
+validated tied rosters have separate counts. An unreadable highest entry keeps its reported score and unavailable roster
 witness; a lower readable entry is never substituted. Reported totals and exact
 reconstructed scores remain separate. Partial fields do not imply complete fields.
 
