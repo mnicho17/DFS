@@ -1556,7 +1556,9 @@ Neither section identifies an original or submitted build.
 ![Qualified archive and a candidate from another snapshot](images/historical-build-candidates.png)
 
 Downstream labels describe evidence prerequisites and require fresh verification.
-Portfolio Risk is available in its separate tab; RL-07 Hindsight remains future work. Missing
+Portfolio Risk is available in its separate tab. Hindsight (RL-07A) independently
+requalifies exact salary/actual evidence; the legacy full-ladder prerequisite above
+is not solver readiness. RL-07B generation explanation remains future work. Missing
 actual scores can block hindsight while leaving generated-portfolio evidence
 available for risk review. Generated archives never identify the submitted
 build, and alone do not establish compute phase timings. Unknown evidence stays
@@ -1655,6 +1657,83 @@ Use **Include player names and lineup details (private)** only when you intend t
 share them. No risk report file, persistent history, solver, SIM, learning adjustment
 or money metric is created. See [Portfolio Risk](PORTFOLIO_RISK.md) for evidence
 gates, arithmetic examples and validation details.
+
+## Hindsight: supplied-pool actual-point benchmarks
+
+Open **Results & Learning > Hindsight**, select one historical contest, then click
+**Capture / Solve**. Opening the tab or refreshing its cached choices does not
+scan source files or solve. If a newly imported contest is missing, use Historical
+Coverage's explicit reconciliation first.
+
+The supplied-pool benchmark needs a qualified exact salary revision and complete,
+finite, conflict-free actual scores for every eligible athlete, including athletes
+absent from observed entries. It does not need a snapshot or generated archive.
+Unknown scores never become zero; zero and negative scores remain known.
+
+**Any certified optimum is limited to the complete supplied salary revision under
+the displayed roster rules. Completeness of the original contest-wide player pool
+is not independently established.** A salary/snapshot match or a high observed
+score cannot prove that no other original platform players were offered.
+
+![Synthetic Hindsight supplied-pool and snapshot-local comparison](images/hindsight-overview.png)
+
+Enable **Compare exact qualified snapshot restrictions** to request the second
+benchmark. The displayed pregame snapshot must still qualify at capture time. An
+optional archive choice identifies a specific completed generated build; neither
+choice establishes the original or submitted portfolio. Saved salary/snapshot
+associations are preserved, including invalid saved choices requiring review.
+
+Snapshot-local restrictions include the recorded cap, role locks/fades, supported
+groups, explicit zero caps, 100% minima with their recorded role meaning, and
+recorded QB exclusions. A Showdown FLEX lock is not satisfied at Captain. Other
+portfolio percentages, uniqueness, team/game appearance caps, retained rows and
+recovery policies are **not evaluated by a single-lineup benchmark**. Small positive
+minima do not become locks. Unknown local restrictions block this comparison while
+leaving an independently qualified supplied-pool solve available. Missing forecasts,
+personal fades and current depth charts do not shrink the supplied salary universe.
+
+**Highest reported score in supplied entries** comes from original entry Points,
+not the Player/FPTS side table. Identical EntryId copies deduplicate and conflicting
+copies are all excluded regardless of row order. A changed explicit player ID or
+individual roster-role assignment is a conflict even when player names agree.
+Equivalent role aliases and slot order still deduplicate. Tied entries and distinct
+validated tied rosters have separate counts. An unreadable highest entry keeps its reported score and unavailable roster
+witness; a lower readable entry is never substituted. Reported totals and exact
+reconstructed scores remain separate. Partial fields do not imply complete fields.
+
+The supported rules use a 50,000 cap, Classic's nine slots or Showdown's Captain
+plus five FLEX slots, distinct athletes and at least two teams. Showdown uses the
+one verified game and exact Captain 1.5x points and cost once. This is a disclosed
+rules contract, not proof of the original contest's historical platform rules.
+
+Exact base-score inputs support four decimal places and absolute magnitude up to
+10,000. Unsupported precision, nonfinite values and exact conflicts are unavailable,
+not rounded into ties. Existing historical diagnostic tolerances remain unchanged.
+The new benchmark uses exact integer units and independently validates every witness.
+
+![Synthetic Hindsight unavailable snapshot comparison with supplied-pool result retained](images/hindsight-unavailable.png)
+
+One 30-second solver budget covers both primary solves and optional tie work.
+**Optimal** requires completed solver proof and independently checked output.
+Infeasible, time limit, cancelled, solver error, validation failed, unsupported rules,
+unavailable evidence and not requested are separate statuses. An unproven incumbent
+is never called optimal. At most 20 tied roster examples are displayed per scope.
+The exact total or uniqueness is known only after exhaustive tie search; otherwise
+the report shows a lower bound and partial/not-checked status. Classic slot-order
+permutations do not multiply ties; Captain swaps do count as different rosters.
+
+**Cancel Operation**, Close/Escape and selector changes suppress unapplied results.
+Controls unlock only after the worker and child process retire. Failure/cancel
+retains prior output and disables copying until a matching capture succeeds.
+Committed reconciliations remain committed after late cancellation. Reports are
+frozen; later disk changes require another capture.
+
+**Copy Summary** is aggregate-only by default. Explicit private detail adds names
+and roster witnesses. No report file, live pool, saved bank, submission export,
+candidate library or learning update is created. This feature provides no payout,
+prediction or strategy advice. **RL-07B generation explanation is unimplemented**:
+an optimum does not explain where a lineup disappeared from generation or selection.
+See [Hindsight Solver](HINDSIGHT_SOLVER.md) for evidence, numerical and resource limits.
 
 ## Results plus username: automatic snapshot comparisons
 

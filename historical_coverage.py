@@ -91,7 +91,7 @@ def aggregate(contests):
         supported.update({k:int(v) for k,v in capabilities(data).items()})
     result.update(coverage_version=1, evidence_levels=dict(levels), categories=dict(groups),
         capability_evidence=dict(supported),
-        capability_basis='prerequisites only; Portfolio Risk revalidates its selected archive; RL-07 is not implemented; generated input/output evidence does not establish phase timings or submission')
+        capability_basis='cached prerequisites only; the legacy hindsight count describes the full evidence ladder, not RL-07A readiness; Hindsight independently requalifies salary, exact actuals, rules and optional snapshot; generated evidence does not establish timings or submission')
     return result
 
 
@@ -210,7 +210,7 @@ def detail_text(data):
     for label, key in (('Ordinary historical results','results'),('Portfolio Risk / RL-06','portfolio_risk'),
                        ('Hindsight / RL-07','hindsight'),('Compute input/output comparison','compute_input_output')):
         lines.append(f"  {label}: {'evidence available' if capabilities(data)[key] else 'unavailable — evidence incomplete'}")
-    lines += ['Portfolio Risk revalidates one explicitly selected archive. RL-07 is not implemented. Compute phase timings and submitted-build identity are not established by these archives.']
+    lines += ['Portfolio Risk revalidates one explicitly selected archive. The legacy Hindsight prerequisite above describes the full evidence ladder, not solver readiness. RL-07A independently requalifies the supplied salary universe, exact actual scores and rules; its snapshot comparison is optional. RL-07B generation explanation remains unimplemented. Compute phase timings and submitted-build identity are not established by these archives.']
     for field in ('conflicts','blockers','limitations'):
         codes = data.get(field, [])
         if codes:
