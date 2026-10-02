@@ -143,9 +143,11 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
             row_id = id(lineup)
             data = meta[row_id]
             keys = data['keys']
-            if not keys or not group_ok(keys) or groups_by_id[row_id] and any(
-                    (group_list[group_index] & selected_ids) - {row_id}
-                    for group_index in groups_by_id[row_id]):
+            if (not keys or not group_ok(keys)
+                    or (group_list and any(
+                        (group_list[group_index] & selected_ids) - {row_id}
+                        for group_index in groups_by_id[row_id]))
+                    or (not group_list and conflicts.get(row_id, set()) & (selected_ids - {row_id}))):
                 valid_seed = False
                 break
             counts['total'].update(keys)
@@ -170,8 +172,11 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
             if limits['specialist'] is not None and specialist > limits['specialist']:
                 valid_seed = False
                 break
-            for group_index in groups_by_id[row_id]:
-                blocked.update(group_list[group_index])
+            if group_list:
+                for group_index in groups_by_id[row_id]:
+                    blocked.update(group_list[group_index])
+            else:
+                blocked.update(conflicts.get(row_id, set()) & row_ids)
         if not valid_seed:
             return None
 

@@ -9,6 +9,7 @@ from feasible_shortlist import preserve
 from main_window import _deep_shortlist, _lineup_signature
 from nfl_simulation import SimLineup
 from optimizers import ShowdownLineup
+from portfolio_feasibility import diversity_first_witness
 from portfolio_rules import _uniqueness_keys, player_key, select_portfolio
 
 
@@ -118,6 +119,36 @@ class ShortlistRecoveryTests(unittest.TestCase):
             with self.subTest(rules=rules,retained=bool(retained)), patch('bounded_solver.solve',return_value=False):
                 _,witness,_=self.capture(trap_rows('classic',2),4,'classic',rules,retained)
                 self.assertFalse(witness)
+
+    def test_retained_conflicts_are_blocked_before_candidate_ordering(self):
+        retained, trap, first, second, alt_a, alt_b, alt_c = [
+            dict(name=name, score=index) for index, name in enumerate(
+                ('retained', 'trap', 'first', 'second', 'alt-a', 'alt-b', 'alt-c'))]
+        rows = [trap, first, second, alt_a, alt_b, alt_c]
+        named = {row['name']: row for row in [retained, *rows]}
+        conflict_names = {
+            'retained': {'trap', 'alt-a', 'alt-b', 'alt-c'},
+            'trap': {'retained', 'first', 'second'},
+            'first': {'trap', 'alt-a', 'alt-b', 'alt-c'},
+            'second': {'trap', 'alt-a', 'alt-b', 'alt-c'},
+            'alt-a': {'retained', 'first', 'second', 'alt-b', 'alt-c'},
+            'alt-b': {'retained', 'first', 'second', 'alt-a', 'alt-c'},
+            'alt-c': {'retained', 'first', 'second', 'alt-a', 'alt-b'},
+        }
+        conflicts = {id(named[name]): {id(named[other]) for other in others}
+                     for name, others in conflict_names.items()}
+        meta = {id(row): dict(keys=[row['name']], captain_key=None, teams=[], games=[],
+                              specialist_captain=False, signature=(row['name'],))
+                for row in [retained, *rows]}
+        limits = dict(requested=3, total={}, captain={}, team=None, game=None,
+                      specialist=None)
+
+        witness = diversity_first_witness(
+            rows, [retained], meta, conflicts, limits, lambda keys: True,
+            lambda row: row['score'], seconds=1)
+
+        self.assertEqual({row['name'] for row in witness},
+                         {'retained', 'first', 'second'})
 
     def test_cancel_and_expired_budget_skip_new_work(self):
         rows=trap_rows('showdown',3)
