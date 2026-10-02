@@ -533,13 +533,29 @@ def select_portfolio(
     feasibility_limits = dict(requested=requested, total=max_total, captain=max_cpt,
         team=max_team, game=max_game, specialist=specialist_cpt_limit)
     if feasibility_only:
-        from portfolio_feasibility import repair
-        witness = repair(pool, retained, [], candidate_meta, current_uniqueness_conflicts,
-            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), finish_rank,
-            seconds=max(0, repair_time_limit - (time.perf_counter() - selection_started)),
-            conflict_groups=uniqueness_groups.get(current_min_unique),
-            cancelled=selection_cancel_callback or (lambda: False))
-        return {'lineups': witness or [], 'report': {}, 'candidate_count': len(pool)}
+        from portfolio_feasibility import diversity_first_witness, repair
+        remaining = max(0, repair_time_limit - (time.perf_counter() - selection_started))
+        cancelled = selection_cancel_callback or (lambda: False)
+        conflict_groups = uniqueness_groups.get(current_min_unique)
+        # Recover a fast diverse witness before building a large CBC model. Keep
+        # most of the same bounded window available to the exact solver when the
+        # deterministic coverage pass cannot finish the portfolio.
+        heuristic_budget = min(3.0, remaining * 0.5)
+        witness = diversity_first_witness(pool, retained, candidate_meta,
+            current_uniqueness_conflicts, feasibility_limits,
+            lambda keys: _group_ok(keys, normalized['groups']), finish_rank,
+            conflict_groups=conflict_groups, seconds=heuristic_budget,
+            cancelled=cancelled)
+        method = 'diversity-first coverage' if witness else ''
+        if not witness:
+            feasibility_checkpoint()
+            remaining = max(0, repair_time_limit - (time.perf_counter() - selection_started))
+            witness = repair(pool, retained, [], candidate_meta, current_uniqueness_conflicts,
+                feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), finish_rank,
+                seconds=remaining, conflict_groups=conflict_groups, cancelled=cancelled)
+            method = 'bounded CBC repair' if witness else 'no complete witness found within budget'
+        return {'lineups': witness or [], 'report': {}, 'candidate_count': len(pool),
+                'method': method}
 
     while len(selected) < requested and remaining:
         if selection_cancel_callback and selection_cancel_callback():
