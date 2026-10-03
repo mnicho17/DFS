@@ -410,6 +410,14 @@ def build_entry_safety_report(
     ))
 
     portfolio_warnings = list((portfolio_report or {}).get("warnings") or [])
+    from portfolio_recovery import CONCENTRATION_WARNING
+    recovery = (portfolio_report or {}).get('portfolio_recovery') or {}
+    if (recovery.get('automatic_recovery_ran') and recovery.get('recovery_stage') != 'none'
+            and recovery.get('final_selected_count') == len(selected) == recovery.get('requested_count')
+            and CONCENTRATION_WARNING in portfolio_warnings):
+        portfolio_warnings.remove(CONCENTRATION_WARNING)
+        checks.append(_check('automatic_recovery', 'Automatic concentration', 'review',
+            CONCENTRATION_WARNING, 'Review the increased player and Captain concentrations before export.'))
     checks.append(_check(
         "portfolio_rules", "Portfolio rules", "block" if portfolio_warnings else "pass",
         (f"{len(portfolio_warnings)} saved-portfolio rule violation(s): {portfolio_warnings[0]}"

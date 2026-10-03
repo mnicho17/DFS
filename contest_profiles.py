@@ -3,6 +3,7 @@ from __future__ import annotations
 """Validation and serialization for reusable contest payout profiles."""
 
 import json
+from contest_objectives import normalize_objective
 import math
 import re
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
@@ -122,6 +123,7 @@ def normalize_contest_profile(profile: Mapping[str, Any]) -> Dict[str, Any]:
     )
     return {
         "name": name,
+        "objective": normalize_objective(profile.get("objective")),
         "field_size": field_size,
         "entry_fee": entry_fee,
         "user_entries": user_entries,

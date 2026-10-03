@@ -1,4 +1,6 @@
 """NFL Showdown Deep exploration and shared-outcome contest simulation."""
+from compute_ledger import phase
+
 import bisect
 import math
 import random
@@ -126,6 +128,7 @@ def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0,
     return field
 
 
+@phase("primary_sim", simulation=True)
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
                       seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False):
     if not candidates:
@@ -255,11 +258,30 @@ def run_deep_showdown(worker, shortlist_fn):
     jobs = [] if bank else search_jobs(seeds, worker.build_style, options["all_styles"])
     if bank:
         budget = len(bank)
+    from compute_ledger import safe as compute_safe, candidate_budget as record_candidate_budget
+    compute_safe(record_candidate_budget, budget)
     generation_fraction, screening_fraction = deep_phase_fractions(options)
     generation_end = start + limit * generation_fraction
     from captain_coverage import captain_targets, seed_captains, shortlist_reservations, coverage_report
     targets = captain_targets(players)
     library_build = bool(bank)
+    def expand_coverage():
+        if not requested or library_build or getattr(worker, 'candidate_library', '') or stop(generation_end):
+            return
+        from showdown_coverage import expand_capped_candidates
+        coverage = expand_capped_candidates(list(bank.values()), players, worker.num_lineups,
+            worker.portfolio_rules, salary_cap=worker.salary_cap, own_mode=worker.own_mode,
+            own_weight=worker.own_weight, build_style=worker.build_style,
+            seconds=max(0, min(20, generation_end-time.perf_counter())),
+            max_additions=max(0, budget-len(bank)), retained=retained,
+            salary_strategy=worker.salary_strategy,
+            automatic=options['selection_mode'] != 'Individual ranking', cancelled=worker._cancel_event.is_set)
+        for lu in attach_showdown_metrics(coverage, worker.salary_cap):
+            key = showdown_signature(lu)
+            bank.setdefault(key, lu)
+            exclusions.add((key[0][4:], tuple(key[1:])))
+        style_counts['Portfolio coverage'] = style_counts.get('Portfolio coverage', 0) + len(coverage)
+
     seeded = 0
     if requested and not library_build:
         seeded = seed_captains(players, targets, bank, retained_keys, budget,
@@ -287,10 +309,16 @@ def run_deep_showdown(worker, shortlist_fn):
             if key not in retained_keys:
                 bank.setdefault(key, lu)
                 exclusions.add((key[0][4:], tuple(key[1:])))
+        if index == 0:
+            expand_coverage()
+    expand_coverage()
     from pipeline_audit import quarterback_mix, defense_mix
     qb_stages = {"generated": quarterback_mix(list(bank.values()) + retained)}
     dst_stages = {"generated": defense_mix(list(bank.values()) + retained)}
     generated = len(bank)
+    from compute_ledger import safe as compute_safe, observe_dedup
+    # Dedup is interleaved with search; its separate duration/attempt count is unknown.
+    compute_safe(observe_dedup, None, generated)
     eligible_salary = filter_salary_candidates(list(bank.values()), worker.salary_cap, worker.salary_strategy)
     salary_excluded = generated - len(eligible_salary)
     bank = {showdown_signature(lu): lu for lu in eligible_salary}
@@ -374,6 +402,8 @@ def run_deep_showdown(worker, shortlist_fn):
     worker.progress.emit(0, worker.num_lineups, "Phase 4 of 4 - selecting and refining Showdown portfolio")
     selected = select_portfolio(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
         allow_relaxation=worker._cancel_event.is_set(),
+        # Keep the existing cancelled Deep Showdown receipt path verbatim.
+        automatic_recovery=not worker._cancel_event.is_set(), recovery_deadline=deadline,
         fallback_lineups=feasible_fallback,
         selection_cancel_callback=worker._cancel_event.is_set,
         repair_time_limit=max(0,min(15,deadline-time.perf_counter())),

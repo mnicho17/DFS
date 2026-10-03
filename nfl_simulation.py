@@ -1,4 +1,6 @@
 from __future__ import annotations
+from compute_ledger import generator, phase
+
 
 """Fast, dependency-free NFL field and contest simulation.
 
@@ -517,6 +519,7 @@ def _build_field_lineup(
     return lineup
 
 
+@generator("field_shaped", method=False, candidate_only=True)
 def generate_nfl_field_lineups(players, count, *, match_ownership=True, **kwargs):
     entries, pool = _generate_nfl_field_lineups(players, count, **kwargs)
     if not match_ownership or kwargs.get('candidate_mode') or kwargs.get('unique'):
@@ -669,6 +672,7 @@ def _scenario_candidate_score(
     return score
 
 
+@generator("scenario_built", method=False)
 def generate_nfl_scenario_lineups(
     players: Sequence[Dict[str, Any]],
     count: int,
@@ -1226,6 +1230,7 @@ def _learned_ownership_profile_fit(
     return score / used_weight * 100.0 if used_weight > 0 else None
 
 
+@phase("primary_sim", simulation=True)
 def simulate_nfl_contest(
     candidates: Sequence[Sequence[Dict[str, Any]]],
     players: Sequence[Dict[str, Any]],
@@ -1615,6 +1620,7 @@ def simulate_nfl_contest(
     }
 
 
+@phase("joint_portfolio_sim", simulation=True)
 def simulate_nfl_portfolio_contest(
     lineups: Sequence[Sequence[Dict[str, Any]]],
     players: Sequence[Dict[str, Any]],

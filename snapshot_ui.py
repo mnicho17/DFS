@@ -2,7 +2,7 @@
 import copy
 import os
 from PyQt5 import QtCore, QtWidgets
-from build_snapshots import create_snapshot, load_snapshot, save_snapshot, freshness_text, validate_snapshot
+from build_snapshots import create_snapshot, load_snapshot, save_snapshot, freshness_text, validate_snapshot, snapshot_objective
 from build_diagnostics import build_history_path
 from learning_db import load_nfl_field_calibration
 
@@ -108,7 +108,7 @@ class SnapshotActions:
         # afterward, so no ownership recalculation or enrichment can change it.
         blockers = [QtCore.QSignalBlocker(widget) for widget in self.findChildren(QtWidgets.QWidget)]
         try:
-            self._apply_build_recipe('Snapshot', inputs['recipe'])
+            self._apply_build_recipe('Snapshot', dict(inputs['recipe'], contest_objective=snapshot_objective(value)))
         finally:
             del blockers
         self.players = copy.deepcopy(inputs['players'])

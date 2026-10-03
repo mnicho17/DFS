@@ -7,6 +7,7 @@ not authenticity. No original inputs are reconstructed or upgraded.
 from collections import Counter, defaultdict
 from datetime import datetime
 import hashlib
+import io
 import itertools
 import json
 from pathlib import Path
@@ -15,6 +16,7 @@ import zipfile
 from zoneinfo import ZoneInfo
 
 from review_report import Cancelled, accepted, enum, now, number, safe_text
+from contest_objectives import recorded_objective, objective_evidence_label
 
 MAX_FILES = 100
 MAX_DIRECTORY_ENTRIES = 1000
@@ -33,6 +35,11 @@ def digest(value):
                                      allow_nan=False).encode()).hexdigest()
 
 
+def archive_identity(metadata, signatures):
+    """RL-05A identity, unchanged; signatures alone are not occurrence weights."""
+    return digest([metadata, sorted(signatures)])
+
+
 def name_key(value):
     if not isinstance(value, str) or not value or len(value) > 200:
         return ''
@@ -43,6 +50,25 @@ def name_key(value):
     return ' '.join(parts)
 
 
+def normalize_role(value):
+    """Canonical supported slot token; no coercion of arbitrary objects/labels."""
+    if not isinstance(value, str):
+        return None
+    role = value.strip().upper()
+    role = {'CAPTAIN':'CPT', 'D/ST':'DST'}.get(role, role)
+    return role if role in {'CPT','FLEX','QB','RB','WR','TE','DST'} else None
+
+
+def roster_kind(roles):
+    """Identify an exact canonical role shape, shared by parsing and adaptation."""
+    slots = Counter(roles)
+    if slots == {'CPT':1, 'FLEX':5}:
+        return 'showdown'
+    if slots == {'QB':1, 'RB':2, 'WR':3, 'TE':1, 'FLEX':1, 'DST':1}:
+        return 'classic'
+    return None
+
+
 def roster_key(text):
     """Names only; reject malformed, ambiguous or ID-only rosters, never guess."""
     if not isinstance(text, str) or len(text) > 4000:
@@ -50,20 +76,16 @@ def roster_key(text):
     matches = list(re.finditer(r'\b(CPT|CAPTAIN|FLEX|QB|RB|WR|TE|DST|D/ST)\s+', text, re.I))
     if not matches or text[:matches[0].start()].strip():
         return None
-    rows = [(m.group(1).upper(), name_key(text[m.end():matches[n+1].start()
+    rows = [(normalize_role(m.group(1)), name_key(text[m.end():matches[n+1].start()
               if n+1 < len(matches) else len(text)].strip(' ,;|/')))
             for n, m in enumerate(matches)]
     names = [n for _, n in rows]
     if any(not n or n.isdigit() for n in names) or len(set(names)) != len(names):
         return None
-    slots = Counter(s for s, _ in rows)
-    if len(rows) == 6 and slots.get('CPT', 0) + slots.get('CAPTAIN', 0) == 1 and slots['FLEX'] == 5:
-        kind = 'showdown'
-    elif len(rows) == 9 and slots['QB'] == 1 and slots['RB'] == 2 and slots['WR'] == 3 and slots['TE'] == 1 and slots['FLEX'] == 1 and slots.get('DST', 0) + slots.get('D/ST', 0) == 1:
-        kind = 'classic'
-    else:
+    kind = roster_kind(s for s, _ in rows)
+    if kind is None:
         return None
-    return kind, tuple(sorted(('@cpt:' if s in {'CPT', 'CAPTAIN'} else '') + n for s, n in rows))
+    return kind, tuple(sorted(('@cpt:' if s == 'CPT' else '') + n for s, n in rows))
 
 
 def timestamp(value):
@@ -153,6 +175,9 @@ def explanation(snap, details_left):
     recipe = snap['recipe']
     deep = recipe.get('deep_compute') if isinstance(recipe.get('deep_compute'), dict) else {}
     return {'input_id': snap['raw']['input_id'], 'input_recorded_at': snap['raw'].get('created_at') if snap['created'] else None,
+            'contest_objective': recorded_objective(recipe.get('contest_objective',
+                snap['raw']['inputs']['contest'].get('objective',
+                    snap['raw']['inputs']['contest'].get('contest_objective')))),
             'sport': 'NFL', 'format': snap['kind'], 'slate_date': snap['day'],
             'pregame_input': snap['pregame'], 'checksum_state': 'consistent_not_authenticated',
             'recorded_settings': {'selection_mode': enum(deep.get('selection_mode'), ('Individual ranking','Portfolio selection')),
@@ -166,6 +191,7 @@ class Reader:
         self.cancelled = cancelled
         self.bytes = 0
         self.issues = Counter()
+        self.receipts = {}
 
     def check(self):
         if self.cancelled():
@@ -208,13 +234,24 @@ class Reader:
             raise OverflowError('file size changed')
         if len(raw) > declared:
             self.consume(len(raw) - declared)
-        return json.loads(raw)
+        value = json.loads(raw)
+        self.receipts[str(path)] = hashlib.sha256(raw).hexdigest()
+        return value
 
     def archive(self, path):
+        # Keep the established four-value API for all existing consumers.
+        return self.archive_details(path)[:4]
+
+    def archive_details(self, path):
+        """Also return validated output occurrences from the same captured bytes."""
         self.check()
         if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
             raise ValueError('unsupported archive')
-        with zipfile.ZipFile(path) as z:
+        with path.open('rb') as handle:
+            captured = handle.read(MAX_FILE_BYTES + 1)
+        if len(captured) > MAX_FILE_BYTES:
+            raise ValueError('archive size changed')
+        with zipfile.ZipFile(io.BytesIO(captured)) as z:
             entries = z.infolist()
             names = [x.filename for x in entries]
             if len(names) != len(set(names)) or not set(names) <= MEMBERS or not {'manifest.json', 'lineups.json', 'input-snapshot.json'} <= set(names):
@@ -257,7 +294,8 @@ class Reader:
             for k in parsed[1]:
                 if k.startswith('@cpt:'):
                     cpts[k[5:]] += 1
-        return snap, meta, sigs, cpts
+        self.receipts[str(path)] = hashlib.sha256(captured).hexdigest()
+        return snap, meta, sigs, cpts, rows
 
 
 def capture_build_evidence(root, options, results, cancelled, progress):
@@ -285,6 +323,7 @@ def capture_build_evidence(root, options, results, cancelled, progress):
                 record['source'] = 'generated_output_archive' if meta is not None else 'input_snapshot_only'
                 record['matched_result_occurrences'] = 0
                 if meta is not None:
+                    record['contest_objective'] = recorded_objective(meta.get('contest_objective'))
                     created = timestamp(meta.get('created_at'))
                     status = enum(meta.get('build_status'), ('completed', 'cancelled', 'error'))
                     record.update(recorded_code_fingerprint=meta.get('app_code_id') if HASH.fullmatch(str(meta.get('app_code_id',''))) else None,
@@ -302,6 +341,7 @@ def capture_build_evidence(root, options, results, cancelled, progress):
                         archives.append((snap['kind'], snap['day'], sigs, record))
                 else:
                     inputs.append((snap, record))
+                record['contest_objective_label'] = objective_evidence_label(record['contest_objective'])
                 records.append(record)
             except OverflowError:
                 reader.issues['byte_limit'] += 1

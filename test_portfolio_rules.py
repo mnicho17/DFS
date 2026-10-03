@@ -5,6 +5,7 @@ import time
 import unittest
 
 from nfl_simulation import SimLineup
+from optimizers import showdown_correlation_flags
 from portfolio_rules import portfolio_report, select_portfolio
 
 
@@ -27,6 +28,105 @@ def _player(name: str, team: str, game: str, projection: float, **extra):
 
 
 class PortfolioRulesTests(unittest.TestCase):
+    def test_core_plan_targets_guide_classic_selection_and_report_shortfalls(self):
+        core = _player("Core", "A", "G", 1.0, CoreClassicMinPct=50)
+        candidates = [
+            [core, _player("Core-fill-1", "B", "G", 1.0)],
+            [core, _player("Core-fill-2", "B", "G", 1.0)],
+            [_player("Noncore-1", "A", "G", 80.0), _player("Noncore-fill-1", "B", "G", 1.0)],
+            [_player("Noncore-2", "A", "G", 70.0), _player("Noncore-fill-2", "B", "G", 1.0)],
+        ]
+        result = select_portfolio(candidates, 2, rules={"min_unique": 1}, kind="classic")
+        self.assertEqual(sum(any(player["Name"] == "Core" for player in lineup) for lineup in result["lineups"]), 1)
+        target = next(row for row in result["report"]["core_plan"] if row["name"] == "Core")
+        self.assertEqual(target["target_count"], 1)
+        self.assertEqual(target["achieved_count"], 1)
+        self.assertFalse(any("Core Plan Classic target" in warning for warning in result["report"]["warnings"]))
+
+        absent = select_portfolio(candidates[2:], 2, rules={"min_unique": 1,
+            "player_constraints": {"Core": {"Name": "Core", "CoreClassicMinPct": 50}}}, kind="classic")
+        self.assertTrue(any("Core Plan Classic target for Core" in warning for warning in absent["report"]["warnings"]))
+
+    def test_showdown_core_flex_and_captain_targets_are_separate(self):
+        flex_core = _player("Flex core", "A", "G", 12.0, Position="WR", CoreShowdownMinFlexPct=50)
+        cpt_core = _player("Captain core", "B", "G", 12.0, Position="RB", CoreShowdownMinCptPct=50)
+        def lineup(prefix, captain, include_flex_core=False, include_cpt_core=False):
+            flex = [_player(f"{prefix}-F{i}", "A" if i < 2 else "B", "G", 10.0) for i in range(5)]
+            if include_flex_core:
+                flex[0] = flex_core
+            if include_cpt_core:
+                captain = cpt_core
+            return {"Captain": captain, "Flex": flex}
+        candidates = [
+            lineup("FLEX", _player("FLEX Captain", "A", "G", 10.0, Position="QB"), include_flex_core=True),
+            lineup("CPT", _player("CPT Captain", "A", "G", 10.0, Position="QB"), include_cpt_core=True),
+        ]
+        result = select_portfolio(candidates, 2, rules={"min_unique": 1, "balance_ownership": False}, kind="showdown")
+        goals = {(row["name"], row["role"]): row for row in result["report"]["core_plan"]}
+        self.assertEqual(goals[("Flex core", "FLEX")]["achieved_count"], 1)
+        self.assertEqual(goals[("Captain core", "Captain")]["achieved_count"], 1)
+
+    def test_showdown_kicker_captain_cap_is_aggregate_and_qb_opposing_dst_is_blocked(self):
+        candidates = []
+        for index in range(2):
+            kicker = _player(f"K{index}", "A", "G", 80.0, Position="K")
+            flex = [_player(f"K{index}-F{slot}", "A" if slot < 2 else "B", "G", 8.0) for slot in range(5)]
+            candidates.append({"Captain": kicker, "Flex": flex})
+        for index in range(19):
+            captain = _player(f"WR{index}", "A", "G", 20.0, Position="WR")
+            flex = [_player(f"WR{index}-F{slot}", "A" if slot < 2 else "B", "G", 8.0) for slot in range(5)]
+            candidates.append({"Captain": captain, "Flex": flex})
+        result = select_portfolio(candidates, 20, rules={"min_unique": 1, "balance_ownership": False,
+            "player_constraints": {"K0": {"Name": "K0", "MaxCptPct": 100}}},
+                                  kind="showdown", individual_ranking=True)
+        kicker_count = sum("K" in str(lineup["Captain"].get("Position")) for lineup in result["lineups"])
+        self.assertEqual(kicker_count, 1)
+        self.assertEqual(result["report"]["showdown_policy"]["kicker_captain_count"], 1)
+        self.assertEqual(result["report"]["showdown_policy"]["kicker_captain_limit"], 1)
+        self.assertIn("Showdown guardrails: K Captain 1/20; automatic cap 1 by default",
+                      result["report"]["text"])
+
+        locked_kicker = _player("Locked K", "A", "G", 20.0, Position="K", LockCpt=True)
+        locked_candidates = [
+            {"Captain": locked_kicker,
+             "Flex": [_player(f"Locked-{entry}-F{slot}", "A" if slot < 2 else "B", "G", 8.0)
+                      for slot in range(5)]}
+            for entry in range(2)
+        ]
+        locked_result = select_portfolio(locked_candidates, 2,
+            rules={"min_unique": 1, "balance_ownership": False},
+            kind="showdown", individual_ranking=True)
+        self.assertEqual(len(locked_result["lineups"]), 2)
+        self.assertEqual(locked_result["report"]["showdown_policy"]["kicker_captain_count"], 2)
+        self.assertTrue(any("explicit Captain lock" in warning
+                            for warning in locked_result["report"]["warnings"]))
+
+        qb = _player("QB", "A", "G", 40.0, Position="QB")
+        dst = _player("Opp DST", "B", "G", 8.0, Position="DST")
+        prohibited = {"Captain": qb, "Flex": [dst] + [_player(f"X{i}", "A", "G", 4.0) for i in range(4)]}
+        valid = {"Captain": qb, "Flex": [_player("Same DST", "A", "G", 8.0, Position="DST")]
+                 + [_player(f"Y{i}", "B", "G", 4.0) for i in range(4)]}
+        chosen = select_portfolio([prohibited, valid], 1, rules={"min_unique": 1, "balance_ownership": False},
+                                  kind="showdown", individual_ranking=True)
+        self.assertNotIn(prohibited, chosen["lineups"])
+
+        unknown_team_qb = _player("Unknown team QB", "", "G", 30.0, Position="QB")
+        unknown_team_lineup = {"Captain": unknown_team_qb,
+            "Flex": [dst] + [_player(f"Unknown-team-F{i}", "A", "G", 4.0) for i in range(4)]}
+        self.assertEqual(select_portfolio([unknown_team_lineup], 1,
+            rules={"min_unique": 1, "balance_ownership": False}, kind="showdown",
+            individual_ranking=True)["lineups"], [unknown_team_lineup])
+        self.assertNotIn("QB Captain vs opposing DST",
+                         showdown_correlation_flags(unknown_team_qb, unknown_team_lineup["Flex"]))
+
+    def test_retained_showdown_entries_are_preserved_under_new_captain_safeguards(self):
+        qb = _player("Retained QB", "A", "G", 40.0, Position="QB")
+        dst = _player("Retained Opp DST", "B", "G", 8.0, Position="DST")
+        retained = {"Captain": qb, "Flex": [dst] + [_player(f"R{i}", "A", "G", 4.0) for i in range(4)]}
+        result = select_portfolio([], 1, rules={"min_unique": 1, "balance_ownership": False},
+                                  kind="showdown", retained_lineups=[retained])
+        self.assertEqual(result["lineups"], [retained])
+
     def test_sim_portfolio_covers_distinct_tournament_scenarios(self):
         candidates = []
         for index, (edge, hits) in enumerate([

@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from statistics import mean
 from build_snapshots import fingerprint
+from compute_ledger import phase
 from lineup_ranking import ranked_lineups, finish_rank
 from nfl_simulation import player_key, SimLineup
 
@@ -65,6 +66,7 @@ def save_bank(reference, players, *, kind, salary_cap, field_count, field_config
     return dict(status='saved', bank_id=bank['bank_id'], candidates=len(rows))
 
 
+@phase('archive')
 def capture_bank(*args, **kwargs):
     # A disk failure must not discard the user's completed build.
     try: return save_bank(*args, **kwargs)

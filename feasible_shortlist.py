@@ -1,8 +1,11 @@
 """Keep a complete compliant portfolio available through SIM shortlisting."""
+from compute_ledger import phase
+
 import time
 import logging
 
 
+@phase("shortlisting", shortlist=True)
 def preserve(rows, shortlist_fn, limit, requested, *, kind, rules, retained,
              reserved, signature, individual_ranking, deadline, cancelled):
     from portfolio_rules import select_portfolio

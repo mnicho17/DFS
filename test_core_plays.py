@@ -115,5 +115,37 @@ class CorePlaysTests(unittest.TestCase):
         self.assertEqual(d.table.editTriggers(),QtWidgets.QAbstractItemView.NoEditTriggers)
         self.assertEqual(pool,before);d.close()
 
+    def test_core_plan_is_applied_only_on_explicit_apply_and_keeps_slots_separate(self):
+        os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
+        from PyQt5 import QtWidgets
+        from core_plays_ui import CorePlaysDialog
+        app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+        core=player('Core',FlexID='core-id',CptID='core-cpt',CoreShowdownMinCptPct=15,
+                    CoreClassicMinPct=10)
+        other=player('Other',FlexID='other-id',CptID='other-cpt')
+        pool=[core,other];before=copy.deepcopy(pool)
+        dialog=CorePlaysDialog(pool,'showdown')
+        dialog.category.setCurrentText('All loaded')
+        row=next(i for i,r in enumerate(dialog.visible) if r['name']=='Other' and r['slot']=='FLEX')
+        checkbox=dialog.table.cellWidget(row,8);target=dialog.table.cellWidget(row,9)
+        self.assertFalse(checkbox.isChecked());self.assertFalse(target.isEnabled())
+        checkbox.setChecked(True);target.setValue(35)
+        self.assertEqual(pool,before)
+        dialog.reject()
+        self.assertEqual(pool,before)
+
+        dialog=CorePlaysDialog(pool,'showdown')
+        dialog.category.setCurrentText('All loaded')
+        row=next(i for i,r in enumerate(dialog.visible) if r['name']=='Other' and r['slot']=='FLEX')
+        dialog.table.cellWidget(row,8).setChecked(True)
+        dialog.table.cellWidget(row,9).setValue(35)
+        dialog.apply_core_plan()
+        self.assertEqual(core['CoreShowdownMinCptPct'],15)
+        self.assertEqual(core['CoreClassicMinPct'],10)
+        self.assertIsNone(core.get('CoreShowdownMinFlexPct'))
+        self.assertEqual(other['CoreShowdownMinFlexPct'],35.0)
+        self.assertTrue(dialog.plan_applied)
+        self.assertEqual(dialog.applied_count,2)
+
 
 if __name__=='__main__':unittest.main()

@@ -1,5 +1,6 @@
 """Local audit archives of generated outputs; never export or submission records."""
 import csv
+from contest_objectives import normalize_objective
 import datetime
 import hashlib
 import io
@@ -96,6 +97,8 @@ def save_build_archive(payload, context, diagnostic):
         record_type='generated_outputs', submission_status='not established',
         build_status='cancelled' if payload.get('cancelled') else 'completed',
         sport=sport, kind=kind, input_id=input_id, snapshot_status=snapshot_status,
+        contest_objective=normalize_objective((context.get("settings") or {}).get("contest_objective",
+            diagnostic.get("contest_objective"))),
         app_code_id=implementation_id(), output_count=len(output),
         ordering='canonical SIM order' if has_sim else 'build output order',
         settings=context.get('settings') or {}, portfolio_rules=context.get('portfolio_rules') or {})

@@ -247,7 +247,13 @@ class ReviewReportDialog(QtWidgets.QDialog):
             return
         report = self._report
         suggested = f'DFS-Review-{date.today().isoformat()}-{report.data["report_id"][:8]}.zip'
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save Review Report', suggested, 'ZIP files (*.zip)')
+        from data_paths import review_reports_directory
+        try:
+            destination = review_reports_directory(excluded_roots=report._source_roots) / suggested
+        except OSError:
+            self.status.setText('The review-report folder is unavailable. Check user-data folder permissions and retry.')
+            return
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, 'Save Review Report', str(destination), 'ZIP files (*.zip)')
         if not path:
             return
         # The standard Save dialog handles overwrite consent for the exact path.

@@ -842,7 +842,7 @@ def capture_opponents(output_dir):
 
 
 def capture_combined_import(output_dir):
-    from analysis_imports import import_folders
+    from analysis_imports import import_folders, save_pair
     from analysis_imports_ui import SalaryMatchesDialog
     from test_analysis_imports import results_file, salary_file
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -872,7 +872,25 @@ def capture_combined_import(output_dir):
         review = SalaryMatchesDialog(dialog)
         review.show()
         save_widget(review, output_dir/'salary-matches.png')
-        review.close(); dialog.close()
+        row = review.rows[0]
+        chosen = row['candidates'][0]['hash']
+        review.close()
+        save_pair(row['hash'], chosen)
+        paired = SalaryMatchesDialog(dialog)
+        paired.show()
+        save_widget(paired, output_dir/'salary-matches-paired.png')
+        paired.close()
+        # Only the disposable synthetic snapshot is modified for this example.
+        from contextlib import closing
+        import sqlite3
+        from learning_db import history_db_path
+        with closing(sqlite3.connect(history_db_path())) as conn:
+            snapshot = conn.execute('SELECT snapshot FROM analysis_sources WHERE hash=?', (chosen,)).fetchone()[0]
+        Path(snapshot).write_bytes(b'Synthetic changed salary revision')
+        invalid = SalaryMatchesDialog(dialog)
+        invalid.show()
+        save_widget(invalid, output_dir/'salary-matches-invalid.png')
+        invalid.close(); dialog.close()
 
 
 def capture_saved_repair(output_dir: Path) -> None:
@@ -938,17 +956,60 @@ def capture_review_report(output_dir: Path) -> None:
     dialog.close()
 
 
+def capture_core_plans(output_dir: Path) -> None:
+    from core_plays_ui import CorePlaysDialog
+    from test_core_plays import player
+    from test_ranked_search import metrics
+    from optimizers import ShowdownLineup
+    output_dir.mkdir(parents=True, exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    QtGui.QFontDatabase.addApplicationFont('C:/Windows/Fonts/segoeui.ttf')
+    app.setFont(QtGui.QFont('Segoe UI', 10))
+    app.setStyle('Fusion'); app.setStyleSheet(DARK_QSS)
+    players = [player('Anchor WR', FlexID='anchor', CoreClassicMinPct=30,
+                      CoreShowdownMinFlexPct=35, CoreShowdownMinCptPct=15),
+               player('Value WR', 16, 4200, 8, FlexID='value'),
+               player('Alternative WR', 18, 6000, 5, FlexID='alternative')]
+    for kind in ('classic', 'showdown'):
+        dialog = CorePlaysDialog(copy.deepcopy(players), kind)
+        dialog.category.setCurrentText('All loaded')
+        dialog.resize(1420, 740); dialog.show(); app.processEvents()
+        save_widget(dialog, output_dir / f'core-plan-{kind}.png')
+        dialog.close()
+    window = MainWindow()
+    try:
+        rows = []
+        for i in range(8):
+            captain = dict(Name=f'Captain {i % 2 + 1}', FlexID=f'cpt-{i % 2}',
+                           Team='A', Position='WR', CptSalary=10500)
+            flex = [dict(Name=f'Player {j + 1}', FlexID=f'f-{i}-{j}', Team='B',
+                         Position='WR', FlexSalary=5000) for j in range(5)]
+            row = ShowdownLineup(captain, flex); row.sim_metrics = metrics(i + 1)
+            row.sim_metrics['sim_mean'] = 120 + i
+            rows.append(row)
+        window._populate_showdown_lineups(rows)
+        window._showdown_captain_filter.setCurrentIndex(1)
+        window._showdown_mean_sort.click()
+        window.tabs_workspace_controls.hide(); window.resize(1800, 900)
+        window.show(); app.processEvents()
+        save_widget(window.tabs_lineups, output_dir / 'captain-output.png')
+    finally:
+        window.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns", "opponents", "combined-import", "saved-repair", "review-report"), default="all")
+    parser.add_argument("--only", choices=("all", "core-plans", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns", "opponents", "combined-import", "saved-repair", "review-report"), default="all")
     parser.add_argument('--isolated', action='store_true', help='Use disposable data/settings and disable network before DFS imports')
     args = parser.parse_args()
     output_dir = (CAPTURE_CWD / args.output_dir).resolve()
-    if args.only in {'saved-repair', 'review-report'}:
+    if args.only in {'saved-repair', 'review-report', 'core-plans'}:
         if not args.isolated:
             parser.error('This capture requires --isolated to preserve local history')
-    if args.only == 'combined-import':
+    if args.only == 'core-plans':
+        capture_core_plans(output_dir)
+    elif args.only == 'combined-import':
         if not args.isolated:
             parser.error('Combined import screenshots require --isolated.')
         capture_combined_import(output_dir)

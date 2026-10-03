@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.23.0 | Windows desktop app | [Release notes](https://github.com/mnicho17/DFS/releases/tag/v1.23.0)
+Version 1.24.0 | Windows desktop app | [Release notes](https://github.com/mnicho17/DFS/releases/tag/v1.24.0)
 
 
 
@@ -288,6 +288,24 @@ Choose **Settings > Build History…** to review the 25 most recent runs and cop
 
 
 
+### Compute ledger
+
+Build History and Copy Last Build Report include a compact **Compute ledger** summary: elapsed wall time, worker CPU time, returned/unique/duplicate candidates, accepted library candidates and **peak observed process memory**. Missing measurements are unknown. Process memory includes the app and other work; it is sampled and is not a precise per-build peak. CPU time is separate from elapsed time.
+
+The ledger observes existing Fast/Deep work. It does not change search budgets, scenarios, ranking, portfolio rules or cancellation behavior. Saved repairs and preparation have separate purposes. A library counts as reused only when candidates are actually accepted; a file merely existing is not proof of reuse.
+
+Detailed aggregate receipts live in the external user-data **compute-ledger** directory. Approximately 250 recent receipts are retained, with bounded batches and checkpoints and no candidate-level records. Ledger cleanup never removes results, salary associations, snapshots, build archives, exports or learning evidence. Build History keeps its separate 25-report limit. Checkpoints contain measurements and hashes, not reusable partial lineups, and do not enable automatic resume.
+
+Candidate compatibility and simulation compatibility are distinct: a roster may remain structurally valid after projections change while its earlier simulation is stale. Existing strict library/cache checks still decide reuse. Historical outcomes never feed a live build through this ledger.
+
+### SIM distribution calibration
+
+The **Recorded scoring-distribution validation** section of Results & Learning includes report-only calibration by model, format, recorded position and pregame role. It uses completed pregame simulation ranges already associated with imported results. It does not recreate missing historical forecasts or rerun simulations.
+
+P10/P25/P50/P75/P90 coverage measures how often actual scores were at or below each recorded percentile. Separate below/inside/above P10-P90 rates treat boundaries as inside. Mean absolute error (MAE) measures the size of mean-score misses; actual-minus-mean bias shows their direction. Equal-game summaries give each scheduled game one weight, alongside player-weighted measurements.
+
+Repeated contests, duplicate entries and Captain multipliers do not create extra independent outcomes. Models and formats remain separate and can share the same player-game results. Conflicting scores are excluded; zero and negative scores remain known. Legacy captures without P25/P75 show those values as unavailable. Players from the same game remain correlated, and a small number of games does not establish accuracy. These reports do not automatically tune projections, ownership, SIM or compute settings.
+
 ### Portfolio Insights
 
 
@@ -430,6 +448,36 @@ Choose the preset that matches the contest's maximum entries per person. Presets
 
 When the contest lobby provides the actual economics, open **Settings > Contest-Aware SIM**. Enter the contest name, total field size, entry fee, how many entries you plan to submit, and the payout table. Use one rank or range per line, such as `1 = $100,000` or `2-10 = $5,000`. **Save and Use** keeps the profile for later slates and turns on NFL SIM Edge. **Use Preset Only** removes the contest profile from the build without deleting it. If the requested build count differs from the profile's planned entries, the app stops before generation and lets you use the profile count, keep the requested count with a visible warning, or cancel.
 
+### Contest objective (unreleased CO-01)
+
+In the **Contest** section of **Settings**, open **Contest-Aware SIM...** and choose
+**Tournament**, **Double-Up**, or **Multiplier**. Tournament is the default and
+continues to use the existing strategy. Double-Up and Multiplier currently record
+intent only; objective-specific strategy arrives later in CO-02. They do not yet
+provide cash lineup construction, paid-rate optimization, multiplier EV
+optimization, or a different ownership strategy.
+
+The objective does not require an exact payout profile. **Use Preset Only** keeps
+your choice while disabling the exact profile. **Save and Use** saves the objective
+with the profile; selecting that saved profile restores it. Build recipes and new
+snapshots also record the objective, and replay restores it without rewriting the
+source snapshot. Legacy execution settings default to Tournament.
+
+Build reports display the objective and explain the framework-only status of
+Double-Up/Multiplier as information, not an error. New generated archives and
+exports record the choice. Results & Learning counts Tournament, Double-Up,
+Multiplier, and **Not recorded** separately. Old exports and artifacts without
+recorded intent remain Not recorded; contest names, payout shapes, fees, or results
+are not evidence of the selected objective.
+
+Changing only the objective does not change candidates, SIM scores, lineup order,
+portfolio construction, or DraftKings export rows. Candidate libraries keep their
+exact original snapshot identity and can be reused across objective choices under
+the same compatible app code. Slate, generation inputs, current rules, and code
+checks still apply. Projections, ownership, payout calculations, AR-01 saved repair,
+and AR-02 portfolio recovery are unchanged.
+
+
 
 
 ![Attaching an exact field, entry fee, and payout table to NFL SIM Edge](images/contest-aware-sim.png){medium}
@@ -554,7 +602,7 @@ Choose **Export Review Report** to prepare a local report of performance, record
 2. Leave **Include lineup and build-player details** unchecked for summaries only. Checking it includes bounded player names, IDs, recorded roster slots and saved player decisions. Legacy matched rosters are labelled recorded exports; their submitted lineup and Captain-role identity are unverified.
 3. Optionally describe what you did, expected, and observed (up to 2,000 characters). Obvious paths and credentials are redacted, but review the text for personal information.
 4. Choose **Generate Preview**. Inspect the `summary.md` and `evidence.json` tabs and, when included, `lineups.csv`. Changing an option or observation requires a new preview.
-5. Choose **Save Report ZIP**, select a destination outside the source history folder, and share that file manually. Nothing is uploaded. Save retries use the same captured report; Generate Preview captures a new one. Cancel/Close waits for the current worker to clean up.
+5. Choose **Save Report ZIP**. The Save dialog defaults to the external user-data **review-reports** folder (normally `%LOCALAPPDATA%/DFS Optimizer/review-reports` on Windows, beside **history**). An external `DFS_OPTIMIZER_DATA_DIR` uses its own **review-reports** folder. Source checkouts and the captured history folder are never default destinations. You can choose another location; the normal Save dialog confirms replacement of an existing file. The final saved path appears in the dialog. Share that ZIP manually; nothing is uploaded. Save retries use the same captured report; Generate Preview captures a new one. Cancel/Close waits for the current worker to clean up.
 
 ![Review report preview with synthetic data and lineup details off](images/review-report.png){medium}
 
@@ -1097,9 +1145,22 @@ The scan runs only when clicked. Cancel or close waits for the current worker to
 
 Each results file has its own saved salary association. A unique compatible candidate can match automatically when the result date agrees with one salary slate and every observed readable player/role identity maps unambiguously. Explicit game/team conflicts, mixed formats, missing identities, namesakes and conflicting dates block a match. One salary snapshot can serve several contests on the same slate, with separate associations.
 
-Use **Review Salary Matches** when several revisions qualify or the results lack a date. Select the exact contest and salary snapshot; an unknown result date needs explicit confirmation. Review shows unresolved identities and unreadable roster counts. Existing pairings cannot be silently replaced by a new salary revision. Salary files with multiple game dates currently remain unpaired. A pairing establishes coverage of readable observed rosters, not a complete eligible pool, a hindsight optimum or contest payouts.
+Use **Review Salary Matches** when several revisions qualify or the results lack a date. The report and dialog now share the same persisted pairing state and database identity:
+
+- **PAIRED** means a saved association exists and still qualifies. The salary filename, revision and qualification are shown; existing pairings stay fixed.
+- **READY_TO_PAIR** means compatible candidates exist, but no pairing is saved yet. Select the exact revision and Save; an unknown result date needs explicit confirmation.
+- **NO_COMPATIBLE_MATCH** shows why the available revisions were rejected.
+- **INVALID_SAVED_PAIR** preserves the saved revision and explains why source verification or qualification failed. It is never automatically replaced.
+
+One historical salary slate may be reused for multiple compatible contest result files. Three results paired with one salary count as three saved pairings and one salary snapshot. With 24 cataloged results and 16 saved pairs, exactly eight remain unpaired even if all eight have compatible candidates. Saving a pair updates the report immediately; Refresh Report and reopening Review Salary Matches show the same counts. Invalid and orphaned saved pairs are flagged separately.
+
+Review shows readable rosters as a count and percentage of total entries, plus the unreadable count; unreadable rows remain excluded. Rejected unrelated candidates are behind the optional diagnostics view for a correctly paired result. Salary files with multiple game dates currently remain unpaired. A pairing establishes coverage of readable observed rosters, not a complete eligible pool, a hindsight optimum or contest payouts.
 
 ![Review explicit contest salary matches](images/salary-matches.png)
+
+![Saved pairing with its verified revision](images/salary-matches-paired.png)
+
+![Invalid saved revision is preserved for review](images/salary-matches-invalid.png)
 
 New result files receive the existing descriptive analysis. After pairing older imported results or adding salaries later, use **Analyze Saved Results** to apply the association to construction reports. Importing folders does not automatically rebuild historical reports. Saved salaries are historical prices, not forecasts; ownership, cash and payout information are never inferred from them. A changed saved snapshot is withheld from analysis. Keep **Import DraftKings Results** for individual files or use **Analyze Saved Results** after changing your username; the combined button deliberately skips already imported contents.
 
@@ -1426,7 +1487,15 @@ Saved banks omit original group/team/game settings, so this does not recreate th
 
 Core Plays opens with **Starting shortlist**: up to three distinct players per position and slot. It first takes the highest-projected anchor, then the highest-value remaining value candidate, then the highest-projected remaining lower-owned alternative. Any remaining places use projection among tagged candidates. This is a review starting point, not a SIM ranking, exposure recommendation or requirement to use all three. Warnings remain visible; **Core candidates** restores the full list. Filters narrow the existing shortlist. Captain and FLEX are handled separately. Alternative details show exact differences in salary dollars, projected points and ownership percentage points. Column widths and sorting remain in place while filtering.
 
-After loading NFL salaries and refreshing player data, open **Settings > Core Plays** for the active Classic or Showdown output tab. No Deep run is required. This read-only view uses the currently loaded inputs; it does not fetch data, change projections, set exposure limits or lock players. Reopen after changing inputs. Filters show core candidates, all eligible/loaded players, individual signal categories and Captain/FLEX slots. Search by player/team/position; click headers to sort numerically, with unknowns last in either direction. Select a row for workload, sources, history, status-check time, reasons and review notes. **Copy Report** copies every row in the current filtered/sorted view.
+After loading NFL salaries and refreshing player data, open **Settings > Core Plays** for the active Classic or Showdown output tab. No Deep run is required. The view uses the currently loaded inputs and does not fetch data or change projections. Filters show core candidates, all eligible/loaded players, individual signal categories and Captain/FLEX slots. Search by player/team/position; click headers to sort numerically, with unknowns last in either direction. Select a row for workload, sources, history, status-check time, reasons and review notes. **Copy Report** copies every row in the current filtered/sorted view.
+
+Check selected players and set a minimum **Target %**, then choose **Apply Core Plan to Build**. Classic targets count appearances across entries; Showdown keeps separate FLEX and Captain targets. Targets guide candidate generation and portfolio selection but are not locks. The build report shows achieved counts and any missed targets; hard roster rules, explicit locks, exclusions and exposure limits remain in force. The plan applies to the current loaded player pool; review it again after loading a new slate.
+
+For Showdown, newly generated QB-Captain lineups with a known opposing DST in FLEX are excluded across build styles. Kicker Captain exposure is capped at 5% of the requested entries, rounded down with a minimum of one (one in a 20-entry build). Existing retained entries are preserved; an explicit kicker Captain lock takes precedence and may exceed the automatic cap.
+
+![Core Plan targets for Classic](images/core-plan-classic.png)
+
+![Separate Showdown Captain and FLEX targets](images/core-plan-showdown.png)
 
 Signals are transparent heuristics, not recommendations to lock a player: **Underpriced role candidate** requires points per $1,000 percentile >=75 and projection percentile >=50 among at least four supported positive-forecast peers at the same position/slot. **High-projection anchor** requires projection percentile >=80; equal peers do not count as strictly lower. **Popular play to assess** uses estimated ownership >=10% Classic, >=25% FLEX or >=8% Captain. **Lower-owned alternative** compares same-position/slot players with >=90% of a popular peer's projection, <=110% salary, and both >=5 percentage points and >=30% lower ownership. Similar mean projections do not prove similar ceilings. **Role-change opportunity** requires explicit unavailability in every earlier recorded depth slot. No salary file alone establishes current starters or actual ownership.
 
@@ -1450,7 +1519,233 @@ Only the selected contest's roster cells change, in existing entry order. Entry 
 ![Choosing one contest to update](images/entries-contest-selector.png)
 
 
+## Historical evidence identity
+
+Open **Results & Learning > Historical Coverage** to see each contest's saved
+evidence chain. The table can filter by the six exclusive states below, or by
+**Ready**, **Needs review**, **Missing evidence**, **Conflict**, sport and format.
+Selecting a contest shows its salary revision, snapshot time, generated builds,
+score coverage and specific blockers. The overview's stage counts are independent:
+complete player scores can exist without a build archive. **Ready** requires the
+full chain. Conflicts are included in **Needs review**.
+
+![Historical Coverage showing synthetic historical contests](images/historical-coverage.png)
+
+The tab opens saved coverage without reparsing original standings. Saved states
+may be stale. Choose **Reconcile All Evidence** to verify stored sources and
+recompute all contests in a background job. The phase and elapsed time stay visible;
+**Cancel Operation** rolls back an uncommitted derived update. A reconciliation
+that has already committed remains saved. Source files and original
+observations remain unchanged. Completed source imports remain saved if their
+subsequent reconciliation is cancelled. Successful Results & Salaries imports and
+salary associations run the same reconciliation, including salary-only imports
+that resolve older results. Duplicate scans leave history alone.
+
+Use **Review Salary Matches** for ambiguous salary revisions or missing-date
+confirmation. Choices show dates, format, games, player/role coverage, import time
+and revision. Cancel also suppresses a salary-review chooser that has not opened
+yet, even if verification has just finished. Existing saved pairs remain fixed.
+**Resolve Snapshot** appears only
+when compatible pregame snapshots are ambiguous. It shows recorded time, earliest
+game time, full-pool coverage and associated builds. Confirming saves the exact
+revision and time. Later reconciliation preserves that choice; missing or changed
+evidence becomes a conflict instead of silently selecting another snapshot.
+
+![Choosing between compatible synthetic pregame snapshots](images/historical-snapshot-choice.png)
+
+Build details separate **Archives linked to the current qualified snapshot** from
+**Other generated archive candidates**. Each shows its archive ID, input ID,
+recording time and lineup count. Other candidates stay visible when snapshots are
+ambiguous or a newer selected snapshot has no archive; they do not qualify the
+build stage or enable analysis. Distinct archives sharing one input ID remain
+separate, and an archive listed in the qualified section is not repeated below.
+Neither section identifies an original or submitted build.
+
+![Qualified archive and a candidate from another snapshot](images/historical-build-candidates.png)
+
+Downstream labels describe evidence prerequisites and require fresh verification.
+Portfolio Risk is available in its separate tab. Hindsight (RL-07A) independently
+requalifies exact salary/actual evidence; the legacy full-ladder prerequisite above
+is not solver readiness. RL-07B generation explanation remains future work. Missing
+actual scores can block hindsight while leaving generated-portfolio evidence
+available for risk review. Generated archives never identify the submitted
+build, and alone do not establish compute phase timings. Unknown evidence stays
+unknown; unavailable protects historical accuracy and does not mean an import failed.
+
+**Share Coverage Report** opens the existing review-report preview and export.
+Its coverage section contains aggregate states, independent stage counts, blocker
+categories and downstream prerequisite counts. It excludes local paths, source
+filenames, usernames, contest IDs and raw identity payloads. Preview the complete
+report before sharing; other optional detail sections retain their existing rules.
+See [Historical Coverage](HISTORICAL_COVERAGE.md) for storage and validation details.
+
+**Analyze Saved Results** also reconciles a separate historical identity record. The review ZIP summarizes the evidence ladder: **Results > Salary/Slate > Pregame Snapshot > Build Archive > Outcome Coverage**.
+
+The states are **UNRESOLVED**, **CANDIDATE**, **SALARY_QUALIFIED**, **SNAPSHOT_QUALIFIED**, **BUILD_QUALIFIED** and **OUTCOME_QUALIFIED**. Counts describe import/contest groups, not independent games. Blockers explain missing or conflicting evidence. Review Salary Matches remains the place to resolve a salary association; a compatible candidate is not a saved pairing.
+
+Later evidence can establish a missing date or format without changing the original observation. A confirmed salary revision can qualify a legacy contest's date while its original missing date stays missing. Changed sources are rechecked; ambiguous revisions or snapshots are not resolved by choosing the first file. Cancellation preserves previous derived identity records.
+
+A completed pregame archive must share the qualified snapshot's exact input ID. Multiple matching builds remain candidates; an archive does not prove which portfolio was submitted. Outcome coverage is assessed separately across the eligible salary pool. Unknown scores stay unknown; zero and negative scores remain valid. Captain/FLEX IDs and scoring stay separate. Legacy contest objectives remain unknown unless recorded.
+
+The new shareable section contains only state and limitation counts. Its filters use qualified identity where available; original result metrics keep their recorded-date basis. Projections, ownership, SIM formulas, payouts and automatic learning are unchanged. See [Historical Evidence Identity](HISTORICAL_IDENTITY.md) for developer details and read limits.
+
+## Portfolio Risk: concentration and early-exit assumptions
+
+Open **Results & Learning > Portfolio Risk**. Choose a source and click
+**Capture / Update Risk Report**. The selected Historical Coverage contest may be
+suggested, but multiple archives require your explicit choice. Each report covers
+one portfolio; separate builds and export batches are never combined.
+
+- **Qualified historical generated archive** revalidates the salary revision, exact pregame snapshot and completed pregame archive. It does not certify a submitted portfolio. Incomplete actual scores do not block qualified forecasts. Other archive candidates remain in Historical Coverage and cannot enable risk.
+- **Recorded saved export (descriptive only)** reads the original recorded roster keys and Captain slots. Submission, slate/game identity and exact original pregame inputs may be unknown. Stress and qualified historical roles are **Unavailable: no exact qualified pregame input association**. Legacy recorded forecasts/status remain unqualified metadata; zeros do not fill missing evidence.
+
+Capture populates athlete choices from the source's identity pool. No risk targets
+are selected by default. Choose one or two athletes and optional alternatives,
+then capture again. Alternatives can have zero appearances. They are diagnostic
+choices, not recommendations, exposure changes or automatic replacement lineups.
+
+![Synthetic Portfolio Risk overview with four distinct occurrence patterns](images/portfolio-risk-overview.png)
+
+**Overview** shows R source occurrences, N valid occurrences and U unique rosters.
+Repeated rows count repeatedly. Exposure uses N, with separate Captain/FLEX counts
+for Showdown and roster appearances for Classic. Selected pair buckets are both,
+A only, B only and neither. **Either (at least one)** includes both; **exactly one**
+does not. Team and QB-WR/TE dependencies show their own context coverage. These
+are shared roster dependencies, not measured correlations. Concentration is not
+an error, and neither selected player does not mean safe.
+
+**Stress Test** uses retained production of 100%, 75%, 50%, 25% and 0%. One target
+has five cases; two have a 25-case grid. These are point-production assumptions,
+not exact minutes played, injury probabilities or equally likely scenarios. Each
+athlete keeps the same factor across the portfolio. Captain scaling is 1.5 once;
+unselected players keep their forecasts, and alternatives inherit no production.
+
+![Synthetic joint retained-production grid; additional columns scroll horizontally](images/portfolio-risk-stress.png)
+
+Signed change is baseline minus stressed points. M is the fixed complete-forecast
+cohort for baseline/stressed means and full-entry changes. M_delta is the separate
+cohort with known selected contributions; direct change can remain available when
+another player's forecast is missing. Min/median/p90/max describe entries under
+that one assumption, using sorted index floor((n-1)q); they are not probabilities
+or a simulated return distribution. Do not average cases as equally likely.
+
+Missing forecasts remain unknown, explicit zero and negative values remain known,
+and reducing a negative contribution can increase points. A declared Missing
+forecast overrides a numeric value. Missing redundant Captain projection may be
+transparently derived; a conflicting recorded Captain value blocks that role's
+forecast calculation. Projection share requires a positive total on M.
+
+**Coverage** lists rejected/omitted rows, read limits, forecast and context
+denominators, raw recorded roles, flags and evidence times. Role policy v1 requires
+an applicable role source and an aware role check at/before capture, before
+earliest kickoff, and no more than 24 hours old at that kickoff. Usage/news times
+are not substitutes. Missing, conflicting, future or stale role evidence is
+unknown; reviewing an old game today does not itself make timely archived roles
+stale. Non-QB depth uses **Other depth roles / rotation**, not an exclusive backup
+claim. Frozen QB exclusions remain visible and unchanged.
+
+Alternative pairs show exclusive buckets, union and Captain coverage, including
+when every alternative appearance coexists with the risk player. A known pool
+athlete absent from all entries has 0/N exposure; an identity outside the pool is
+unknown. Missing roles do not erase exposure, and missing forecasts do not erase
+roles. Alternative coverage does not prove injury compensation or prediction.
+
+![Saved export mode keeps unqualified historical stress visibly unavailable](images/portfolio-risk-export.png)
+
+Capture runs in the background with phase/elapsed status. **Cancel Operation**,
+Close/Escape or changing selections suppresses an unapplied read-only result,
+including one just completed. Controls unlock after worker retirement. Failure or
+cancel retains the prior output with a label and disables copying until a complete
+matching capture. Later source changes do not continuously update a frozen report;
+capture again to revalidate. Saved salary/snapshot associations, original files,
+lineups and committed reconciliation results remain unchanged.
+
+**Copy Summary** shares aggregates without names, source IDs, paths or rosters.
+Use **Include player names and lineup details (private)** only when you intend to
+share them. No risk report file, persistent history, solver, SIM, learning adjustment
+or money metric is created. See [Portfolio Risk](PORTFOLIO_RISK.md) for evidence
+gates, arithmetic examples and validation details.
+
+## Hindsight: supplied-pool actual-point benchmarks
+
+Open **Results & Learning > Hindsight**, select one historical contest, then click
+**Capture / Solve**. Opening the tab or refreshing its cached choices does not
+scan source files or solve. If a newly imported contest is missing, use Historical
+Coverage's explicit reconciliation first.
+
+The supplied-pool benchmark needs a qualified exact salary revision and complete,
+finite, conflict-free actual scores for every eligible athlete, including athletes
+absent from observed entries. It does not need a snapshot or generated archive.
+Unknown scores never become zero; zero and negative scores remain known.
+
+**Any certified optimum is limited to the complete supplied salary revision under
+the displayed roster rules. Completeness of the original contest-wide player pool
+is not independently established.** A salary/snapshot match or a high observed
+score cannot prove that no other original platform players were offered.
+
+![Synthetic Hindsight supplied-pool and snapshot-local comparison](images/hindsight-overview.png)
+
+Enable **Compare exact qualified snapshot restrictions** to request the second
+benchmark. The displayed pregame snapshot must still qualify at capture time. An
+optional archive choice identifies a specific completed generated build; neither
+choice establishes the original or submitted portfolio. Saved salary/snapshot
+associations are preserved, including invalid saved choices requiring review.
+
+Snapshot-local restrictions include the recorded cap, role locks/fades, supported
+groups, explicit zero caps, 100% minima with their recorded role meaning, and
+recorded QB exclusions. A Showdown FLEX lock is not satisfied at Captain. Other
+portfolio percentages, uniqueness, team/game appearance caps, retained rows and
+recovery policies are **not evaluated by a single-lineup benchmark**. Small positive
+minima do not become locks. Unknown local restrictions block this comparison while
+leaving an independently qualified supplied-pool solve available. Missing forecasts,
+personal fades and current depth charts do not shrink the supplied salary universe.
+
+**Highest reported score in supplied entries** comes from original entry Points,
+not the Player/FPTS side table. Identical EntryId copies deduplicate and conflicting
+copies are all excluded regardless of row order. A changed explicit player ID or
+individual roster-role assignment is a conflict even when player names agree.
+Equivalent role aliases and slot order still deduplicate. Tied entries and distinct
+validated tied rosters have separate counts. An unreadable highest entry keeps its reported score and unavailable roster
+witness; a lower readable entry is never substituted. Reported totals and exact
+reconstructed scores remain separate. Partial fields do not imply complete fields.
+
+The supported rules use a 50,000 cap, Classic's nine slots or Showdown's Captain
+plus five FLEX slots, distinct athletes and at least two teams. Showdown uses the
+one verified game and exact Captain 1.5x points and cost once. This is a disclosed
+rules contract, not proof of the original contest's historical platform rules.
+
+Exact base-score inputs support four decimal places and absolute magnitude up to
+10,000. Unsupported precision, nonfinite values and exact conflicts are unavailable,
+not rounded into ties. Existing historical diagnostic tolerances remain unchanged.
+The new benchmark uses exact integer units and independently validates every witness.
+
+![Synthetic Hindsight unavailable snapshot comparison with supplied-pool result retained](images/hindsight-unavailable.png)
+
+One 30-second solver budget covers both primary solves and optional tie work.
+**Optimal** requires completed solver proof and independently checked output.
+Infeasible, time limit, cancelled, solver error, validation failed, unsupported rules,
+unavailable evidence and not requested are separate statuses. An unproven incumbent
+is never called optimal. At most 20 tied roster examples are displayed per scope.
+The exact total or uniqueness is known only after exhaustive tie search; otherwise
+the report shows a lower bound and partial/not-checked status. Classic slot-order
+permutations do not multiply ties; Captain swaps do count as different rosters.
+
+**Cancel Operation**, Close/Escape and selector changes suppress unapplied results.
+Controls unlock only after the worker and child process retire. Failure/cancel
+retains prior output and disables copying until a matching capture succeeds.
+Committed reconciliations remain committed after late cancellation. Reports are
+frozen; later disk changes require another capture.
+
+**Copy Summary** is aggregate-only by default. Explicit private detail adds names
+and roster witnesses. No report file, live pool, saved bank, submission export,
+candidate library or learning update is created. This feature provides no payout,
+prediction or strategy advice. **RL-07B generation explanation is unimplemented**:
+an optimum does not explain where a lineup disappeared from generation or selection.
+See [Hindsight Solver](HINDSIGHT_SOLVER.md) for evidence, numerical and resource limits.
+
 ## Results plus username: automatic snapshot comparisons
+
+Imported standings and your exact username can be compared with compatible saved pregame snapshots. These comparisons describe stored forecasts; they do not certify the original producing build or reconstruct missing inputs.
 
 ### Opponent portfolios from one standings file
 
@@ -1543,7 +1838,9 @@ Full NFL data refreshes retry a transient weekly-statistics download failure onc
 
 Reload the salary file for a full data refresh after updating; the lightweight pre-build status check does not download weekly usage again. Snapshot replay continues to preserve its original inputs. Results & Learning's **Refresh Free NFL Stats** uses the same download cache and labels cached refreshes. Back up the history folder to retain this cache with snapshots and results.
 
-Normal desktop Classic and Showdown builds no longer automatically weaken minimum uniqueness or raise automatic Showdown exposure caps to fill an output request. If greedy selection gets stuck, a bounded feasibility repair can rearrange candidates under the same maximums, group rules, team/game limits, retained entries and uniqueness. It prioritizes retaining greedy selections, then their quality order, and does not fit or change scoring models. The repair has a 15-second maximum, limited by remaining Deep time. A solver result is accepted only when it is integral and satisfies every modeled constraint; it need not be proven optimal. Existing minimum-exposure shortfalls remain reported rather than guaranteed.
+Normal desktop builds run candidate generation and scoring, strict portfolio selection, and strict repair first. If a Showdown portfolio is still short, AR-02 can try bounded increases to automatic total-player, Captain, and combined K/DST Captain guardrails. Recovery stops at the first complete valid portfolio. Explicit exposure limits (including zero), Captain limits, locks, fades, minimum uniqueness, groups, team/game limits, salary/roster eligibility, and retained rows remain hard constraints.
+
+Build diagnostics record the requested count, strict count, whether automatic recovery ran, starting/effective automatic caps, recovery stage, and final count. Increased automatic concentration is clearly flagged as a review item; it is not described as relaxing a user rule. Classic and Showdown candidate coverage can improve before final scoring. Deep uses only its remaining budget, never extends saved candidate libraries, and adds no candidates after final scoring. Cancellation never starts automatic recovery; AR-01 saved-repair safeguards and the cancelled Deep Showdown receipt behavior remain intact.
 
 If no complete compliant portfolio is found, the build explains the shortage instead of releasing the incomplete constrained portfolio or silently changing its limits. This is a search limitation, not proof of mathematical infeasibility. Increase candidate/shortlist coverage or explicitly change the requested count or rules before rebuilding. Evaluated Deep banks and pre-game scoring summaries saved before selection remain available. Cancellation still preserves retained entries. Unconstrained generator shortages may still return fewer entries with a warning.
 
@@ -1563,7 +1860,7 @@ A constrained portfolio shortage now opens a **Lineup limits** warning instead o
 
 Classic and Showdown Deep builds now search the full screened candidate pool for a complete set satisfying the current maximum exposures, uniqueness, groups, team/game limits and retained entries **before** narrowing the SIM shortlist. A short diversity-first pass tries two deterministic orderings that favor candidates blocking fewer alternatives, then gives the remaining feasibility budget to the exact solver. Both use the same hard limits as final selection, including automatic Showdown caps. A verified complete set is reserved ahead of optional shortlist reservations; it receives the same later SIM evaluation as other shortlisted candidates. The rest of the shortlist still follows the selected ranking/search mode. Build reports identify which search found the witness. No scoring forecasts or exposure limits are changed.
 
-If final greedy selection gets stuck, the app rechecks the preserved set against the current candidates and rules and can use it as a complete fallback, followed by normal refinement where enabled. Output ordering still uses the final SIM ranking. This is a feasible portfolio, not proof of the best possible portfolio. Build reports disclose preservation and fallback use. If no complete set is found within the available pool/time, existing strict shortage handling remains. More scenarios alone cannot replace missing candidate alternatives. Run a fresh Deep build after updating; old saved shortlists are not expanded or rewritten.
+If final greedy selection gets stuck, the app rechecks the preserved set against the current candidates and rules and can use it as a complete fallback, followed by normal refinement where enabled. Output ordering still uses the final SIM ranking. This is a feasible portfolio, not proof of the best possible portfolio. Build reports disclose preservation and fallback use. If strict selection and repair remain short, bounded automatic Showdown recovery may run within the remaining budget as described above. If recovery cannot complete a valid set, shortage handling explains the stop. More scenarios alone cannot replace missing candidate alternatives. Run a fresh Deep build after updating; old saved shortlists are not expanded or rewritten.
 
 
 ### Responsive portfolio feasibility checks
@@ -1631,6 +1928,10 @@ Focused comparisons preserved complete Classic metrics and tie handling. A local
 ### Resizable generated-lineup tables
 
 Classic/Sport and Showdown result tables now give player columns at least 180 pixels by default, expanding for visible names up to 260 pixels. All result columns can be resized by dragging header dividers; double-click a divider to fit contents. A horizontal scrollbar exposes later players and SIM/comparison metrics instead of compressing names into the window width. Hover over a player cell for its full displayed name.
+
+The Showdown results controls can filter to one Captain; pagination and row Save checkboxes follow the filtered result set. **Mean pts ↓** sorts the complete result set by simulated mean points when SIM metrics are available. Clear the Captain filter to return to all lineups; filtering does not remove saved entries.
+
+![Captain filter and mean points sort in the output pane](images/captain-output.png)
 
 Manual widths are retained within the open app while paging, sorting, restoring Best first, or refreshing results, including repeated roster slots. Numeric cells remain right-aligned and Save actions are unchanged. Widths are not saved across app restarts. This changes presentation only: lineup identities, ordering rules, saved selections, exports and simulation behavior are unchanged.
 

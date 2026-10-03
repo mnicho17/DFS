@@ -4,6 +4,8 @@
 
 A Windows desktop lineup optimizer for DraftKings NFL, MLB, NBA, NHL, and WNBA slates.
 
+**v1.24.0 — Core Plans and Captain safeguards:** Classic and separate Showdown FLEX/Captain targets, bounded kicker Captain exposure, and output Captain filtering with mean-points sorting. See the [release notes](docs/releases/v1.24.0.md).
+
 NFL Classic and Showdown support **Settings > Ownership Sensitivity**: compare a saved Deep bank against baseline, higher ownership for favorites, and concentrated ownership, with paired player outcomes. Defaults run three batches of three profiles at 5,000 scenarios each. Reports save automatically and include Copy Report. See the [ownership sensitivity guide](docs/USER_GUIDE.md#ownership-sensitivity).
 
 
@@ -130,7 +132,7 @@ The optimizer can shape the complete set of generated lineups, not just each lin
 
 
 
-The app generates a larger candidate pool and selects a compliant portfolio from it. If aggressive settings cannot all be satisfied, it returns the feasible lineups it found and clearly reports any relaxed uniqueness or minimum-exposure shortfall.
+The app generates a larger candidate pool and selects a compliant portfolio from it. Explicit rules remain fixed. After strict selection and repair, a short Showdown portfolio can recover by increasing only automatic concentration caps, with a clear warning. If no complete valid portfolio is found, the build stops without publishing a partial portfolio.
 
 
 
@@ -283,6 +285,8 @@ Candidate provenance survives NFL contest simulation and portfolio selection, so
 
 
 After lineup generation, **Settings > Copy Last Build Report** copies a shareable snapshot of the build-space count, pool size, candidate flow, phase timing, active strategy, portfolio rules, preset fit, selected source mix, SIM quality, scenario coverage, and generalized warnings. The NFL SIM Edge candidate budget distinguishes projection-led optimizer candidates, realistic field-shaped candidates, and correlated scenario-built candidates. **Settings > Build History…** keeps the 25 most recent runs available, compares two selected runs side by side, and lets the user copy or clear the local reports.
+
+The **Compute ledger** adds a compact wall/CPU, candidate/reuse and peak-observed-memory summary. Bounded aggregate receipts are stored separately in external user data, with approximately 250 runs retained. Saved repairs and preparation are identified separately. It observes existing work without changing budgets or optimizer decisions. Results & Learning also reports recorded pregame SIM quantile coverage and error by game, position, role and model, without automatic tuning. See [Compute ledger and calibration](docs/COMPUTE_LEDGER.md) for count definitions, compatibility, privacy and limitations.
 
 
 
@@ -675,7 +679,11 @@ Saved banks omit original group/team/game settings, so this does not recreate th
 
 Core Plays opens with **Starting shortlist**: up to three distinct players per position and slot. It first takes the highest-projected anchor, then the highest-value remaining value candidate, then the highest-projected remaining lower-owned alternative. Any remaining places use projection among tagged candidates. This is a review starting point, not a SIM ranking, exposure recommendation or requirement to use all three. Warnings remain visible; **Core candidates** restores the full list. Filters narrow the existing shortlist. Captain and FLEX are handled separately. Alternative details show exact differences in salary dollars, projected points and ownership percentage points. Column widths and sorting remain in place while filtering.
 
-After loading NFL salaries and refreshing player data, open **Settings > Core Plays** for the active Classic or Showdown output tab. No Deep run is required. This read-only view uses the currently loaded inputs; it does not fetch data, change projections, set exposure limits or lock players. Reopen after changing inputs. Filters show core candidates, all eligible/loaded players, individual signal categories and Captain/FLEX slots. Search by player/team/position; click headers to sort numerically, with unknowns last in either direction. Select a row for workload, sources, history, status-check time, reasons and review notes. **Copy Report** copies every row in the current filtered/sorted view.
+After loading NFL salaries and refreshing player data, open **Settings > Core Plays** for the active Classic or Showdown output tab. No Deep run is required. The view uses the currently loaded inputs and does not fetch data or change projections. Filters show core candidates, all eligible/loaded players, individual signal categories and Captain/FLEX slots. Search by player/team/position; click headers to sort numerically, with unknowns last in either direction. Select a row for workload, sources, history, status-check time, reasons and review notes. **Copy Report** copies every row in the current filtered/sorted view.
+
+Check selected players and set a minimum **Target %**, then choose **Apply Core Plan to Build**. Classic targets count appearances across entries; Showdown keeps separate FLEX and Captain targets. Targets guide candidate generation and portfolio selection but are not locks. The build report shows achieved counts and any missed targets; hard roster rules, explicit locks, exclusions and exposure limits remain in force. The plan applies to the current loaded player pool; review it again after loading a new slate.
+
+For Showdown, newly generated QB-Captain lineups with a known opposing DST in FLEX are excluded across build styles. Kicker Captain exposure is capped at 5% of the requested entries, rounded down with a minimum of one (one in a 20-entry build). Existing retained entries are preserved; an explicit kicker Captain lock takes precedence and may exceed the automatic cap.
 
 Signals are transparent heuristics, not recommendations to lock a player: **Underpriced role candidate** requires points per $1,000 percentile >=75 and projection percentile >=50 among at least four supported positive-forecast peers at the same position/slot. **High-projection anchor** requires projection percentile >=80; equal peers do not count as strictly lower. **Popular play to assess** uses estimated ownership >=10% Classic, >=25% FLEX or >=8% Captain. **Lower-owned alternative** compares same-position/slot players with >=90% of a popular peer's projection, <=110% salary, and both >=5 percentage points and >=30% lower ownership. Similar mean projections do not prove similar ceilings. **Role-change opportunity** requires explicit unavailability in every earlier recorded depth slot. No salary file alone establishes current starters or actual ownership.
 
@@ -845,6 +853,8 @@ Focused comparisons preserved complete Classic metrics and tie handling. A local
 
 Classic/Sport and Showdown result tables now give player columns at least 180 pixels by default, expanding for visible names up to 260 pixels. All result columns can be resized by dragging header dividers; double-click a divider to fit contents. A horizontal scrollbar exposes later players and SIM/comparison metrics instead of compressing names into the window width. Hover over a player cell for its full displayed name.
 
+The Showdown results controls can filter to one Captain; pagination and row Save checkboxes follow the filtered result set. **Mean pts ↓** sorts the complete result set by simulated mean points when SIM metrics are available. Clear the Captain filter to return to all lineups; filtering does not remove saved entries.
+
 Manual widths are retained within the open app while paging, sorting, restoring Best first, or refreshing results, including repeated roster slots. Numeric cells remain right-aligned and Save actions are unchanged. Widths are not saved across app restarts. This changes presentation only: lineup identities, ordering rules, saved selections, exports and simulation behavior are unchanged.
 
 ### Showdown concentration audit
@@ -861,8 +871,20 @@ Deep Showdown reports now trace defense counts through generation, salary filter
 
 Lineup-limit warnings and optimization errors include **Copy Error**. Click it to copy the complete message, including any traceback, for troubleshooting.
 
-## Capped-player alternatives in Fast Showdown
+## Portfolio recovery (AR-02)
 
-Fast Showdown builds now add a bounded exploration pass when a capped player is overrepresented in the generated candidates. It keeps the original bank, explores alternatives without up to four overrepresented players, then applies the same final portfolio limits. This adds at most 20 seconds of exploration and up to 600 candidates for large requests. Locks and original player tags are preserved; final selection still rejects incomplete or noncompliant portfolios. This addresses candidate coverage, not proof that every requested portfolio is feasible.
+Builds generate candidates and score them normally, then select under strict portfolio rules and try the existing strict repair. If the portfolio is still short, Showdown can increase only its automatic total-player, Captain, and combined K/DST Captain caps. Recovery tries ceilings of 10% and 25% above the starting counts, then the amount needed to finish. It stops at the first complete valid portfolio and warns that concentration increased. Explicit player minimums and maximums (including zero), Captain caps, locks, fades, uniqueness, groups, team/game limits, salary/roster eligibility, and retained entries stay fixed. Incompatible explicit rules still stop the build.
+
+Before scoring, bounded candidate exploration covers insufficient alternatives around capped players in Classic and Showdown. Captain-only coverage excludes the targeted player only from Captain, leaving FLEX available. Fast exploration has a 20-second limit and adds at most 600 candidates; Deep uses only remaining generation time and candidate capacity. Saved candidate libraries are never extended, and selection never generates unscored candidates. Recovery shares a 15-second solver budget across its three stages, further bounded by the remaining Deep deadline.
+
+The portfolio summary and build diagnostics record requested, strict, and final counts; whether recovery ran; starting and effective automatic caps; and the successful stage. Failed recovery publishes no partial portfolio or changed caps. Cancellation never starts recovery. Saved-repair cancellation, retained rows, callback guards, and the existing cancelled Deep Showdown receipt are preserved.
 
 Fast Showdown also skips the Classic-only field comparison when finishing its report, preventing a roster-format error after successful selection.
+
+### Historical Coverage (RL-05B, unreleased)
+
+**Results & Learning > Historical Coverage** shows the saved evidence ladder, state/format filters, concrete blockers and downstream prerequisites. **Reconcile All Evidence** revalidates sources in a cancellable background transaction; combined imports and salary confirmations use the same reconciliation. Saved coverage opens without reparsing original standings. Ambiguous salary revisions use Review Salary Matches; ambiguous pregame snapshots support explicit, versioned confirmation that later automatic reconciliation cannot replace. **Share Coverage Report** uses the existing privacy-preserving review export. See the [guide](docs/USER_GUIDE.md#historical-evidence-identity) and [storage/validation notes](docs/HISTORICAL_COVERAGE.md).
+
+**Results & Learning > Portfolio Risk (RL-06)** reviews one explicitly selected generated archive or recorded saved export. It preserves occurrence weights for athlete/Captain exposure, selected-pair overlap, team/QB-receiver dependencies and selected alternative coverage. Freshly qualified pregame archives support five/25 retained-production point comparisons with fixed coverage cohorts; legacy exports keep historical stress unavailable. Roles use frozen source/timestamp evidence. This read-only report adds no optimizer, SIM, injury prediction, exposure enforcement or learning changes. See [Portfolio Risk](docs/PORTFOLIO_RISK.md).
+
+**Results & Learning > Hindsight (RL-07A)** compares the highest reported supplied entry score with a certified actual-point optimum over the entire qualified supplied salary revision and an optional snapshot-local restricted optimum. Original contest-wide pool completeness remains unverified. Exact score coverage, supported rules and solver proof are independent gates; tied entries and tied roster examples have separate counts. One bounded solver budget covers both primary comparisons and tie work. The view is read-only, cancellable and aggregate-only when copied by default. No live strategy, forecasts, SIM, payouts or learning change. [Hindsight Solver](docs/HINDSIGHT_SOLVER.md) documents the rules and limits. RL-07B generation explanation remains unimplemented.

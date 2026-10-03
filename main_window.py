@@ -973,6 +973,8 @@ def _deep_shortlist(
 
 
 
+from compute_ledger import instrument_worker, finish_worker, safe as compute_safe, observe_dedup, candidate_budget as record_candidate_budget
+
 class LineupBuildWorker(QtCore.QObject):
 
     """Build lineups in a background thread so the UI/status bar stays responsive."""
@@ -1025,6 +1027,8 @@ class LineupBuildWorker(QtCore.QObject):
 
         contest_profile: Optional[Dict[str, Any]] = None,
 
+        contest_objective: Optional[str] = None,
+
         compute_mode: str = "Fast",
 
         deep_time_limit_seconds: float = 300.0,
@@ -1036,6 +1040,8 @@ class LineupBuildWorker(QtCore.QObject):
         repair_source: str = "",
         candidate_library: str = "",
         scenario_cache: bool = False,
+
+        compute_telemetry: bool = True,
 
     ):
 
@@ -1081,6 +1087,11 @@ class LineupBuildWorker(QtCore.QObject):
 
         )
 
+        self.contest_objective = normalize_objective(contest_objective if contest_objective is not None
+            else (self.contest_profile or {}).get("objective"))
+        if self.contest_profile:
+            self.contest_profile["objective"] = self.contest_objective
+
         self.compute_mode = str(compute_mode or "Fast").strip()
 
         self.deep_time_limit_seconds = max(1.0, float(deep_time_limit_seconds or 300.0))
@@ -1090,6 +1101,8 @@ class LineupBuildWorker(QtCore.QObject):
         self.retained_lineups = list(retained_lineups or [])[:self.num_lineups]
 
         self.repair_source = str(repair_source or "")
+        self.compute_telemetry = bool(compute_telemetry)
+
         self.scenario_cache = scenario_cache
         self.candidate_library = candidate_library
         self.library_candidates = []
@@ -1109,6 +1122,7 @@ class LineupBuildWorker(QtCore.QObject):
 
     @QtCore.pyqtSlot()
 
+    @instrument_worker
     def run(self) -> None:
 
         try:
@@ -1137,7 +1151,10 @@ class LineupBuildWorker(QtCore.QObject):
 
                 from showdown_simulation import run_deep_showdown
 
-                self.finished.emit(run_deep_showdown(self, _deep_shortlist))
+                result = run_deep_showdown(self, _deep_shortlist)
+                result["contest_objective"] = self.contest_objective
+                result.setdefault("sim_report", {})["contest_objective"] = self.contest_objective
+                self._emit_finished(result)
 
                 return
 
@@ -1255,7 +1272,7 @@ class LineupBuildWorker(QtCore.QObject):
 
                 )
 
-                self.finished.emit({
+                self._emit_finished({
 
                     "kind": self.kind,
 
@@ -1502,6 +1519,7 @@ class LineupBuildWorker(QtCore.QObject):
                 candidate_target = build_request
 
             candidate_budget = candidate_target + ownership_candidate_target + scenario_candidate_target
+            compute_safe(record_candidate_budget, candidate_budget)
 
             if use_nfl_sim:
 
@@ -1535,9 +1553,16 @@ class LineupBuildWorker(QtCore.QObject):
 
                 configured = constraints.get(key) or {}
 
-                min_total = float(configured.get("MinPct", player.get("MinPct", 0.0)) or 0.0)
+                min_total = max(
+                    float(configured.get("MinPct", player.get("MinPct", 0.0)) or 0.0),
+                    float(configured.get("CoreClassicMinPct", player.get("CoreClassicMinPct", 0.0)) or 0.0),
+                    float(configured.get("CoreShowdownMinFlexPct", player.get("CoreShowdownMinFlexPct", 0.0)) or 0.0),
+                )
 
-                min_cpt = float(configured.get("MinCptPct", player.get("MinCptPct", 0.0)) or 0.0)
+                min_cpt = max(
+                    float(configured.get("MinCptPct", player.get("MinCptPct", 0.0)) or 0.0),
+                    float(configured.get("CoreShowdownMinCptPct", player.get("CoreShowdownMinCptPct", 0.0)) or 0.0),
+                )
 
                 if min_total > 0.0 or min_cpt > 0.0:
 
@@ -1561,10 +1586,24 @@ class LineupBuildWorker(QtCore.QObject):
 
             style_counts = {}
 
+            def expand_classic_coverage(rows, allowance=None):
+                if self.library_candidates or self.candidate_library:
+                    return []
+                from candidate_recovery import expand_candidates
+                return expand_candidates(rows, build_players, self.num_lineups,
+                    self.portfolio_rules, kind='classic', sport=self.sport,
+                    salary_cap=self.salary_cap, own_mode=self.own_mode, own_weight=self.own_weight,
+                    build_style=self.build_style, salary_strategy=self.salary_strategy,
+                    mlb_stack_pref=self.mlb_stack_pref, retained=self.retained_lineups,
+                    cancelled=self._cancel_event.is_set,
+                    seconds=max(0, min(20, generation_deadline-time.perf_counter())) if deep_build else 20,
+                    max_additions=allowance)
+
             if self.library_candidates:
                 lineups = list(self.library_candidates)
                 candidate_target = len(lineups)
                 candidate_budget = len(lineups)
+                compute_safe(record_candidate_budget, candidate_budget)
                 ownership_candidate_target = 0
                 scenario_candidate_target = 0
             else:
@@ -1616,7 +1655,7 @@ class LineupBuildWorker(QtCore.QObject):
                     coverage = expand_capped_candidates(lineups, build_players, self.num_lineups,
                         self.portfolio_rules, salary_cap=self.salary_cap, own_mode=self.own_mode,
                         own_weight=self.own_weight, build_style=self.build_style,
-                        cancelled=self._cancel_event.is_set)
+                        cancelled=self._cancel_event.is_set, retained=self.retained_lineups)
                     lineups.extend(coverage)
                     candidate_target += len(coverage)
                     candidate_budget += len(coverage)
@@ -1728,6 +1767,13 @@ class LineupBuildWorker(QtCore.QObject):
 
                             lineups.extend(batch_lineups)
 
+                            if batch_index == 0:
+                                coverage = expand_classic_coverage(lineups, max(0, candidate_target-len(lineups)))
+                                lineups.extend(coverage)
+                                optimizer_seen.update(tuple(sorted(player_key(p) for p in lu)) for lu in coverage)
+                                completed_optimizer += len(coverage)
+                                style_counts['Portfolio coverage'] = len(coverage)
+
                             completed_optimizer += len(batch_lineups)
 
                             remaining_optimizer = max(0, candidate_target - completed_optimizer)
@@ -1783,6 +1829,13 @@ class LineupBuildWorker(QtCore.QObject):
                             minimum_unique=int(self.portfolio_rules.get("min_unique", 1) or 1),
 
                         )
+
+            if self.kind != 'showdown' and not self.library_candidates and not self.candidate_library:
+                coverage = expand_classic_coverage(lineups, max(0, candidate_target-len(lineups)) if deep_build else None)
+                lineups.extend(coverage)
+                if not deep_build:
+                    candidate_target += len(coverage)
+                    candidate_budget += len(coverage)
 
             generation_seconds = time.perf_counter() - build_started
 
@@ -1946,6 +1999,8 @@ class LineupBuildWorker(QtCore.QObject):
 
                 # SIM sources pass through one exact-signature dedupe step.
 
+                compute_dedup_started = time.perf_counter()
+                compute_dedup_input = len(lineups) + len(extras) + len(scenario_extras)
                 unique_lineups: Dict[tuple[str, ...], List[Dict[str, Any]]] = {}
 
                 source_additions = {"optimizer": 0, "field_shaped": 0, "scenario_built": 0}
@@ -1983,6 +2038,7 @@ class LineupBuildWorker(QtCore.QObject):
                             source_additions[source] += 1
 
                 lineups = list(unique_lineups.values())
+                compute_safe(observe_dedup, compute_dedup_input, len(lineups), time.perf_counter() - compute_dedup_started)
 
                 scenario_candidate_report["unique_source_additions"] = source_additions
 
@@ -2394,6 +2450,8 @@ class LineupBuildWorker(QtCore.QObject):
 
                 rules=self.portfolio_rules,
                 allow_relaxation=False,
+                automatic_recovery=True,
+                recovery_deadline=deep_deadline if deep_build else None,
                 fallback_lineups=feasible_fallback,
                 selection_cancel_callback=self._cancel_event.is_set,
                 repair_time_limit=max(0,min(15,deep_deadline-time.perf_counter())) if deep_build else 15,
@@ -2660,6 +2718,7 @@ class LineupBuildWorker(QtCore.QObject):
             )
 
             sim_report["candidate_library"] = dict(self.library_report)
+            sim_report["contest_objective"] = self.contest_objective
             if self.sport == "NFL":
                 from projection_coverage import summarize_projection_coverage
                 sim_report["projection_coverage"] = summarize_projection_coverage(build_players)
@@ -2682,6 +2741,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "scenario_candidate_target": int(scenario_candidate_target),
 
                 "candidate_count": reported_candidate_count,
+                "contest_objective": self.contest_objective,
 
                 "selected_count": len(lineups),
 
@@ -2757,7 +2817,7 @@ class LineupBuildWorker(QtCore.QObject):
 
             }
 
-            self.finished.emit({
+            self._emit_finished({
 
                 "kind": self.kind,
 
@@ -2772,6 +2832,7 @@ class LineupBuildWorker(QtCore.QObject):
                 "portfolio_report": selected["report"],
 
                 "candidate_count": reported_candidate_count,
+                "contest_objective": self.contest_objective,
 
                 "sim_report": sim_report,
 
@@ -2797,7 +2858,7 @@ class LineupBuildWorker(QtCore.QObject):
         # Selection can stop with an exception after cooperative cancellation.
         # Deliver only this worker's retained proposal; the GUI receipt rejects
         # it without replacing the current saved portfolio or its reports.
-        self.finished.emit({
+        self._emit_finished({
             "kind": self.kind, "sport": self.sport,
             "lineups": list(self.retained_lineups), "requested": self.num_lineups,
             "cancelled": True, "repair_source": self.repair_source,
@@ -2814,6 +2875,11 @@ class LineupBuildWorker(QtCore.QObject):
 
 
 
+
+
+    def _emit_finished(self, payload):
+        finish_worker(payload)
+        self.finished.emit(payload)
 
 
 from data_io import read_players_csv
@@ -2867,6 +2933,9 @@ from entry_safety import build_entry_safety_report
 from game_day_safety import build_final_lock_report
 
 from build_recipes import dump_recipes_json, load_recipes_json, normalize_recipe
+
+from contest_objectives import (TOURNAMENT, OBJECTIVES, FRAMEWORK_NOTE,
+    normalize_objective, objective_label)
 
 from contest_profiles import (
 
@@ -3866,6 +3935,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Results & Learning")
+        from learning_db import history_db_path
+        self.db_path = history_db_path()
 
         self.resize(820, 700)
 
@@ -3980,7 +4051,24 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         self.report.setReadOnly(True)
 
-        layout.addWidget(self.report, 1)
+        from historical_coverage_ui import HistoricalCoverageWidget
+        self.coverage = HistoricalCoverageWidget(self.db_path, self)
+        self.coverage.reconcile_requested.connect(self.reconcile_history)
+        self.coverage.salary_requested.connect(self.review_salary_matches)
+        self.coverage.report_requested.connect(self.export_review_report)
+        self.results_tabs = QtWidgets.QTabWidget()
+        self.results_tabs.addTab(self.report, 'Results Report')
+        self.results_tabs.addTab(self.coverage, 'Historical Coverage')
+        from portfolio_risk_ui import PortfolioRiskWidget
+        self.risk = PortfolioRiskWidget(self.db_path,self)
+        self.risk.requested.connect(self.start_portfolio_risk)
+        self.results_tabs.addTab(self.risk,'Portfolio Risk')
+        from hindsight_ui import HindsightWidget
+        self.hindsight = HindsightWidget(self.db_path,self)
+        self.hindsight.requested.connect(self.start_hindsight)
+        self.results_tabs.addTab(self.hindsight,'Hindsight')
+        self.results_tabs.currentChanged.connect(self._suggest_risk_source)
+        layout.addWidget(self.results_tabs, 1)
 
 
 
@@ -4053,7 +4141,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         import_status.addWidget(self.import_progress, 1)
 
-        self.import_cancel = QtWidgets.QPushButton("Cancel Import")
+        self.import_cancel = QtWidgets.QPushButton("Cancel Operation")
 
         self.import_cancel.setObjectName("cancelResultsImportButton")
 
@@ -4111,7 +4199,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         try:
 
-            payload = generate_learning_report(username=self.username_edit.text().strip())
+            payload = generate_learning_report(username=self.username_edit.text().strip(), db_path=self.db_path)
 
             roi = payload.get("roi_pct")
 
@@ -4163,13 +4251,67 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.learning_settings.setValue("learning/salary_folder", "")
         self.learning_settings.sync()
 
-    def review_salary_matches(self) -> None:
+    def _suggest_risk_source(self, index) -> None:
+        if self.results_tabs.widget(index) is self.risk:
+            selected = self.coverage.selected()
+            if selected:
+                self.risk.suggest_contest(selected['identity_id'])
+        elif self.results_tabs.widget(index) is self.hindsight:
+            selected = self.coverage.selected()
+            if selected:
+                self.hindsight.suggest_contest(selected['identity_id'])
+
+    def start_hindsight(self, request) -> None:
         if self._import_thread is not None:
             return
-        from analysis_imports_ui import SalaryMatchesDialog, CombinedImportWorker
-        dialog = SalaryMatchesDialog(self)
-        if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selection:
-            self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip()), self._on_combined_import_finished)
+        from hindsight_ui import HindsightWorker
+        worker = HindsightWorker(self.db_path,request)
+        cancelled = worker.cancelled
+        self.hindsight.begin(cancelled)
+        def ready(result):
+            self.hindsight.finish(result,cancelled=cancelled.is_set())
+        self._start_background_import(worker,ready)
+
+    def start_portfolio_risk(self, request) -> None:
+        if self._import_thread is not None:
+            return
+        from portfolio_risk_ui import RiskWorker
+        worker = RiskWorker(self.db_path,request)
+        cancelled = worker.cancelled  # Plain token survives QObject destruction.
+        self.risk.begin(cancelled)
+        def ready(result):
+            self.risk.finish(result,cancelled=cancelled.is_set())
+        self._start_background_import(worker,ready)
+
+    def reconcile_history(self, snapshot_choices=None) -> None:
+        if self._import_thread is not None:
+            return
+        from historical_coverage_ui import CoverageWorker
+        self.coverage.start_progress()
+        self._start_background_import(CoverageWorker(self.db_path, snapshot_choices), self._on_coverage_finished)
+
+    def _on_coverage_finished(self, result) -> None:
+        text = result.get('message','Reconciliation finished.')
+        if result.get('committed'):
+            text += f" Elapsed: {result['seconds']:.1f}s. Timing recorded by the compute ledger when storage is available."
+        self.coverage.finish(text)
+
+    def review_salary_matches(self, result_hash='') -> None:
+        if self._import_thread is not None:
+            return
+        from analysis_imports_ui import SalaryMatchReviewWorker
+        worker = SalaryMatchReviewWorker(self.db_path)
+        # Keep this job's plain Event alive through retirement, without reading
+        # the deleted QObject. A queued payload predates a later Cancel click.
+        cancelled = worker.cancelled
+        def ready(result):
+            if result.get('cancelled') or cancelled.is_set():
+                return
+            from analysis_imports_ui import SalaryMatchesDialog, CombinedImportWorker
+            dialog = SalaryMatchesDialog(self, db_path=self.db_path, state=result['state'], result_hash=result_hash)
+            if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selection:
+                self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip(), db_path=self.db_path), self._on_combined_import_finished)
+        self._start_background_import(worker, ready)
 
     def _on_combined_import_finished(self, result) -> None:
         from analysis_imports_ui import import_summary
@@ -4196,7 +4338,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())
             self.learning_settings.sync()
             self._start_background_import(CombinedImportWorker(self.results_folder.text(), self.salary_folder.text(),
-                self.username_edit.text().strip()), self._on_combined_import_finished)
+                self.username_edit.text().strip(), db_path=self.db_path), self._on_combined_import_finished)
 
     def import_results(self) -> None:
 
@@ -4285,6 +4427,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_thread.start()
 
     def _set_import_controls(self, enabled):
+        self.coverage.setEnabled(enabled)
+        self.risk.setEnabled(enabled)
+        self.hindsight.setEnabled(enabled)
         for control in (self.import_new_button, self.import_button, self.attach_salary_button,
                         self.refresh_button, self.analyze_button, self.stats_button, self.opponents_button,
                         self.choose_results_button, self.choose_salary_button, self.clear_salary_button,
@@ -4295,6 +4440,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
     def _job_progress(self, job, done, total, text):
         if self._import_job is job and self.import_cancel.isEnabled():
             self._on_import_progress(done, total, text)
+            self.coverage.progress(text)
+            self.risk.progress(text)
+            self.hindsight.progress(text)
 
     def _job_completed(self, job, handler, payload):
         if self._import_job is job and job['completion'] is None:
@@ -4304,7 +4452,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if self._import_thread is not None:
             return
         from review_report_ui import ReviewReportDialog
-        ReviewReportDialog(self).exec_()
+        ReviewReportDialog(self, db_path=self.db_path).exec_()
 
     def attach_matching_salaries(self) -> None:
 
@@ -4377,6 +4525,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if self._import_worker is not None:
 
             self._import_worker.request_cancel()
+            self.coverage.progress('Cancellation requested; waiting for the transaction to finish')
+            self.risk.progress('Cancellation requested; waiting for worker retirement')
+            self.hindsight.progress('Cancellation requested; waiting for solver and worker retirement')
 
             self.import_cancel.setEnabled(False)
 
@@ -4474,6 +4625,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def _on_import_error(self, message: str) -> None:
+        if self.coverage.started is not None:
+            self.coverage.finish(message)
 
         self._finish_import_ui()
 
@@ -4490,7 +4643,14 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_worker = None
         self._import_job = None
         self._finish_import_ui()
+        self.coverage.reload()
         if self._close_after_import:
+            if self.hindsight.started is not None:
+                self.hindsight.finish({},cancelled=True)
+            if self.risk.started is not None:
+                self.risk.finish({},cancelled=True)
+            if self.coverage.started is not None:
+                self.coverage.finish('Reconciliation stopped; reopen coverage to inspect committed evidence.')
             QtCore.QTimer.singleShot(0, self.accept)
         elif job['completion'] is not None:
             handler, payload = job['completion']
@@ -5300,7 +5460,8 @@ class BuildRecipesDialog(QtWidgets.QDialog):
 
             f"{int(recipe.get('requested_lineups', 1) or 1)} lineups • {sim_text} • "
 
-            f"minimum unique {int(recipe.get('min_unique', 1) or 1)}"
+            f"minimum unique {int(recipe.get('min_unique', 1) or 1)} • "
+            f"Objective: {objective_label(recipe.get('contest_objective'))}"
 
         )
 
@@ -5372,6 +5533,8 @@ class ContestProfileDialog(QtWidgets.QDialog):
 
         parent: Optional[QtWidgets.QWidget] = None,
 
+        *, objective: Optional[str] = None,
+
     ):
 
         super().__init__(parent)
@@ -5381,6 +5544,7 @@ class ContestProfileDialog(QtWidgets.QDialog):
         self.active_name = str(active_name or "").strip()
 
         self.selected_profile: Optional[Dict[str, Any]] = None
+        self.initial_objective = normalize_objective(objective)
 
         self.changed = False
 
@@ -5407,6 +5571,21 @@ class ContestProfileDialog(QtWidgets.QDialog):
         layout.addWidget(intro)
 
 
+
+        objective_form = QtWidgets.QFormLayout()
+        self.objective_combo = QtWidgets.QComboBox(self)
+        self.objective_combo.setObjectName("contestObjective")
+        for value in OBJECTIVES:
+            self.objective_combo.addItem(objective_label(value), value)
+        self.objective_combo.setCurrentIndex(OBJECTIVES.index(self.initial_objective))
+        objective_form.addRow("Contest objective", self.objective_combo)
+        layout.addLayout(objective_form)
+        self.objective_note = QtWidgets.QLabel(self)
+        self.objective_note.setObjectName("contestObjectiveNote")
+        self.objective_note.setWordWrap(True)
+        layout.addWidget(self.objective_note)
+        self.objective_combo.currentIndexChanged.connect(self._update_objective_note)
+        self._update_objective_note()
 
         saved_row = QtWidgets.QHBoxLayout()
 
@@ -5565,8 +5744,17 @@ class ContestProfileDialog(QtWidgets.QDialog):
         self.user_entries.valueChanged.connect(self._update_preview)
 
         self._refresh_profiles(self.active_name)
+        if objective is not None:
+            self.objective_combo.setCurrentIndex(OBJECTIVES.index(self.initial_objective))
 
 
+
+    @property
+    def objective(self):
+        return normalize_objective(self.objective_combo.currentData())
+
+    def _update_objective_note(self, *_args):
+        self.objective_note.setText(FRAMEWORK_NOTE if self.objective != TOURNAMENT else "Tournament uses the existing lineup strategy.")
 
     def _selected_name(self) -> str:
 
@@ -5610,6 +5798,8 @@ class ContestProfileDialog(QtWidgets.QDialog):
 
         if profile:
 
+            self.objective_combo.setCurrentIndex(OBJECTIVES.index(normalize_objective(profile.get("objective"))))
+
             self.name_edit.setText(name)
 
             self.field_size.setValue(int(profile.get("field_size", 100_000) or 100_000))
@@ -5641,6 +5831,8 @@ class ContestProfileDialog(QtWidgets.QDialog):
         return normalize_contest_profile({
 
             "name": self.name_edit.text(),
+
+            "objective": self.objective,
 
             "field_size": self.field_size.value(),
 
@@ -8870,6 +9062,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
+    def _current_contest_objective(self):
+        return normalize_objective(self.app_settings.value("contest/objective", TOURNAMENT))
+
+    def _set_contest_objective(self, objective):
+        self.app_settings.setValue("contest/objective", normalize_objective(objective))
+        self.app_settings.sync()
+
     def _load_contest_profiles(self) -> Dict[str, Dict[str, Any]]:
 
         try:
@@ -8940,13 +9139,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             str(getattr(self, "_active_contest_profile_name", "") or ""),
 
-            self,
+            self, objective=self._current_contest_objective(),
 
         )
 
         if dialog.exec_() != QtWidgets.QDialog.Accepted:
 
             return
+
+        self._set_contest_objective(dialog.objective)
 
         if dialog.changed:
 
@@ -8993,6 +9194,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "sport": self._current_sport(),
 
             "contest_kind": kind,
+
+            "contest_objective": self._current_contest_objective(),
 
             "requested_lineups": requested,
 
@@ -9305,6 +9508,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
     def _apply_build_recipe(self, name: str, recipe: Dict[str, Any]) -> None:
 
         value = normalize_recipe(recipe)
+
+        self._set_contest_objective(value["contest_objective"])
 
         self._set_recipe_combo(self.combo_sport, value.get("sport"))
 
@@ -9943,6 +10148,23 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 exposure_text += f" · CPT min {float(min_cpt):.0f}%"
 
+            core_flex = player.get("CoreShowdownMinFlexPct")
+
+            core_cpt = player.get("CoreShowdownMinCptPct")
+
+            if core_flex not in (None, "") and float(core_flex) > 0:
+                exposure_text += f" · Core FLEX target {float(core_flex):.0f}%"
+
+            if core_cpt not in (None, "") and float(core_cpt) > 0:
+                exposure_text += f" · Core CPT target {float(core_cpt):.0f}%"
+
+        else:
+
+            core_classic = player.get("CoreClassicMinPct")
+
+            if core_classic not in (None, "") and float(core_classic) > 0:
+                exposure_text += f" · Core target {float(core_classic):.0f}%"
+
         self.player_inspector.setTitle("Selected player")
 
         self.lbl_player_inspector_title.setText(name)
@@ -10074,6 +10296,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         if p.get("FadeCpt"):
 
             bits.append("CF")
+
+        for field, label in (("CoreClassicMinPct", "Core"),
+                             ("CoreShowdownMinFlexPct", "Core FLEX"),
+                             ("CoreShowdownMinCptPct", "Core CPT")):
+            value = p.get(field)
+            if value not in (None, "") and float(value) > 0:
+                bits.append(f"{label} {float(value):.0f}%")
 
         return " ".join(bits)
 
@@ -10283,7 +10512,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         for player in self.players:
 
-            if not any(player.get(field) not in (None, "") for field in ("MinPct", "MaxPct", "MinCptPct", "MaxCptPct")):
+            if not any(player.get(field) not in (None, "") for field in (
+                "MinPct", "MaxPct", "MinCptPct", "MaxCptPct",
+                "CoreClassicMinPct", "CoreShowdownMinFlexPct", "CoreShowdownMinCptPct",
+            )):
 
                 continue
 
@@ -10306,6 +10538,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
                 "MaxCptPct": player.get("MaxCptPct"),
 
             }
+
+            for field in ("CoreClassicMinPct", "CoreShowdownMinFlexPct", "CoreShowdownMinCptPct"):
+                value = player.get(field)
+                if value not in (None, ""):
+                    constraints[key][field] = value
 
         return {
 
@@ -11241,6 +11478,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 p.setdefault("MinPct", None)
 
+                p.setdefault("CoreClassicMinPct", None)
+
+                p.setdefault("CoreShowdownMinFlexPct", None)
+
+                p.setdefault("CoreShowdownMinCptPct", None)
+
                 p.setdefault("BaseProjection", float(p.get("FlexProjection", 0.0) or 0.0))
 
                 p.setdefault("BattingOrder", 0)
@@ -11530,6 +11773,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
                         float(player.get("MinPct") or 0.0) > 0.0
 
                         or float(player.get("MinCptPct") or 0.0) > 0.0
+
+                        or float(player.get("CoreClassicMinPct") or 0.0) > 0.0
+
+                        or float(player.get("CoreShowdownMinFlexPct") or 0.0) > 0.0
+
+                        or float(player.get("CoreShowdownMinCptPct") or 0.0) > 0.0
 
                     )
 
@@ -13155,6 +13404,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 "contest_profile": dict(contest_profile or {}),
 
+                "contest_objective": self._current_contest_objective(),
+
                 "compute_mode": (
 
                     "Deep" if effective_sim_enabled and compute_mode.casefold().startswith("deep") else "Fast"
@@ -13273,6 +13524,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             field_calibration=field_calibration,
 
             contest_profile=contest_profile,
+
+            contest_objective=self._active_build_context["settings"]["contest_objective"],
 
             compute_mode=compute_mode,
 
@@ -13410,6 +13663,23 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         bar.addWidget(reset)
 
+        mean_sort = QtWidgets.QPushButton("Mean pts ↓")
+        mean_sort.setObjectName(kind + "MeanPointsSort")
+        mean_sort.setToolTip("Sort the complete result set by simulated mean points, highest first.")
+        mean_sort.clicked.connect(lambda _checked=False, k=kind: self._sort_result_mean_points(k))
+        setattr(self, "_" + kind + "_mean_sort", mean_sort)
+        bar.addWidget(mean_sort)
+
+        if kind == "showdown":
+            bar.addWidget(QtWidgets.QLabel("Captain:"))
+            captain_filter = QtWidgets.QComboBox()
+            captain_filter.setObjectName("showdownCaptainFilter")
+            captain_filter.setMinimumWidth(190)
+            captain_filter.addItem("All Captains", "")
+            captain_filter.currentIndexChanged.connect(lambda _index: self._result_filter_changed("showdown"))
+            self._showdown_captain_filter = captain_filter
+            bar.addWidget(captain_filter)
+
         ownership = QtWidgets.QPushButton("Comparisons…")
         ownership_menu = QtWidgets.QMenu(ownership)
         def review_ownership():
@@ -13450,7 +13720,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             bar.addWidget(widget)
 
-        note = QtWidgets.QLabel("Click a column to sort all results. Best first restores SIM ranking. Rules apply to the full output.")
+        note = QtWidgets.QLabel("Filter Showdown by Captain. Mean pts sorts all SIM results. Pages follow filtering and sorting; existing saved entries remain saved.")
 
         note.setWordWrap(True)
 
@@ -13465,6 +13735,54 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         setattr(self, "_" + kind + "_sort", None)
 
         self._change_result_page(kind, 0)
+
+
+    def _sort_result_mean_points(self, kind):
+        table = self.tbl_sd if kind == "showdown" else self.tbl_cl
+        column = next((index for index in range(table.columnCount())
+                       if table.horizontalHeaderItem(index)
+                       and table.horizontalHeaderItem(index).text() == "Mean pts"), None)
+        if column is None:
+            return
+        setattr(self, "_" + kind + "_sort", (column, True, "Mean pts"))
+        self._change_result_page(kind, 0)
+
+
+    def _result_filter_changed(self, kind):
+        self._change_result_page(kind, 0)
+
+
+    def _sync_showdown_captain_filter(self, *, reset=False):
+        combo = getattr(self, "_showdown_captain_filter", None)
+        if combo is None:
+            return
+        selected = "" if reset else str(combo.currentData() or "")
+        captains = {}
+        for lineup in self.last_showdown:
+            captain = (lineup or {}).get("Captain") or {}
+            key = player_key(captain)
+            if key:
+                captains[key] = self._display_name(captain)
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("All Captains", "")
+        for key, label in sorted(captains.items(), key=lambda item: item[1].casefold()):
+            combo.addItem(label, key)
+        index = combo.findData(selected) if selected else 0
+        combo.setCurrentIndex(index if index >= 0 else 0)
+        combo.blockSignals(False)
+
+
+    def _result_display_indices(self, kind):
+        rows = self.last_showdown if kind == "showdown" else self.last_classic
+        if kind != "showdown":
+            return list(range(len(rows)))
+        combo = getattr(self, "_showdown_captain_filter", None)
+        captain_key = str(combo.currentData() or "") if combo is not None else ""
+        if not captain_key:
+            return list(range(len(rows)))
+        return [index for index, lineup in enumerate(rows)
+                if player_key((lineup or {}).get("Captain") or {}) == captain_key]
 
 
 
@@ -13578,7 +13896,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         table = self.tbl_sd if kind == "showdown" else self.tbl_cl
 
-        rows = self.last_showdown if kind == "showdown" else self.last_classic
+        all_rows = self.last_showdown if kind == "showdown" else self.last_classic
+
+        display_indices = self._result_display_indices(kind)
+
+        rows = [all_rows[index] for index in display_indices]
 
         page = getattr(self, "_" + kind + "_page", 0)
 
@@ -13586,7 +13908,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         table.setVerticalHeaderLabels([str(page * 150 + i + 1) for i in range(len(visible))])
 
-        if any(finish_rank(lu)[0] for lu in rows):
+        has_finish_metrics = any(finish_rank(lu)[0] for lu in all_rows)
+
+        mean_sort = getattr(self, "_" + kind + "_mean_sort", None)
+
+        if mean_sort is not None:
+
+            mean_sort.setEnabled(has_finish_metrics)
+
+        if has_finish_metrics:
 
             columns = [("Top 1%", "sim_top_one_pct"), ("Top 2%", "sim_top_two_pct"),
 
@@ -13667,11 +13997,21 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
     def _populate_showdown_lineups(self, lineups: List[Dict[str, Any]], page: int = 0) -> None:
 
+        new_result = lineups is not self.last_showdown
+
         self.last_showdown = self._sorted_result_rows(ranked_lineups(lineups or []), "showdown")
+
+        self._sync_showdown_captain_filter(reset=new_result)
 
         self._showdown_page = page
 
-        visible = self.last_showdown[page * 150:(page + 1) * 150]
+        display_indices = self._result_display_indices("showdown")
+
+        self._showdown_display_indices = display_indices
+
+        visible_indices = display_indices[page * 150:(page + 1) * 150]
+
+        visible = [self.last_showdown[index] for index in visible_indices]
 
         has_sim = any(getattr(lu, "sim_metrics", {}).get("sim_scenarios", 0) for lu in self.last_showdown)
 
@@ -13685,7 +14025,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        total = max(1, len(self.last_showdown))
+        total = max(1, len(display_indices))
 
         self._build_progress.setRange(0, total)
 
@@ -13705,7 +14045,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             chk = QtWidgets.QCheckBox()
 
-            chk.stateChanged.connect(lambda state, row=page * 150 + i: self._sd_checkbox_changed(row, state))
+            source_row = visible_indices[i]
+
+            chk.stateChanged.connect(lambda state, row=source_row: self._sd_checkbox_changed(row, state))
 
             self.tbl_sd.setCellWidget(i, 0, chk)
 
@@ -15219,6 +15561,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             settings = {
 
+                "contest_objective": self._current_contest_objective(),
+
                 "build_style": self.combo_build_style.currentText(),
 
                 "own_mode": self.combo_build_own_mode.currentText(),
@@ -15658,7 +16002,14 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         offset = getattr(self, "_" + kind_l + "_page", 0) * 150
 
-        for row, lineup in enumerate(generated[offset:offset + 150]):
+        display_indices = self._result_display_indices(kind_l)
+
+        for row, source_index in enumerate(display_indices[offset:offset + 150]):
+
+            if source_index < 0 or source_index >= len(generated):
+                continue
+
+            lineup = generated[source_index]
 
             widget = table.cellWidget(row, 0)
 

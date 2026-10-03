@@ -1,5 +1,6 @@
 """Portable, data-only build inputs. No executable objects or account settings."""
 import copy
+from contest_objectives import normalize_objective
 import datetime
 import hashlib
 import json
@@ -15,10 +16,19 @@ def fingerprint(value):
 def create_snapshot(players, recipe, rules, calibration=None, contest=None, freshness=None):
     inputs = copy.deepcopy(dict(players=players, recipe=recipe, rules=rules,
                                 calibration=calibration or {}, contest=contest or {}))
+    inputs["recipe"]["contest_objective"] = snapshot_objective({"inputs": inputs})
     if not players:
         raise ValueError('Load players before saving a snapshot.')
     return dict(schema_version=1, created_at=datetime.datetime.now().astimezone().isoformat(),
                 input_id=fingerprint(inputs), inputs=inputs, freshness=copy.deepcopy(freshness or {}))
+
+
+def snapshot_objective(snapshot):
+    """Execution intent only; never upgrade the supplied artifact in place."""
+    inputs = snapshot['inputs']
+    recipe, contest = inputs['recipe'], inputs['contest']
+    return normalize_objective(recipe.get('contest_objective',
+        contest.get('objective', contest.get('contest_objective'))))
 
 
 def validate_snapshot(value):

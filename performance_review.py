@@ -121,7 +121,7 @@ def result_date(name):
     except ValueError:return ''
 
 
-def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,progress=lambda text:None,import_ids=None):
+def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,progress=lambda text:None,import_ids=None,ledger_root=None):
     from learning_db import _connect,init_historical_import_tables,_field_roster_signature,_normalize_roster_token,_dk_username
     conn=_connect(db_path)
     messages=[];completed=0
@@ -225,7 +225,15 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
                     conn.execute('DELETE FROM contest_player_scores WHERE import_id=?',(import_id,))
                     conn.executemany('INSERT INTO contest_player_scores VALUES (?,?,?,?,?)',[(import_id,k,v,payload['date'],date_source) for k,v in base.items()])
             completed+=1
-        return dict(completed=completed,cancelled=cancelled(),message=f'Analyzed {completed} contests. '+ '; '.join(messages))
+        if not cancelled():
+            from historical_identity import reconcile
+            from analysis_imports import ImportCancelled
+            progress('Reconciling historical evidence identity')
+            try:
+                reconcile(db_path, cancelled=cancelled, progress=progress, ledger_root=ledger_root)
+            except ImportCancelled:
+                return dict(completed=completed,cancelled=True,message='Historical identity reconciliation cancelled; previous derived state retained.')
+        return dict(completed=completed,cancelled=cancelled(),identity_reconciled=not cancelled(),message=f'Analyzed {completed} contests. '+ '; '.join(messages))
     finally:conn.close()
 
 

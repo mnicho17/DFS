@@ -1,6 +1,8 @@
 # optimizers.py
 from __future__ import annotations
 
+from compute_ledger import generator, trial_counts
+
 import logging
 import random
 import math
@@ -449,8 +451,10 @@ def showdown_correlation_flags(captain: Dict[str, Any], flex: List[Dict[str, Any
     captain_team = _team(captain)
     flex = list(flex or [])
     flags: List[str] = []
-    opposing_dst = any(
-        "DST" in _position_tokens(player) and _team(player) != captain_team
+    opposing_dst = bool(captain_team) and any(
+        "DST" in _position_tokens(player)
+        and _team(player)
+        and _team(player) != captain_team
         for player in flex
     )
     same_team_qb = any(
@@ -744,11 +748,13 @@ class ShowdownOptimizer:
         players = [p for p in players if _pkey(p) in allowed_qb_keys]
         self.players = [p for p in players if p.get("NFLQBEligible") is not False and (_salary(p) > 0 or _cpt_salary(p) > 0)]
         self.salary_cap = float(salary_cap)
+        self._compute_seed = seed
         self.rng = random.Random(seed)
         self.own_mode = own_mode
         self.own_weight = float(own_weight or 0.0)
         self.build_style = build_style or "Strategic"
 
+    @generator()
     def build_lineups(
         self,
         num_lineups: int = 10,
@@ -932,22 +938,20 @@ class ShowdownOptimizer:
                         for index, (_, _, pair_bonus) in enumerate(scripted_pairs)
                     ])
 
-                # Standard Strategic mode excludes the most contradictory
-                # Captain/DST pairing. Other modes keep it available as a rare,
-                # heavily penalized contrarian construction.
-                if style >= 1.0:
-                    for qb_key in keys:
-                        qb = key_to_player[qb_key]
-                        if "QB" not in _position_tokens(qb):
-                            continue
-                        for dst_key in keys:
-                            dst = key_to_player[dst_key]
-                            if (
-                                "DST" in _position_tokens(dst)
-                                and _team(dst)
-                                and _team(dst) != _team(qb)
-                            ):
-                                prob += cpt[qb_key] + flx[dst_key] <= 1
+                # QB Captain with the opposing defense is blocked in every
+                # Showdown style; other correlation preferences remain style-based.
+                for qb_key in keys:
+                    qb = key_to_player[qb_key]
+                    if "QB" not in _position_tokens(qb) or not _team(qb):
+                        continue
+                    for dst_key in keys:
+                        dst = key_to_player[dst_key]
+                        if (
+                            "DST" in _position_tokens(dst)
+                            and _team(dst)
+                            and _team(dst) != _team(qb)
+                        ):
+                            prob += cpt[qb_key] + flx[dst_key] <= 1
 
                 # Tiny jitter so repeated lineups are not just strictly deterministic after no-good cuts.
                 obj += pulp.lpSum([
@@ -1068,6 +1072,7 @@ class ShowdownOptimizer:
 
         return out
 
+    @generator()
     def _build_lineups_fast(
         self,
         num_lineups: int,
@@ -1272,10 +1277,7 @@ class ShowdownOptimizer:
                 return None
             if len({_team(player) for player in [captain] + flex if _team(player)}) != 2:
                 return None
-            if (
-                style >= 1.0
-                and "QB Captain vs opposing DST" in showdown_correlation_flags(captain, flex)
-            ):
+            if "QB Captain vs opposing DST" in showdown_correlation_flags(captain, flex):
                 return None
             if style >= 1.0:
                 strategic_flags = set(showdown_correlation_flags(captain, flex))
@@ -1296,6 +1298,7 @@ class ShowdownOptimizer:
         candidates_per_lineup = 28 if num_lineups >= 100 else 48
         failures = 0
         max_failures = 16
+        compute_attempted = compute_legal = 0
 
         while len(out) < num_lineups and failures < max_failures:
             if self._cancelled(cancel_callback):
@@ -1307,8 +1310,10 @@ class ShowdownOptimizer:
             for _ in range(attempts):
                 if self._cancelled(cancel_callback):
                     break
+                compute_attempted += 1
                 candidate = sample_candidate()
                 if candidate is not None:
+                    compute_legal += 1
                     candidates.append(candidate)
                     if len(candidates) >= candidates_per_lineup:
                         break
@@ -1337,6 +1342,7 @@ class ShowdownOptimizer:
                 len(out),
                 num_lineups,
             )
+        trial_counts(compute_attempted, compute_legal)
         return out
 
     def _build_lineups_greedy(self, num_lineups: int) -> List[Dict[str, Any]]:
@@ -1857,7 +1863,7 @@ def get_roster_slots_for_sport(sport: str) -> List[str]:
 
 
 def _position_tokens(p: Dict[str, Any]) -> set[str]:
-    raw = str(p.get("Position", "") or "").upper().replace("/", ",").replace(";", ",")
+    raw = str(p.get("Position", "") or "").upper().replace("D/ST", "DST").replace("DEF", "DST").replace("/", ",").replace(";", ",")
     parts = [x.strip() for x in raw.split(",") if x.strip()]
     if not parts and raw.strip():
         parts = [raw.strip()]
@@ -2086,6 +2092,7 @@ class MultiSportClassicOptimizer:
         self.slots = get_roster_slots_for_sport(self.sport)
         self.players = [p for p in players if p.get("NFLQBEligible") is not False and _salary(p) > 0 and str(p.get("Position", "")).strip()]
         self.salary_cap = float(salary_cap)
+        self._compute_seed = seed
         self.rng = random.Random(seed)
         self.own_mode = own_mode
         self.own_weight = float(own_weight or 0.0)
@@ -2093,6 +2100,7 @@ class MultiSportClassicOptimizer:
         self.mlb_stack_pref = mlb_stack_pref or "Strategic"
         self.salary_strategy = salary_strategy or "Near Cap"
 
+    @generator()
     def build_lineups(
         self,
         num_lineups: int = 10,
@@ -2132,6 +2140,8 @@ class MultiSportClassicOptimizer:
 
         if HAS_PULP and len(self.players) <= 120 and num_lineups <= 20 and not excluded_signatures and not exact_excluded_signatures:
             logger.info("%s fast build returned no lineups; trying small-slate PuLP fallback.", self.sport)
+            # The solver does not expose comparable construction-trial counts.
+            trial_counts(None, None, 'mixed_engine_unknown')
             return self._build_lineups_pulp(num_lineups=num_lineups)
 
         logger.info("%s fast build returned no lineups; PuLP skipped for large slate safety.", self.sport)
@@ -2653,6 +2663,7 @@ class MultiSportClassicOptimizer:
             )
 
         # Build progressively: near-cap first, then relax only if needed.
+        compute_attempted = compute_legal = 0
         attempts_per_stage = max(500, num_lineups * 20)
         candidate_batch_size = min(60, max(20, num_lineups // 4))
         candidates_by_sig: Dict[Tuple[str, ...], List[Dict[str, Any]]] = {}
@@ -2665,10 +2676,13 @@ class MultiSportClassicOptimizer:
             for attempt in range(attempts_per_stage):
                 if cancel_callback and cancel_callback():
                     accept_candidate_pool(stage_min_unique)
+                    trial_counts(compute_attempted, compute_legal)
                     return accepted[:num_lineups]
+                compute_attempted += 1
                 lu = try_build_one(floor)
                 if not lu:
                     continue
+                compute_legal += 1
                 sig = tuple(sorted(key_by_id[id(p)] for p in lu))
                 if sig in candidates_by_sig or too_similar(sig, stage_min_unique):
                     continue
@@ -2679,6 +2693,7 @@ class MultiSportClassicOptimizer:
                 if len(candidates_by_sig) >= candidate_batch_size:
                     accept_candidate_pool(stage_min_unique)
                 if len(accepted) >= num_lineups:
+                    trial_counts(compute_attempted, compute_legal)
                     return accepted[:num_lineups]
 
                 if attempt and attempt % 100 == 0:
@@ -2700,6 +2715,7 @@ class MultiSportClassicOptimizer:
             num_lineups,
             f"Generated {len(accepted)} {self.sport} Classic candidates",
         )
+        trial_counts(compute_attempted, compute_legal)
         return accepted[:num_lineups]
 
 

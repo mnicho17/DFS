@@ -38,6 +38,27 @@ class RankedSearchTests(unittest.TestCase):
         rows[0].sim_metrics.update(sim_top_one_pct=7, sim_top_two_pct=99)
         self.assertIs(ranked_lineups(rows)[0], rows[0])
 
+    def test_portfolio_rules_include_only_active_core_targets(self):
+        with tempfile.TemporaryDirectory() as folder:
+            settings = QtCore.QSettings(folder + '/test.ini', QtCore.QSettings.IniFormat)
+            with mock.patch('main_window.QtCore.QSettings', return_value=settings):
+                window = MainWindow()
+            try:
+                window.players = [
+                    dict(Name='Core', FlexID='core-id', CoreClassicMinPct=30),
+                    dict(Name='Other', FlexID='other-id'),
+                ]
+                rules = window._portfolio_rules()
+                self.assertEqual(rules['player_constraints'], {
+                    'core-id': {
+                        'Name': 'Core', 'MinPct': None, 'MaxPct': None,
+                        'MinCptPct': None, 'MaxCptPct': None,
+                        'CoreClassicMinPct': 30,
+                    }
+                })
+            finally:
+                window.close()
+
     def test_ranking_respects_explicit_max_and_retained_entries(self):
         a = dict(FlexID="a", Team="A", FlexProjection=10, MaxPct=50)
         rows = [SimLineup([a, dict(FlexID=str(i), Team="B")], metrics=metrics(90-i)) for i in range(2)]
@@ -193,6 +214,77 @@ class RankedSearchTests(unittest.TestCase):
                     table.cellWidget(149, 0).setChecked(False)
                 self.assertEqual(window.spin_cl.maximum(), 1000)
                 self.assertEqual(window.spin_sd.maximum(), 1000)
+            finally:
+                window.close()
+
+    def test_filtered_second_page_saves_the_correct_source_lineup(self):
+        window = MainWindow()
+        try:
+            rows = []
+            for index in range(450):
+                captain = dict(Name=f'Captain {index % 2}', FlexID=f'cpt-{index % 2}',
+                               Team='A', Position='WR', CptSalary=10500)
+                flex = [dict(Name=f'F{index}-{slot}', FlexID=f'f{index}-{slot}',
+                             Team='B', Position='WR', FlexSalary=5000) for slot in range(5)]
+                row = ShowdownLineup(captain, flex)
+                row.sim_metrics = metrics(index + 1)
+                row.sim_metrics['sim_mean'] = index
+                rows.append(row)
+            window._populate_showdown_lineups(rows)
+            combo = window._showdown_captain_filter
+            combo.setCurrentIndex(combo.findData(player_key(rows[0]['Captain'])))
+            window._showdown_mean_sort.click()
+            window._change_result_page('showdown', 1)
+            self.assertEqual(window.tbl_sd.rowCount(), 75)
+            visible = [row for row in window.last_showdown
+                       if player_key(row['Captain']) == player_key(rows[0]['Captain'])]
+            window.tbl_sd.cellWidget(0, 0).setChecked(True)
+            self.assertEqual(window.saved_showdown, [visible[150]])
+            window.tbl_sd.cellWidget(0, 0).setChecked(False)
+            self.assertEqual(window.saved_showdown, [])
+        finally:
+            window.close()
+
+    def test_showdown_captain_filter_and_mean_points_sort_preserve_save_mapping(self):
+        with tempfile.TemporaryDirectory() as folder:
+            settings = QtCore.QSettings(folder + '/test.ini', QtCore.QSettings.IniFormat)
+            with mock.patch('main_window.QtCore.QSettings', return_value=settings):
+                window = MainWindow()
+            try:
+                rows = []
+                means = (15.0, 35.0, 25.0)
+                for index, mean in enumerate(means):
+                    captain = dict(Name=f'Captain {index}', FlexID=f'captain-{index}',
+                                   CptID=f'cpt-{index}', Team='A', Position='WR',
+                                   FlexSalary=7000, CptSalary=10500)
+                    flex = [dict(Name=f'F{index}-{slot}', FlexID=f'f{index}-{slot}',
+                                 Team='A' if slot < 2 else 'B', Position='WR', FlexSalary=5000)
+                            for slot in range(5)]
+                    lineup = ShowdownLineup(captain, flex)
+                    lineup.sim_metrics = metrics(index + 1)
+                    lineup.sim_metrics['sim_mean'] = mean
+                    rows.append(lineup)
+
+                window._populate_showdown_lineups(rows)
+                captain_filter = window._showdown_captain_filter
+                selected_key = player_key(rows[1]['Captain'])
+                captain_filter.setCurrentIndex(captain_filter.findData(selected_key))
+                self.assertEqual(window.tbl_sd.rowCount(), 1)
+                self.assertTrue(window.tbl_sd.item(0, 1).text().startswith('Captain 1'))
+
+                window._showdown_mean_sort.click()
+                self.assertEqual([lineup.sim_metrics['sim_mean'] for lineup in window.last_showdown],
+                                 [35.0, 25.0, 15.0])
+                self.assertEqual(window.tbl_sd.rowCount(), 1)
+                window.tbl_sd.cellWidget(0, 0).setChecked(True)
+                self.assertEqual(window.saved_showdown, [rows[1]])
+
+                captain_filter.setCurrentIndex(0)
+                self.assertEqual(window.tbl_sd.rowCount(), 3)
+                self.assertTrue(window.tbl_sd.cellWidget(0, 0).isChecked())
+                self.assertTrue(window.tbl_sd.item(0, 1).text().startswith('Captain 1'))
+                window.tbl_sd.cellWidget(0, 0).setChecked(False)
+                self.assertFalse(window.saved_showdown)
             finally:
                 window.close()
 

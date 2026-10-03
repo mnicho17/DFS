@@ -57,22 +57,35 @@ def remember_contests(template,contest_id,snapshot,folder):
     atomic_json(registry,data)
 
 
-def match_snapshot(folder,date,kind,observed,filename):
+def match_snapshot(folder,date,kind,observed,filename,*,snapshots=None,contest_ids=(),check=lambda:None):
     from learning_db import _normalize_roster_token
     folder=Path(folder);ids=None;linked=False
     match=re.search(r'contest[-_]standings[-_](\d+)',filename,re.I)
     registry=folder/'contest-snapshots.json'
-    if match and registry.exists():
+    if (match or contest_ids) and registry.exists():
         try:
-            ids=json.loads(registry.read_text(encoding='utf-8')).get(match[1]);linked=bool(ids)
+            registry_data=json.loads(registry.read_text(encoding='utf-8'))
+            if contest_ids:
+                associations=[registry_data.get(str(key)) for key in contest_ids]
+                ids=sorted({i for values in associations for i in (values or [])}) if any(v is not None for v in associations) else None
+            else:
+                ids=registry_data.get(match[1])
+            linked=bool(ids)
         except (ValueError,OSError):pass
     if not date and not linked:return None,'Contest date unavailable and no saved contest-ID association; forecast comparison unavailable.'
     if len(observed)<(6 if kind=='showdown' else 9):return None,'Insufficient player-result coverage to match the saved slate.'
     candidates=[]
-    for path in (folder/'snapshots').glob('*.json'):
-        if ids is not None and path.stem not in ids:continue
+    sources=(folder/'snapshots').glob('*.json') if snapshots is None else snapshots
+    for source in sources:
+        check()
         try:
-            snap=load_snapshot(str(path));inputs=snap['inputs'];players=inputs['players']
+            if snapshots is None:
+                if ids is not None and source.stem not in ids:continue
+                snap=load_snapshot(str(source))
+            else:
+                snap=source
+                if ids is not None and snap['input_id'] not in ids:continue
+            inputs=snap['inputs'];players=inputs['players']
             if inputs['recipe'].get('sport')!='NFL' or inputs['recipe'].get('contest_kind')!=kind:continue
             names=[_normalize_roster_token(p.get('Name')) for p in players]
             if len(set(names))!=len(names) or not observed.issubset(names):continue

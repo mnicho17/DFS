@@ -46,7 +46,7 @@ def valid_portfolio(rows, retained, meta, conflicts, limits, group_ok, conflict_
         return False
     if not {id(lu) for lu in retained} <= ids:
         return False
-    if any(not group_ok(meta[key]['keys']) for key in ids):
+    if any(not meta[key].get('eligible', True) or not group_ok(meta[key]['keys']) for key in ids):
         return False
     if conflict_groups is not None:
         if any(len(set(group) & ids) > 1 for group in conflict_groups):
@@ -55,15 +55,25 @@ def valid_portfolio(rows, retained, meta, conflicts, limits, group_ok, conflict_
         return False
     for field, label in [('keys', 'total'), ('teams', 'team'), ('games', 'game')]:
         counts = Counter(value for key in ids for value in meta[key][field])
+        if label == 'total' and any(counts[key] < floor for key, floor in limits.get('min_total', {}).items()):
+            return False
         for value, count in counts.items():
             cap = limits[label].get(value) if label == 'total' else limits[label]
             if cap is not None and count > cap:
                 return False
     counts = Counter(meta[key]['captain_key'] for key in ids)
+    flex_counts = Counter(value for key in ids for value in meta[key].get('flex_keys', ()))
+    if any(cap is not None and flex_counts[key] > cap for key, cap in limits.get('flex', {}).items()):
+        return False
+    if any(counts[key] < floor for key, floor in limits.get('min_captain', {}).items()):
+        return False
     if any(cap is not None and counts[key] > cap for key, cap in limits['captain'].items()):
         return False
     cap = limits['specialist']
-    return cap is None or sum(meta[key]['specialist_captain'] for key in ids) <= cap
+    if cap is not None and sum(meta[key]['specialist_captain'] for key in ids) > cap:
+        return False
+    kicker_cap = limits.get('kicker_captain')
+    return kicker_cap is None or sum(meta[key].get('kicker_captain', False) for key in ids) <= kicker_cap
 
 
 def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, score,
@@ -133,6 +143,7 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
         blocked = set(selected_ids)
         counts = {name: Counter() for name in ('total', 'captain', 'team', 'game')}
         specialist = 0
+        kicker_captains = 0
 
         # Retained lineups are fixed and must themselves satisfy every hard rule.
         valid_seed = True
@@ -155,6 +166,7 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
             counts['team'].update(data['teams'])
             counts['game'].update(data['games'])
             specialist += int(data['specialist_captain'])
+            kicker_captains += int(data.get('kicker_captain', False))
             if any(value is not None and counts['total'][key] > value
                    for key, value in limits['total'].items()):
                 valid_seed = False
@@ -170,6 +182,9 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
                 valid_seed = False
                 break
             if limits['specialist'] is not None and specialist > limits['specialist']:
+                valid_seed = False
+                break
+            if limits.get('kicker_captain') is not None and kicker_captains > limits['kicker_captain']:
                 valid_seed = False
                 break
             if group_list:
@@ -204,6 +219,8 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
                 continue
             if data['specialist_captain'] and limits['specialist'] is not None and specialist >= limits['specialist']:
                 continue
+            if data.get('kicker_captain') and limits.get('kicker_captain') is not None and kicker_captains >= limits['kicker_captain']:
+                continue
 
             selected.append(lineup)
             selected_ids.add(row_id)
@@ -213,6 +230,7 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
             counts['team'].update(data['teams'])
             counts['game'].update(data['games'])
             specialist += int(data['specialist_captain'])
+            kicker_captains += int(data.get('kicker_captain', False))
             blocked.add(row_id)
             for group_index in groups_by_id[row_id]:
                 blocked.update(group_list[group_index])
@@ -247,7 +265,7 @@ def repair(pool,retained,selected,meta,conflicts,limits,group_ok,score,seconds=1
         for lu in all_rows:
             checkpoint()
             key=id(lu)
-            if not group_ok(meta[key]['keys']):problem += variables[key] == 0
+            if not meta[key].get('eligible', True) or not group_ok(meta[key]['keys']):problem += variables[key] == 0
             for other in (conflicts.get(key,set()) if conflict_groups is None else ()):
                 if other in variables and other<key:problem += variables[key]+variables[other] <= 1
         for group in conflict_groups or []:
@@ -259,6 +277,15 @@ def repair(pool,retained,selected,meta,conflicts,limits,group_ok,score,seconds=1
                 problem.addConstraint(pulp.lpSum(variables[id(lu)] for lu in all_rows
                     if key in meta[id(lu)][field]) <= limit)
         for key,value in limits['total'].items():maximum('keys',key,value)
+        for key,value in limits.get('flex', {}).items():maximum('flex_keys',key,value)
+        for key,value in limits.get('min_total', {}).items():
+            checkpoint()
+            if value:
+                problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if key in meta[id(lu)]['keys']) >= value
+        for key,value in limits.get('min_captain', {}).items():
+            checkpoint()
+            if value:
+                problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if meta[id(lu)]['captain_key']==key) >= value
         for key,value in limits['captain'].items():
             checkpoint()
             if value is not None:problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if meta[id(lu)]['captain_key']==key) <= value
@@ -266,6 +293,8 @@ def repair(pool,retained,selected,meta,conflicts,limits,group_ok,score,seconds=1
             for key in set().union(*(meta[id(lu)][field] for lu in all_rows)):maximum(field,key,limits[label])
         if limits['specialist'] is not None:
             problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if meta[id(lu)]['specialist_captain']) <= limits['specialist']
+        if limits.get('kicker_captain') is not None:
+            problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if meta[id(lu)].get('kicker_captain', False)) <= limits['kicker_captain']
         remaining = deadline-time.perf_counter()
         if remaining <= 0:return None
         if not solve(problem, deadline, cancelled):return None
