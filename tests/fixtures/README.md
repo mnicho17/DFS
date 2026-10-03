@@ -20,6 +20,15 @@ DK rows, Entry Safety, portfolio reports, and remaining build report content are
 compared exactly. Only additive objective fields/labels are removed from CO-01
 output before comparison. No numeric rounding or tolerance is applied.
 
+The Core Plans integration also excludes the additive Showdown safety-policy
+report field and line, the disclosed feasibility method label, and report blank
+line placement. Preselection SIM candidate and scored-row lists are compared by
+signature because the reviewed diversity witness may reorder their reservation
+sequence. Their complete identity sets and every metric per identity remain
+exact. Final selected lineup order, exports, exposures and safety evidence are
+still compared without reordering. The new policy and Core Plan behavior have
+separate integrated portfolio and UI assertions; the original fixture is retained.
+
 Both fixtures compare legacy missing objective, explicit Tournament, Double-Up,
 and Multiplier against that same original main evidence. Each child installs the
 network-denying disposable test environment and asserts zero network attempts.

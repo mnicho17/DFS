@@ -64,7 +64,7 @@ def normalize_rules(rules: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         stable_key = str(key or "").strip()
         if not stable_key or not isinstance(item, dict):
             continue
-        constraints[stable_key] = {
+        normalized_constraint = {
             "Name": str(item.get("Name") or stable_key),
             "FlexNamePlusID": stable_key,
             "MinPct": item.get("MinPct"),
@@ -76,6 +76,11 @@ def normalize_rules(rules: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             **{field: bool(item[field]) for field in ('FadeFlex', 'FadeCpt') if field in item},
             **({'MaxFlexPct': item['MaxFlexPct']} if 'MaxFlexPct' in item else {}),
         }
+        for field in ("CoreClassicMinPct", "CoreShowdownMinFlexPct", "CoreShowdownMinCptPct"):
+            value = item.get(field)
+            if value not in (None, ""):
+                normalized_constraint[field] = value
+        constraints[stable_key] = normalized_constraint
     return {
         "min_unique": max(1, min(8, int(raw.get("min_unique", 1) or 1))),
         "max_team_pct": _pct(raw.get("max_team_pct"), 100.0),
@@ -111,6 +116,27 @@ def _game(player: Dict[str, Any]) -> str:
     team = _team(player)
     opponent = str(player.get("Opponent") or "").strip().upper()
     return "@".join(sorted([team, opponent])) if team and opponent else ""
+
+
+def _position_tokens(player: Dict[str, Any]) -> set[str]:
+    raw = str(player.get("Position") or "").upper().replace("D/ST", "DST").replace("DEF", "DST").replace("/", ",").replace(";", ",")
+    parts = {part.strip() for part in raw.split(",") if part.strip()}
+    return parts or ({raw.strip()} if raw.strip() else set())
+
+
+def _qb_captain_opposing_dst(lineup: Any) -> bool:
+    captain = lineup_captain(lineup, "showdown") or {}
+    if "QB" not in _position_tokens(captain):
+        return False
+    captain_team = _team(captain)
+    if not captain_team:
+        return False
+    return any(
+        "DST" in _position_tokens(player)
+        and _team(player)
+        and _team(player) != captain_team
+        for player in (lineup or {}).get("Flex") or []
+    )
 
 
 def _projection(lineup: Any, kind: str) -> float:
@@ -247,6 +273,9 @@ def select_portfolio(
         if signature and signature not in retained_by_signature and signature not in unique_candidates:
             unique_candidates[signature] = lineup
     pool = list(unique_candidates.values())
+    if kind == "showdown":
+        # Existing retained entries are user data; filter only new candidates.
+        pool = [lineup for lineup in pool if not _qb_captain_opposing_dst(lineup)]
     all_lineups = retained + pool
 
     player_lookup: Dict[str, Dict[str, Any]] = {
@@ -263,6 +292,7 @@ def select_portfolio(
                         field: value
                         for field, value in player_lookup[key].items()
                         if value not in (None, "")
+                        and not (field in {"LockFlex", "LockCpt"} and not value)
                     })
                     if automatic_recovery:
                         for field in ('LockFlex', 'LockCpt', 'FadeFlex', 'FadeCpt'):
@@ -281,6 +311,18 @@ def select_portfolio(
                 max_total[key] = cap
     min_cpt = {key: _min_count(player.get("MinCptPct"), requested) for key, player in player_lookup.items()}
     max_cpt = {key: _max_count(player.get("MaxCptPct"), requested) for key, player in player_lookup.items()}
+    core_min_total = {
+        key: _min_count(player.get("CoreClassicMinPct"), requested)
+        for key, player in player_lookup.items()
+    } if kind == "classic" else {}
+    core_min_flex = {
+        key: _min_count(player.get("CoreShowdownMinFlexPct"), requested)
+        for key, player in player_lookup.items()
+    } if kind == "showdown" else {}
+    core_min_cpt = {
+        key: _min_count(player.get("CoreShowdownMinCptPct"), requested)
+        for key, player in player_lookup.items()
+    } if kind == "showdown" else {}
     auto_guardrails = kind == "showdown" and normalized["balance_ownership"] and not individual_ranking
     if requested <= 20:
         auto_total_pct, auto_cpt_pct = 80.0, 35.0
@@ -302,6 +344,25 @@ def select_portfolio(
     else:
         auto_total_keys = set()
         auto_cpt_keys = set()
+    kicker_cpt_limit = None
+    if kind == "showdown":
+        requested_kicker_limit = max(1, int(math.floor(requested * 0.05 + 1e-9)))
+        retained_kicker_captains = sum(
+            1 for lineup in retained
+            if "K" in _position_tokens(lineup_captain(lineup, kind) or {})
+        )
+        locked_kicker_captain = any(
+            "K" in _position_tokens(player) and player.get("LockCpt")
+            for player in player_lookup.values()
+        )
+        kicker_cpt_limit = requested if locked_kicker_captain else max(requested_kicker_limit, retained_kicker_captains)
+        for key, player in player_lookup.items():
+            if "K" not in _position_tokens(player) or player.get("LockCpt"):
+                continue
+            configured_cap = max_cpt.get(key)
+            max_cpt[key] = min(configured_cap, kicker_cpt_limit) if configured_cap is not None else kicker_cpt_limit
+            # This new safety cap is independent of guardrails that may relax.
+            auto_cpt_keys.discard(key)
     specialist_cpt_limit = (
         max(1, int(math.floor(requested * 0.15 + 1e-9)))
         if auto_guardrails else None
@@ -323,6 +384,9 @@ def select_portfolio(
         and not any(value > 0 for value in min_total.values())
         and not any(value is not None for value in max_total.values())
         and not any(value > 0 for value in min_cpt.values())
+        and not any(value > 0 for value in core_min_total.values())
+        and not any(value > 0 for value in core_min_flex.values())
+        and not any(value > 0 for value in core_min_cpt.values())
         and not any(value is not None for value in max_cpt.values())
         and (not automatic_recovery or not any(value is not None for value in max_flex.values()))
         and (max_team is None or max_team >= requested)
@@ -384,6 +448,7 @@ def select_portfolio(
             "specialist_captain": bool(
                 captain and str(captain.get("Position") or "").strip().upper() in {"K", "DST", "D/ST", "DEF"}
             ),
+            "kicker_captain": bool(captain and "K" in _position_tokens(captain)),
             "sim": _sim_metrics(lineup),
             "archetype": str(
                 getattr(lineup, "candidate_archetype", "")
@@ -400,6 +465,7 @@ def select_portfolio(
     selected_candidate_ids: set[int] = {id(lineup) for lineup in retained}
     core_counts = Counter()
     total_counts: Counter[str] = Counter()
+    flex_counts: Counter[str] = Counter()
     cpt_counts: Counter[str] = Counter()
     team_counts: Counter[str] = Counter()
     game_counts: Counter[str] = Counter()
@@ -411,17 +477,21 @@ def select_portfolio(
     sim_value_counts: Counter[int] = Counter()
     archetype_counts: Counter[str] = Counter()
     specialist_cpt_count = 0
+    kicker_cpt_count = 0
 
     for lineup in retained:
         meta = candidate_meta[id(lineup)]
         core_counts.update(meta["cores"])
         total_counts.update(meta["keys"])
+        flex_counts.update(meta["flex_keys"])
         team_counts.update(meta["teams"])
         game_counts.update(meta["games"])
         if meta["captain_key"]:
             cpt_counts[meta["captain_key"]] += 1
         if meta["specialist_captain"]:
             specialist_cpt_count += 1
+        if meta["kicker_captain"]:
+            kicker_cpt_count += 1
         sim_top_counts.update(meta["top_hits"])
         sim_top_five_counts.update(meta["top_five_hits"])
         sim_win_counts.update(meta["win_hits"])
@@ -470,16 +540,28 @@ def select_portfolio(
                 return False
         if meta["specialist_captain"] and specialist_cpt_limit is not None and specialist_cpt_count >= specialist_cpt_limit:
             return False
+        if meta["kicker_captain"] and kicker_cpt_limit is not None and kicker_cpt_count >= kicker_cpt_limit:
+            return False
         if max_team is not None and any(team_counts[team] >= max_team for team in teams):
             return False
         if max_game is not None and any(game_counts[game] >= max_game for game in games):
             return False
         return True
 
-    def score(lineup: Any) -> float:
-        if individual_ranking:
-            return finish_rank(lineup)
+    def core_target_hits(meta: Dict[str, Any]) -> int:
+        hits = sum(1 for key in meta["keys"] if total_counts[key] < core_min_total.get(key, 0))
+        hits += sum(1 for key in meta["flex_keys"] if flex_counts[key] < core_min_flex.get(key, 0))
+        captain_key = meta["captain_key"]
+        if captain_key and cpt_counts[captain_key] < core_min_cpt.get(captain_key, 0):
+            hits += 1
+        return hits
+
+    def score(lineup: Any) -> Any:
         meta = candidate_meta[id(lineup)]
+        core_hits = core_target_hits(meta)
+        if individual_ranking:
+            rank = finish_rank(lineup)
+            return (core_hits,) + (rank if isinstance(rank, tuple) else (rank,))
         keys = meta["keys"]
         teams = meta["teams"]
         games = meta["games"]
@@ -487,6 +569,7 @@ def select_portfolio(
         deficit_bonus = sum(500.0 for key in keys if total_counts[key] < min_total.get(key, 0))
         if captain_key and cpt_counts[captain_key] < min_cpt.get(captain_key, 0):
             deficit_bonus += 650.0
+        deficit_bonus += 700.0 * core_hits
         concentration_penalty = sum(total_counts[key] for key in keys) * 0.08
         captain_concentration_penalty = (
             cpt_counts[captain_key] * 0.85
@@ -565,17 +648,34 @@ def select_portfolio(
     remaining = list(pool)
     auto_relaxations = 0
     feasibility_limits = dict(requested=requested, total=max_total, captain=max_cpt,
-        team=max_team, game=max_game, specialist=specialist_cpt_limit)
+        team=max_team, game=max_game, specialist=specialist_cpt_limit,
+        kicker_captain=kicker_cpt_limit)
     if automatic_recovery:
         feasibility_limits.update(min_total=min_total, min_captain=min_cpt, flex=max_flex)
     if feasibility_only:
-        from portfolio_feasibility import repair
-        witness = repair(pool, retained, [], candidate_meta, current_uniqueness_conflicts,
-            feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), finish_rank,
-            seconds=max(0, repair_time_limit - (time.perf_counter() - selection_started)),
-            conflict_groups=uniqueness_groups.get(current_min_unique),
-            cancelled=selection_cancel_callback or (lambda: False))
-        return {'lineups': witness or [], 'report': {}, 'candidate_count': len(pool)}
+        from portfolio_feasibility import diversity_first_witness, repair
+        remaining = max(0, repair_time_limit - (time.perf_counter() - selection_started))
+        cancelled = selection_cancel_callback or (lambda: False)
+        conflict_groups = uniqueness_groups.get(current_min_unique)
+        # Recover a fast diverse witness before building a large CBC model. Keep
+        # most of the same bounded window available to the exact solver when the
+        # deterministic coverage pass cannot finish the portfolio.
+        heuristic_budget = min(3.0, remaining * 0.5)
+        witness = diversity_first_witness(pool, retained, candidate_meta,
+            current_uniqueness_conflicts, feasibility_limits,
+            lambda keys: _group_ok(keys, normalized['groups']), finish_rank,
+            conflict_groups=conflict_groups, seconds=heuristic_budget,
+            cancelled=cancelled)
+        method = 'diversity-first coverage' if witness else ''
+        if not witness:
+            feasibility_checkpoint()
+            remaining = max(0, repair_time_limit - (time.perf_counter() - selection_started))
+            witness = repair(pool, retained, [], candidate_meta, current_uniqueness_conflicts,
+                feasibility_limits, lambda keys: _group_ok(keys, normalized['groups']), finish_rank,
+                seconds=remaining, conflict_groups=conflict_groups, cancelled=cancelled)
+            method = 'bounded CBC repair' if witness else 'no complete witness found within budget'
+        return {'lineups': witness or [], 'report': {}, 'candidate_count': len(pool),
+                'method': method}
 
     while len(selected) < requested and remaining:
         if selection_cancel_callback and selection_cancel_callback():
@@ -616,12 +716,15 @@ def select_portfolio(
         selected_candidate_ids.add(id(chosen))
         core_counts.update(chosen_meta["cores"])
         total_counts.update(keys)
+        flex_counts.update(chosen_meta["flex_keys"])
         team_counts.update(teams)
         game_counts.update(games)
         if chosen_meta["captain_key"]:
             cpt_counts[chosen_meta["captain_key"]] += 1
         if chosen_meta["specialist_captain"]:
             specialist_cpt_count += 1
+        if chosen_meta["kicker_captain"]:
+            kicker_cpt_count += 1
         chosen_top_hits = chosen_meta["top_hits"]
         chosen_top_five_hits = chosen_meta["top_five_hits"]
         chosen_win_hits = chosen_meta["win_hits"]
@@ -678,8 +781,8 @@ def select_portfolio(
             from selection_shortage import PortfolioSelectionShortage, describe
             message = describe(requested, selected, remaining, candidate_meta,
                 current_uniqueness_conflicts,
-                dict(total=max_total, captain=max_cpt, team=max_team, game=max_game, specialist=specialist_cpt_limit),
-                dict(total=total_counts, captain=cpt_counts, team=team_counts, game=game_counts, specialist=specialist_cpt_count),
+                dict(total=max_total, captain=max_cpt, team=max_team, game=max_game, specialist=specialist_cpt_limit, kicker_captain=kicker_cpt_limit),
+                dict(total=total_counts, captain=cpt_counts, team=team_counts, game=game_counts, specialist=specialist_cpt_count, kicker_captain=kicker_cpt_count),
                 player_lookup, current_min_unique, auto_total_keys, auto_cpt_keys,
                 lambda keys: _group_ok(keys, normalized['groups']))
             if recovery['automatic_recovery_ran']:
@@ -694,14 +797,16 @@ def select_portfolio(
         feasibility_repaired = True
         selected_candidate_ids = {id(lu) for lu in selected}
         remaining = [lu for lu in pool if id(lu) not in selected_candidate_ids]
-        for counter in (core_counts,total_counts,team_counts,game_counts,cpt_counts,sim_top_counts,sim_top_five_counts,sim_win_counts,sim_value_counts,archetype_counts):
+        for counter in (core_counts,total_counts,flex_counts,team_counts,game_counts,cpt_counts,sim_top_counts,sim_top_five_counts,sim_win_counts,sim_value_counts,archetype_counts):
             counter.clear()
         specialist_cpt_count = 0
+        kicker_cpt_count = 0
         for lu in selected:
             m = candidate_meta[id(lu)]
-            core_counts.update(m['cores']);total_counts.update(m['keys']);team_counts.update(m['teams']);game_counts.update(m['games'])
+            core_counts.update(m['cores']);total_counts.update(m['keys']);flex_counts.update(m['flex_keys']);team_counts.update(m['teams']);game_counts.update(m['games'])
             if m['captain_key']:cpt_counts[m['captain_key']] += 1
             specialist_cpt_count += int(m['specialist_captain'])
+            kicker_cpt_count += int(m['kicker_captain'])
             sim_top_counts.update(m['top_hits']);sim_top_five_counts.update(m['top_five_hits']);sim_win_counts.update(m['win_hits'])
             sim_value_counts.update(m['scenario_values'].keys())
             if m['archetype']:archetype_counts[m['archetype']] += 1
@@ -760,6 +865,21 @@ def select_portfolio(
             delta -= weight * float(after * after - before * before)
         return delta
 
+    def target_swap_delta(
+        counts: Counter[str],
+        minimum: Dict[str, int],
+        outgoing: set[str],
+        incoming: set[str],
+        weight: float = 700.0,
+    ) -> float:
+        delta = 0.0
+        for key in outgoing.union(incoming):
+            before = max(0, minimum.get(key, 0) - counts[key])
+            after_count = counts[key] - int(key in outgoing) + int(key in incoming)
+            after = max(0, minimum.get(key, 0) - after_count)
+            delta += weight * (before - after)
+        return delta
+
     def scenario_swap_delta(
         counts: Counter[int],
         outgoing: set[int],
@@ -814,6 +934,9 @@ def select_portfolio(
             + int(in_meta["specialist_captain"])
         )
         if specialist_cpt_limit is not None and specialist_after > specialist_cpt_limit:
+            return False
+        kicker_after = kicker_cpt_count - int(out_meta["kicker_captain"]) + int(in_meta["kicker_captain"])
+        if kicker_cpt_limit is not None and kicker_after > kicker_cpt_limit:
             return False
         for team in out_meta["teams"].union(in_meta["teams"]):
             after = team_counts[team] - int(team in out_meta["teams"]) + int(team in in_meta["teams"])
@@ -872,6 +995,14 @@ def select_portfolio(
             for key in touched_players
         )
         delta += 500.0 * float(before_shortfall - after_shortfall)
+        delta += target_swap_delta(total_counts, core_min_total, out_meta["keys"], in_meta["keys"])
+        delta += target_swap_delta(flex_counts, core_min_flex, set(out_meta["flex_keys"]), set(in_meta["flex_keys"]))
+        delta += target_swap_delta(
+            cpt_counts,
+            core_min_cpt,
+            {out_meta["captain_key"]} if out_meta["captain_key"] else set(),
+            {in_meta["captain_key"]} if in_meta["captain_key"] else set(),
+        )
         core_weight = core_penalty / max(1, len(in_meta["cores"])) / max(1, requested - 1)
         delta += counter_swap_delta(core_counts, set(out_meta["cores"]), set(in_meta["cores"]), core_weight)
         delta += counter_swap_delta(total_counts, out_meta["keys"], in_meta["keys"], 0.08)
@@ -894,7 +1025,7 @@ def select_portfolio(
         return delta + duplication_bonus
 
     def apply_swap(outgoing: Any, incoming: Any) -> None:
-        nonlocal specialist_cpt_count
+        nonlocal specialist_cpt_count, kicker_cpt_count
         out_meta = candidate_meta[id(outgoing)]
         in_meta = candidate_meta[id(incoming)]
         index = selected.index(outgoing)
@@ -904,6 +1035,7 @@ def select_portfolio(
         for counts, out_values, in_values in (
             (core_counts, set(out_meta["cores"]), set(in_meta["cores"])),
             (total_counts, out_meta["keys"], in_meta["keys"]),
+            (flex_counts, set(out_meta["flex_keys"]), set(in_meta["flex_keys"])),
             (team_counts, out_meta["teams"], in_meta["teams"]),
             (game_counts, out_meta["games"], in_meta["games"]),
             (sim_top_counts, out_meta["top_hits"], in_meta["top_hits"]),
@@ -918,6 +1050,7 @@ def select_portfolio(
         if in_meta["captain_key"]:
             cpt_counts[in_meta["captain_key"]] += 1
         specialist_cpt_count += int(in_meta["specialist_captain"]) - int(out_meta["specialist_captain"])
+        kicker_cpt_count += int(in_meta["kicker_captain"]) - int(out_meta["kicker_captain"])
         remaining.remove(incoming)
         remaining.append(outgoing)
 
@@ -1058,6 +1191,7 @@ def portfolio_report(
     total = len(lineups or [])
     target = max(1, int(requested or total or 1))
     total_counts: Counter[str] = Counter()
+    flex_counts: Counter[str] = Counter()
     cpt_counts: Counter[str] = Counter()
     team_counts: Counter[str] = Counter()
     game_counts: Counter[str] = Counter()
@@ -1066,12 +1200,17 @@ def portfolio_report(
     players_by_key: Dict[str, Dict[str, Any]] = {
         key: dict(value) for key, value in normalized["player_constraints"].items()
     }
+    warnings: List[str] = []
     group_violations = 0
 
     for lineup in lineups or []:
         keys, teams, games = _lineup_sets(lineup, kind)
         key_sets.append(_uniqueness_keys(lineup, kind))
         total_counts.update(keys)
+        if kind == "showdown":
+            flex_counts.update(player_key(player) for player in (lineup or {}).get("Flex") or [] if player_key(player))
+            if _qb_captain_opposing_dst(lineup):
+                warnings.append("A retained QB Captain lineup includes the opposing DST; this pairing is blocked for new candidates.")
         team_counts.update(teams)
         game_counts.update(games)
         if not _group_ok(keys, normalized["groups"]):
@@ -1089,7 +1228,7 @@ def portfolio_report(
     for key, player in players_by_key.items():
         names.setdefault(key, str(player.get("Name") or key))
 
-    warnings: List[str] = []
+    core_plan_rows = []
     for key, player in players_by_key.items():
         minimum = _min_count(player.get("MinPct"), target)
         maximum = _max_count(player.get("MaxPct"), target)
@@ -1104,6 +1243,43 @@ def portfolio_report(
                 warnings.append(f"{names[key]} captain exposure is {cpt_counts[key]}/{target}; minimum is {minimum_cpt}.")
             if maximum_cpt is not None and cpt_counts[key] > maximum_cpt:
                 warnings.append(f"{names[key]} captain exposure exceeds its maximum ({cpt_counts[key]}/{target} > {maximum_cpt}).")
+            for field, role, counts in (
+                ("CoreShowdownMinFlexPct", "FLEX", flex_counts),
+                ("CoreShowdownMinCptPct", "Captain", cpt_counts),
+            ):
+                goal = _min_count(player.get(field), target)
+                if goal:
+                    achieved = counts[key]
+                    row = dict(key=key, name=names[key], role=role, target_count=goal,
+                               target_pct=_pct(player.get(field), 0.0), achieved_count=achieved,
+                               achieved_pct=achieved / max(1, total) * 100.0,
+                               shortfall=max(0, goal-achieved))
+                    core_plan_rows.append(row)
+                    if achieved < goal:
+                        warnings.append(f"Core Plan {role} target for {names[key]}: {achieved}/{target}; target is {goal}.")
+        else:
+            goal = _min_count(player.get("CoreClassicMinPct"), target)
+            if goal:
+                achieved = total_counts[key]
+                row = dict(key=key, name=names[key], role="Classic", target_count=goal,
+                           target_pct=_pct(player.get("CoreClassicMinPct"), 0.0), achieved_count=achieved,
+                           achieved_pct=achieved / max(1, total) * 100.0,
+                           shortfall=max(0, goal-achieved))
+                core_plan_rows.append(row)
+                if achieved < goal:
+                    warnings.append(f"Core Plan Classic target for {names[key]}: {achieved}/{target}; target is {goal}.")
+
+    kicker_captain_limit = max(1, int(math.floor(target * 0.05 + 1e-9))) if kind == "showdown" else None
+    kicker_captain_count = 0
+    if kind == "showdown":
+        kicker_captain_count = sum(
+            1 for lineup in lineups or []
+            if "K" in _position_tokens(lineup_captain(lineup, kind) or {})
+        )
+        if kicker_captain_count > kicker_captain_limit:
+            warnings.append(
+                f"Kicker Captain default cap exceeded ({kicker_captain_count}/{target}; cap {kicker_captain_limit}); check for an explicit Captain lock or retained entries."
+            )
 
     team_limit = _max_count(normalized["max_team_pct"], target)
     game_limit = _max_count(normalized["max_game_pct"], target)
@@ -1229,6 +1405,12 @@ def portfolio_report(
         "compliant": not warnings and total >= target,
         "sim_summary": sim_summary,
     }
+    if core_plan_rows:
+        report['core_plan'] = core_plan_rows
+    if kind == 'showdown':
+        report['showdown_policy'] = dict(kicker_captain_limit=kicker_captain_limit,
+            kicker_captain_count=kicker_captain_count, kicker_captain_pct=5.0,
+            qb_captain_opposing_dst_blocked=True)
     report["text"] = _report_text(report)
     return report
 
@@ -1246,6 +1428,22 @@ def _report_text(report: Dict[str, Any]) -> str:
         "",
         "Top player exposure:",
     ]
+    core_plan = report.get("core_plan") or []
+    if core_plan:
+        lines.insert(3, "Core Plan targets:")
+        lines[4:4] = [
+            f"- {row.get('name')} {row.get('role')}: {int(row.get('achieved_count', 0))}/{int(report.get('requested', report.get('lineup_count', 0)))}; target {int(row.get('target_count', 0))} ({float(row.get('target_pct', 0.0)):.0f}%)."
+            for row in core_plan[:12]
+        ]
+    showdown_policy = report.get("showdown_policy") or {}
+    if showdown_policy:
+        lines.insert(2,
+            "Showdown guardrails: K Captain "
+            f"{int(showdown_policy.get('kicker_captain_count', 0))}/"
+            f"{int(report.get('lineup_count', 0))}; automatic cap "
+            f"{int(showdown_policy.get('kicker_captain_limit', 0))} by default; "
+            "new QB Captains with a known opposing DST are blocked."
+        )
     from portfolio_recovery import format_recovery
     lines[3:3] = format_recovery(report.get('portfolio_recovery'))
     sim = report.get("sim_summary") or {}

@@ -699,7 +699,9 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             lines.append(f"- Showdown salary filter: {salary_filter.get('excluded', 0):,} candidates excluded before screening; minimum ${salary_filter.get('minimum', 0):,.0f}.")
         feasibility = record.get('portfolio_feasibility') or {}
         if feasibility:
-            lines.append(f"- Portfolio feasibility before shortlist: {feasibility.get('status')}; {feasibility.get('lineups', 0)} lineups preserved from {feasibility.get('searched', 0):,} candidates; {feasibility.get('seconds', 0):.2f}s")
+            method = feasibility.get('method')
+            method_text = f" via {method}" if method else ""
+            lines.append(f"- Portfolio feasibility before shortlist: {feasibility.get('status')}{method_text}; {feasibility.get('lineups', 0)} lineups preserved from {feasibility.get('searched', 0):,} candidates; {feasibility.get('seconds', 0):.2f}s")
             if record.get('feasible_shortlist_fallback_used'):
                 lines.append("- Selection recovered using the SIM-scored preserved portfolio; no limits were changed.")
         time_remaining = max(0.0, _number(sim.get("time_remaining_seconds")))

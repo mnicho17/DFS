@@ -13,6 +13,7 @@ from optimizers import (
     _showdown_split_bonus_for_count,
     showdown_correlation_flags,
 )
+from lineup_ranking import BUILD_STYLES
 
 
 def _showdown_players():
@@ -50,6 +51,19 @@ def _script_player(name, team, position, spread, total):
 
 
 class ShowdownPerformanceTests(unittest.TestCase):
+    def test_qb_opposing_defense_aliases_require_known_teams(self):
+        from optimizers import showdown_correlation_flags
+        from portfolio_rules import _qb_captain_opposing_dst
+        qb = dict(Name='QB', Team='A', Position='QB')
+        for position in ('DST', 'D/ST', 'DEF'):
+            defense = dict(Name='Defense', Team='B', Position=position)
+            self.assertIn('QB Captain vs opposing DST', showdown_correlation_flags(qb, [defense]))
+            self.assertTrue(_qb_captain_opposing_dst({'Captain': qb, 'Flex': [defense]}))
+            defense['Team'] = ''
+            self.assertFalse(_qb_captain_opposing_dst({'Captain': qb, 'Flex': [defense]}))
+        self.assertFalse(_qb_captain_opposing_dst({'Captain': dict(qb, Team=''),
+                                                 'Flex': [dict(Team='B', Position='DST')]}))
+
     def test_flags_strange_captain_and_specialist_constructions(self):
         qb = {"Name": "ARI QB", "Team": "ARI", "Position": "QB"}
         car_dst = {"Name": "CAR DST", "Team": "CAR", "Position": "DST"}
@@ -78,7 +92,7 @@ class ShowdownPerformanceTests(unittest.TestCase):
         contradictory = _showdown_lineup_script_bonus(qb, [opponent_dst] + fillers)
         self.assertGreater(coherent, contradictory)
 
-    def test_strategic_fast_build_excludes_qb_captain_opposing_dst(self):
+    def test_every_exact_and_fast_build_style_excludes_qb_captain_opposing_dst(self):
         players = _showdown_players()
         captain = players[0]
         captain["LockCpt"] = True
@@ -90,9 +104,14 @@ class ShowdownPerformanceTests(unittest.TestCase):
             "ProjOwnPct": 30.0,
         }
         players.append(opposing_dst)
-        lineups = ShowdownOptimizer(players, build_style="Strategic").build_lineups(30)
-        self.assertEqual(len(lineups), 30)
-        self.assertTrue(all(opposing_dst not in lineup["Flex"] for lineup in lineups))
+        for style in BUILD_STYLES:
+            with self.subTest(style=style):
+                exact = ShowdownOptimizer(players, build_style=style).build_lineups(1)
+                self.assertEqual(len(exact), 1)
+                self.assertTrue(all(opposing_dst not in lineup["Flex"] for lineup in exact))
+                lineups = ShowdownOptimizer(players, build_style=style).build_lineups(30)
+                self.assertEqual(len(lineups), 30)
+                self.assertTrue(all(opposing_dst not in lineup["Flex"] for lineup in lineups))
 
     def test_key_free_qb_receiver_correlation_is_active(self):
         qb = {"Name": "QB", "Team": "ARI", "Position": "QB"}

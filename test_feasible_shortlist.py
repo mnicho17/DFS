@@ -70,13 +70,15 @@ class FeasibleShortlistTests(unittest.TestCase):
         from build_diagnostics import create_build_diagnostic, format_build_report
         record = create_build_diagnostic(context={'sport':'NFL','kind':'showdown','settings':{}},
             timing_report={'compute_mode':'Deep','portfolio_feasibility':{
-                'status':'preserved','lineups':150,'searched':12000,'seconds':1.3}},
+                'status':'preserved','method':'diversity-first coverage',
+                'lineups':150,'searched':12000,'seconds':1.3}},
             portfolio_report={'feasible_shortlist_fallback_used':True},
             sim_report={}, lineups=[])
         self.assertEqual(record['portfolio_feasibility']['lineups'],150)
         self.assertTrue(record['feasible_shortlist_fallback_used'])
         text=format_build_report(record)
         self.assertIn('Portfolio feasibility before shortlist: preserved',text)
+        self.assertIn('via diversity-first coverage',text)
         self.assertIn('no limits were changed',text)
 
 

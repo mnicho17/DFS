@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from forecast_checks import check_forecasts
 from nfl_eligibility import apply_qb_eligibility, unavailable, depth
 from portfolio_insights import _position, _team
+from portfolio_rules import player_key
 from projection_sources import number
 from usage_history import history_evidence
 
@@ -59,7 +60,7 @@ def build_core_plays(players, kind='classic', now=None):
         if not name:
             continue
         pos, team = _position(p), _team(p)
-        key = str(p.get('FlexID') or p.get('FlexNamePlusID') or f'{name}|{team}|{pos}')
+        key = player_key(p) or f'{name}|{team}|{pos}'
         if key in seen:
             continue
         seen.add(key)
@@ -107,6 +108,14 @@ def build_core_plays(players, kind='classic', now=None):
         workload = '; '.join(f'{number(w.get(k)):.1f} {k}' for k in ('attempts','carries','targets') if number(w.get(k)) is not None) or 'No recorded workload breakdown'
         slots = ('Captain','FLEX') if kind == 'showdown' else ('Regular',)
         for slot in slots:
+            core_field = (
+                'CoreShowdownMinCptPct' if slot == 'Captain' else 'CoreShowdownMinFlexPct'
+            ) if kind == 'showdown' else 'CoreClassicMinPct'
+            core_target = number(p.get(core_field))
+            if core_target is not None:
+                core_target = max(0.0, min(100.0, core_target))
+                if core_target <= 0:
+                    core_target = None
             captain = slot == 'Captain'
             salary = number(p.get('CptSalary' if captain else 'FlexSalary'))
             projection = number(p.get('CptProjection' if captain else 'FlexProjection'))
@@ -139,7 +148,8 @@ def build_core_plays(players, kind='classic', now=None):
                 role=role, workload=workload, history=history, checked=checked or 'Unknown',
                 eligible=not excluded, supported=supported, promoted=promoted,
                 categories=[], reasons=[], concerns=list(dict.fromkeys(notes)), excluded=excluded,
-                peers=0, value_percentile=None, projection_percentile=None, partners=[]))
+                peers=0, value_percentile=None, projection_percentile=None, partners=[],
+                core_target_pct=core_target))
     for r in rows:
         peers = [q for q in rows if q['slot']==r['slot'] and q['position']==r['position']
                  and q['eligible'] and q['supported'] and q['projection'] is not None and q['projection']>0]
@@ -190,6 +200,7 @@ def format_core_report(report, rows=None):
     for r in rows:
         def n(key,fmt):return format(r[key],fmt) if r[key] is not None else 'Unknown'
         lines += ['',f"{r['player']} — {r['slot']} | {', '.join(r['categories']) or 'No threshold flags'}",
+                  f"Core plan minimum: {format(r['core_target_pct'], '.1f') + '%' if r.get('core_target_pct') is not None else 'Off'}.",
                   f"Salary: {n('salary',',.0f')}; projection: {n('projection','.2f')}; pts/$1,000: {n('value','.2f')}; estimated ownership: {n('ownership','.1f')}%.",
                   f"Role: {r['role']}; workload: {r['workload']} (unmultiplied player opportunities).",
                   f"Forecast: {r['source']}; ownership source: {r['ownership_source']}; status checked: {r['checked']}; history: {r['history']}."]

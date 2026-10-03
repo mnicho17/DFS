@@ -1,6 +1,6 @@
 # DFS Optimizer User Guide
 
-Version 1.23.1 | Windows desktop app | [Release notes](https://github.com/mnicho17/DFS/releases/tag/v1.23.1)
+Version 1.24.0 | Windows desktop app | [Release notes](https://github.com/mnicho17/DFS/releases/tag/v1.24.0)
 
 
 
@@ -1487,7 +1487,15 @@ Saved banks omit original group/team/game settings, so this does not recreate th
 
 Core Plays opens with **Starting shortlist**: up to three distinct players per position and slot. It first takes the highest-projected anchor, then the highest-value remaining value candidate, then the highest-projected remaining lower-owned alternative. Any remaining places use projection among tagged candidates. This is a review starting point, not a SIM ranking, exposure recommendation or requirement to use all three. Warnings remain visible; **Core candidates** restores the full list. Filters narrow the existing shortlist. Captain and FLEX are handled separately. Alternative details show exact differences in salary dollars, projected points and ownership percentage points. Column widths and sorting remain in place while filtering.
 
-After loading NFL salaries and refreshing player data, open **Settings > Core Plays** for the active Classic or Showdown output tab. No Deep run is required. This read-only view uses the currently loaded inputs; it does not fetch data, change projections, set exposure limits or lock players. Reopen after changing inputs. Filters show core candidates, all eligible/loaded players, individual signal categories and Captain/FLEX slots. Search by player/team/position; click headers to sort numerically, with unknowns last in either direction. Select a row for workload, sources, history, status-check time, reasons and review notes. **Copy Report** copies every row in the current filtered/sorted view.
+After loading NFL salaries and refreshing player data, open **Settings > Core Plays** for the active Classic or Showdown output tab. No Deep run is required. The view uses the currently loaded inputs and does not fetch data or change projections. Filters show core candidates, all eligible/loaded players, individual signal categories and Captain/FLEX slots. Search by player/team/position; click headers to sort numerically, with unknowns last in either direction. Select a row for workload, sources, history, status-check time, reasons and review notes. **Copy Report** copies every row in the current filtered/sorted view.
+
+Check selected players and set a minimum **Target %**, then choose **Apply Core Plan to Build**. Classic targets count appearances across entries; Showdown keeps separate FLEX and Captain targets. Targets guide candidate generation and portfolio selection but are not locks. The build report shows achieved counts and any missed targets; hard roster rules, explicit locks, exclusions and exposure limits remain in force. The plan applies to the current loaded player pool; review it again after loading a new slate.
+
+For Showdown, newly generated QB-Captain lineups with a known opposing DST in FLEX are excluded across build styles. Kicker Captain exposure is capped at 5% of the requested entries, rounded down with a minimum of one (one in a 20-entry build). Existing retained entries are preserved; an explicit kicker Captain lock takes precedence and may exceed the automatic cap.
+
+![Core Plan targets for Classic](images/core-plan-classic.png)
+
+![Separate Showdown Captain and FLEX targets](images/core-plan-showdown.png)
 
 Signals are transparent heuristics, not recommendations to lock a player: **Underpriced role candidate** requires points per $1,000 percentile >=75 and projection percentile >=50 among at least four supported positive-forecast peers at the same position/slot. **High-projection anchor** requires projection percentile >=80; equal peers do not count as strictly lower. **Popular play to assess** uses estimated ownership >=10% Classic, >=25% FLEX or >=8% Captain. **Lower-owned alternative** compares same-position/slot players with >=90% of a popular peer's projection, <=110% salary, and both >=5 percentage points and >=30% lower ownership. Similar mean projections do not prove similar ceilings. **Role-change opportunity** requires explicit unavailability in every earlier recorded depth slot. No salary file alone establishes current starters or actual ownership.
 
@@ -1850,14 +1858,14 @@ A constrained portfolio shortage now opens a **Lineup limits** warning instead o
 
 ### Preserve a feasible portfolio before Deep shortlisting
 
-Classic and Showdown Deep builds now search the full screened candidate pool for a complete set satisfying the current maximum exposures, uniqueness, groups, team/game limits and retained entries **before** narrowing the SIM shortlist. The check uses the same limits as final selection, including automatic Showdown caps, with up to 20 seconds from remaining build time. A verified complete set is reserved ahead of optional shortlist reservations; it receives the same later SIM evaluation as other shortlisted candidates. The rest of the shortlist still follows the selected ranking/search mode. No scoring forecasts or exposure limits are changed.
+Classic and Showdown Deep builds now search the full screened candidate pool for a complete set satisfying the current maximum exposures, uniqueness, groups, team/game limits and retained entries **before** narrowing the SIM shortlist. A short diversity-first pass tries two deterministic orderings that favor candidates blocking fewer alternatives, then gives the remaining feasibility budget to the exact solver. Both use the same hard limits as final selection, including automatic Showdown caps. A verified complete set is reserved ahead of optional shortlist reservations; it receives the same later SIM evaluation as other shortlisted candidates. The rest of the shortlist still follows the selected ranking/search mode. Build reports identify which search found the witness. No scoring forecasts or exposure limits are changed.
 
 If final greedy selection gets stuck, the app rechecks the preserved set against the current candidates and rules and can use it as a complete fallback, followed by normal refinement where enabled. Output ordering still uses the final SIM ranking. This is a feasible portfolio, not proof of the best possible portfolio. Build reports disclose preservation and fallback use. If strict selection and repair remain short, bounded automatic Showdown recovery may run within the remaining budget as described above. If recovery cannot complete a valid set, shortage handling explains the stop. More scenarios alone cannot replace missing candidate alternatives. Run a fresh Deep build after updating; old saved shortlists are not expanded or rewritten.
 
 
 ### Responsive portfolio feasibility checks
 
-The pre-shortlist check now has an app-enforced solver deadline and cancellation, rather than relying only on CBC's internal time limit. The app polls its own solver process, terminates that process if the budget expires or Cancel is pressed, and cleans up its temporary files. Preparation checks the same deadline/cancellation; the full-pool check avoids expanding shared-roster groups into a large pairwise conflict graph. Classic and Showdown display the feasibility subphase explicitly and record its start/end in the debug log.
+The pre-shortlist check has an app-enforced time limit and cancellation, rather than relying only on CBC's internal time limit. The diversity pass uses at most three seconds and never changes hard limits; the remaining time is available to the exact solver. The app polls its solver process, terminates it if the budget expires or Cancel is pressed, and cleans up its temporary files. Preparation checks the same deadline/cancellation; the full-pool check avoids expanding shared-roster groups into a large pairwise conflict graph. Classic and Showdown display the feasibility subphase explicitly and record its method and outcome in the debug log and build report.
 
 A timed-out check cannot supply a partial or unchecked portfolio. The build continues with the ordinary shortlist if the feasibility check finds no complete set within its budget; final exposure/uniqueness safeguards still apply. Cancellation ends the current check. These bounds apply to the portfolio feasibility check, not to all other build phases.
 
@@ -1920,6 +1928,10 @@ Focused comparisons preserved complete Classic metrics and tie handling. A local
 ### Resizable generated-lineup tables
 
 Classic/Sport and Showdown result tables now give player columns at least 180 pixels by default, expanding for visible names up to 260 pixels. All result columns can be resized by dragging header dividers; double-click a divider to fit contents. A horizontal scrollbar exposes later players and SIM/comparison metrics instead of compressing names into the window width. Hover over a player cell for its full displayed name.
+
+The Showdown results controls can filter to one Captain; pagination and row Save checkboxes follow the filtered result set. **Mean pts ↓** sorts the complete result set by simulated mean points when SIM metrics are available. Clear the Captain filter to return to all lineups; filtering does not remove saved entries.
+
+![Captain filter and mean points sort in the output pane](images/captain-output.png)
 
 Manual widths are retained within the open app while paging, sorting, restoring Best first, or refreshing results, including repeated roster slots. Numeric cells remain right-aligned and Save actions are unchanged. Widths are not saved across app restarts. This changes presentation only: lineup identities, ordering rules, saved selections, exports and simulation behavior are unchanged.
 

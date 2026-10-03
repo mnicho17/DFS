@@ -451,8 +451,10 @@ def showdown_correlation_flags(captain: Dict[str, Any], flex: List[Dict[str, Any
     captain_team = _team(captain)
     flex = list(flex or [])
     flags: List[str] = []
-    opposing_dst = any(
-        "DST" in _position_tokens(player) and _team(player) != captain_team
+    opposing_dst = bool(captain_team) and any(
+        "DST" in _position_tokens(player)
+        and _team(player)
+        and _team(player) != captain_team
         for player in flex
     )
     same_team_qb = any(
@@ -936,22 +938,20 @@ class ShowdownOptimizer:
                         for index, (_, _, pair_bonus) in enumerate(scripted_pairs)
                     ])
 
-                # Standard Strategic mode excludes the most contradictory
-                # Captain/DST pairing. Other modes keep it available as a rare,
-                # heavily penalized contrarian construction.
-                if style >= 1.0:
-                    for qb_key in keys:
-                        qb = key_to_player[qb_key]
-                        if "QB" not in _position_tokens(qb):
-                            continue
-                        for dst_key in keys:
-                            dst = key_to_player[dst_key]
-                            if (
-                                "DST" in _position_tokens(dst)
-                                and _team(dst)
-                                and _team(dst) != _team(qb)
-                            ):
-                                prob += cpt[qb_key] + flx[dst_key] <= 1
+                # QB Captain with the opposing defense is blocked in every
+                # Showdown style; other correlation preferences remain style-based.
+                for qb_key in keys:
+                    qb = key_to_player[qb_key]
+                    if "QB" not in _position_tokens(qb) or not _team(qb):
+                        continue
+                    for dst_key in keys:
+                        dst = key_to_player[dst_key]
+                        if (
+                            "DST" in _position_tokens(dst)
+                            and _team(dst)
+                            and _team(dst) != _team(qb)
+                        ):
+                            prob += cpt[qb_key] + flx[dst_key] <= 1
 
                 # Tiny jitter so repeated lineups are not just strictly deterministic after no-good cuts.
                 obj += pulp.lpSum([
@@ -1277,10 +1277,7 @@ class ShowdownOptimizer:
                 return None
             if len({_team(player) for player in [captain] + flex if _team(player)}) != 2:
                 return None
-            if (
-                style >= 1.0
-                and "QB Captain vs opposing DST" in showdown_correlation_flags(captain, flex)
-            ):
+            if "QB Captain vs opposing DST" in showdown_correlation_flags(captain, flex):
                 return None
             if style >= 1.0:
                 strategic_flags = set(showdown_correlation_flags(captain, flex))
@@ -1866,7 +1863,7 @@ def get_roster_slots_for_sport(sport: str) -> List[str]:
 
 
 def _position_tokens(p: Dict[str, Any]) -> set[str]:
-    raw = str(p.get("Position", "") or "").upper().replace("/", ",").replace(";", ",")
+    raw = str(p.get("Position", "") or "").upper().replace("D/ST", "DST").replace("DEF", "DST").replace("/", ",").replace(";", ",")
     parts = [x.strip() for x in raw.split(",") if x.strip()]
     if not parts and raw.strip():
         parts = [raw.strip()]

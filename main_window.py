@@ -1553,9 +1553,16 @@ class LineupBuildWorker(QtCore.QObject):
 
                 configured = constraints.get(key) or {}
 
-                min_total = float(configured.get("MinPct", player.get("MinPct", 0.0)) or 0.0)
+                min_total = max(
+                    float(configured.get("MinPct", player.get("MinPct", 0.0)) or 0.0),
+                    float(configured.get("CoreClassicMinPct", player.get("CoreClassicMinPct", 0.0)) or 0.0),
+                    float(configured.get("CoreShowdownMinFlexPct", player.get("CoreShowdownMinFlexPct", 0.0)) or 0.0),
+                )
 
-                min_cpt = float(configured.get("MinCptPct", player.get("MinCptPct", 0.0)) or 0.0)
+                min_cpt = max(
+                    float(configured.get("MinCptPct", player.get("MinCptPct", 0.0)) or 0.0),
+                    float(configured.get("CoreShowdownMinCptPct", player.get("CoreShowdownMinCptPct", 0.0)) or 0.0),
+                )
 
                 if min_total > 0.0 or min_cpt > 0.0:
 
@@ -10141,6 +10148,23 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 exposure_text += f" · CPT min {float(min_cpt):.0f}%"
 
+            core_flex = player.get("CoreShowdownMinFlexPct")
+
+            core_cpt = player.get("CoreShowdownMinCptPct")
+
+            if core_flex not in (None, "") and float(core_flex) > 0:
+                exposure_text += f" · Core FLEX target {float(core_flex):.0f}%"
+
+            if core_cpt not in (None, "") and float(core_cpt) > 0:
+                exposure_text += f" · Core CPT target {float(core_cpt):.0f}%"
+
+        else:
+
+            core_classic = player.get("CoreClassicMinPct")
+
+            if core_classic not in (None, "") and float(core_classic) > 0:
+                exposure_text += f" · Core target {float(core_classic):.0f}%"
+
         self.player_inspector.setTitle("Selected player")
 
         self.lbl_player_inspector_title.setText(name)
@@ -10272,6 +10296,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         if p.get("FadeCpt"):
 
             bits.append("CF")
+
+        for field, label in (("CoreClassicMinPct", "Core"),
+                             ("CoreShowdownMinFlexPct", "Core FLEX"),
+                             ("CoreShowdownMinCptPct", "Core CPT")):
+            value = p.get(field)
+            if value not in (None, "") and float(value) > 0:
+                bits.append(f"{label} {float(value):.0f}%")
 
         return " ".join(bits)
 
@@ -10481,7 +10512,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         for player in self.players:
 
-            if not any(player.get(field) not in (None, "") for field in ("MinPct", "MaxPct", "MinCptPct", "MaxCptPct")):
+            if not any(player.get(field) not in (None, "") for field in (
+                "MinPct", "MaxPct", "MinCptPct", "MaxCptPct",
+                "CoreClassicMinPct", "CoreShowdownMinFlexPct", "CoreShowdownMinCptPct",
+            )):
 
                 continue
 
@@ -10504,6 +10538,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
                 "MaxCptPct": player.get("MaxCptPct"),
 
             }
+
+            for field in ("CoreClassicMinPct", "CoreShowdownMinFlexPct", "CoreShowdownMinCptPct"):
+                value = player.get(field)
+                if value not in (None, ""):
+                    constraints[key][field] = value
 
         return {
 
@@ -11439,6 +11478,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 p.setdefault("MinPct", None)
 
+                p.setdefault("CoreClassicMinPct", None)
+
+                p.setdefault("CoreShowdownMinFlexPct", None)
+
+                p.setdefault("CoreShowdownMinCptPct", None)
+
                 p.setdefault("BaseProjection", float(p.get("FlexProjection", 0.0) or 0.0))
 
                 p.setdefault("BattingOrder", 0)
@@ -11728,6 +11773,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
                         float(player.get("MinPct") or 0.0) > 0.0
 
                         or float(player.get("MinCptPct") or 0.0) > 0.0
+
+                        or float(player.get("CoreClassicMinPct") or 0.0) > 0.0
+
+                        or float(player.get("CoreShowdownMinFlexPct") or 0.0) > 0.0
+
+                        or float(player.get("CoreShowdownMinCptPct") or 0.0) > 0.0
 
                     )
 
@@ -13612,6 +13663,23 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         bar.addWidget(reset)
 
+        mean_sort = QtWidgets.QPushButton("Mean pts ↓")
+        mean_sort.setObjectName(kind + "MeanPointsSort")
+        mean_sort.setToolTip("Sort the complete result set by simulated mean points, highest first.")
+        mean_sort.clicked.connect(lambda _checked=False, k=kind: self._sort_result_mean_points(k))
+        setattr(self, "_" + kind + "_mean_sort", mean_sort)
+        bar.addWidget(mean_sort)
+
+        if kind == "showdown":
+            bar.addWidget(QtWidgets.QLabel("Captain:"))
+            captain_filter = QtWidgets.QComboBox()
+            captain_filter.setObjectName("showdownCaptainFilter")
+            captain_filter.setMinimumWidth(190)
+            captain_filter.addItem("All Captains", "")
+            captain_filter.currentIndexChanged.connect(lambda _index: self._result_filter_changed("showdown"))
+            self._showdown_captain_filter = captain_filter
+            bar.addWidget(captain_filter)
+
         ownership = QtWidgets.QPushButton("Comparisons…")
         ownership_menu = QtWidgets.QMenu(ownership)
         def review_ownership():
@@ -13652,7 +13720,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             bar.addWidget(widget)
 
-        note = QtWidgets.QLabel("Click a column to sort all results. Best first restores SIM ranking. Rules apply to the full output.")
+        note = QtWidgets.QLabel("Filter Showdown by Captain. Mean pts sorts all SIM results. Pages follow filtering and sorting; existing saved entries remain saved.")
 
         note.setWordWrap(True)
 
@@ -13667,6 +13735,54 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         setattr(self, "_" + kind + "_sort", None)
 
         self._change_result_page(kind, 0)
+
+
+    def _sort_result_mean_points(self, kind):
+        table = self.tbl_sd if kind == "showdown" else self.tbl_cl
+        column = next((index for index in range(table.columnCount())
+                       if table.horizontalHeaderItem(index)
+                       and table.horizontalHeaderItem(index).text() == "Mean pts"), None)
+        if column is None:
+            return
+        setattr(self, "_" + kind + "_sort", (column, True, "Mean pts"))
+        self._change_result_page(kind, 0)
+
+
+    def _result_filter_changed(self, kind):
+        self._change_result_page(kind, 0)
+
+
+    def _sync_showdown_captain_filter(self, *, reset=False):
+        combo = getattr(self, "_showdown_captain_filter", None)
+        if combo is None:
+            return
+        selected = "" if reset else str(combo.currentData() or "")
+        captains = {}
+        for lineup in self.last_showdown:
+            captain = (lineup or {}).get("Captain") or {}
+            key = player_key(captain)
+            if key:
+                captains[key] = self._display_name(captain)
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("All Captains", "")
+        for key, label in sorted(captains.items(), key=lambda item: item[1].casefold()):
+            combo.addItem(label, key)
+        index = combo.findData(selected) if selected else 0
+        combo.setCurrentIndex(index if index >= 0 else 0)
+        combo.blockSignals(False)
+
+
+    def _result_display_indices(self, kind):
+        rows = self.last_showdown if kind == "showdown" else self.last_classic
+        if kind != "showdown":
+            return list(range(len(rows)))
+        combo = getattr(self, "_showdown_captain_filter", None)
+        captain_key = str(combo.currentData() or "") if combo is not None else ""
+        if not captain_key:
+            return list(range(len(rows)))
+        return [index for index, lineup in enumerate(rows)
+                if player_key((lineup or {}).get("Captain") or {}) == captain_key]
 
 
 
@@ -13780,7 +13896,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         table = self.tbl_sd if kind == "showdown" else self.tbl_cl
 
-        rows = self.last_showdown if kind == "showdown" else self.last_classic
+        all_rows = self.last_showdown if kind == "showdown" else self.last_classic
+
+        display_indices = self._result_display_indices(kind)
+
+        rows = [all_rows[index] for index in display_indices]
 
         page = getattr(self, "_" + kind + "_page", 0)
 
@@ -13788,7 +13908,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         table.setVerticalHeaderLabels([str(page * 150 + i + 1) for i in range(len(visible))])
 
-        if any(finish_rank(lu)[0] for lu in rows):
+        has_finish_metrics = any(finish_rank(lu)[0] for lu in all_rows)
+
+        mean_sort = getattr(self, "_" + kind + "_mean_sort", None)
+
+        if mean_sort is not None:
+
+            mean_sort.setEnabled(has_finish_metrics)
+
+        if has_finish_metrics:
 
             columns = [("Top 1%", "sim_top_one_pct"), ("Top 2%", "sim_top_two_pct"),
 
@@ -13869,11 +13997,21 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
     def _populate_showdown_lineups(self, lineups: List[Dict[str, Any]], page: int = 0) -> None:
 
+        new_result = lineups is not self.last_showdown
+
         self.last_showdown = self._sorted_result_rows(ranked_lineups(lineups or []), "showdown")
+
+        self._sync_showdown_captain_filter(reset=new_result)
 
         self._showdown_page = page
 
-        visible = self.last_showdown[page * 150:(page + 1) * 150]
+        display_indices = self._result_display_indices("showdown")
+
+        self._showdown_display_indices = display_indices
+
+        visible_indices = display_indices[page * 150:(page + 1) * 150]
+
+        visible = [self.last_showdown[index] for index in visible_indices]
 
         has_sim = any(getattr(lu, "sim_metrics", {}).get("sim_scenarios", 0) for lu in self.last_showdown)
 
@@ -13887,7 +14025,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        total = max(1, len(self.last_showdown))
+        total = max(1, len(display_indices))
 
         self._build_progress.setRange(0, total)
 
@@ -13907,7 +14045,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             chk = QtWidgets.QCheckBox()
 
-            chk.stateChanged.connect(lambda state, row=page * 150 + i: self._sd_checkbox_changed(row, state))
+            source_row = visible_indices[i]
+
+            chk.stateChanged.connect(lambda state, row=source_row: self._sd_checkbox_changed(row, state))
 
             self.tbl_sd.setCellWidget(i, 0, chk)
 
@@ -15862,7 +16002,14 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         offset = getattr(self, "_" + kind_l + "_page", 0) * 150
 
-        for row, lineup in enumerate(generated[offset:offset + 150]):
+        display_indices = self._result_display_indices(kind_l)
+
+        for row, source_index in enumerate(display_indices[offset:offset + 150]):
+
+            if source_index < 0 or source_index >= len(generated):
+                continue
+
+            lineup = generated[source_index]
 
             widget = table.cellWidget(row, 0)
 
