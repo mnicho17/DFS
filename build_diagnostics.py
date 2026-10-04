@@ -484,6 +484,12 @@ def create_build_diagnostic(
     }
     diagnostic["distribution_capture"] = dict(sim.get("distribution_capture") or {})
     diagnostic['captain_coverage'] = dict(sim.get('captain_coverage') or {})
+    if sim.get('qb_coverage'):
+        diagnostic['qb_coverage'] = dict(sim['qb_coverage'])
+        diagnostic['qb_coverage']['qbs'] = [{key:value for key,value in row.items() if key != 'key'}
+                                          for row in sim['qb_coverage'].get('qbs',[])]
+    if sim.get('selection_strategy') or portfolio.get('selection_strategy'):
+        diagnostic['selection_strategy'] = str(sim.get('selection_strategy') or portfolio['selection_strategy'])
     if sim.get('compute_ledger'):
         diagnostic['compute_ledger'] = dict(sim['compute_ledger'])
 
@@ -624,7 +630,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         if sim.get("style_candidate_counts"):
             lines.append("- Style candidates before deduplication: " + "; ".join(f"{name} {int(count):,}" for name, count in sim["style_candidate_counts"].items()))
         lines.append("- Output selection: " + str(options.get("selection_mode") or "Portfolio selection"))
-        lines.append("- Display order: top-1%, top-2%, top-5%, first-place rate, then mean points (descending)")
+        lines.append('- Display order: ' + str(record.get('selection_strategy') or 'top-1%, top-2%, top-5%, first-place rate, then mean points (descending)'))
         def pool_limit(key):
             return f"{_integer(options.get(key)):,}" if options.get(key) else "Auto"
         lines.append(
@@ -644,6 +650,12 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         )
     if sim.get("preset_fit") is not None:
         lines.append(f"- Preset fit: {_number(sim.get('preset_fit')):.0f}/100")
+    if record.get('selection_strategy'):
+        lines.append('- Selection strategy: ' + str(record['selection_strategy']))
+        lines.append('- Contest ranking uses individual sampled-field estimates under portfolio rules; joint validation is a subsequent estimate, not a global portfolio optimum.')
+    if record.get('qb_coverage'):
+        from qb_coverage import format_coverage
+        lines.append(format_coverage(record['qb_coverage']))
     if sim.get("joint_portfolio"):
         lines.append(
             f"- Joint contest: {_integer(sim.get('joint_entries')):,} entries cost "

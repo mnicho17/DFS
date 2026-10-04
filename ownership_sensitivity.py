@@ -91,7 +91,7 @@ def run_sensitivity(path,*,batches=3,scenarios=5000,cancelled=lambda:False,progr
                 result=simulate_nfl_contest(candidates(p),copy.deepcopy(p['players']),field_config=copy.deepcopy(p['field_config']),**kwargs)
             else:
                 from showdown_simulation import simulate_showdown
-                result=simulate_showdown(candidates(p),copy.deepcopy(p['players']),**kwargs)
+                result=simulate_showdown(candidates(p),copy.deepcopy(p['players']),contest_profile=p.get('field_config',{}).get('contest_profile'),**kwargs)
             if cancelled() or result.get('report',{}).get('scenarios')!=scenarios:break
             count=result.get('report',{}).get('field_lineups')
             if name==PROFILES[0]:baseline_field_count=count
@@ -126,7 +126,9 @@ def run_sensitivity(path,*,batches=3,scenarios=5000,cancelled=lambda:False,progr
             rows.append(row)
     return dict(status='completed' if len(seeds)==batches else 'incomplete',sensitivity_version=SENSITIVITY_VERSION,bank_id=bank['bank_id'],input_id=p['input_id'],
         kind=p['kind'],saved_model=p['model_version'],current_model=model_version(),completed_batches=len(seeds),requested_batches=batches,
-        scenarios=scenarios,opponents=p['field_count'],candidate_count=len(ref),seeds=seeds,changes=changes,fields=fields,rows=rows)
+        scenarios=scenarios,opponents=p['field_count'],candidate_count=len(ref),seeds=seeds,changes=changes,fields=fields,rows=rows,
+        **({'selection_strategy':p['rows'][0]['metrics']['sim_selection_label']}
+           if p['rows'][0]['metrics'].get('sim_selection_label') else {}))
 
 
 def format_sensitivity(r):
@@ -137,7 +139,8 @@ def format_sensitivity(r):
         'Favorites: up to five positive contender-minus-field gaps per slot from saved top150. Raw weights increase by max(5 percentage points, original ownership), then redistribute within Classic positions or Showdown slots.',
         'Concentrated field: ownership weights raised to power 1.35, then redistributed. Showdown Captain/FLEX total 100/500%, with combined player ownership capped at 100%. Classic position totals preserved.',
         'These are hypothetical ownership stresses, not forecasts. Matching to targets is approximate. Sample roster matches are not full-contest duplication predictions; zero matches do not establish uniqueness. No output ranks or exposures are changed.']
-    lines.append('Ranks use top1, top2, top5, first-place rate and mean points; exact ties preserve bank order. Top150 uses the entire bank when smaller than 150. Repeating these settings uses the same seed sequence.')
+    lines.append(('Ranks use '+r['selection_strategy']+'; top-1% statistics are separate diagnostics.' if r.get('selection_strategy') else
+                  'Ranks use top1, top2, top5, first-place rate and mean points;') + ' exact ties preserve bank order. Top150 uses the entire bank when smaller than 150. Repeating these settings uses the same seed sequence.')
     if n:
         lines += ['', 'Actual sampled fields (averages across completed batches):']
         for name in PROFILES:

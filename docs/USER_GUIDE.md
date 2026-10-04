@@ -446,36 +446,103 @@ Choose the preset that matches the contest's maximum entries per person. Presets
 
 
 
-When the contest lobby provides the actual economics, open **Settings > Contest-Aware SIM**. Enter the contest name, total field size, entry fee, how many entries you plan to submit, and the payout table. Use one rank or range per line, such as `1 = $100,000` or `2-10 = $5,000`. **Save and Use** keeps the profile for later slates and turns on NFL SIM Edge. **Use Preset Only** removes the contest profile from the build without deleting it. If the requested build count differs from the profile's planned entries, the app stops before generation and lets you use the profile count, keep the requested count with a visible warning, or cancel.
+When the contest lobby provides the actual economics, open **Settings > Contest-Aware SIM**. Enter the contest name, total field size, entry fee, how many entries you plan to submit, and the payout table. Use one rank or range per line, such as `1 = $100,000` or `2-10 = $5,000`. **Save and Use** keeps the profile for later slates and turns on NFL SIM Edge. **Use Tournament Preset** removes the profile without deleting it and explicitly returns to Tournament ranking. If the requested build count differs from the profile's planned entries, the app stops before generation and lets you use the profile count, keep the requested count with a visible warning, or cancel.
 
-### Contest objective (unreleased CO-01)
+### Contest objective and single entry (CO-02, development preview)
 
 In the **Contest** section of **Settings**, open **Contest-Aware SIM...** and choose
 **Tournament**, **Double-Up**, or **Multiplier**. Tournament is the default and
-continues to use the existing strategy. Double-Up and Multiplier currently record
-intent only; objective-specific strategy arrives later in CO-02. They do not yet
-provide cash lineup construction, paid-rate optimization, multiplier EV
-optimization, or a different ownership strategy.
+uses its existing finish-rate strategy without an exact profile. Requesting one
+lineup does **not** identify your contest type. Choose the objective explicitly,
+choose the contest's entry-limit preset separately, and enter its actual field
+size, entry fee and payouts. **Your entries** is the number you plan to submit;
+it is separate from the contest's maximum entries per person.
+If you submit one entry to a 20-Max or 150-Max contest, turn **Auto from lineup
+count** off and choose that contest's preset manually. Auto count matching is a
+visible convenience; it does not verify the actual entry limit or contest type.
 
-The objective does not require an exact payout profile. **Use Preset Only** keeps
-your choice while disabling the exact profile. **Save and Use** saves the objective
+Double-Up requires a real profile with a contiguous flat paid range starting at
+first place and a payout above the entry fee. It ranks candidates by **paid-finish
+rate**, then expected profit and mean points. Multiplier requires a real profile
+and ranks by **expected profit**, then paid-finish rate and mean points. Enter the
+actual 3x/5x/etc. table; the app does not guess the multiplier or cutoff.
+Tournament with a real profile also ranks by expected profit, including split
+prizes for tied ranks. These are simulated estimates, not guaranteed returns.
+The output adds **Paid %** and **Profit $**; **Best first** uses the executed
+objective. Hover for the ranking rule and payout estimates.
+
+**Use Tournament Preset** explicitly switches to Tournament and disables the
+exact profile. **Save and Use** saves the objective
 with the profile; selecting that saved profile restores it. Build recipes and new
 snapshots also record the objective, and replay restores it without rewriting the
 source snapshot. Legacy execution settings default to Tournament.
 
-Build reports display the objective and explain the framework-only status of
-Double-Up/Multiplier as information, not an error. New generated archives and
+These strategies require NFL with SIM enabled; Showdown requires **Deep**.
+Missing economics or unsupported modes stop the build with a concrete message,
+instead of executing a cash request with Tournament strategy. Candidate
+generation still uses the selected build style. Selection ranks the scored
+candidate bank under existing portfolio rules and Core Plan priorities; it does
+not claim a globally optimal lineup or portfolio. Tournament diversity bonuses
+and duplication polishing do not override exact-profile ranking. Build reports
+record both objective intent and executed selection strategy. New archives and
 exports record the choice. Results & Learning counts Tournament, Double-Up,
 Multiplier, and **Not recorded** separately. Old exports and artifacts without
 recorded intent remain Not recorded; contest names, payout shapes, fees, or results
 are not evidence of the selected objective.
 
-Changing only the objective does not change candidates, SIM scores, lineup order,
-portfolio construction, or DraftKings export rows. Candidate libraries keep their
+Changing the objective can change selected lineups and order. Existing candidate
+libraries keep their
 exact original snapshot identity and can be reused across objective choices under
 the same compatible app code. Slate, generation inputs, current rules, and code
-checks still apply. Projections, ownership, payout calculations, AR-01 saved repair,
-and AR-02 portfolio recovery are unchanged.
+checks still apply. Baseline projections and historical observations remain
+unchanged. An older recorded objective alone cannot establish its executed
+strategy. Classic retains subsequent joint portfolio payout validation; Showdown
+payout estimates compare each candidate against sampled opponents and are not
+joint portfolio profits.
+
+![Illustrative single-entry Double-Up profile](images/contest-double-up.png){medium}
+
+![Output sorted by the explicit contest objective, with paid rate and expected profit](images/contest-objective-output.png)
+
+### QB fade coverage (development preview)
+
+Open **Settings > QB Coverage...** for the current NFL slate and format. Select
+starting QBs A and B and enable coverage. Set minimum counts **without A**,
+**without B**, and **without either QB**. A lineup without both QBs contributes
+to all applicable counts; these are overlapping targets, not separate buckets.
+Zero requests no minimum. There is no recommended injury percentage.
+
+Builds preserve these targets alongside salaries, roster eligibility, locks,
+fades, uniqueness, exposures and retained entries. Core Plans retain their
+existing priorities and reported shortfalls. Automatic-cap recovery and portfolio
+refinement cannot weaken QB targets or existing limits. Deep Showdown spends a
+bounded part of generation exploring requested fades; candidate libraries are
+never expanded. Missing constructions or conflicting rules stop selection with
+requested/achieved counts. Increase candidate coverage or deliberately change a
+rule; more scenarios alone do not add roster choices.
+
+**Review current output** shows occurrence-based both/A-only/B-only/neither
+counts, Captain and non-Captain exposure, and each team's WR/TE dependence.
+Classic uses the same explicit pair review to support starter diversification.
+It is not a complete passing-offense model: RB receiving is not classified.
+QB settings are specific to the slate and format, saved with snapshots, and kept
+only for the current session otherwise. Disable coverage to return to ordinary
+builds. A changed slate requires reopening the controls.
+
+The conditional point comparison freezes current inputs and runs 250 paired
+draws for Normal, A exits and B exits. Choose game elapsed at exit and remaining
+WR/TE efficiency. It assumes production occurs uniformly before exit; after exit
+the selected QB produces zero more points, and his WR/TE outcomes retain the
+entered efficiency. Captain receives the usual 1.5 multiplier. Every occurrence
+is counted, including repeated entries. Competitive means meeting the normal
+portfolio's 75th-percentile points in the same draw, including ties; **it is not
+a cash cutoff**. The report shows mean point changes and competitive percentages.
+It provides no injury probability or monetary protection estimate. RB receiving,
+K/DST effects, and replacement playing time are unmodeled. Backup allocation
+remains queued until replacement-role and opportunity assumptions are validated.
+Conditional values do not change ordinary forecasts or historical evidence.
+
+![Illustrative QB coverage controls and paired conditional point review](images/qb-coverage.png)
 
 
 
@@ -484,7 +551,7 @@ and AR-02 portfolio recovery are unchanged.
 
 
 
-With a profile active, candidate grading first converts each simulated finish into the listed prize. After portfolio selection, the app runs all selected entries in the same contests. Your entries occupy ranks together, can take prizes from one another, and split ties with your other entries and sampled opponents. Results show **Edge | ROI** using this portfolio-adjusted pass. The tooltip adds each lineup's expected payout and profit plus the portfolio's total cost, payout, profit chance, and 95% ROI range.
+With a profile active, candidate scoring first converts each simulated finish into the listed prize. In Classic, after portfolio selection the app runs all selected entries in the same contests. Your entries occupy ranks together, can take prizes from one another, and split ties with your other entries and sampled opponents. Results show **Edge | ROI** using this portfolio-adjusted pass. The tooltip adds each lineup's expected payout and profit plus the portfolio's total cost, payout, profit chance, and 95% ROI range.
 
 
 

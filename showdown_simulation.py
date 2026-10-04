@@ -130,7 +130,9 @@ def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0,
 
 @phase("primary_sim", simulation=True)
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
-                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False):
+                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False, contest_profile=None):
+    from contest_strategy import execution_profile, sampled_payout, attach_strategy, strategy_label
+    profile = execution_profile(contest_profile)
     if not candidates:
         return {"lineups": [], "report": {"scenarios": 0, "field_lineups": 0}}
     pool = active_showdown_players(players)
@@ -149,6 +151,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     hits = [[set() for _ in candidates] for _ in range(3)]
     sums = [0.0] * len(candidates)
     returns = [0.0] * len(candidates)
+    payout_sums = [0.0] * len(candidates)
     top_twos = [0] * len(candidates)
     cashes, busts = [0] * len(candidates), [0] * len(candidates)
     values = [{} for _ in candidates]
@@ -180,9 +183,14 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
                 if score >= threshold:
                     group[i].add(scenario)
             top_twos[i] += score >= ranked[int(.98 * (len(ranked) - 1))]
-            cashes[i] += score >= cash
+            cashes[i] += score >= cash if not profile else 0
             busts[i] += score < bust
             value = 16.0 if score >= ranked[-1] else 6.0 + (pct - .99) * 200 if score >= top1 else 1.5 + (pct - .95) * 75 if score >= top5 else .2 if score >= cash else -1.0
+            if profile:
+                payout = sampled_payout(ranked, score, profile)
+                payout_sums[i] += payout
+                cashes[i] += payout > 0
+                value = (payout - profile['entry_fee']) / profile['entry_fee']
             returns[i] += value
             if value >= 1.5:
                 values[i][scenario] = value
@@ -194,6 +202,9 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     rows = []
     for i, lineup in enumerate(candidates):
         base = dict(getattr(lineup, "sim_metrics", {}) or {})
+        for key in ('sim_selection_objective','sim_contest_profile_id','sim_selection_fields','sim_selection_label','sim_payout_model',
+                    'sim_expected_payout','sim_expected_profit','sim_expected_roi_pct','sim_contest_name','sim_entry_fee','sim_contest_field_size'):
+            base.pop(key,None)
         base.update(sim_scenarios=completed, sim_field_lineups=len(field),
                     sim_top_two_pct=top_twos[i] / max(1, completed) * 100,
                     sim_top_one_pct=len(hits[0][i]) / max(1, completed) * 100,
@@ -205,6 +216,13 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
                     sim_mean=sum(scores[i]) / max(1, completed), sim_ceiling=_quantile(scores[i], .9),
                     sim_return_score=returns[i] / max(1, completed),
                     field_exact_matches=field_counts[showdown_signature(lineup)])
+        if profile:
+            payout = payout_sums[i] / max(1, completed)
+            base.update(sim_expected_payout=payout, sim_expected_profit=payout-profile['entry_fee'],
+                        sim_expected_roi_pct=(payout/profile['entry_fee']-1)*100,
+                        sim_contest_name=profile['name'], sim_entry_fee=profile['entry_fee'],
+                        sim_contest_field_size=profile['field_size'])
+            attach_strategy(base, profile)
         rows.append(base)
     ordered = {key: sorted(row[key] for row in rows) for key in ("sim_top_one_pct", "sim_top_five_pct", "sim_ceiling", "sim_return_score", "field_exact_matches")}
     for i, row in enumerate(rows):
@@ -222,7 +240,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         result.append(lu)
     from field_diagnostics import summarize_field
     from build_snapshots import fingerprint
-    return {"lineups": result, "report": {
+    report = {
         "scenario_cache": cache_report,
         "field_diagnostic": summarize_field(field, field_pool, showdown=True, salary_cap=salary_cap),
         "sensitivity_field_id": fingerprint([showdown_signature(lu) for lu in field]) if outcome_transform is not None else None,
@@ -234,7 +252,12 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         "specialist_model": "shared-specialist-events-v1",
             "volatility_model": "role-aware-player-volatility-v1", "rare_event_model": "guardrailed-breakout-tails-v1",
         "game_script_mix": {k: v / max(1, sum(scripts.values())) * 100 for k, v in scripts.items()},
-    }}
+    }
+    if profile:
+        report.update(contest_aware=True, contest_profile=dict(profile),
+                      payout_model='exact-rank-tie-split-v1', selection_strategy=strategy_label(profile),
+                      payout_scope='Each candidate occupies one entry against sampled opponents; no joint portfolio payout estimate.')
+    return {'lineups': result, 'report': report}
 
 
 def run_deep_showdown(worker, shortlist_fn):
@@ -265,6 +288,11 @@ def run_deep_showdown(worker, shortlist_fn):
     from captain_coverage import captain_targets, seed_captains, shortlist_reservations, coverage_report
     targets = captain_targets(players)
     library_build = bool(bank)
+    if getattr(worker,'portfolio_rules',{}).get('qb_coverage') and not library_build:
+        from qb_coverage import seed_showdown_fades
+        worker.progress.emit(0,worker.num_lineups,'Phase 1 of 4 - exploring requested QB fades')
+        seed_showdown_fades(worker,players,bank,retained_keys,budget,
+                            min(generation_end,time.perf_counter()+min(20,limit*.1)))
     def expand_coverage():
         if not requested or library_build or getattr(worker, 'candidate_library', '') or stop(generation_end):
             return
@@ -338,7 +366,7 @@ def run_deep_showdown(worker, shortlist_fn):
             "validation_scenarios": 0, "shortlist_count": 0, "validation_top_overlap_pct": None,
             "candidate_bank_count": generated, "validation_time_limit_reached": False}
     if lineups and not stop(start + limit * screening_fraction):
-        coarse = simulate_showdown(retained + lineups, players, scenario_cache=getattr(worker,"scenario_cache",False),
+        coarse = simulate_showdown(retained + lineups, players, contest_profile=getattr(worker, 'contest_profile', None), scenario_cache=getattr(worker,"scenario_cache",False),
             scenarios=min(options["screening"], max(250, worker.sim_scenarios)),
             field_lineup_count=min(1600, options["field"] or 1200), salary_cap=worker.salary_cap, seed=73129,
             cancel_callback=lambda: stop(start + limit * screening_fraction),
@@ -363,7 +391,7 @@ def run_deep_showdown(worker, shortlist_fn):
             top = {showdown_signature(lu) for lu in sorted(short, key=rank, reverse=True)[:worker.num_lineups]}
             validation_end = deadline - min(60, limit * .20)
             if not stop(validation_end):
-                validated = simulate_showdown(short, players, scenario_cache=getattr(worker,"scenario_cache",False), scenarios=max(2500, worker.sim_scenarios),
+                validated = simulate_showdown(short, players, contest_profile=getattr(worker, 'contest_profile', None), scenario_cache=getattr(worker,"scenario_cache",False), scenarios=max(2500, worker.sim_scenarios),
                     field_lineup_count=options["field"] or 2700, salary_cap=worker.salary_cap, seed=90210, capture_distributions=True,
                     cancel_callback=lambda: stop(validation_end),
                     progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 3 of 4 - " + c))
@@ -384,9 +412,10 @@ def run_deep_showdown(worker, shortlist_fn):
                 from repeatability import capture_bank
                 deep['ranking_bank'] = capture_bank(short, players, kind='showdown',
                     salary_cap=worker.salary_cap, field_count=options['field'] or 2700,
+                    field_config={'contest_profile':worker.contest_profile} if getattr(worker,'contest_profile',None) else None,
                     input_id=getattr(worker, 'build_input_id', ''))
                 deep['ranking_audit'] = audit_ranking(short,
-                    lambda audit_stop: simulate_showdown(short, players, scenarios=2000,
+                    lambda audit_stop: simulate_showdown(short, players, contest_profile=getattr(worker, 'contest_profile', None), scenarios=2000,
                         field_lineup_count=options['field'] or 2700, salary_cap=worker.salary_cap,
                         seed=481516, cancel_callback=audit_stop,
                         progress_callback=lambda a,b,c: worker.progress.emit(a,b,'Phase 3 of 4 - Ranking audit: ' + c)),
@@ -400,6 +429,8 @@ def run_deep_showdown(worker, shortlist_fn):
     simulation_seconds = time.perf_counter() - sim_start
     selection_start = time.perf_counter()
     worker.progress.emit(0, worker.num_lineups, "Phase 4 of 4 - selecting and refining Showdown portfolio")
+    if getattr(worker,'contest_profile',None) and any(not (getattr(lu,'sim_metrics',{}) or {}).get('sim_selection_fields') for lu in retained+lineups):
+        raise ValueError('Contest-specific selection could not score the candidate bank within the available budget. Increase the Deep budget and rebuild.')
     selected = select_portfolio(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
         allow_relaxation=worker._cancel_event.is_set(),
         # Keep the existing cancelled Deep Showdown receipt path verbatim.

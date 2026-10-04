@@ -1,4 +1,4 @@
-"""Recorded contest intent, independent of today's Tournament strategy.
+"""Recorded contest intent, independent of the executed selection strategy.
 
 Execution defaults are deliberately separate from historical evidence. Never
 derive an objective from a contest name, payout table, or observed result.
@@ -13,8 +13,7 @@ EXECUTION_DEFAULT = TOURNAMENT
 _LABELS = {TOURNAMENT: 'Tournament', DOUBLE_UP: 'Double-Up', MULTIPLIER: 'Multiplier'}
 _ALIASES = {'TOURNAMENT': TOURNAMENT, 'GPP': TOURNAMENT,
             'DOUBLE_UP': DOUBLE_UP, 'DOUBLEUP': DOUBLE_UP, 'MULTIPLIER': MULTIPLIER}
-FRAMEWORK_NOTE = ('Objective recorded. Objective-specific optimization is not enabled yet; '
-                  'CO-01 continues to use Tournament lineup strategy.')
+FRAMEWORK_NOTE = 'Recorded intent alone does not establish the strategy executed by an older build.'
 
 
 def recorded_objective(value):
@@ -43,7 +42,7 @@ def objective_report_label(value):
     recorded = recorded_objective(value)
     label = objective_evidence_label(recorded)
     if recorded in (DOUBLE_UP, MULTIPLIER):
-        label += ' (strategy framework only; current lineup optimization uses Tournament logic)'
+        label += ' (recorded intent; see selection strategy for executed behavior)'
     return label
 
 

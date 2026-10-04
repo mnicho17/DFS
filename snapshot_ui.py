@@ -113,6 +113,7 @@ class SnapshotActions:
             del blockers
         self.players = copy.deepcopy(inputs['players'])
         self.portfolio_groups = copy.deepcopy(inputs['rules'].get('groups') or [])
+        self._qb_coverage = copy.deepcopy(inputs['rules'].get('qb_coverage'))
         self.lbl_portfolio_groups.setText(f'Groups: {len(self.portfolio_groups)}')
         self.last_live_check_summary = copy.deepcopy(value.get('freshness') or {})
         self._snapshot_replay = True

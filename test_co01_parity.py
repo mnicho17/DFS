@@ -147,7 +147,9 @@ class ObjectiveParityTests(unittest.TestCase):
 
 if __name__ == '__main__':
     kind, destination = sys.argv[1:]
+    # CO-02 deliberately replaces metadata-only cash execution. Retain the
+    # untouched Tournament/default fixture; cash execution now needs payouts.
     values = {str(objective): evidence(kind, objective)
-              for objective in (None, 'TOURNAMENT', 'DOUBLE_UP', 'MULTIPLIER')}
+              for objective in (None, 'TOURNAMENT')}
     assert not network_attempts, network_attempts
     Path(destination).write_text(json.dumps(values, sort_keys=True))
