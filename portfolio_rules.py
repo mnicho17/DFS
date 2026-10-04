@@ -81,6 +81,8 @@ def normalize_rules(rules: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             if value not in (None, ""):
                 normalized_constraint[field] = value
         constraints[stable_key] = normalized_constraint
+    from qb_coverage import normalize_coverage
+    coverage = normalize_coverage(raw.get('qb_coverage'))
     return {
         "min_unique": max(1, min(8, int(raw.get("min_unique", 1) or 1))),
         "max_team_pct": _pct(raw.get("max_team_pct"), 100.0),
@@ -88,6 +90,7 @@ def normalize_rules(rules: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "balance_ownership": bool(raw.get("balance_ownership", True)),
         "groups": groups,
         "player_constraints": constraints,
+        **({'qb_coverage': coverage} if coverage else {}),
     }
 
 
@@ -103,6 +106,10 @@ def lineup_captain(lineup: Any, kind: str) -> Optional[Dict[str, Any]]:
     if str(kind or "classic").lower() != "showdown":
         return None
     return (lineup or {}).get("Captain") or None
+
+
+def lineup_players_from_candidates(rows, kind):
+    return list({player_key(p): p for lu in rows for p in lineup_players(lu,kind)}.values())
 
 
 def _team(player: Dict[str, Any]) -> str:
@@ -257,6 +264,13 @@ def select_portfolio(
         raise ValueError("Core penalty must be between 0 and 10")
     requested = max(1, int(requested or 1))
     normalized = normalize_rules(rules)
+    from qb_coverage import coverage_limits, coverage_report, coverage_ok, format_coverage
+    qb_limits = coverage_limits(normalized.get('qb_coverage'), requested)
+    qb_config = normalized.get('qb_coverage')
+    if qb_config:
+        allow_relaxation = False
+        refinement_passes = 0
+        refinement_polish_duplication = False
     kind = str(kind or "classic").lower()
 
     retained_by_signature: Dict[Tuple[str, ...], Any] = {}
@@ -273,6 +287,20 @@ def select_portfolio(
         if signature and signature not in retained_by_signature and signature not in unique_candidates:
             unique_candidates[signature] = lineup
     pool = list(unique_candidates.values())
+    strategy_rows = retained + pool
+    strategy = {(_sim_metrics(lu).get('sim_selection_objective'),
+                 _sim_metrics(lu).get('sim_contest_profile_id'),
+                 tuple(_sim_metrics(lu).get('sim_selection_fields') or ()))
+                for lu in strategy_rows if _sim_metrics(lu).get('sim_selection_fields')}
+    if strategy:
+        if len(strategy) != 1 or any(not _sim_metrics(lu).get('sim_selection_fields')
+                                    or not _sim_metrics(lu).get('sim_scenarios') for lu in strategy_rows):
+            raise ValueError('Contest-specific selection requires consistently scored candidates and retained entries from the same objective.')
+        # Expected paid-entry count / expected total payout are additive across
+        # entries. Tournament coverage bonuses must not override these objectives.
+        individual_ranking = True
+        refinement_passes = 0
+        refinement_polish_duplication = False
     if kind == "showdown":
         # Existing retained entries are user data; filter only new candidates.
         pool = [lineup for lineup in pool if not _qb_captain_opposing_dst(lineup)]
@@ -379,6 +407,8 @@ def select_portfolio(
     # The pairwise check keeps the configured uniqueness contract intact.
     unrestricted_full_pool = (
         not retained
+        and not qb_config
+        and not strategy
         and len(pool) <= requested
         and not normalized["groups"]
         and not any(value > 0 for value in min_total.values())
@@ -435,7 +465,7 @@ def select_portfolio(
         keys, teams, games = _lineup_sets(lineup, kind)
         captain = lineup_captain(lineup, kind)
         candidate_meta[id(lineup)] = {
-            "eligible": not automatic_recovery or explicit_lineup_ok(keys, player_key(captain or {}), player_lookup),
+            "eligible": not (automatic_recovery or qb_config) or explicit_lineup_ok(keys, player_key(captain or {}), player_lookup),
             "cores": tuple(combinations(sorted(keys), 2)) + tuple(combinations(sorted(keys), 3)) if core_penalty else (),
             "keys": keys,
             "flex_keys": keys - {player_key(captain or {})},
@@ -462,6 +492,8 @@ def select_portfolio(
         }
 
     selected: List[Any] = list(retained)
+    coverage_counts = Counter(item['label'] for lu in selected for item in qb_limits
+                              if not set(item['excluded']).intersection(candidate_meta[id(lu)]['keys']))
     selected_candidate_ids: set[int] = {id(lineup) for lineup in retained}
     core_counts = Counter()
     total_counts: Counter[str] = Counter()
@@ -559,9 +591,12 @@ def select_portfolio(
     def score(lineup: Any) -> Any:
         meta = candidate_meta[id(lineup)]
         core_hits = core_target_hits(meta)
+        coverage_hits = sum(not set(item['excluded']).intersection(meta['keys']) and
+                            coverage_counts[item['label']] < item['minimum']
+                            for item in qb_limits)
         if individual_ranking:
             rank = finish_rank(lineup)
-            return (core_hits,) + (rank if isinstance(rank, tuple) else (rank,))
+            return (coverage_hits, core_hits) + (rank if isinstance(rank, tuple) else (rank,)) if qb_config else (core_hits,) + (rank if isinstance(rank, tuple) else (rank,))
         keys = meta["keys"]
         teams = meta["teams"]
         games = meta["games"]
@@ -570,6 +605,7 @@ def select_portfolio(
         if captain_key and cpt_counts[captain_key] < min_cpt.get(captain_key, 0):
             deficit_bonus += 650.0
         deficit_bonus += 700.0 * core_hits
+        deficit_bonus += 1000.0 * coverage_hits
         concentration_penalty = sum(total_counts[key] for key in keys) * 0.08
         captain_concentration_penalty = (
             cpt_counts[captain_key] * 0.85
@@ -650,6 +686,8 @@ def select_portfolio(
     feasibility_limits = dict(requested=requested, total=max_total, captain=max_cpt,
         team=max_team, game=max_game, specialist=specialist_cpt_limit,
         kicker_captain=kicker_cpt_limit)
+    if qb_config:
+        feasibility_limits.update(qb_coverage=qb_limits, min_total=min_total, min_captain=min_cpt, flex=max_flex)
     if automatic_recovery:
         feasibility_limits.update(min_total=min_total, min_captain=min_cpt, flex=max_flex)
     if feasibility_only:
@@ -713,6 +751,7 @@ def select_portfolio(
         teams = chosen_meta["teams"]
         games = chosen_meta["games"]
         selected.append(chosen)
+        coverage_counts.update(item['label'] for item in qb_limits if not set(item['excluded']).intersection(keys))
         selected_candidate_ids.add(id(chosen))
         core_counts.update(chosen_meta["cores"])
         total_counts.update(keys)
@@ -740,7 +779,9 @@ def select_portfolio(
     fallback_used = False
     from portfolio_feasibility import valid_portfolio
     recovery = recovery_diagnostics(requested, len(selected), starting_caps)
-    needs_repair = len(selected) < requested or (automatic_recovery and not valid_portfolio(
+    needs_repair = len(selected) < requested or (qb_config and not valid_portfolio(
+        selected, retained, candidate_meta, current_uniqueness_conflicts, feasibility_limits,
+        lambda keys: _group_ok(keys, normalized['groups']))) or (automatic_recovery and not valid_portfolio(
         selected, retained, candidate_meta, current_uniqueness_conflicts, feasibility_limits,
         lambda keys: _group_ok(keys, normalized['groups'])))
     if needs_repair and not allow_relaxation:
@@ -761,7 +802,7 @@ def select_portfolio(
             raise ValueError('Selection cancelled')
         if repaired is not None:
             recovery['strict_selected_count'] = len(repaired)
-        elif automatic_recovery and (recovery_deadline is None or time.perf_counter() < recovery_deadline):
+        elif automatic_recovery and not qb_config and (recovery_deadline is None or time.perf_counter() < recovery_deadline):
             from portfolio_recovery import recover
             end = min(time.perf_counter() + 15, recovery_deadline if recovery_deadline is not None else float('inf'))
             repaired, effective = recover(pool, retained, selected, candidate_meta,
@@ -791,6 +832,8 @@ def select_portfolio(
                 from portfolio_recovery import format_recovery
                 message += '\n' + '\n'.join(format_recovery(recovery))
             error = PortfolioSelectionShortage(message)
+            if qb_config:
+                error = PortfolioSelectionShortage(message + '\n' + format_coverage(coverage_report(selected, lineup_players_from_candidates(all_lineups, kind), qb_config, kind)) + '\nQB targets remain hard. No coverage targets or existing limits were relaxed.')
             error.recovery_diagnostics = recovery
             raise error
         selected = repaired
@@ -1143,6 +1186,12 @@ def select_portfolio(
     if not refinement_passes:
         refinement_stop_reason = "disabled in individual ranking" if individual_ranking else "disabled"
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
+    if qb_config:
+        report['qb_coverage'] = coverage_report(selected, lineup_players_from_candidates(all_lineups, kind), qb_config, kind)
+        report['text'] += '\n' + format_coverage(report['qb_coverage'])
+    if strategy:
+        report['selection_strategy'] = _sim_metrics(strategy_rows[0]).get('sim_selection_label')
+        report['text'] += '\nSelection: ' + str(report['selection_strategy'])
     recovery['final_selected_count'] = len(selected)
     if automatic_recovery:
         report['portfolio_recovery'] = recovery
@@ -1411,6 +1460,13 @@ def portfolio_report(
         report['showdown_policy'] = dict(kicker_captain_limit=kicker_captain_limit,
             kicker_captain_count=kicker_captain_count, kicker_captain_pct=5.0,
             qb_captain_opposing_dst_blocked=True)
+    if normalized.get('qb_coverage'):
+        from qb_coverage import coverage_report, format_coverage
+        report['qb_coverage'] = coverage_report(lineups,lineup_players_from_candidates(lineups,kind),normalized['qb_coverage'],kind)
+        for label,row in report['qb_coverage']['targets'].items():
+            if row['shortage']:
+                report['warnings'].append(f"QB coverage {label}: achieved {row['achieved']} of {row['requested']} requested entries.")
+                report['compliant'] = False
     report["text"] = _report_text(report)
     return report
 
@@ -1494,6 +1550,11 @@ def _report_text(report: Dict[str, Any]) -> str:
         lines.extend(f"- {warning}" for warning in warnings[:12])
     else:
         lines.append("All configured portfolio rules are satisfied.")
+    if report.get('qb_coverage'):
+        from qb_coverage import format_coverage
+        lines.append(format_coverage(report['qb_coverage']))
+    if report.get('selection_strategy'):
+        lines.append('Selection: ' + str(report['selection_strategy']))
     return "\n".join(lines)
 
 

@@ -48,6 +48,9 @@ def valid_portfolio(rows, retained, meta, conflicts, limits, group_ok, conflict_
         return False
     if any(not meta[key].get('eligible', True) or not group_ok(meta[key]['keys']) for key in ids):
         return False
+    from qb_coverage import coverage_ok
+    if not coverage_ok(rows, meta, limits.get('qb_coverage', [])):
+        return False
     if conflict_groups is not None:
         if any(len(set(group) & ids) > 1 for group in conflict_groups):
             return False
@@ -257,6 +260,10 @@ def repair(pool,retained,selected,meta,conflicts,limits,group_ok,score,seconds=1
             variables[id(lu)] = pulp.LpVariable(f'entry_{i}',cat='Binary')
         requested=limits['requested']
         problem += pulp.lpSum(variables.values()) == requested
+        for item in limits.get('qb_coverage', []):
+            checkpoint()
+            problem += pulp.lpSum(variables[id(lu)] for lu in all_rows
+                                  if not set(item['excluded']).intersection(meta[id(lu)]['keys'])) >= item['minimum']
         chosen={id(lu) for lu in selected}
         values={id(lu):float(rank) for rank,lu in enumerate(sorted(all_rows,key=score))}
         lo=min(values.values(),default=0);span=max(1,max(values.values(),default=0)-lo)

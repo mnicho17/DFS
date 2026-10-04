@@ -164,7 +164,7 @@ The Classic results table shows slate-relative SIM Edge and top-one-percent rate
 
 
 
-For a specific NFL Classic contest, open **Settings > Contest-Aware SIM** and save its field size, entry fee, your entry count, and payout tiers. The candidate SIM replaces the generic payout-shape proxy with that contest's actual prizes. After selection, a joint pass places every chosen entry into the same contest, so your lineups occupy ranks together and share covered prizes across ties. Portfolio Insights and build reports add total entry cost, expected payout and profit, profit and double-up chances, payout percentiles, estimate stability, and a 95% ROI range. A pre-build prompt catches profile and lineup-count mismatches. Saved profiles are reusable and local to the current Windows user. Choose **Use Preset Only** at any time to return to the normal preset workflow.
+For a specific NFL Classic contest, open **Settings > Contest-Aware SIM** and save its field size, entry fee, your entry count, and payout tiers. The candidate SIM replaces the generic payout-shape proxy with that contest's actual prizes. After selection, a joint pass places every chosen entry into the same contest, so your lineups occupy ranks together and share covered prizes across ties. Portfolio Insights and build reports add total entry cost, expected payout and profit, profit and double-up chances, payout percentiles, estimate stability, and a 95% ROI range. A pre-build prompt catches profile and lineup-count mismatches. Saved profiles are reusable and local to the current Windows user. Choose **Use Tournament Preset** to return to Tournament without an exact profile.
 
 
 
@@ -866,6 +866,17 @@ The offline `scripts/compare_showdown_construction.py` diagnostic compares broad
 Results construction review now separates defense and kicker counts in Showdown and shows the top-1% finish rate within each construction for both formats. After updating, Analyze Saved Results refreshes existing cached construction reviews.
 
 Deep Showdown reports now trace defense counts through generation, salary filtering, screening, validation, individual leaders and selected output, without running extra scenarios or changing selection.
+
+### Contest objectives and QB coverage
+
+Development preview: **Settings > Contest-Aware SIM** now executes an explicit
+contest objective independently of single-entry count. Double-Up profiles rank
+by paid-finish rate; Multiplier and Tournament profiles rank by expected profit
+from entered payouts. **Use Tournament Preset** restores existing proxy ranking.
+NFL SIM is required, with Deep for Showdown. **Settings > QB Coverage** adds hard
+starting-QB fade targets and a paired conditional point review. Backup allocation
+remains queued. See the [user guide](docs/USER_GUIDE.md#contest-objective-and-single-entry-co-02-development-preview)
+and [preview notes](docs/releases/unreleased-contest-coverage.md).
 
 ## Copying build errors
 

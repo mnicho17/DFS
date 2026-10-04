@@ -93,7 +93,7 @@ def run_projection(path, *, batches=3, scenarios=5000, cancelled=lambda:False, p
                 result=simulate_nfl_contest(candidates(p),copy.deepcopy(p['players']),field_config=copy.deepcopy(p['field_config']),**kw)
             else:
                 from showdown_simulation import simulate_showdown
-                result=simulate_showdown(candidates(p),copy.deepcopy(p['players']),**kw)
+                result=simulate_showdown(candidates(p),copy.deepcopy(p['players']),contest_profile=p.get('field_config',{}).get('contest_profile'),**kw)
             report=result.get('report',{})
             if cancelled() or report.get('scenarios')!=scenarios: break
             ev=transform.evidence(); current_field=report.get('sensitivity_field_id')
@@ -132,7 +132,9 @@ def run_projection(path, *, batches=3, scenarios=5000, cancelled=lambda:False, p
     return dict(comparison_type='projection',sensitivity_version=VERSION,status='completed' if len(seeds)==batches else 'incomplete',
                 bank_id=bank['bank_id'],input_id=p['input_id'],kind=p['kind'],saved_model=p['model_version'],current_model=model_version(),
                 completed_batches=len(seeds),requested_batches=batches,scenarios=scenarios,opponents=p['field_count'],candidate_count=len(reference),
-                profiles=list(profiles),individual_tests=individual,seeds=seeds,targets=targets,evidence=evidence,fields=fields,rows=rows)
+                profiles=list(profiles),individual_tests=individual,seeds=seeds,targets=targets,evidence=evidence,fields=fields,rows=rows,
+                **({'selection_strategy':p['rows'][0]['metrics']['sim_selection_label']}
+                   if p['rows'][0]['metrics'].get('sim_selection_label') else {}))
 
 def format_projection(r):
     lines=['DFS Projection Sensitivity',f"Status: {r['status']}; matched batches {r['completed_batches']}/{r['requested_batches']}",
@@ -144,6 +146,8 @@ def format_projection(r):
            'These are explicit hypothetical assumptions, not fitted projection corrections or historical validation. Inputs, ownership, selected outputs and limits remain unchanged. No joint ownership-plus-projection stress is implied.',
            'Ranks use simulated finish-rate order within this bank; exact ties preserve bank order. Repeating settings repeats seeds. Only batches completing every requested profile count. Individual reductions use the same 15% scoring proxy, one favorite at a time; effects are not additive because contest ranks are nonlinear.']
     profiles=r.get('profiles',list(PROFILES))
+    if r.get('selection_strategy'):
+        lines.append('Rank order: '+r['selection_strategy']+'. Top-1% statistics are separate diagnostics; rank changes follow the explicit objective.')
     lines.append(f'- Profiles per batch: {len(profiles)}; simulations requested: {len(profiles)*r["requested_batches"]}.')
     for name in profiles[1:]:
         targets=r['targets'][name]; lines+=['',f'{name}: {len(targets)} targeted players']

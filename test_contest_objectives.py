@@ -275,7 +275,7 @@ class ObjectiveStorageTests(unittest.TestCase):
                 text = format_build_report(saved)
                 self.assertIn('Objective: ' + objective_label(objective), text)
                 if objective != TOURNAMENT:
-                    self.assertIn('strategy framework only', text)
+                    self.assertIn('recorded intent; see selection strategy', text)
 
     def test_legacy_diagnostic_remains_unrecorded_without_rewriting(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -396,7 +396,7 @@ class ObjectiveUITests(unittest.TestCase):
         try:
             dialog.profile_combo.setCurrentIndex(1)
             self.assertEqual(dialog.objective, DOUBLE_UP)
-            self.assertEqual(dialog.objective_note.text(), FRAMEWORK_NOTE)
+            self.assertIn('paid-finish rate',dialog.objective_note.text())
             dialog.objective_combo.setCurrentIndex(2)
             dialog._save_and_use()
             self.assertEqual(dialog.profiles['Named contest']['objective'], MULTIPLIER)
@@ -425,8 +425,8 @@ class ObjectiveUITests(unittest.TestCase):
                         patch.object(dialog, 'exec_', return_value=QtWidgets.QDialog.Accepted):
                     window.on_contest_profiles()
                 self.assertIsNone(window._active_contest_profile())
-                self.assertEqual(window.app_settings.value('contest/objective'), objective)
-                self.assertEqual(window._current_build_recipe()['contest_objective'], objective)
+                self.assertEqual(window.app_settings.value('contest/objective'), TOURNAMENT)
+                self.assertEqual(window._current_build_recipe()['contest_objective'], TOURNAMENT)
             # Reopen the same explicit INI store through the isolated real QSettings.
             window.app_settings = QtCore.QSettings('objective-reopen.ini', QtCore.QSettings.IniFormat)
             window._set_contest_objective(DOUBLE_UP)

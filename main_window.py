@@ -875,7 +875,7 @@ def _deep_shortlist(
 
 
 
-    if individual_ranking:
+    if individual_ranking or any((getattr(lu, 'sim_metrics', {}) or {}).get('sim_selection_fields') for lu in lineups):
 
         remaining = ranked_lineups([lu for sig, lu in unique.items() if sig not in chosen_signatures])
 
@@ -1126,6 +1126,13 @@ class LineupBuildWorker(QtCore.QObject):
     def run(self) -> None:
 
         try:
+            from contest_strategy import execution_profile
+            self.contest_profile = execution_profile(self.contest_profile, self.contest_objective)
+            if self.contest_objective != TOURNAMENT or self.contest_profile:
+                if self.sport != 'NFL' or not self.sim_enabled:
+                    raise ValueError('Contest-specific optimization requires NFL with SIM enabled.')
+                if self.kind == 'showdown' and not self.compute_mode.casefold().startswith('deep'):
+                    raise ValueError('Contest-specific Showdown optimization requires Deep with SIM enabled.')
 
             if self.candidate_library:
                 if self.retained_lineups:
@@ -1142,6 +1149,21 @@ class LineupBuildWorker(QtCore.QObject):
                 from nfl_eligibility import eligible_players, apply_qb_eligibility
                 self.players = apply_qb_eligibility([dict(p) for p in self.players])
                 eligible_players(self.players)
+            if self.portfolio_rules.get('qb_coverage'):
+                if self.sport != 'NFL':
+                    raise ValueError('QB coverage requires NFL.')
+                from qb_coverage import normalize_coverage, coverage_limits, coverage_report, slate_identity
+                config = normalize_coverage(self.portfolio_rules['qb_coverage'])
+                coverage_limits(config,self.num_lineups)
+                if config:
+                    if config.get('kind',self.kind) != self.kind or config.get('slate_id',slate_identity(self.players)) != slate_identity(self.players):
+                        raise ValueError('QB coverage belongs to a different slate or format. Reopen Settings > QB Coverage.')
+                    from nfl_eligibility import eligible_players
+                    current = eligible_players(self.players)
+                    lookup = {player_key(p):p for p in current}
+                    if not {config['qb_a'],config['qb_b']} <= set(lookup):
+                        raise ValueError('QB coverage selections are no longer eligible on this slate. Reopen Settings > QB Coverage.')
+                    coverage_report([],current,config,self.kind)
             feasible_fallback = []
             build_started = time.perf_counter()
 
@@ -2429,6 +2451,8 @@ class LineupBuildWorker(QtCore.QObject):
 
 
             selection_started = time.perf_counter()
+            if self.contest_profile and any(not (getattr(lu,'sim_metrics',{}) or {}).get('sim_selection_fields') for lu in self.retained_lineups+lineups):
+                raise ValueError('Contest-specific selection requires completed candidate scoring. Increase the compute budget and rebuild.')
 
             self.progress.emit(
 
@@ -2878,6 +2902,17 @@ class LineupBuildWorker(QtCore.QObject):
 
 
     def _emit_finished(self, payload):
+        if self.portfolio_rules.get('qb_coverage'):
+            from qb_coverage import coverage_report
+            report = coverage_report(payload.get('lineups') or [],self.players,
+                                     self.portfolio_rules['qb_coverage'],self.kind)
+            payload.setdefault('portfolio_report',{})['qb_coverage'] = report
+            from portfolio_rules import format_portfolio_report_text
+            payload['portfolio_report']['text'] = format_portfolio_report_text(payload['portfolio_report'])
+            payload.setdefault('sim_report',{})['qb_coverage'] = report
+        if self.contest_profile:
+            from contest_strategy import strategy_label
+            payload.setdefault('sim_report',{})['selection_strategy'] = strategy_label(self.contest_profile)
         finish_worker(payload)
         self.finished.emit(payload)
 
@@ -5562,7 +5597,7 @@ class ContestProfileDialog(QtWidgets.QDialog):
 
             "Attach the real field size, entry fee, and payout table to NFL SIM Edge. "
 
-            "The selected entry-limit preset still shapes the opponent field; this profile replaces only the payout economics."
+            "The objective determines ranking with this profile. The entry-limit preset separately shapes the opponent field."
 
         )
 
@@ -5707,11 +5742,11 @@ class ContestProfileDialog(QtWidgets.QDialog):
 
         self.delete_button.clicked.connect(self._delete_selected)
 
-        preset_button = buttons.addButton("Use Preset Only", QtWidgets.QDialogButtonBox.ActionRole)
+        preset_button = buttons.addButton("Use Tournament Preset", QtWidgets.QDialogButtonBox.ActionRole)
 
         preset_button.setObjectName("disableContestProfile")
 
-        preset_button.setToolTip("Keep NFL SIM Edge on, but return to the preset's payout-shape proxy.")
+        preset_button.setToolTip("Set Tournament as the objective and use its preset payout proxy without an exact contest profile.")
 
         preset_button.clicked.connect(self._use_preset_only)
 
@@ -5754,7 +5789,13 @@ class ContestProfileDialog(QtWidgets.QDialog):
         return normalize_objective(self.objective_combo.currentData())
 
     def _update_objective_note(self, *_args):
-        self.objective_note.setText(FRAMEWORK_NOTE if self.objective != TOURNAMENT else "Tournament uses the existing lineup strategy.")
+        self.objective_note.setText(
+            "Double-Up ranks by paid-finish rate, then expected profit. Enter the actual flat payout and field size."
+            if self.objective == 'DOUBLE_UP' else
+            "Multiplier ranks by expected profit from your actual payout table, then paid-finish rate."
+            if self.objective == 'MULTIPLIER' else
+            "Tournament ranks by expected profit with a profile; preset-only builds keep the existing finish-rate strategy."
+        )
 
     def _selected_name(self) -> str:
 
@@ -5876,7 +5917,8 @@ class ContestProfileDialog(QtWidgets.QDialog):
 
         try:
 
-            profile = self._profile_from_fields()
+            from contest_strategy import execution_profile
+            profile = execution_profile(self._profile_from_fields(), self.objective)
 
         except ValueError as exc:
 
@@ -5899,6 +5941,7 @@ class ContestProfileDialog(QtWidgets.QDialog):
 
 
     def _use_preset_only(self) -> None:
+        self.objective_combo.setCurrentIndex(OBJECTIVES.index(TOURNAMENT))
 
         self.active_name = ""
 
@@ -7815,6 +7858,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         contest_profile_action = settings_menu.addAction("Contest-Aware SIM...", self.on_contest_profiles)
 
         contest_profile_action.setObjectName("contestAwareSimAction")
+        from qb_coverage_ui import open_qb_coverage
+        qb_coverage_action = settings_menu.addAction('QB Coverage...', lambda: open_qb_coverage(self))
+        qb_coverage_action.setObjectName('qbCoverageAction')
 
         settings_menu.addSection("Review")
 
@@ -9026,7 +9072,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 if contest_profile:
 
-                    parts.append(f"ROI {contest_profile['name']}")
+                    parts.append(f"{objective_label(self._current_contest_objective())}: {contest_profile['name']}")
 
             else:
 
@@ -10557,6 +10603,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "groups": list(self.portfolio_groups),
 
             "player_constraints": constraints,
+            **({'qb_coverage': deepcopy(self._qb_coverage)} if getattr(self,'_qb_coverage',None) and self._qb_coverage.get('kind',self._contest_mode()) == self._contest_mode() else {}),
 
         }
 
@@ -13328,7 +13375,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         )
 
-        contest_profile = self._active_contest_profile() if effective_sim_enabled and kind != "showdown" else None
+        contest_profile = self._active_contest_profile() if effective_sim_enabled else None
 
         if contest_profile and not str(repair_source or "").strip():
 
@@ -13804,12 +13851,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         label = item.text()
 
-        numeric = label in {"SIM Edge", "Grade", "TotalSal", "Top 1%", "Top 2%", "Top 5%", "First %", "Mean pts"}
+        numeric = label in {"SIM Edge", "Grade", "TotalSal", "Top 1%", "Top 2%", "Top 5%", "First %", "Mean pts", 'Paid %', 'Profit $'}
 
         if label in OWN_COLUMNS+PROJECTION_COLUMNS:
             numeric = label in OWN_COLUMNS[:2]+PROJECTION_COLUMNS[:2]
 
-        descending = not previous[1] if previous and previous[0] == column else numeric
+        descending = not previous[1] if previous and previous[0] == column and previous[2] == label else numeric
 
         setattr(self, "_" + kind + "_sort", (column, descending, label))
 
@@ -13829,7 +13876,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         metrics = {"SIM Edge": "sim_edge", "Top 1%": "sim_top_one_pct", "Top 2%": "sim_top_two_pct",
 
-                   "Top 5%": "sim_top_five_pct", "First %": "sim_win_rate", "Mean pts": "sim_mean"}
+                   "Top 5%": "sim_top_five_pct", "First %": "sim_win_rate", "Mean pts": "sim_mean", 'Paid %':'sim_cash_rate', 'Profit $':'sim_expected_profit'}
 
         def key(lu):
 
@@ -13921,6 +13968,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             columns = [("Top 1%", "sim_top_one_pct"), ("Top 2%", "sim_top_two_pct"),
 
                        ("Top 5%", "sim_top_five_pct"), ("First %", "sim_win_rate"), ("Mean pts", "sim_mean")]
+            if any((getattr(lu, 'sim_metrics', {}) or {}).get('sim_selection_fields') for lu in all_rows):
+                columns = [('Paid %', 'sim_cash_rate'), ('Profit $', 'sim_expected_profit')] + columns
 
             # Set the schema explicitly: repeated refreshes must not append columns.
 

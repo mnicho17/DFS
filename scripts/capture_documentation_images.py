@@ -997,17 +997,75 @@ def capture_core_plans(output_dir: Path) -> None:
         window.close()
 
 
+def capture_contest_coverage(output_dir):
+    from qb_coverage_ui import QBCoverageDialog
+    from test_qb_coverage import fixtures
+    from contest_strategy import attach_strategy, execution_profile
+    output_dir.mkdir(parents=True,exist_ok=True)
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    QtGui.QFontDatabase.addApplicationFont('C:/Windows/Fonts/segoeui.ttf')
+    app.setFont(QtGui.QFont('Segoe UI',10))
+    app.setStyle('Fusion')
+    app.setStyleSheet(DARK_QSS)
+    profile = execution_profile(dict(name='Illustrative Single Entry Double-Up',objective='DOUBLE_UP',
+                                     field_size=100,entry_fee=10,user_entries=1,payouts='1-45=20'))
+    dialog = ContestProfileDialog({profile['name']:profile},profile['name'])
+    dialog.resize(760,720)
+    dialog.show()
+    app.processEvents()
+    save_widget(dialog,output_dir/'contest-double-up.png')
+    dialog.close()
+    rows,players,config = fixtures()
+    window = MainWindow()
+    try:
+        window.players = players
+        window.tabs_lineups.setCurrentIndex(0)
+        window.last_showdown = rows
+        window._qb_coverage = config
+        dialog = QBCoverageDialog(window)
+        dialog.resize(850,820)
+        dialog.show()
+        dialog.start_review()
+        import time
+        deadline = time.monotonic()+15
+        while dialog.thread.isRunning() and time.monotonic()<deadline:
+            app.processEvents()
+            time.sleep(.002)
+        if dialog.thread.isRunning():
+            dialog.worker.cancel.set()
+            while dialog.thread.isRunning():
+                app.processEvents()
+                time.sleep(.002)
+            raise RuntimeError('QB documentation review exceeded its time budget')
+        app.processEvents()
+        save_widget(dialog,output_dir/'qb-coverage.png')
+        dialog.close()
+        for i,row in enumerate(rows):
+            row.sim_metrics = attach_strategy(dict(sim_scenarios=250,sim_cash_rate=70-i*10,sim_expected_profit=4-i,
+                                                  sim_mean=100+i,sim_top_one_pct=i),profile)
+        window._populate_showdown_lineups(rows)
+        window.tabs_workspace_controls.hide()
+        window.resize(1800,800)
+        window.show()
+        app.processEvents()
+        save_widget(window.tabs_lineups,output_dir/'contest-objective-output.png')
+    finally:
+        window.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", default="docs/images")
-    parser.add_argument("--only", choices=("all", "core-plans", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns", "opponents", "combined-import", "saved-repair", "review-report"), default="all")
+    parser.add_argument("--only", choices=("all", "contest-coverage", "core-plans", "contest-aware-sim", "deep-compute", "showdown-deep", "snapshots", "projections", "overnight", "lineup-columns", "opponents", "combined-import", "saved-repair", "review-report"), default="all")
     parser.add_argument('--isolated', action='store_true', help='Use disposable data/settings and disable network before DFS imports')
     args = parser.parse_args()
     output_dir = (CAPTURE_CWD / args.output_dir).resolve()
-    if args.only in {'saved-repair', 'review-report', 'core-plans'}:
+    if args.only in {'saved-repair', 'review-report', 'core-plans', 'contest-coverage'}:
         if not args.isolated:
             parser.error('This capture requires --isolated to preserve local history')
-    if args.only == 'core-plans':
+    if args.only == 'contest-coverage':
+        capture_contest_coverage(output_dir)
+    elif args.only == 'core-plans':
         capture_core_plans(output_dir)
     elif args.only == 'combined-import':
         if not args.isolated:
