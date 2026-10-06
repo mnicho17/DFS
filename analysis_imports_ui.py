@@ -11,10 +11,11 @@ class CombinedImportWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal(dict)
     error = QtCore.pyqtSignal(str)
 
-    def __init__(self, results_folder='', salary_folder='', username='', pair=None, db_path=None):
+    def __init__(self, results_folder='', salary_folder='', username='', pair=None, db_path=None, refresh_history=False):
         super().__init__()
         self.results_folder, self.salary_folder, self.username = results_folder, salary_folder, username
         self.pair = pair
+        self.refresh_history = refresh_history
         from learning_db import history_db_path
         self.db_path = str(db_path or history_db_path())
         from compute_ledger import folder
@@ -67,7 +68,18 @@ class CombinedImportWorker(QtCore.QObject):
             result['cancelled'] = bool(result.get('cancelled') or self.cancelled.is_set())
             if result['cancelled']:
                 result.pop('report', None)
-            # All duplicate scans leave report/history untouched.
+            if self.refresh_history and not result['cancelled']:
+                from opponent_history import sync_saved
+                try:
+                    result['username_history'] = sync_saved(self.db_path, self.cancelled.is_set,
+                        lambda text: self.progress.emit(0, 0, text))
+                except ImportCancelled:
+                    result['cancelled'] = True
+                except Exception as exc:
+                    result['errors'].append('Username history needs retry: ' + str(exc))
+            if result['cancelled']:
+                result.pop('report', None)
+            # Duplicate sources do not rerun personal forecast analysis.
             self.finished.emit(result)
         except ImportCancelled:
             self.finished.emit(dict(cancelled=True, errors=[]))

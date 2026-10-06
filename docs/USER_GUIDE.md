@@ -1749,6 +1749,14 @@ Imported standings and your exact username can be compared with compatible saved
 
 ### Opponent portfolios from one standings file
 
+**Username history & field profiles…** indexes every accepted user and entry from saved mapped contests into the local SQLite database. Search an exact username across contests, compare construction with the field and a historical high-finish cohort, filter by entry-count band, and save a verified profile version. Profiles use a strict date cutoff and disclose coverage, sample sizes and sparse-history blending. The standard successful cohort requires repeated top-1% finishes in complete observed fields; an explicit option permits unverified field coverage using the observed-entry denominator. Saving a profile does not yet change SIM, ownership or projections. See [Username history and field profiles](OPPONENT_HISTORY.md) for tables, safeguards and example SQL.
+
+**Analyze saved mapped contest…** reuses the saved result-to-salary association. The worker verifies both historical source hashes and the association before analysis and rechecks the sources afterward. It never substitutes the current slate, changes a mapping, or imports files. Changed or incompatible sources require review in Results & Learning.
+
+Mapped Showdown reports include per-user and per-Captain 5–1/4–2/3–3 team splits, the Captain team's side of the split, Captain position, quarterback counts, same-team FLEX QB presence, separate kicker/defense counts and salary-left bands. Classic reports include QB stacks and bring-backs. Counts include repeated entries; each table discloses its matched-metadata denominator and unknown coverage. Reports also show score p10/p90, dispersion, and top-10/top-100 finishes. These describe the supplied contest and are not predictions or monetary returns.
+
+A single-Captain analysis assumption is labeled explicitly when enabled for your username: treating those entries as Captain-locked without the typical SIM workflow is a user assumption, not proof from standings. Partial readable-roster coverage remains disclosed.
+
 Choose **Results & Learning > Opponent Portfolios…**, select **NFL Showdown** or **NFL Classic**, then **Open standings CSV…**. Use the original downloaded file (or its copy under `history/imported_results`). This separate analysis reads locally without importing, rematching, refreshing sources or changing history.
 
 The sortable table shows each username's observed entry count, readable rosters, unique lineups, average shared players, Captain variety, mean points, best rank and field copies. Filter by username or entry-count range. The table displays up to 1,000 matching entrants; narrow the filter to find any entrant in a larger field. Clear your saved username from the filter to see opponents.
@@ -1850,6 +1858,14 @@ Captain coverage now reports every Captain appearing in generated, shortlisted, 
 
 ![Build History distinguishes reserved and ordinary-search Captains](images/captain-coverage.png)
 
+
+### Showdown Captain pools and build diagnostics
+
+Selecting one Captain allocates every requested lineup to that Captain. Selecting several allocates as-even-as-possible integer shares among that pool, preserving retained Captain counts first. Every lineup still has exactly one Captain, and the other selected Captains may appear in FLEX. Request at least one lineup per selected Captain. Conflicting fades, FLEX locks, unavailable athletes, legal salaries, both-team requirements, distinct athletes, uniqueness and other player limits remain enforced.
+
+The build reconciles conflicting Captain exposure minimums/maximums, including manually entered values, on copied build inputs. Non-pool Captain exposure is zero; a sole selected Captain has 100% total/Captain exposure. The completed report and saved build diagnostics list the adjustments. Player-table settings are not silently rewritten. Exact final Captain quotas are separate from surplus candidate-generation limits. An insufficient legal candidate bank can still stop a build.
+
+Kicker/defense diagnostics compare the selection candidate bank with selected output, separating Captain usage, FLEX slots and the number of specialist slots per lineup. They do not change projections, SIM scores, ranking or specialist limits. Concentration alone does not establish which stage caused it.
 
 ### Clear messages when lineup limits stop a build
 
@@ -1962,6 +1978,11 @@ python scripts/compare_showdown_construction.py INPUT.json SALARIES.csv --output
 The comparison is a bounded diagnostic search, not a replay of the full Deep pipeline (including its Captain reservations and portfolio selection). The stresses are applied after scoring and do not regenerate specialist events; they measure sensitivity rather than define a new play-level scoring model.
 
 ### Comparing other users’ constructions
+
+Results & Learning can automatically refresh your configured Results and Salary
+folders at startup. Use **Refresh history now** for new downloads during a session;
+the summary shows imported entries and records needing review. The startup option
+can be disabled. Refresh imports evidence and username history without changing SIM.
 
 Analyze Saved Results reviews the complete available contest field, including other users, with separate top-5%, top-1%, winner and username groups. Showdown now lists zero, one and two defenses separately from kicker counts. Each construction includes its own top-1% finish rate: qualifying entries divided by all mapped entries using that construction. Rank cutoffs include ties. This is not a cash rate or ROI.
 

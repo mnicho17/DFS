@@ -401,6 +401,10 @@ def create_build_diagnostic(
                 portfolio.get("automatic_showdown_guardrails") or {}
             ),
             "portfolio_recovery": aggregate_recovery(portfolio.get("portfolio_recovery")),
+            **({"captain_pool_adjustments": list(portfolio['captain_pool_adjustments'])}
+               if portfolio.get('captain_pool_adjustments') else {}),
+            **({"specialist_diagnostics": dict(portfolio['specialist_diagnostics'])}
+               if portfolio.get('specialist_diagnostics') else {}),
         },
         "ranked_groups": ranked_group_summaries(lineups, contest_type, salary_cap, salary_strategy),
         "exposures": exposure_summary,
@@ -792,6 +796,12 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.append("- None")
     from pipeline_audit import format_quarterback_pipeline, format_defense_pipeline
     lines.extend(format_quarterback_pipeline(sim.get("quarterback_pipeline") or {}))
+    if portfolio.get('captain_pool_adjustments'):
+        from captain_pool import adjustment_text
+        lines.append(adjustment_text(portfolio['captain_pool_adjustments']))
+    if portfolio.get('specialist_diagnostics'):
+        from specialist_diagnostics import text
+        lines.extend(text(portfolio['specialist_diagnostics']))
     lines.extend(format_defense_pipeline(sim.get("defense_pipeline") or {}))
     from field_diagnostics import format_field
     from projection_coverage import format_projection_coverage

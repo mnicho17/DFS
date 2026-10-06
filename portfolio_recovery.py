@@ -9,10 +9,11 @@ CONCENTRATION_WARNING = ('Portfolio concentration increased to complete the requ
 
 
 def explicit_lineup_ok(keys, captain_key, players):
+    pool = {key for key, player in players.items() if player.get('LockCpt')}
+    if pool and captain_key not in pool:
+        return False
     for key, player in players.items():
         if player.get('LockFlex') and (key not in keys or key == captain_key):
-            return False
-        if player.get('LockCpt') and key != captain_key:
             return False
         if key in keys and player.get('FadeCpt' if key == captain_key else 'FadeFlex'):
             return False

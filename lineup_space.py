@@ -121,7 +121,7 @@ def _showdown_count(players: Sequence[Mapping[str, Any]]) -> tuple[int, bool, st
         and not bool(player.get("FadeCpt"))
         and _number(player.get("CptSalary"), 0.0) > 0
     ]
-    if len(captain_locks) > 1 or len(flex_locks) > 5:
+    if len(flex_locks) > 5:
         return 0, True, "Captain or FLEX locks exceed the Showdown roster limits."
 
     captain_candidates = [
