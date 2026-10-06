@@ -159,6 +159,11 @@ class HistoryRefreshTests(unittest.TestCase):
         self.assertFalse(dialog.opponents_button.isEnabled())
         self.assertFalse(dialog.history_refresh_button.isEnabled())
         self.wait(parent.history_refresh)
+        deadline = time.monotonic() + 10
+        while dialog._import_thread is not None and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(.005)
+        self.assertIsNone(dialog._import_thread)
         self.assertTrue(dialog.import_new_button.isEnabled())
         self.assertIn('1 newly indexed contests', dialog.history_status.toPlainText())
         dialog.reject()

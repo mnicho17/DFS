@@ -4,6 +4,7 @@ import os
 from test_environment import install
 install()
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -37,6 +38,12 @@ class ResultsLearningUITests(unittest.TestCase):
 
     def test_dialog_starts_with_local_empty_state(self):
         dialog = ResultsLearningDialog()
+        dialog.refresh_report()
+        deadline = time.monotonic() + 10
+        while dialog._import_thread is not None and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(.005)
+        self.assertIsNone(dialog._import_thread)
         self.assertIsNotNone(dialog.findChild(QtWidgets.QPushButton, "importResultsButton"))
         copy_button = dialog.findChild(QtWidgets.QPushButton, "copyLearningReportButton")
         self.assertIsNotNone(copy_button)

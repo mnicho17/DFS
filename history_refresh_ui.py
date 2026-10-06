@@ -36,6 +36,18 @@ class HistoryRefreshController(QtCore.QObject):
         self.stop = None
         self.text = str(settings.value('learning/last_history_refresh', '') or '')
         self._pending = None
+        self._reports = 0
+        self._deferred_start = False
+
+    def report_started(self):
+        self._reports += 1
+
+    def report_finished(self, *, resume=True):
+        self._reports -= 1
+        if not self._reports and self._deferred_start:
+            self._deferred_start = False
+            if resume:
+                QtCore.QTimer.singleShot(0, self.start)
 
     @property
     def busy(self):
@@ -49,6 +61,9 @@ class HistoryRefreshController(QtCore.QObject):
             self.start()
 
     def start(self):
+        if self._reports:
+            self._deferred_start = True
+            return False
         if self.busy:
             return False
         results = str(self.settings.value('learning/results_folder', '') or '')

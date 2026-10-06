@@ -4173,7 +4173,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         layout.addWidget(self.import_status_label)
 
-        self.refresh_report()
+        self._report_pending = False
+        self._initial_report_started = False
+        self.summary.setText('Preparing results report…')
         self.history_refresh = getattr(parent, 'history_refresh', None)
         self._owns_history_refresh = self.history_refresh is None
         self._close_after_history_refresh = False
@@ -4199,6 +4201,12 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.history_refresh.changed.connect(self.update_history_status)
         self.history_refresh.completed.connect(self._history_refresh_completed)
         self.update_history_status()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._initial_report_started:
+            self._initial_report_started = True
+            QtCore.QTimer.singleShot(0, self.refresh_report)
 
     def _history_refresh_completed(self):
         if self._close_after_history_refresh:
@@ -4251,10 +4259,33 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.refresh_report()
 
     def refresh_report(self) -> None:
+        if self._close_after_import or self._close_after_history_refresh:
+            return
+        if self._import_thread is not None or self.history_refresh.busy:
+            self._report_pending = True
+            return
+        from learning_report_ui import LearningReportWorker
+        self._report_pending = False
+        worker = LearningReportWorker(generate_learning_report, self.username_edit.text().strip(), self.db_path)
+        self._initial_report_started = True
+        self._start_background_import(worker, self._on_report_finished)
+        self._import_job['report'] = True
+        self.history_refresh.report_started()
+        self.import_status_label.setText('Building report and verifying saved evidence…')
+
+    def _on_report_finished(self, result):
+        if result.get('cancelled'):
+            self.summary.setText('Report refresh cancelled. Refresh to try again.')
+            return
+        self._apply_report(result['report'])
+
+    def _on_report_error(self, message):
+        logger.error('Learning report refresh failed: %s', message)
+        self.summary.setText(f'Results report is temporarily unavailable: {message}. Refresh to retry.')
+
+    def _apply_report(self, payload):
 
         try:
-
-            payload = generate_learning_report(username=self.username_edit.text().strip(), db_path=self.db_path)
 
             roi = payload.get("roi_pct")
 
@@ -4506,6 +4537,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
     def _job_completed(self, job, handler, payload):
         if self._import_job is job and job['completion'] is None:
+            if job.get('report'):
+                if job.get('cancelled'):
+                    handler, payload = self._on_report_finished, dict(cancelled=True)
+                elif handler == self._on_import_error:
+                    handler = self._on_report_error
             job['completion'] = (handler, payload)
 
     def export_review_report(self) -> None:
@@ -4583,7 +4619,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
     def cancel_import(self) -> None:
 
         if self._import_worker is not None:
-
+            if self._import_job.get('report'):
+                self._import_job['cancelled'] = True
             self._import_worker.request_cancel()
             self.coverage.progress('Cancellation requested; waiting for the transaction to finish')
             self.risk.progress('Cancellation requested; waiting for worker retirement')
@@ -4704,8 +4741,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_thread = None
         self._import_worker = None
         self._import_job = None
+        if job.get('report'):
+            self.history_refresh.report_finished(resume=not (self._owns_history_refresh and self._close_after_import))
         self._finish_import_ui()
-        self.coverage.reload()
+        if not job.get('report'):
+            self.coverage.reload()
         if self._close_after_import:
             if self.hindsight.started is not None:
                 self.hindsight.finish({},cancelled=True)
@@ -4716,7 +4756,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             QtCore.QTimer.singleShot(0, self.accept)
         elif job['completion'] is not None:
             handler, payload = job['completion']
+            if job.get('report') and job.get('cancelled'):
+                handler, payload = self._on_report_finished, dict(cancelled=True)
             handler(payload)
+        if self._report_pending and not self._close_after_import and self._import_thread is None:
+            self.refresh_report()
 
 
 

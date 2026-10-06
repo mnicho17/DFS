@@ -233,7 +233,15 @@ def _sources(conn):
                 'SELECT hash,kind,snapshot,original_name,source_path,manifest,import_id,created_at FROM analysis_sources ORDER BY created_at,hash')]
 
 
-def qualify_pair(result, salary):
+def _salary_identity_index(salary):
+    """Index one fresh manifest, preserving every duplicate identity."""
+    index = {}
+    for player in salary['manifest']['players']:
+        index.setdefault(_name(player['name']), []).append(player)
+    return index
+
+
+def qualify_pair(result, salary, *, _identity_index=None):
     """Return compatibility and exact role/ID/name matches; never guess aliases."""
     r, s = result['manifest'], salary['manifest']
     failures = []
@@ -254,9 +262,9 @@ def qualify_pair(result, salary):
                     matched=0, observed=len(r['observed']), matches={})
     matches = {}
     missing = []
+    identity_index = _identity_index if _identity_index is not None else _salary_identity_index(salary)
     for role, name, player_id in r['observed']:
-        eligible = [p for p in s['players'] if _name(p['name']) == name
-                    and (not player_id or p['id'] == player_id)
+        eligible = [p for p in identity_index.get(name, []) if (not player_id or p['id'] == player_id)
                     and (p['role'] == role if s['format'] == 'showdown' else role in p['role'].split('/'))]
         if len(eligible) != 1:
             missing.append(f'{role} {name}' + (' (ambiguous)' if eligible else ' (missing)'))
@@ -333,10 +341,16 @@ def _pairing_state(conn, path, cancelled):
         except ValueError:
             verification[source['hash']] = 'Saved source snapshot changed; restore the original revision.'
 
+    # Operation-local only: later reports rebuild from fresh manifests and
+    # verify the saved evidence again. Never collapse ambiguous player rows.
+    identity_indexes = {s['hash']: _salary_identity_index(s) for s in salaries
+                        if not verification[s['hash']]}
+
     def candidate(result, salary):
         _check(cancelled)
         reason = verification[result['hash']] or verification[salary['hash']]
-        q = dict(compatible=False, automatic=False, reason=reason) if reason else qualify_pair(result, salary)
+        q = dict(compatible=False, automatic=False, reason=reason) if reason else qualify_pair(
+            result, salary, _identity_index=identity_indexes[salary['hash']])
         return dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'],
                     automatic=q['automatic'], reason=q['reason'], dates=salary['manifest'].get('dates',[]),
                     format=salary['manifest'].get('format'), games=salary['manifest'].get('games',[]),

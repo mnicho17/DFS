@@ -56,6 +56,37 @@ class PairingFixture(unittest.TestCase):
 
 
 class PairingStateTests(PairingFixture):
+    def test_report_normalizes_each_salary_row_once_per_operation(self):
+        self.seed(count=4, salaries=2)
+        with closing(sqlite3.connect(self.db)) as conn:
+            sources = imports._sources(conn)
+        salary_rows = sum(len(s['manifest']['players']) for s in sources if s['kind'] == 'salary')
+        with patch.object(imports, '_name', wraps=imports._name) as normalize:
+            first = imports.pairing_state(self.db)
+            self.assertEqual(normalize.call_count, salary_rows)
+            second = imports.pairing_state(self.db)
+            self.assertEqual(normalize.call_count, 2 * salary_rows)
+        self.assertEqual(first, second)
+
+    def test_index_preserves_explicit_ids_partial_ids_roles_and_ambiguity(self):
+        salary = dict(manifest=dict(format='showdown', dates=['day'], games=[], players=[
+            dict(name='Same Name', id='1', role='FLEX'),
+            dict(name='Same Name', id='2', role='FLEX'),
+            dict(name='Same Name', id='3', role='CPT')]))
+        for role, player_id, compatible in [('FLEX', '1', True), ('FLEX', '', False),
+                                            ('CPT', '', True), ('FLEX', '3', False)]:
+            result = dict(manifest=dict(format='showdown', dates=['day'], contest_ids=['one'],
+                                       observed=[(role, 'same name', player_id)]))
+            with self.subTest(role=role, player_id=player_id):
+                direct = imports.qualify_pair(result, salary)
+                indexed = imports.qualify_pair(result, salary,
+                                                _identity_index=imports._salary_identity_index(salary))
+                self.assertEqual(direct, indexed)
+                self.assertEqual(indexed['compatible'], compatible)
+        salary['manifest']['players'].append(dict(salary['manifest']['players'][0]))
+        result['manifest']['observed'] = [('FLEX', 'same name', '1')]
+        self.assertFalse(imports.qualify_pair(result, salary)['compatible'])
+
     def test_missing_and_empty_database_are_read_only(self):
         for existing in (False, True):
             if existing:
@@ -303,14 +334,24 @@ class PairingDialogTests(PairingFixture):
         with patch('learning_db.history_db_path', return_value=str(self.db)):
             parent = ResultsLearningDialog()
         self.addCleanup(parent.deleteLater)
+        def wait_report():
+            end = time.monotonic() + 10
+            while parent._import_thread is not None and time.monotonic() < end:
+                self.app.processEvents()
+                time.sleep(.005)
+            self.assertIsNone(parent._import_thread)
+        parent.refresh_report()
+        wait_report()
         self.assertIn('Results awaiting a salary match: 1', parent.report.toPlainText())
         worker = CombinedImportWorker(pair=(row['hash'], row['candidates'][0]['hash'], True), db_path=parent.db_path)
         worker.finished.connect(parent._on_combined_import_finished)
         with patch.object(QtWidgets.QMessageBox, 'information'):
             worker.run()
+        wait_report()
         self.assertIn('Results awaiting a salary match: 0', parent.report.toPlainText())
         with patch.dict(os.environ, {'DFS_OPTIMIZER_DATA_DIR': str(self.root / 'wrong-profile')}):
             parent.refresh_report()
+            wait_report()
             with patch('analysis_imports_ui.SalaryMatchesDialog', wraps=SalaryMatchesDialog) as factory, patch.object(SalaryMatchesDialog, 'exec_', return_value=QtWidgets.QDialog.Rejected):
                 parent.review_salary_matches()
                 # Candidate verification now runs off the GUI thread. Retire the
