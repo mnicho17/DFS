@@ -181,6 +181,35 @@ construction target or lack legal proposal coverage; keeping the original sample
 is a disclosed result, not a reason to relax constraints. Matching recorded
 forecasts more closely does not establish their accuracy or improved returns.
 
+The separate **Evaluate ownership accuracy and actual outcomes** checkbox adds
+post-ranking diagnostics. It reads original immutable player-result tables using
+RL-07A exact identity, role and score parsing. Other mapped exports of the same
+game are checked for conflicting scores, including salary revisions; they never
+fill a missing score in the selected export. Missing selected-source scores make
+the entire candidate-bank outcome comparison unavailable. Reconstructed supplied
+entry totals must agree exactly where player coverage permits.
+
+Ownership comes from validated six-athlete historical rosters, not listed CSV
+percentages. The report compares recorded forecasts and sampled fields with
+observed Captain/FLEX appearances. A complete supplied field requires an explicit
+matching field size, no duplicate conflicts and every roster validated. Otherwise
+results are labeled **readable-subset diagnostics**, with accepted/readable counts
+and unknown rosters shown. Subset zeros never establish full-field zero ownership.
+Forecast errors cover only the frozen active pool; other salary athletes are not
+assigned forecasts. Existing complete-field ownership safeguards are unchanged.
+
+The same frozen candidate bank is ranked by pregame simulation before outcomes
+are evaluated. Top-20 actual points, percentages of supplied scored entries beaten,
+exact ties, and observed duplicate lower bounds are reported for each model.
+Hypothetical supplied ranks are not official ranks, and candidates are evaluated
+individually rather than inserted together as a new portfolio. No verified payout
+schedule or hypothetical-entry fee is inferred, so payout and ROI remain unknown.
+Games, rather than contests or seeds, are the independent evidence units.
+
+Outcome CSVs stream with the existing 200,000-row and 5,000 score-observation
+bounds. Exceeding a bound blocks that game's outcome metrics; partial scans never
+publish outcomes. Cancellation and changed-source checks withhold publication.
+
 ```sql
 SELECT u.username, c.end_date, c.name, s.entries, s.best_rank,
        s.top_one_pct_entries

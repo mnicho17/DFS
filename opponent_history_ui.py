@@ -31,7 +31,8 @@ class HistoryWorker(QtCore.QObject):
                 result=evaluate_history(self.db_path,self.cutoff,self.stop.is_set,self.progress.emit,
                     draw_mode='recorded' if self.action=='recorded' else self.config.get('draw_mode','salary_proxy'),
                     snapshot_root=self.config.get('snapshot_root'),compare_sim=self.action=='recorded',
-                    ownership_calibration=self.action=='recorded' and self.config.get('ownership_calibration',False))
+                    ownership_calibration=self.action=='recorded' and self.config.get('ownership_calibration',False),
+                    evaluate_outcomes=self.action=='recorded' and self.config.get('evaluate_outcomes',False))
             else:
                 result=profile_preview(self.db_path,self.cutoff,self.contest_format,self.username,self.stop.is_set,**self.config)
             if not self.stop.is_set():self.result.emit(result)
@@ -78,6 +79,8 @@ class OpponentHistoryDialog(QtWidgets.QDialog):
         self.recorded_button.clicked.connect(lambda:self.start('recorded'));layout.addWidget(self.recorded_button)
         self.calibrate_ownership=QtWidgets.QCheckBox('Include ownership-calibrated historical model (experimental; recorded inputs only)')
         self.calibrate_ownership.setChecked(True);layout.addWidget(self.calibrate_ownership)
+        self.evaluate_outcomes=QtWidgets.QCheckBox('Evaluate ownership accuracy and actual outcomes (read only; coverage limits apply)')
+        self.evaluate_outcomes.setChecked(True);layout.addWidget(self.evaluate_outcomes)
         cohort=QtWidgets.QHBoxLayout()
         self.band=QtWidgets.QComboBox();self.band.addItems(['All entry counts','1','2–5','6–20','21–150','151+']);cohort.addWidget(self.band)
         cohort.addWidget(QtWidgets.QLabel('Successful cohort: minimum complete contests'))
@@ -110,11 +113,11 @@ class OpponentHistoryDialog(QtWidgets.QDialog):
         if action in ('evaluate','recorded') and self.format.currentData()!='showdown':
             self.status.setText('The whole-game experiment currently supports Showdown.');return
         if action in ('sync','evaluate','recorded'):self.invalidate()
-        for widget in (self.sync_button,self.preview_button,self.evaluate_button,self.recorded_button,self.choose_snapshots,self.calibrate_ownership,self.draw_mode,self.username,self.format,self.cutoff,self.band,self.min_contests,self.min_successes,self.observed,self.save_button):widget.setEnabled(False)
+        for widget in (self.sync_button,self.preview_button,self.evaluate_button,self.recorded_button,self.choose_snapshots,self.calibrate_ownership,self.evaluate_outcomes,self.draw_mode,self.username,self.format,self.cutoff,self.band,self.min_contests,self.min_successes,self.observed,self.save_button):widget.setEnabled(False)
         self.cancel_button.setEnabled(True);self.status.setText('Working locally…')
         config=dict(entry_band=self.band.currentText() if self.band.currentIndex() else '',min_contests=self.min_contests.value(),min_successes=self.min_successes.value(),allow_observed_fields=self.observed.isChecked())
         if action=='evaluate':config={'draw_mode':self.draw_mode.currentData()}
-        if action=='recorded':config={'snapshot_root':self.snapshot_root.text(),'ownership_calibration':self.calibrate_ownership.isChecked()}
+        if action=='recorded':config={'snapshot_root':self.snapshot_root.text(),'ownership_calibration':self.calibrate_ownership.isChecked(),'evaluate_outcomes':self.evaluate_outcomes.isChecked()}
         worker=self._worker=HistoryWorker(self.db_path,action,self.cutoff.date().toString('yyyy-MM-dd'),self.format.currentData(),self.username.text(),self.profile,config)
         thread=self._thread=QtCore.QThread(self);worker.moveToThread(thread)
         thread.started.connect(worker.run);worker.progress.connect(self.status.setText)
@@ -129,7 +132,7 @@ class OpponentHistoryDialog(QtWidgets.QDialog):
     def retire(self):
         cancelled=self._worker.stop.is_set();thread=self._thread
         self._thread=self._worker=None;thread.deleteLater()
-        for widget in (self.sync_button,self.preview_button,self.evaluate_button,self.recorded_button,self.choose_snapshots,self.calibrate_ownership,self.draw_mode,self.username,self.format,self.cutoff,self.band,self.min_contests,self.min_successes,self.observed):widget.setEnabled(True)
+        for widget in (self.sync_button,self.preview_button,self.evaluate_button,self.recorded_button,self.choose_snapshots,self.calibrate_ownership,self.evaluate_outcomes,self.draw_mode,self.username,self.format,self.cutoff,self.band,self.min_contests,self.min_successes,self.observed):widget.setEnabled(True)
         self.cancel_button.setEnabled(False)
         if cancelled:self.status.setText('Cancelled. Completed indexed contests remain saved; an unfinished contest is rolled back.')
         elif self._pending is None:self.status.setText('Failed: '+self._error)
