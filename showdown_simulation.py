@@ -130,14 +130,35 @@ def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0,
 
 @phase("primary_sim", simulation=True)
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
-                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False):
+                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False, diagnostic_field=None):
+    if diagnostic_field is not None and scenario_cache:
+        raise ValueError('Explicit diagnostic fields cannot use the production scenario cache.')
     if not candidates:
         return {"lineups": [], "report": {"scenarios": 0, "field_lineups": 0}}
     pool = active_showdown_players(players)
     for lineup in candidates:
         validate_showdown_lineup(lineup, pool, salary_cap)
     field_pool = active_showdown_players(opponent_players) if opponent_players is not None else pool
-    field = generate_showdown_field(field_pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback, model=field_model)
+    if diagnostic_field is None:
+        field = generate_showdown_field(field_pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback, model=field_model)
+    else:
+        # Explicit comparison only. Canonicalize to the supplied frozen pool so
+        # an ID-matching field cannot inject different salaries or forecasts.
+        from showdown_field import OpponentField
+        if len(diagnostic_field)!=field_lineup_count:
+            raise ValueError('A diagnostic field must contain every requested opponent.')
+        lookup={player_key(p):p for p in field_pool};field=OpponentField()
+        field.diagnostic=dict(getattr(diagnostic_field,'diagnostic',{}) or {})
+        field.ownership_fit=dict(getattr(diagnostic_field,'ownership_fit',{}) or {})
+        for raw in diagnostic_field:
+            if cancel_callback and cancel_callback():raise ValueError('Diagnostic field validation cancelled.')
+            validate_showdown_lineup(raw,field_pool,salary_cap)
+            roster=[raw['Captain']]+list(raw['Flex'])
+            for p in roster:
+                current=lookup[player_key(p)]
+                if any(p.get(k)!=current.get(k) for k in ('Name','Team','Position','FlexID','CptID','FlexSalary','CptSalary')):
+                    raise ValueError('Diagnostic opponent identity or salary differs from the frozen pool.')
+            field.append(ShowdownLineup(lookup[player_key(roster[0])],[lookup[player_key(p)] for p in roster[1:]]))
     if not field:
         return {"lineups": list(candidates), "report": {"scenarios": 0, "field_lineups": 0}}
     # Three bootstrap fields share outcomes within each scenario, as in Classic.

@@ -1,5 +1,6 @@
 """Local field-history indexing and explicit, non-applying profile previews."""
 import threading
+from pathlib import Path
 from PyQt5 import QtCore, QtWidgets
 from opponent_history import sync_saved, profile_preview, render_preview, save_profile
 
@@ -25,9 +26,11 @@ class HistoryWorker(QtCore.QObject):
                 result=sync_saved(self.db_path,self.stop.is_set,self.progress.emit)
             elif self.action=='save':
                 result={'profile_id':save_profile(self.db_path,self.profile,self.stop.is_set)}
-            elif self.action=='evaluate':
+            elif self.action in ('evaluate','recorded'):
                 from field_history_validation import evaluate_history
-                result=evaluate_history(self.db_path,self.cutoff,self.stop.is_set,self.progress.emit,draw_mode=self.config.get('draw_mode','salary_proxy'))
+                result=evaluate_history(self.db_path,self.cutoff,self.stop.is_set,self.progress.emit,
+                    draw_mode='recorded' if self.action=='recorded' else self.config.get('draw_mode','salary_proxy'),
+                    snapshot_root=self.config.get('snapshot_root'),compare_sim=self.action=='recorded')
             else:
                 result=profile_preview(self.db_path,self.cutoff,self.contest_format,self.username,self.stop.is_set,**self.config)
             if not self.stop.is_set():self.result.emit(result)
@@ -64,6 +67,14 @@ class OpponentHistoryDialog(QtWidgets.QDialog):
         self.draw_mode.addItem('Experiment athlete weights: salary-based proxy (hypothetical)','salary_proxy')
         self.draw_mode.addItem('Experiment athlete weights: uniform (may underfill)','uniform')
         layout.addWidget(self.draw_mode)
+        frozen=QtWidgets.QHBoxLayout()
+        self.snapshot_root=QtWidgets.QLineEdit(str(Path(db_path).resolve().parent));self.snapshot_root.setReadOnly(True)
+        self.snapshot_root.setToolTip('Original history folder containing snapshots and saved contest-snapshot associations. Read only.');frozen.addWidget(self.snapshot_root)
+        self.choose_snapshots=QtWidgets.QPushButton('Choose snapshot history folder');self.choose_snapshots.clicked.connect(self.choose_snapshot_root);frozen.addWidget(self.choose_snapshots)
+        layout.addLayout(frozen)
+        self.recorded_button=QtWidgets.QPushButton('Compare qualified pregame fields + SIM')
+        self.recorded_button.setToolTip('Require exact salaries, recorded eligibility, ownership units/totals and pre-kickoff timing. Freeze a diagnostic candidate bank; compare fields on shared scenarios. No defaults or saved inputs change.')
+        self.recorded_button.clicked.connect(lambda:self.start('recorded'));layout.addWidget(self.recorded_button)
         cohort=QtWidgets.QHBoxLayout()
         self.band=QtWidgets.QComboBox();self.band.addItems(['All entry counts','1','2–5','6–20','21–150','151+']);cohort.addWidget(self.band)
         cohort.addWidget(QtWidgets.QLabel('Successful cohort: minimum complete contests'))
@@ -85,17 +96,22 @@ class OpponentHistoryDialog(QtWidgets.QDialog):
     def invalidate(self):
         self.profile=None;self.save_button.setEnabled(False)
 
+    def choose_snapshot_root(self):
+        folder=QtWidgets.QFileDialog.getExistingDirectory(self,'Choose original history folder containing snapshots',self.snapshot_root.text())
+        if folder:self.snapshot_root.setText(folder)
+
     def start(self, action):
         if self._thread is not None:return
         if action=='save' and self.profile is None:return
         self._pending=None;self._error='';self.action=action
-        if action=='evaluate' and self.format.currentData()!='showdown':
+        if action in ('evaluate','recorded') and self.format.currentData()!='showdown':
             self.status.setText('The whole-game experiment currently supports Showdown.');return
-        if action in ('sync','evaluate'):self.invalidate()
-        for widget in (self.sync_button,self.preview_button,self.evaluate_button,self.draw_mode,self.username,self.format,self.cutoff,self.band,self.min_contests,self.min_successes,self.observed,self.save_button):widget.setEnabled(False)
+        if action in ('sync','evaluate','recorded'):self.invalidate()
+        for widget in (self.sync_button,self.preview_button,self.evaluate_button,self.recorded_button,self.choose_snapshots,self.draw_mode,self.username,self.format,self.cutoff,self.band,self.min_contests,self.min_successes,self.observed,self.save_button):widget.setEnabled(False)
         self.cancel_button.setEnabled(True);self.status.setText('Working locally…')
         config=dict(entry_band=self.band.currentText() if self.band.currentIndex() else '',min_contests=self.min_contests.value(),min_successes=self.min_successes.value(),allow_observed_fields=self.observed.isChecked())
         if action=='evaluate':config={'draw_mode':self.draw_mode.currentData()}
+        if action=='recorded':config={'snapshot_root':self.snapshot_root.text()}
         worker=self._worker=HistoryWorker(self.db_path,action,self.cutoff.date().toString('yyyy-MM-dd'),self.format.currentData(),self.username.text(),self.profile,config)
         thread=self._thread=QtCore.QThread(self);worker.moveToThread(thread)
         thread.started.connect(worker.run);worker.progress.connect(self.status.setText)
@@ -110,7 +126,7 @@ class OpponentHistoryDialog(QtWidgets.QDialog):
     def retire(self):
         cancelled=self._worker.stop.is_set();thread=self._thread
         self._thread=self._worker=None;thread.deleteLater()
-        for widget in (self.sync_button,self.preview_button,self.evaluate_button,self.draw_mode,self.username,self.format,self.cutoff,self.band,self.min_contests,self.min_successes,self.observed):widget.setEnabled(True)
+        for widget in (self.sync_button,self.preview_button,self.evaluate_button,self.recorded_button,self.choose_snapshots,self.draw_mode,self.username,self.format,self.cutoff,self.band,self.min_contests,self.min_successes,self.observed):widget.setEnabled(True)
         self.cancel_button.setEnabled(False)
         if cancelled:self.status.setText('Cancelled. Completed indexed contests remain saved; an unfinished contest is rolled back.')
         elif self._pending is None:self.status.setText('Failed: '+self._error)
@@ -119,7 +135,7 @@ class OpponentHistoryDialog(QtWidgets.QDialog):
             self.status.setText(f"{len(r['contests'])} contests indexed/unchanged; {len(r['errors'])} errors. Existing build history was not modified.")
             self.report.setPlainText(r['note']+'\n'+'\n'.join(e['name']+': '+e['error'] for e in r['errors']))
         elif self.action=='save':self.status.setText(f"Saved verified profile version #{self._pending['profile_id']}. SIM remains unchanged.")
-        elif self.action=='evaluate':
+        elif self.action in ('evaluate','recorded'):
             from field_history_validation import render_evaluation
             self.report.setPlainText(render_evaluation(self._pending));self.status.setText('Whole-game construction test complete. No simulation settings changed.')
         else:

@@ -135,6 +135,35 @@ historical backtests need an additional availability record to prevent look-ahea
 
 ## Example SQL on a backup copy
 
+## Recorded pregame field comparison
+
+The optional **Compare qualified pregame fields + SIM** action reads an original
+history folder. It requires snapshot integrity, exact full historical salary
+identities and roles, matching original kickoff times, and a timestamp strictly
+before kickoff. Saved exact snapshot resolutions and contest associations retain
+precedence. Conflicting timestamp revisions require an exact saved choice.
+Missing eligibility, forecasts, percentage ownership units or valid slot totals
+exclude the game; no present-day inputs are substituted.
+
+The independent multi-game catalog allows at most 256 MB, retains the existing
+32 MB per-file limit, and allows at most 100 files and 64 MB per format/date.
+Directory enumeration remains bounded at 1,000 entries. Invalid or incomplete
+inventories stop selection. Existing reconciliation reader limits are unchanged.
+Files, associations and saved resolutions are rechecked before publication.
+
+Both field models use the same recorded eligible pool and a frozen diagnostic
+candidate bank (seed 7109; default 100 candidates). Each comparison uses 200 shared
+scenarios and seeds 17, 101 and 509. Candidate point moments must agree exactly.
+The report shows top-20 ranking overlap, model-dependent simulated top-1% rates
+and Captain/FLEX ownership drift. Personal locks are cleared for opponents.
+This bank is not the original submitted portfolio; checksums and timestamps show
+consistency rather than authenticity. The experiment establishes neither returns
+nor profitability and does not change production simulation or generation.
+
+The original salary-proxy experiment remains available separately. Its synthetic
+athlete weights are not recorded forecasts. Whole-game holdouts and equal game
+weights apply to both experiments; missing qualified games remain unscored.
+
 ```sql
 SELECT u.username, c.end_date, c.name, s.entries, s.best_rank,
        s.top_one_pct_entries

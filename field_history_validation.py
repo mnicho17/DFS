@@ -52,12 +52,18 @@ def _distance(predicted, observed):
     return .5*sum(abs(predicted.get(k,0)-observed.get(k,0)) for k in predicted.keys()|observed.keys())
 
 
-def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda text:None, *, count=300, seeds=(17,101,509), draw_mode='salary_proxy'):
+def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda text:None, *, count=300, seeds=(17,101,509), draw_mode='salary_proxy', snapshot_root=None, compare_sim=False, scenarios=200, candidate_count=100):
     cutoff = date.fromisoformat(cutoff).isoformat()
     if not isinstance(count,int) or not 50<=count<=1000 or not seeds or len(seeds)>5 or len(set(seeds))!=len(seeds) or any(not isinstance(s,int) for s in seeds):
         raise ValueError('Use 50–1000 opponents and 1–5 distinct integer seeds.')
-    if draw_mode not in ('uniform','salary_proxy'):
+    if draw_mode not in ('uniform','salary_proxy','recorded'):
         raise ValueError('Choose uniform or explicitly hypothetical salary-proxy draw weights.')
+    if compare_sim and (draw_mode!='recorded' or not isinstance(scenarios,int) or not 20<=scenarios<=1000 or not isinstance(candidate_count,int) or not 20<=candidate_count<=200):
+        raise ValueError('SIM comparison requires recorded inputs, 20–1000 scenarios and 20–200 candidates.')
+    audit=None
+    if draw_mode=='recorded':
+        from pregame_field_evidence import PregameEvidence
+        audit=PregameEvidence(db_path,snapshot_root,cancelled,progress)
     excluded, candidates, receipts = [],[],{}
     with closing(_connect(db_path,True)) as conn:
         conn.execute('BEGIN')
@@ -108,6 +114,17 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
         results = []
         for i,row in enumerate(heldout):
             ai._check(cancelled);progress(f'Testing later game {i+1}/{len(heldout)}: {row["game"][1]} {row["date"]}')
+            snapshot_receipt=None
+            if audit:
+                try:
+                    row['pool'],snapshot_receipt=audit.qualify(sources[row['result_hash']],manifests[row['salary_hash']],row['salary_hash'],conn)
+                except ai.ImportCancelled:raise
+                except Exception as exc:
+                    excluded.append(dict(name=row['name'],reason='Pregame input qualification: '+str(exc)));continue
+            bank=None
+            if compare_sim:
+                from pregame_sim_comparison import freeze_bank
+                bank=freeze_bank(row['pool'],candidate_count,cancelled)
             observed,known,entries = _counts(conn,row['key'],cancelled)
             if any(not observed[c] for c in CATEGORIES):raise ValueError('Held-out game lacks comparable construction metadata.')
             models = {'current':[], 'historical':[]}
@@ -116,18 +133,23 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
                 current = sample_field(row['pool'],count,seed=seed,cancel_callback=cancelled)
                 historical = sample_history_field(row['pool'],count,priors,seed=seed,cancelled=cancelled)
                 ai._check(cancelled)
+                sim=None
+                if compare_sim and len(current)==count and len(historical)==count:
+                    from pregame_sim_comparison import compare_sim as run_comparison
+                    sim=run_comparison(bank,row['pool'],current,historical,seed,scenarios,cancelled)
                 for name,field in (('current',current),('historical',historical)):
                     sampled = distributions(field)
                     metric = {c:_distance(sampled[c],observed[c]) for c in CATEGORIES} if len(field)==count else None
                     models[name].append(dict(seed=seed,returned=len(field),distances=metric,distributions=sampled,
-                        diagnostic=dict(getattr(field,'diagnostic',{}) or {})))
+                        diagnostic=dict(getattr(field,'diagnostic',{}) or {}),
+                        sim_comparison=sim))
             # Underfilled fields are failures, never scored as comparable full fields.
             usable = all(r['distances'] is not None for trials in models.values() for r in trials)
             averages = {name:{c:statistics.mean(r['distances'][c] for r in trials) for c in CATEGORIES}
                         for name,trials in models.items()} if usable else None
             results.append(dict(**{k:row[k] for k in ('key','date','game','result_hash','salary_hash','name')},
                 entries=entries,known_entries=known,unknown_entries=entries-known,observed=observed,
-                models=models,comparable=usable,mean_distances=averages))
+                models=models,comparable=usable,mean_distances=averages,snapshot=snapshot_receipt))
     # Verify current associations outside the read snapshot; a remap during the
     # benchmark must not publish results bound to the superseded association.
     with closing(_connect(db_path,True)) as conn:
@@ -141,12 +163,13 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
                 if digest not in current_sources or current_sources[digest]['snapshot']!=receipts[digest]['snapshot']:
                     raise ValueError('Historical evidence changed during testing; retry.')
         for digest,source in receipts.items():ai._verify(source,cancelled)
+    if audit:audit.revalidate()
     usable = [r for r in results if r['comparable']]
     scores = {name:{c:statistics.mean(r['mean_distances'][name][c] for r in usable) for c in CATEGORIES}
               for name in ('current','historical')} if usable else {}
     aggregate = {name:statistics.mean(values.values()) for name,values in scores.items()}
     ai._check(cancelled)
-    return dict(model=MODEL,cutoff=cutoff,count=count,seeds=list(seeds),draw_mode=draw_mode,priors={k:dict(v) for k,v in priors.items()},
+    report=dict(model=MODEL,cutoff=cutoff,count=count,seeds=list(seeds),draw_mode=draw_mode,compare_sim=compare_sim,requested_games=len(heldout),priors={k:dict(v) for k,v in priors.items()},
         training=training_evidence,games=results,excluded=excluded,scores=scores,aggregate=aggregate,
         profile_digest=hashlib.sha256(json.dumps(dict(cutoff=cutoff,evidence=training_evidence,priors=priors),sort_keys=True).encode()).hexdigest(),
         limitations=['Retrospective structural fit only: original salary files do not establish pregame availability, ownership or projections.',
@@ -155,15 +178,22 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
             'The historical model changes marginal construction weights and permits any legal under-cap spending; joint correlations and opponent entry portfolios are not fitted.',
             'Unavailable proposal targets and incomplete generated fields are disclosed. Proposal absence is not proof of infeasibility.',
             'No lineup returns, ranking gains, skill or profitability are established. Default SIM, ownership, projections, limits and generated lineups remain unchanged.'])
+    if audit:
+        report['snapshot_inventory_issues']=audit.issues
+        report['limitations'][0]='Recorded-input experiment: exact historical salary identities, matching kickoff timestamps, integrity and pregame timing required. Checksums/timestamps establish consistency, not authenticity.'
+        report['limitations'][1]='Both models use the same frozen eligible pool, forecasts and slot ownership with verified percentage units/totals. Personal Captain/FLEX locks are cleared for opponents; no present-day data or hindsight availability is inferred.'
+        report['limitations'].append('Current SIM code runs on recorded inputs, not the old executable. Rankings use a frozen diagnostic bank, not original submitted lineups. Simulated top-1% rates are model-dependent and do not establish realized returns. Ownership drift is reported rather than silently renormalized.')
+    return report
 
 
 def render_evaluation(report):
     lines=[f'Whole-game Showdown field experiment — training before {report["cutoff"]}',
-           'Athlete draws: '+('uniform' if report['draw_mode']=='uniform' else 'salary-weighted proxy — hypothetical, not recorded pregame forecasts'),
+           'Athlete draws: '+('recorded pregame inputs — exact snapshot/salary qualification' if report['draw_mode']=='recorded' else 'uniform' if report['draw_mode']=='uniform' else 'salary-weighted proxy — hypothetical, not recorded pregame forecasts'),
            f'{len(report["training"])} training games; {len(report["games"])} later games; {report["count"]} opponents × {len(report["seeds"])} fixed seeds per model/game.',
            'Total variation distance: lower is closer to the observed construction distribution; 0 is identical, 1 is disjoint.',
            'Scores average seeds within each game, then give each comparable game equal weight.',
            'Training profile evidence digest: '+report['profile_digest']]
+    if report['draw_mode']=='recorded':lines.append(f"Pregame-qualified later games: {len(report['games'])}/{report['requested_games']}.")
     for category in CATEGORIES:
         if report['scores']:lines.append(f'{category}: current {report["scores"]["current"][category]:.3f}; historical {report["scores"]["historical"][category]:.3f}')
     if report['aggregate']:
@@ -173,6 +203,14 @@ def render_evaluation(report):
         if game['comparable']:
             for name,values in game['mean_distances'].items():lines.append(f'{name}: mean distance {statistics.mean(values.values()):.3f}')
         else:lines.append('Incomplete generated field: excluded from aggregate scores.')
+        if game.get('snapshot'):
+            s=game['snapshot'];lines.append(f"Snapshot {s['input_id'][:12]} recorded {s['recorded_at']}; kickoff {s['earliest_game']}; {s['active_players']}/{s['supplied_players']} frozen active athletes; {s['association']}.")
+        for trial in game['models']['current']:
+            sim=trial.get('sim_comparison')
+            if sim and sim['status']=='complete':
+                lines.append(f"SIM seed {sim['scenario_seed']}: {sim['candidate_count']} frozen candidates × {sim['scenarios']} shared scenarios; top-{sim['models']['current']['top_n']} overlap {sim['top_n_overlap_pct']:.1f}%; scoring moments identical.")
+                for name,info in sim['models'].items():lines.append(f"  {name}: top-bank mean simulated top-1% {info['top_n_mean_sim_top_one_pct']:.2f}%; slot ownership drift {info['field_ownership_drift_pp']:.2f} percentage points.")
+            elif sim:lines.append('SIM unavailable: '+sim['reason'])
         for model,trials in game['models'].items():
             for trial in trials:
                 missing=trial['diagnostic'].get('unavailable_targets')
@@ -180,4 +218,5 @@ def render_evaluation(report):
                 if trial['returned']!=report['count']:lines.append(f'{model} seed {trial["seed"]}: {trial["returned"]}/{report["count"]} opponents returned.')
     lines.extend('\n'+note for note in report['limitations'])
     lines.extend('Excluded '+r['name']+': '+r['reason'] for r in report['excluded'])
+    lines.extend('Snapshot inventory issue '+r['name']+': '+r['reason'] for r in report.get('snapshot_inventory_issues',[]))
     return '\n'.join(lines)
