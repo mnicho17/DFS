@@ -288,6 +288,18 @@ def load_bounded(path,players,*,limit=20000,seconds=30,salary_cap=50000,
         raise ValueError('The screening budget must cover every eligible Captain.')
     if not set(captains).issubset(info['captains']):
         raise ValueError('This library does not cover the current Captain pool. Lock only prepared Captains or prepare a broader library.')
+    if not info['complete']:
+        # Preparation advances Captain by Captain. Explicit partial opt-in must
+        # not silently discard Captains that have not been reached yet.
+        with closing(sqlite3.connect(Path(path).resolve().as_uri()+'?mode=ro',uri=True)) as con:
+            state=_read(con,verify_count=False)
+            indices={p['key']:i for i,p in enumerate(state['structure']['players'])}
+            missing=[key for key in captains if con.execute(
+                'SELECT 1 FROM rosters WHERE captain=? LIMIT 1',(indices[key],)).fetchone() is None]
+        if missing:
+            raise ValueError(f'Partial library has no saved rosters for {len(missing)} current Captains '
+                f'(including {", ".join(missing[:3])}). Resume preparation with a higher stored-roster limit, '
+                'or explicitly lock a covered Captain pool. No Captain choices were changed.')
     output=[];coverage=[];scanned=0
     for index,key in enumerate(captains):
         quota=limit//len(captains)+int(index<limit%len(captains))

@@ -95,6 +95,11 @@ class PreparedIntegrationTests(unittest.TestCase):
         self.assertEqual(len(counts),len(self.players)+2)
         self.assertTrue(all(c['sampled']==2 for c in report['captain_sampling']))
 
+    def test_partial_unlocked_library_cannot_silently_drop_unprepared_captains(self):
+        prepare(self.path,self.players,max_candidates=9)
+        with self.assertRaisesRegex(ValueError,'Partial library has no saved rosters'):
+            load_bounded(self.path,self.players,limit=16,salary_strategy='Flexible',allow_partial=True)
+
     def test_bounded_scan_rejects_changed_saved_count_after_sampling(self):
         import sqlite3
         import showdown_library as library
