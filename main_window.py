@@ -4175,6 +4175,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         self._report_pending = False
         self._initial_report_started = False
+        self._initial_report_timer = QtCore.QTimer(self)
+        self._initial_report_timer.setSingleShot(True)
+        self._initial_report_timer.timeout.connect(self._load_initial_report)
         self.summary.setText('Preparing results report…')
         self.history_refresh = getattr(parent, 'history_refresh', None)
         self._owns_history_refresh = self.history_refresh is None
@@ -4206,7 +4209,13 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         super().showEvent(event)
         if not self._initial_report_started:
             self._initial_report_started = True
-            QtCore.QTimer.singleShot(0, self.refresh_report)
+            self._initial_report_timer.start(0)
+
+    def _load_initial_report(self):
+        if self.isVisible():
+            self.refresh_report()
+        else:
+            self._initial_report_started = False
 
     def _history_refresh_completed(self):
         if self._close_after_history_refresh:

@@ -113,6 +113,14 @@ class LearningReportUITests(unittest.TestCase):
                 self.app.processEvents()
                 resume.assert_called_once()
 
+    def test_immediate_close_does_not_start_a_hidden_report(self):
+        with patch('main_window.generate_learning_report') as build:
+            self.dialog.show()
+            self.dialog.close()
+            self.app.processEvents()
+            build.assert_not_called()
+            self.assertIsNone(self.dialog._import_thread)
+
 
 if __name__ == '__main__':
     unittest.main()
