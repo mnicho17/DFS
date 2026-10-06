@@ -1,6 +1,7 @@
 from test_environment import install
 install()
 import copy
+from contextlib import closing
 from collections import Counter
 from pathlib import Path
 import tempfile
@@ -108,8 +109,9 @@ class PreparedIntegrationTests(unittest.TestCase):
         def mutate_after_scan(*args,**kwargs):
             yield from original(*args,**kwargs)
             if not changed[0]:
-                with sqlite3.connect(self.path) as con:
-                    con.execute('DELETE FROM rosters WHERE (captain,flex) IN (SELECT captain,flex FROM rosters LIMIT 1)')
+                with closing(sqlite3.connect(self.path)) as con:
+                    with con:
+                        con.execute('DELETE FROM rosters WHERE (captain,flex) IN (SELECT captain,flex FROM rosters LIMIT 1)')
                 changed[0]=True
         with patch.object(library,'iter_candidates',side_effect=mutate_after_scan):
             with self.assertRaisesRegex(ValueError,'saved count'):
