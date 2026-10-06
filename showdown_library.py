@@ -61,7 +61,7 @@ def _structure(players, salary_cap, captain_keys=None):
     return dict(schema=SCHEMA,salary_cap=_number(salary_cap),players=rows,captains=scope)
 
 
-def _read(con):
+def _read(con, *, verify_count=True):
     try:
         state = json.loads(con.execute('SELECT payload FROM preparation WHERE id=1').fetchone()[0])
         structure = state['structure']
@@ -88,7 +88,7 @@ def _read(con):
                 previous = index
         if state['checked'] != expected or not 0 <= state['saved'] <= expected:
             raise ValueError('Library progress does not match its cursor.')
-        if con.execute('SELECT count(*) FROM rosters').fetchone()[0] != state['saved']:
+        if verify_count and con.execute('SELECT count(*) FROM rosters').fetchone()[0] != state['saved']:
             raise ValueError('Library saved count is invalid.')
         return state
     except (sqlite3.Error, TypeError, KeyError, IndexError, json.JSONDecodeError) as exc:
@@ -195,12 +195,18 @@ def prepare(path, players, *, salary_cap=50000, seconds=3600, batch_size=2000,
 
 
 def iter_candidates(path, players, *, salary_cap=50000, salary_floor=0, rules=None,
-                    allow_partial=False, cancelled=lambda: False, captain_key=None):
+                    allow_partial=False, cancelled=lambda: False, captain_key=None,
+                    _validated_info=None):
     """Stream fresh player objects; never reuse stored forecasts or SIM outputs."""
     current = copy.deepcopy(players)
     with closing(sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True)) as con:
         con.execute('BEGIN')
-        state = _read(con)
+        # Bounded loading counts the entire library before and after sampling.
+        # Repeating that count for every Captain can exhaust short scan slices.
+        state = _read(con, verify_count=_validated_info is None)
+        if _validated_info is not None and dict(saved=state['saved'],complete=state['complete'],
+                identity=state['identity'],captains=state['structure']['captains']) != _validated_info:
+            raise ValueError('The library changed during loading. Pause preparation before building.')
         if not state['complete'] and not allow_partial:
             raise ValueError('Library is incomplete. Resume preparation or explicitly allow partial coverage.')
         if _structure(current,state['structure']['salary_cap'],state['structure']['captains']) != state['structure']:
@@ -285,17 +291,21 @@ def load_bounded(path,players,*,limit=20000,seconds=30,salary_cap=50000,
     output=[];coverage=[];scanned=0
     for index,key in enumerate(captains):
         quota=limit//len(captains)+int(index<limit%len(captains))
-        deadline=time.monotonic()+seconds/len(captains)
+        deadline=None
         limited=[False]
         def stop():
+            nonlocal deadline
             if cancelled(): return True
-            limited[0]=time.monotonic()>=deadline
+            now=time.monotonic()
+            if deadline is None:
+                deadline=now+seconds/len(captains)
+            limited[0]=now>=deadline
             return limited[0]
         rng=random.Random(int.from_bytes(hashlib.sha256(f'{seed}:{key}'.encode()).digest()[:8],'big'))
         sample=[];seen=0
         for row in iter_candidates(path,players,salary_cap=salary_cap,
                 salary_floor=salary_floor(salary_cap,salary_strategy),rules=rules,
-                allow_partial=allow_partial,cancelled=stop,captain_key=key):
+                allow_partial=allow_partial,cancelled=stop,captain_key=key,_validated_info=info):
             seen+=1
             if len(sample)<quota: sample.append(row)
             else:
