@@ -1042,6 +1042,7 @@ class LineupBuildWorker(QtCore.QObject):
         scenario_cache: bool = False,
 
         compute_telemetry: bool = True,
+        allow_partial_library: bool = False,
 
     ):
 
@@ -1106,6 +1107,7 @@ class LineupBuildWorker(QtCore.QObject):
 
         self.scenario_cache = scenario_cache
         self.candidate_library = candidate_library
+        self.allow_partial_library = allow_partial_library
         self.library_candidates = []
         self.library_report = {}
 
@@ -1139,12 +1141,31 @@ class LineupBuildWorker(QtCore.QObject):
                     raise ValueError("Clear the candidate library before repairing an existing portfolio.")
                 if self.sport != "NFL" or not self.sim_enabled or not self.compute_mode.casefold().startswith("deep"):
                     raise ValueError("Candidate libraries require NFL Deep with SIM enabled.")
-                from candidate_library import load_candidates
-                self.library_candidates, self.library_report = load_candidates(self.candidate_library,
-                    self.players, kind=self.kind, salary_cap=self.salary_cap,
-                    salary_strategy=self.salary_strategy, rules=self.portfolio_rules)
-                self.progress.emit(0, len(self.library_candidates),
-                    f"Library: {len(self.library_candidates):,} candidates accepted; {self.library_report['rejected']:,} rejected")
+                from showdown_library import is_prepared_library,load_bounded
+                if is_prepared_library(self.candidate_library):
+                    if self.kind != 'showdown':
+                        raise ValueError('Prepared Showdown libraries require NFL Showdown.')
+                    from compute_settings import deep_candidate_budget as prepared_candidate_budget
+                    try:
+                        self.library_candidates,self.library_report=load_bounded(self.candidate_library,self.players,
+                            limit=prepared_candidate_budget(self.num_lineups,self.deep_options,False),
+                            seconds=max(.1,min(30,self.deep_time_limit_seconds*.1)),
+                            salary_cap=self.salary_cap,salary_strategy=self.salary_strategy,rules=self.portfolio_rules,
+                            allow_partial=self.allow_partial_library,cancelled=self._cancel_event.is_set,
+                            progress=lambda text:self.progress.emit(0,0,text))
+                    except InterruptedError:
+                        if not self._cancel_event.is_set():raise
+                        self._emit_finished(dict(kind=self.kind,sport=self.sport,lineups=[],requested=self.num_lineups,
+                            cancelled=True,portfolio_report={},sim_report={},timing_report={}))
+                        return
+                    self.progress.emit(0,len(self.library_candidates),f'Prepared library: {len(self.library_candidates):,} candidates sampled for fresh SIM')
+                else:
+                    from candidate_library import load_candidates
+                    self.library_candidates, self.library_report = load_candidates(self.candidate_library,
+                        self.players, kind=self.kind, salary_cap=self.salary_cap,
+                        salary_strategy=self.salary_strategy, rules=self.portfolio_rules)
+                    self.progress.emit(0, len(self.library_candidates),
+                        f"Library: {len(self.library_candidates):,} candidates accepted; {self.library_report['rejected']:,} rejected")
             if self.sport == "NFL":
                 from nfl_eligibility import eligible_players, apply_qb_eligibility
                 self.players = apply_qb_eligibility([dict(p) for p in self.players])
@@ -7920,6 +7941,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         settings_menu.addAction("Ownership Sensitivity...", self.on_ownership_sensitivity)
         settings_menu.addAction("Projection Sensitivity...", self.on_projection_sensitivity)
         settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
+        settings_menu.addAction("Prepare Showdown Roster Library...", self.on_prepare_showdown_library)
         settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
         settings_menu.addAction("Open Automatic Build Archives...", self.on_open_build_archives)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)
@@ -13670,6 +13692,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             retained_lineups=retained,
 
             candidate_library=getattr(self, "_candidate_library", ""),
+            allow_partial_library=getattr(self,"_candidate_library_allow_partial",False),
             scenario_cache=True,
             repair_source=repair_source,
 
@@ -14744,6 +14767,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "contest": self._active_contest_profile(),
             "deep_compute": self.deep_compute_settings,
             "candidate_library": getattr(self, "_candidate_library", ""),
+            "allow_partial_library": getattr(self,"_candidate_library_allow_partial",False),
         })
 
     def _repair_rejection(self, receipt, payload):

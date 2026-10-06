@@ -624,7 +624,11 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.append("- Search styles: " + ("All five styles (shared budget)" if options.get("all_styles") else "Selected style"))
         library = record.get("candidate_library") or {}
         if library:
-            lines.append(f"- Candidate library: {library.get('saved', 0):,} saved; {library.get('accepted', 0):,} accepted; {library.get('rejected', 0):,} rejected by current eligibility/rules. Scores recalculated with current inputs.")
+            if library.get('type') == 'prepared_showdown':
+                lines.append(f"- Prepared roster library: {library.get('saved',0):,} saved; {library.get('valid_seen',0):,} valid rosters scanned; {library.get('accepted',0):,} sampled for fresh SIM")
+                lines.append('- Library coverage: preparation '+('complete' if library.get('preparation_complete') else 'partial (explicitly allowed)')+'; current scan '+('complete' if library.get('scan_complete') else 'time limited')+'. Captain-balanced sampling is not full-library SIM or proof of portfolio feasibility.')
+            else:
+                lines.append(f"- Candidate library: {library.get('saved', 0):,} saved; {library.get('accepted', 0):,} accepted; {library.get('rejected', 0):,} rejected by current eligibility/rules. Scores recalculated with current inputs.")
         if sim.get("style_candidate_counts"):
             lines.append("- Style candidates before deduplication: " + "; ".join(f"{name} {int(count):,}" for name, count in sim["style_candidate_counts"].items()))
         lines.append("- Output selection: " + str(options.get("selection_mode") or "Portfolio selection"))

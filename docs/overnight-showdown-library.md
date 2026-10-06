@@ -2,15 +2,19 @@
 
 The new `showdown_library` backend enumerates legal six-player NFL Showdown
 rosters directly. It is separate from the existing searched candidate libraries.
-This first stage provides a resumable preparation command and streaming reader;
-the main app does not yet consume these libraries or schedule preparation.
+The app now offers explicit preparation and loading. Prepared builds use a
+bounded Captain-balanced sample through the existing fresh SIM and portfolio
+pipeline. Automated scheduling and persistent overnight SIM screening remain
+future work.
 
 ## What preparation saves
 
 A roster contains one Captain and five distinct FLEX players, includes both
-teams, and fits the preparation salary cap. Preparation covers every Captain
-and player in the supplied slate, including temporarily unavailable or personally
-excluded players, so later selections are not limited by yesterday's locks.
+teams, and fits the preparation salary cap. Preparation covers the chosen Captain
+scope and every FLEX player in the supplied slate, including temporarily
+unavailable or personally excluded players. The desktop action prepares locked
+Captains if present; otherwise all Captains. Resuming preserves the saved scope.
+Requesting an unprepared Captain later requires a broader library.
 The snapshot must contain explicit FLEX/Captain IDs, positive salaries and one
 two-team game. Duplicate identities and mixed games are rejected.
 
@@ -22,18 +26,28 @@ checkpoint updates reject conflicting writers rather than overwriting progress.
 
 Completion means every structural combination was checked, not that every roster
 was legal. Candidate, time and storage limits pause preparation with incomplete
-coverage. The backend defaults to one hour, at most five million saved rosters,
-and a two-GiB storage threshold checked after each batch. A batch can exceed that
+coverage. The backend defaults to one hour and five million saved rosters,
+with a configurable maximum of fifty million. The desktop default is ten million.
+There is also
+a two-GiB storage threshold checked after each batch. A batch can exceed that
 storage threshold slightly. The normal reader refuses incomplete libraries unless
 the caller explicitly permits partial coverage.
 
 ## Run explicitly during downtime
+
+In the app, choose NFL Showdown and set the desired Captain locks. Open
+**Settings > Prepare Showdown Roster Library**, choose a new `.sdlib` file,
+set the limits, then start. Pause/resume checkpoints are retained; closing waits
+for safe worker retirement. Later use **Settings > Load Candidate Library**,
+select that file, choose Deep with SIM enabled, and build. Loading incomplete
+preparation requires an explicit choice with No as the default.
 
 Extract `input-snapshot.json` from a saved automatic build archive into a working
 directory. Use the app's Python environment:
 
 ```powershell
 python scripts/prepare_showdown_library.py --snapshot input-snapshot.json --output slate-rosters.sqlite --hours 8
+python scripts/prepare_showdown_library.py --snapshot input-snapshot.json --output locked-rosters.sdlib --hours 8 --max-candidates 10000000 --locked-captains
 python scripts/prepare_showdown_library.py --output slate-rosters.sqlite --status
 ```
 
@@ -58,18 +72,34 @@ scenario replay requires exact compatible scoring inputs and model identity.
 Database rosters are validated as they stream; this disposable cache is not an
 immutable historical-evidence artifact.
 
+## Bounded on-demand screening
+
+The build scans each current Captain's roster partition with an equal scan-time
+share and a repeatable seeded reservoir sample. Total admitted candidates fit the
+existing Deep candidate budget (up to 20,000), and the scan allowance is at most
+30 seconds or ten percent of the selected Deep time limit. Loading time counts
+toward the Deep budget and appears in generation timing. Records rejected by
+current rules are not sampled. Candidate admission is a sample, not a ranking by
+cached scores or full-library SIM. Time-limited scans can omit promising rosters
+and can depend on machine throughput; only complete scans give repeatable samples
+independent of elapsed time. A library that changes during scanning is rejected.
+
+Existing SIM shortlisting, bounded feasibility preservation, exposure allocation
+and independent validation still apply. Sampling can miss a feasible portfolio;
+a failed sampled build is not proof that the full library is infeasible. Build
+reports distinguish complete/partial preparation, full/time-limited scans and
+sampled candidates. Captain-balanced admission is separate from final Captain
+exposure requirements. Defaults without a loaded prepared library are unchanged.
+
 ## Remaining implementation stages
 
-1. Add preparation UI with progress, pause/resume and explicit completeness;
-   estimate combinations/storage before starting and partition large slates.
-2. Connect the streaming reader to bounded candidate screening. Preserve Captain
-   coverage and a feasible portfolio, avoiding a full-library Python list.
-3. Add optional overnight screening using a small, recorded scenario sample;
+1. Improve scope/storage estimates and large-slate partition management.
+2. Add optional overnight screening using a small, recorded scenario sample;
    persist scoring-input and model identities independently of roster identity.
-4. Reuse compatible screening or rescore changed inputs, then run the existing
+3. Reuse compatible screening or rescore changed inputs, then run the existing
    detailed SIM, exposure allocation and independent validation. A larger time
    allowance must not silently change the user's chosen SIM settings.
-5. Measure real archive performance and coverage before enabling default use.
+4. Measure full-size build performance and coverage before enabling default use.
 
 All-Captain enumeration is larger than an individual locked-Captain build. A
 56-player slate has 194,810,616 structural combinations before salary/team
