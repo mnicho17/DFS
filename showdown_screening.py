@@ -30,7 +30,8 @@ def settings(options, sim_scenarios):
 
 def target(library,players,*,limit,salary_cap,salary_strategy,rules,screening,folder=None):
     info=validate_library(library,players,salary_cap=salary_cap)
-    context=dict(schema=1,library=info,players=sorted(copy.deepcopy(players),key=player_key),
+    # Player iteration order participates in seeded scenario generation.
+    context=dict(schema=1,library=info,players=copy.deepcopy(players),
         limit=limit,salary_cap=float(salary_cap),salary_strategy=salary_strategy,rules=rules,
         screening=screening,model=code_id(),python=sys.version)
     identity=fingerprint(context)
@@ -78,7 +79,7 @@ def prepare_screening(library,players,*,limit=20000,salary_cap=50000,salary_stra
     """Checkpoint whole completed batches; cancellation never commits partial SIMs."""
     if type(batch_size) is not int or not 1<=batch_size<=1000:raise ValueError('Invalid screening batch size.')
     if not math.isfinite(seconds) or not 0<seconds<=43200:raise ValueError('Invalid screening allowance.')
-    players=sorted(copy.deepcopy(players),key=player_key)
+    players=copy.deepcopy(players)
     screening=screening or settings({},1000)
     if not 250<=screening['scenarios']<=1000 or not 1<=screening['field_lineup_count']<=1600:
         raise ValueError('Invalid screening settings.')

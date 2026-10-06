@@ -74,3 +74,11 @@ class ScreeningTests(unittest.TestCase):
             result=prepare_screening(self.library,self.players,**self.kw)
         self.assertEqual(result['screened'],0)
         self.assertIsNone(load_screening(self.library,self.players,**self.kw))
+
+    def test_player_iteration_order_is_preserved_and_part_of_seeded_identity(self):
+        reversed_players=list(reversed(self.players))
+        prepare_screening(self.library,reversed_players,**self.kw)
+        rows,_=load_screening(self.library,reversed_players,**self.kw)
+        fresh=simulate_showdown(rows,reversed_players,salary_cap=50000,**self.kw['screening'])['lineups']
+        self.assertEqual([r.sim_metrics['sim_mean'] for r in rows],[r.sim_metrics['sim_mean'] for r in fresh])
+        self.assertIsNone(load_screening(self.library,self.players,**self.kw))
