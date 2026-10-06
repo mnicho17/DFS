@@ -1979,6 +1979,11 @@ The comparison is a bounded diagnostic search, not a replay of the full Deep pip
 
 ### Comparing other users’ constructions
 
+Results & Learning can automatically refresh your configured Results and Salary
+folders at startup. Use **Refresh history now** for new downloads during a session;
+the summary shows imported entries and records needing review. The startup option
+can be disabled. Refresh imports evidence and username history without changing SIM.
+
 Analyze Saved Results reviews the complete available contest field, including other users, with separate top-5%, top-1%, winner and username groups. Showdown now lists zero, one and two defenses separately from kicker counts. Each construction includes its own top-1% finish rate: qualifying entries divided by all mapped entries using that construction. Rank cutoffs include ties. This is not a cash rate or ROI.
 
 Run Analyze Saved Results after updating to refresh older cached construction reviews; the original results files must remain available. Multiple contests from the same game are shared outcomes, not independent evidence. Compare constructions against their field frequency and across different games before changing strategy. These reports do not automatically change simulation weights or lineup rules.

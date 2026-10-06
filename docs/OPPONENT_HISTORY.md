@@ -1,5 +1,27 @@
 # Username history and field profiles
 
+## Automatic refresh
+
+Choose your Results and Salary folders in **Results & Learning**. With
+**Refresh history automatically at startup** enabled (the default), the next
+app launch scans those folders in the background, imports new CSV evidence,
+qualifies unambiguous salary matches, and indexes every saved mapped contest.
+Use **Refresh history now** to pick up downloads while the app is open.
+This is a startup/manual scan, not a continuous folder watcher.
+
+The visible refresh summary reports new results/salaries, identical files skipped,
+newly indexed entries, unchanged contests verified, and results needing salary
+matching or retry. A changed file is saved as separate evidence and listed for
+revision review; existing salary mappings stay fixed. Ambiguous matches require
+**Review Salary Matches**. Missing configured folders fail before import writes.
+Cancellation keeps completed files/contests and rolls back an active contest.
+Closing the app waits for safe refresh-worker retirement. Only one refresh runs
+at a time within an app instance. Large first imports may take several minutes
+and expand the database substantially; later identical imports reuse the index.
+
+Refresh updates evidence and descriptive username history. It does not apply
+historical profiles to SIM, projections, ownership, ranking or lineup limits.
+
 Open **Results & Learning → Opponent Portfolios → Username history & field profiles**.
 Index all saved mapped contests, then enter an exact username or leave it blank
 for the entire imported field. Choose Showdown or Classic, an observed entry-count

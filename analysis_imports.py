@@ -452,7 +452,7 @@ def import_folders(results_folder, salary_folder='', *, username='', db_path=Non
         if not root.is_dir():
             raise ValueError(f'Folder unavailable: {root}. Reconnect the drive or choose an available folder.')
     result = dict(results_imported=0, salaries_imported=0, duplicates_skipped=0, ignored=0,
-                  personal_results_added=0, pairs_added=0, errors=[], cancelled=False, analysis_import_ids=[])
+                  personal_results_added=0, pairs_added=0, errors=[], cancelled=False, analysis_import_ids=[], changed_sources=[])
     database = db_path or history_db_path()
     with closing(_connect(database)) as conn:
         init_historical_import_tables(conn)
@@ -504,9 +504,13 @@ def import_folders(results_folder, salary_folder='', *, username='', db_path=Non
                             result['personal_results_added'] += imported['personal_results_added']
                             result['analysis_import_ids'].append(import_id)
                     _check(cancelled)
+                    changed = conn.execute('SELECT 1 FROM analysis_sources WHERE source_path=? AND hash<>?',
+                                           (str(path), digest)).fetchone() is not None
                     with conn:
                         conn.execute('INSERT INTO analysis_sources(hash,kind,snapshot,original_name,source_path,manifest,import_id) VALUES(?,?,?,?,?,?,?)',
                             (digest, kind, str(snapshot), path.name, str(path), json.dumps(manifest), import_id))
+                    if changed:
+                        result['changed_sources'].append(path.name)
                     if kind == 'salary':
                         result['salaries_imported'] += 1
                 except ImportCancelled:
