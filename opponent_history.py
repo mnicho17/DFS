@@ -115,8 +115,9 @@ def _stage_report(path, report, key, success_basis, success_size, cancelled, pro
             for p in members[offset:offset+1000]:
                 user='dk:'+p['username_key'];users.append((user,'draftkings',p['username']))
                 summary={k:v for k,v in p.items() if k not in ('pairs','lineups','players','captain_groups')}
-                summary['history_success_basis']=success_basis
-                stats.append((key,user,p['entries'],p['readable_rosters'],p['best_rank'],top[user] if success_basis else None,json.dumps(summary)))
+                basis=success_basis if p['ranked_entries']==p['entries'] else None
+                summary['history_success_basis']=basis
+                stats.append((key,user,p['entries'],p['readable_rosters'],p['best_rank'],top[user] if basis else None,json.dumps(summary)))
             stage.executemany('INSERT INTO users VALUES(?,?,?)',users)
             stage.executemany('INSERT INTO stats VALUES(?,?,?,?,?,?,?)',stats)
             stage.commit()
@@ -250,7 +251,7 @@ def profile_preview(db_path, cutoff, contest_format='showdown', username='', can
                         if seen%500==0:ai._check(cancelled)
                         seen+=1;p=json.loads(payload)
                         if entry_band and p['entry_band']!=entry_band:continue
-                        if not allow_observed_fields and p.get('history_success_basis')!='supplied complete field':top=None
+                        if p['ranked_entries']!=p['entries'] or (not allow_observed_fields and p.get('history_success_basis')!='supplied complete field'):top=None
                         yield key,user,p,top
 
         def accumulator():

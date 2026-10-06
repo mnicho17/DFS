@@ -55,6 +55,17 @@ class OpponentHistoryTests(unittest.TestCase):
         self.assertEqual(f.query('SELECT complete FROM opponent_contests')[0][0],0)
         self.assertTrue(all(r[0] is None for r in f.query('SELECT top_one_pct_entries FROM opponent_user_contest_stats')))
 
+    def test_missing_rank_is_unknown_even_with_supplied_complete_field(self):
+        def edit(rows):
+            results()(rows);rows[1][rows[0].index('Rank')]=''
+        f=SourceFixture(edit_results=edit);self.addCleanup(f.close)
+        index_contest(f.db,f.source['hash'])
+        self.assertEqual(f.query('SELECT complete FROM opponent_contests')[0][0],1)
+        self.assertIsNone(f.query("SELECT top_one_pct_entries FROM opponent_user_contest_stats WHERE user_key='dk:winner'")[0][0])
+        p=profile_preview(f.db,'2026-09-22',username='Winner',min_contests=1,min_successes=1,allow_observed_fields=True)
+        self.assertIsNone(p['users'][0]['top_one_pct_entries'])
+        self.assertEqual(p['users'][0]['qualifying_contests'],0)
+
     def test_cutoff_exact_username_normalization_format_and_unknown_user(self):
         f=self.fixture();index_contest(f.db,f.source['hash'])
         self.assertEqual(profile_preview(f.db,'2026-09-21')['baseline']['entries'],0)
