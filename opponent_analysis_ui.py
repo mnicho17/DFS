@@ -15,9 +15,12 @@ class OpponentAnalysisWorker(QtCore.QObject):
     error = QtCore.pyqtSignal(str)
     done = QtCore.pyqtSignal()
 
-    def __init__(self, path, contest_format):
+    def __init__(self, path, contest_format, db_path=None, result_hash=None, username='', assume_uniform=False):
         super().__init__()
         self.path, self.contest_format = path, contest_format
+        self.db_path, self.result_hash = db_path, result_hash
+        self.username = username
+        self.assume_uniform = assume_uniform
         self.stop = threading.Event()
 
     def cancel(self):
@@ -26,13 +29,21 @@ class OpponentAnalysisWorker(QtCore.QObject):
     @QtCore.pyqtSlot()
     def run(self):
         try:
-            result = analyze_standings(self.path, self.contest_format, self.stop.is_set, self.progress.emit)
+            if self.result_hash:
+                from opponent_construction import analyze_saved_contest
+                result = analyze_saved_contest(self.db_path, self.result_hash, self.stop.is_set, self.progress.emit)
+            else:
+                result = analyze_standings(self.path, self.contest_format, self.stop.is_set, self.progress.emit)
+            from opponent_construction import apply_user_context
+            if self.assume_uniform:
+                apply_user_context(result, self.username)
             if not self.stop.is_set():
                 self.result.emit(result)
         except AnalysisCancelled:
             pass
         except Exception as exc:
-            self.error.emit(str(exc))
+            if not self.stop.is_set():
+                self.error.emit(str(exc))
         finally:
             self.done.emit()
 
@@ -48,11 +59,13 @@ class NumberItem(QtWidgets.QTableWidgetItem):
 
 
 class OpponentAnalysisDialog(QtWidgets.QDialog):
-    def __init__(self, username='', folder='', parent=None):
+    def __init__(self, username='', folder='', parent=None, db_path=None):
         super().__init__(parent)
         self.setWindowTitle('Opponent Portfolios')
         self.resize(1100, 780)
         self.folder, self.username = folder, username
+        from data_paths import history_source_paths
+        self.db_path = db_path or history_source_paths()[0]
         self._thread = self._worker = None
         self._pending = self.result = None
         self._error = ''
@@ -61,6 +74,13 @@ class OpponentAnalysisDialog(QtWidgets.QDialog):
         self._result_source = None
         self._sort_column, self._sort_order = 0, QtCore.Qt.AscendingOrder
         layout = QtWidgets.QVBoxLayout(self)
+        self.saved_button = QtWidgets.QPushButton('Analyze saved mapped contest…')
+        self.saved_button.clicked.connect(self.open_saved)
+        layout.addWidget(self.saved_button)
+        self.assumption = QtWidgets.QCheckBox('For my username: assume single-Captain entries were locked/non-SIM')
+        self.assumption.setToolTip('A user assumption, not evidence from standings. Applies only to your username; incomplete roster coverage stays disclosed.')
+        self.assumption.toggled.connect(self.update_context)
+        layout.addWidget(self.assumption)
         label = QtWidgets.QLabel('Open one contest standings CSV to compare entry counts, lineup variety and exposure. '
                                 'Analysis reads the file locally. Share exports contain usernames; detailed lineups are optional.')
         label.setWordWrap(True)
@@ -134,7 +154,24 @@ class OpponentAnalysisDialog(QtWidgets.QDialog):
         if path:
             self.start(path)
 
-    def start(self, path):
+    def open_saved(self):
+        if self._thread is not None:
+            return
+        from opponent_construction import saved_contests
+        try:
+            contests = saved_contests(self.db_path)
+            if not contests:
+                self.status.setText('No saved salary associations found. Import and map the contest in Results & Learning first.')
+                return
+            labels = [c['name']+' ['+c['result_hash'][:8]+']' for c in contests]
+            label, ok = QtWidgets.QInputDialog.getItem(self, 'Saved mapped contest', 'Contest', labels, 0, False)
+            if ok:
+                contest = contests[labels.index(label)]
+                self.start(contest['name'], result_hash=contest['result_hash'])
+        except Exception as exc:
+            self.status.setText(str(exc))
+
+    def start(self, path, result_hash=None):
         if self._thread is not None:
             return
         self._pending, self._error, self._closing = None, '', False
@@ -144,7 +181,7 @@ class OpponentAnalysisDialog(QtWidgets.QDialog):
         self.save_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.status.setText('Reading standings… Previous completed results remain visible until this analysis succeeds.')
-        worker = self._worker = OpponentAnalysisWorker(path, self.format.currentData())
+        worker = self._worker = OpponentAnalysisWorker(path, self.format.currentData(), self.db_path, result_hash, self.username, self.assumption.isChecked())
         thread = self._thread = QtCore.QThread(self)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
@@ -276,6 +313,17 @@ class OpponentAnalysisDialog(QtWidgets.QDialog):
             self.details.setChecked(False)
         self.details.setEnabled(not all_users)
 
+    def update_context(self):
+        if self.result is None:
+            return
+        from opponent_construction import apply_user_context
+        for portfolio in self.result['portfolios']:
+            if (portfolio.get('build_context') or {}).get('basis')=='user-instructed assumption, not a build receipt':
+                portfolio.pop('build_context')
+        if self.assumption.isChecked():
+            apply_user_context(self.result,self.username)
+        self.show_selection()
+
     def save_json(self):
         if self.result is None or self._thread is not None:
             return
@@ -287,7 +335,8 @@ class OpponentAnalysisDialog(QtWidgets.QDialog):
         if not path:
             return
         destination = Path(path).resolve()
-        if destination in (self._source, self._result_source) or destination.suffix.lower() != '.json':
+        if (destination in (self._source, self._result_source) or destination.suffix.lower() != '.json'
+                or (self.result.get('salary_evidence') and destination.is_relative_to(Path(self.db_path).resolve().parent))):
             QtWidgets.QMessageBox.warning(self, 'Choose another file', 'Keep the original standings unchanged.')
             return
         temporary = None

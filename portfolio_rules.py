@@ -367,6 +367,9 @@ def select_portfolio(
         max(1, int(math.floor(requested * 0.15 + 1e-9)))
         if auto_guardrails else None
     )
+    if specialist_cpt_limit is not None:
+        specialist_cpt_limit = max(specialist_cpt_limit, sum(min_cpt[key] for key,player in player_lookup.items()
+            if player.get('LockCpt') and _position_tokens(player) & {'K','DST'}))
     max_team = _max_count(normalized["max_team_pct"], requested)
     max_game = _max_count(normalized["max_game_pct"], requested)
     from portfolio_recovery import automatic_caps, recovery_diagnostics, explicit_lineup_ok
@@ -405,6 +408,9 @@ def select_portfolio(
         )
         if pairwise_unique:
             report = portfolio_report(pool, normalized, kind=kind, requested=requested)
+            if kind == 'showdown':
+                from specialist_diagnostics import compare
+                report['specialist_diagnostics'] = compare(pool, pool)
             if automatic_recovery:
                 report['portfolio_recovery'] = recovery_diagnostics(requested, len(pool), starting_caps)
                 report['text'] = _report_text(report)
@@ -1143,6 +1149,9 @@ def select_portfolio(
     if not refinement_passes:
         refinement_stop_reason = "disabled in individual ranking" if individual_ranking else "disabled"
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
+    if kind == 'showdown':
+        from specialist_diagnostics import compare
+        report['specialist_diagnostics'] = compare(all_lineups, selected)
     recovery['final_selected_count'] = len(selected)
     if automatic_recovery:
         report['portfolio_recovery'] = recovery
@@ -1445,6 +1454,12 @@ def _report_text(report: Dict[str, Any]) -> str:
             "new QB Captains with a known opposing DST are blocked."
         )
     from portfolio_recovery import format_recovery
+    if report.get('specialist_diagnostics'):
+        from specialist_diagnostics import text
+        lines.extend(text(report['specialist_diagnostics']))
+    if report.get('captain_pool_adjustments'):
+        from captain_pool import adjustment_text
+        lines.append(adjustment_text(report['captain_pool_adjustments']))
     lines[3:3] = format_recovery(report.get('portfolio_recovery'))
     sim = report.get("sim_summary") or {}
     if sim:

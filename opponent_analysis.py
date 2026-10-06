@@ -78,7 +78,7 @@ def _overlap(counts, size):
     return sum(n*(n-1)//2 for n in counts.values()) / (size*(size-1)//2) if size > 1 else None
 
 
-def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, progress=lambda text: None):
+def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, progress=lambda text: None, *, salary_players=None):
     """Analyze one CSV without changing history, settings, or source files.
 
     Entry IDs deduplicate rows; conflicting copies are excluded entirely.
@@ -101,6 +101,7 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
             digest.update(chunk)
     entries, conflicts, contest_ids, contest_names, field_sizes = {}, set(), set(), set(), set()
     names = {}
+    entry_slots = {}
     audit = Counter({key: 0 for key in ('entry_rows', 'side_table_or_empty_rows', 'missing_id_or_username_rows',
         'identical_duplicate_rows', 'conflicting_duplicate_rows', 'conflicting_entry_ids_excluded', 'invalid_field_size_rows')})
     with path.open(newline='', encoding='utf-8-sig') as handle:
@@ -165,6 +166,11 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
                 else:
                     field_sizes.add(size)
             parsed = _roster(lineup, contest_format)
+            if parsed and salary_players is not None:
+                markers = list(_MARKERS.finditer(lineup))
+                slots = [(lineup[m.end():markers[i+1].start() if i+1<len(markers) else len(lineup)].strip(),
+                          m[1].upper().replace('CAPTAIN','CPT').replace('D/ST','DST')) for i,m in enumerate(markers)]
+                entry_slots[entry_id] = sorted(slots, key=lambda s: s[1] != 'CPT')
             if parsed:
                 signature, players, captain, labels = parsed
                 names.update(labels)
@@ -223,6 +229,14 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
                                flex_pct=_pct(count-cpt, denominator) if cpt is not None else None))
         return result
     portfolios = []
+    from opponent_construction import construction_summary
+    construction_by_user = defaultdict(list)
+    construction_by_captain = defaultdict(lambda: defaultdict(list))
+    for entry_id, entry in entries.items():
+        if entry_id not in conflicts:
+            construction_by_user[entry[0][0]].append((entry_slots.get(entry_id, []), 1))
+            if entry[6]:
+                construction_by_captain[entry[0][0]][entry[6]].append((entry_slots.get(entry_id, []), 1))
     for index, (key, rows) in enumerate(sorted(users.items())):
         check()
         if index % 50 == 0:
@@ -240,6 +254,7 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
                 captains[row[6]] += 1
         points = [r[3] for r in rows if r[3] is not None]
         ranks = [r[2] for r in rows if r[2] is not None]
+        quantiles = statistics.quantiles(points, n=10, method='inclusive') if len(points)>1 else [points[0]]*9 if points else [None]*9
         known_count = len(valid)
         portfolios.append(dict(username=rows[0][1], username_key=key, entries=len(rows), entry_band=_band(len(rows)),
             readable_rosters=known_count, roster_coverage_pct=_pct(known_count, len(rows)),
@@ -252,7 +267,15 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
             mean_field_copies=sum(n * field_signatures[sig] for sig, n in signatures.items()) / known_count if known_count else None,
             scored_entries=len(points), mean_points=statistics.mean(points) if points else None,
             median_points=statistics.median(points) if points else None, best_points=max(points) if points else None,
+            worst_points=min(points) if points else None, points_p10=quantiles[0], points_p90=quantiles[8],
+            points_stddev=statistics.pstdev(points) if points else None,
             ranked_entries=len(ranks), best_rank=min(ranks) if ranks else None,
+            top_10_entries=sum(r<=10 for r in ranks), top_100_entries=sum(r<=100 for r in ranks),
+            constructions=construction_summary(construction_by_user[key], salary_players, contest_format, check) if salary_players is not None else None,
+            captain_groups=[dict(captain=names[cpt],entries=len(group),
+                                 constructions=construction_summary(group,salary_players,contest_format,check))
+                            for cpt,group in sorted(construction_by_captain[key].items())]
+                if salary_players is not None and contest_format=='showdown' else [],
             players=exposures(counts, captains, known_count),
             pairs=[dict(players=[names[p] for p in pair], player_keys=list(pair), entries=n,
                         denominator=known_count, pct=_pct(n, known_count)) for pair, n in pairs.most_common()],
@@ -278,6 +301,8 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
                 audit=dict(audit), entrants=len(portfolios), portfolios=portfolios, cohorts=cohorts, exact_count_cohorts=exact_cohorts,
                 units=dict(points='DraftKings points', exposures='percent_of_readable_entries', overlap='shared_players_per_entry_pair'),
                 field_players=exposures(field_players, field_captains, field_valid),
+                field_constructions=construction_summary([row for rows in construction_by_user.values() for row in rows], salary_players, contest_format, check)
+                    if salary_players is not None else None,
                 limitations=[
                     'One supplied contest, not a strategy recommendation. Repeated entries share game outcomes.',
                     'Username matching ignores case and trailing entry counters only; punctuation stays distinct.',
@@ -295,7 +320,7 @@ def share_payload(result, username='', include_lineups=False):
     """Default share scope: selected entrant plus field/cohort summaries."""
     payload = {k: v for k, v in result.items() if k != 'portfolios'}
     selected = username_key(username) if username else None
-    excluded = {'lineups'} if selected and not include_lineups else set() if selected else {'lineups', 'players', 'pairs'}
+    excluded = {'lineups'} if selected and not include_lineups else set() if selected else {'lineups', 'players', 'pairs', 'captain_groups'}
     payload['portfolios'] = [{k: v for k, v in p.items() if k not in excluded}
                              for p in result['portfolios'] if selected is None or p['username_key'] == selected]
     payload['share_scope'] = 'selected username with exposure/pair detail' if selected else 'all usernames, aggregate summaries only'
@@ -318,7 +343,26 @@ def render_report(result, username='', include_lineups=False):
                      f"shared players {fmt(cohort['median_mean_shared_players'], 2)} (n={cohort['mean_shared_players_entrants']}); "
                      f"mean points {fmt(cohort['median_mean_points'], 2)} (n={cohort['mean_points_entrants']}).")
     field = {p['player_key']: p for p in result['field_players']}
+    if result.get('salary_evidence'):
+        evidence=result['salary_evidence']
+        lines += ['', 'Historical salary: '+evidence['name'], 'Salary SHA-256: '+evidence['sha256']]
+    def constructions(label, data):
+        if not data:
+            return
+        lines.extend(['',label, f"  Metadata matched: {data['known_entries']:,}; unknown: {data['unknown_entries']:,}."])
+        if data['mean_salary'] is not None:
+            lines.append(f"  Mean salary: ${data['mean_salary']:,.0f}.")
+        for category,rows in data['tables'].items():
+            lines.append('  '+category+': '+ '; '.join(f"{r['label']}: {r['entries']:,}/{r['denominator']:,} ({r['pct']:.1f}%)" for r in rows))
+    constructions('Supplied field constructions', result.get('field_constructions'))
     for p in payload['portfolios']:
+        constructions('Constructions — '+p['username'], p.get('constructions'))
+        for group in p.get('captain_groups',[]):
+            constructions(f"Captain {group['captain']} — {group['entries']:,} entries",group['constructions'])
+        if p.get('build_context'):
+            lines += ['Build context: '+p['build_context']['note'], 'Context basis: '+p['build_context']['basis'],
+                      'Complete roster coverage: '+str(p['build_context']['complete_roster_coverage'])]
+        lines.append(f"Score distribution: p10 {fmt(p.get('points_p10'),2)}, p90 {fmt(p.get('points_p90'),2)}, standard deviation {fmt(p.get('points_stddev'),2)}; top-10 finishes {p.get('top_10_entries',0)}/{p['ranked_entries']}, top-100 {p.get('top_100_entries',0)}/{p['ranked_entries']}.")
         lines += ['', f"Username: {p['username']} | entries {p['entries']:,} | readable {p['readable_rosters']:,} | unique {fmt(p['unique_lineups'], 0)}",
                   f"  Repeated entries: {fmt(p['repeated_pct'])}%; athlete pool {fmt(p['player_pool'], 0)}; Captain pool {fmt(p['captain_pool'], 0)}.",
                   f"  Average shared players: {fmt(p['mean_shared_players'], 2)}; shared role slots: {fmt(p['mean_shared_role_slots'], 2)}.",

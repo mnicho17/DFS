@@ -784,9 +784,6 @@ class ShowdownOptimizer:
             return []
 
         locked = [p for p in self.players if p.get("LockCpt")]
-        if len(locked) > 1:
-            names = ", ".join(str(p.get("Name")) for p in locked[:10])
-            raise ValueError(f"Multiple CPT locks set (only 1 CPT allowed). Locked: {names}")
 
         if locked:
             logger.info("CPT LOCK ACTIVE: %s | key=%s", locked[0].get("Name", ""), _pkey(locked[0]))
@@ -1023,6 +1020,9 @@ class ShowdownOptimizer:
             )
 
             # Tags
+            captain_pool = [pk for pk in keys if key_to_player[pk].get('LockCpt')]
+            if captain_pool:
+                prob += pulp.lpSum(cpt[pk] for pk in captain_pool) == 1
             for pk in keys:
                 p = key_to_player[pk]
                 if p.get("FadeFlex"):
@@ -1031,9 +1031,6 @@ class ShowdownOptimizer:
                     prob += cpt[pk] == 0
                 if p.get("LockFlex"):
                     prob += flx[pk] == 1
-                if p.get("LockCpt"):
-                    prob += cpt[pk] == 1
-                    prob += flx[pk] == 0
 
             # Ownership caps (Showdown only)
             for pk in keys:
@@ -1129,7 +1126,7 @@ class ShowdownOptimizer:
             for second in players[index + 1:]
         }
 
-        locked_cpt = next((p for p in players if p.get("LockCpt")), None)
+        locked_cpts = [p for p in players if p.get("LockCpt")]
         conflicting_locks = [
             p for p in players
             if (p.get("LockFlex") and p.get("FadeFlex"))
@@ -1179,8 +1176,8 @@ class ShowdownOptimizer:
                 and not p.get("LockFlex")
                 and under_cap(cap_cpt, used_cpt, player_key[id(p)])
             ]
-            if locked_cpt is not None:
-                cpt_pool = [locked_cpt] if locked_cpt in cpt_pool else []
+            if locked_cpts:
+                cpt_pool = [p for p in cpt_pool if p.get('LockCpt')]
             if not cpt_pool:
                 return None
 
@@ -1363,11 +1360,11 @@ class ShowdownOptimizer:
         def score_flex(p: Dict[str, Any]) -> float:
             return _proj(p) + w_flex * _showdown_flex_own(p)
 
-        locked_cpt = next((p for p in self.players if p.get("LockCpt")), None)
+        locked_cpts = [p for p in self.players if p.get("LockCpt")]
 
         # CPT pool
-        if locked_cpt:
-            cpt_choices = [locked_cpt]
+        if locked_cpts:
+            cpt_choices = locked_cpts
         else:
             cpt_pool = [p for p in self.players if not p.get("FadeCpt")]
             cpt_pool = sorted(cpt_pool, key=lambda p: (score_cpt(p) / max(_cpt_salary(p), 1.0)), reverse=True)

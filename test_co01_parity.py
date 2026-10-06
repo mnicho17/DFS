@@ -110,6 +110,13 @@ class ObjectiveParityTests(unittest.TestCase):
         report = value['portfolio_report']
         # Only additive safety reporting is excluded from the older fixture.
         report.pop('showdown_policy', None)
+        specialist=report.pop('specialist_diagnostics',None)
+        if specialist:
+            from specialist_diagnostics import text
+            observational_lines=set(text(specialist))
+            report['text']='\n'.join(line for line in report['text'].split('\n') if line not in observational_lines)
+            value['build_report']='\n'.join(line for line in value['build_report'].split('\n') if line not in observational_lines)
+        value['diagnostic']['portfolio'].pop('specialist_diagnostics',None)
         report['text'] = '\n'.join(line for line in report['text'].split('\n')
                                    if line.strip() and not line.startswith('Showdown guardrails:'))
         feasibility = value['diagnostic'].get('portfolio_feasibility') or {}

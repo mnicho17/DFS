@@ -40,6 +40,19 @@ def validate_proposal(receipt, payload, players):
     if receipt.retained - Counter(signatures(lineups, receipt.kind)):
         return "retained_mismatch"
     rules = deepcopy(receipt.context["portfolio_rules"])
+    if receipt.kind == 'showdown' and any(p.get('LockCpt') for p in players):
+        from captain_pool import prepare_captain_pool
+        remaining = receipt.retained.copy()
+        retained_rows = []
+        for lineup in lineups:
+            signature = _candidate_signature(lineup, receipt.kind)
+            if remaining[signature]:
+                retained_rows.append(lineup)
+                remaining[signature] -= 1
+        try:
+            _, rules, _ = prepare_captain_pool(players, rules, receipt.requested, retained_rows)
+        except ValueError:
+            return 'validation_failed'
     effective = (payload.get("portfolio_report") or {}).get("effective_min_unique")
     if effective is not None:
         if not 1 <= int(effective) <= rules["min_unique"]:
@@ -67,11 +80,12 @@ def validate_proposal(receipt, payload, players):
         members = lineup_players(lineup, receipt.kind)
         keys = {player_key(p) for p in members}
         captain = player_key(lineup["Captain"]) if receipt.kind == "showdown" else ""
+        captain_pool = {player_key(p) for p in players if p.get('LockCpt')}
+        if receipt.kind == 'showdown' and captain_pool and captain not in captain_pool:
+            return 'validation_failed'
         for player in players:
             key = player_key(player)
             if player.get("LockFlex") and (key not in keys or key == captain):
-                return "validation_failed"
-            if receipt.kind == "showdown" and player.get("LockCpt") and key != captain:
                 return "validation_failed"
             if key in keys and ((key == captain and player.get("FadeCpt")) or (key != captain and player.get("FadeFlex"))):
                 return "validation_failed"

@@ -1068,6 +1068,7 @@ class LineupBuildWorker(QtCore.QObject):
         self.salary_strategy = salary_strategy or "Near Cap"
 
         self.portfolio_rules = dict(portfolio_rules or {})
+        self.captain_adjustments = []
 
         self.sim_enabled = bool(sim_enabled)
 
@@ -1126,6 +1127,12 @@ class LineupBuildWorker(QtCore.QObject):
     def run(self) -> None:
 
         try:
+            if self.kind == 'showdown':
+                from captain_pool import prepare_captain_pool, adjustment_text
+                self.players, self.portfolio_rules, self.captain_adjustments = prepare_captain_pool(
+                    self.players, self.portfolio_rules, self.num_lineups, self.retained_lineups)
+                if self.captain_adjustments:
+                    self.progress.emit(0, self.num_lineups, adjustment_text(self.captain_adjustments))
 
             if self.candidate_library:
                 if self.retained_lineups:
@@ -2609,6 +2616,7 @@ class LineupBuildWorker(QtCore.QObject):
                     "refinement_swaps", "duplication_refinement_swaps", "refinement_attempts",
 
                     "refinement_stop_reason", "refinement_seconds", "effective_min_unique",
+                    "specialist_diagnostics",
 
                 ):
 
@@ -2878,6 +2886,10 @@ class LineupBuildWorker(QtCore.QObject):
 
 
     def _emit_finished(self, payload):
+        if getattr(self, 'captain_adjustments', []) and not payload.get('cancelled'):
+            report = payload.setdefault('portfolio_report', {})
+            report['captain_pool_adjustments'] = self.captain_adjustments
+            report['text'] = format_portfolio_report_text(report)
         finish_worker(payload)
         self.finished.emit(payload)
 
@@ -4167,7 +4179,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
     def open_opponent_portfolios(self):
         from opponent_analysis_ui import OpponentAnalysisDialog
-        dialog = OpponentAnalysisDialog(self.username_edit.text().strip(), self.results_folder.text(), self)
+        dialog = OpponentAnalysisDialog(self.username_edit.text().strip(), self.results_folder.text(), self, db_path=self.db_path)
         dialog.exec_()
 
     def start_performance_review(self, stats=False):
@@ -7423,6 +7435,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
         btn_cpt_lock = QtWidgets.QPushButton("CPT Lock")
+        btn_cpt_lock.setToolTip('Select one Captain for all lineups, or multiple Captains as a pool. Build-local exposure adjustments and allocated lineup counts are shown in the report.')
 
         btn_cpt_lock.clicked.connect(lambda: self.apply_tags(mode="cpt_lock"))
 

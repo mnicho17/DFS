@@ -182,7 +182,7 @@ def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Ca
             if any(unavailable(p) or p.get('FadeFlex') for p in roster) or not locked.issubset(set(keys)) or not _group_ok(set(keys),groups):
                 rejected+=1;continue
             if kind=='showdown':
-                if roster[0].get('FadeCpt') or (captains and captains != {keys[0]}) or keys[0] in locked:
+                if roster[0].get('FadeCpt') or (captains and keys[0] not in captains) or keys[0] in locked:
                     rejected+=1;continue
                 salary=float(roster[0].get('CptSalary') or 0)+sum(float(p.get('FlexSalary') or 0) for p in roster[1:])
                 if len({p.get('Team') for p in roster}) != 2:

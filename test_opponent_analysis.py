@@ -293,7 +293,7 @@ class OpponentDialogTests(StandingsFixture):
             parent.results_folder.setText(self.tmp.name)
             with patch('opponent_analysis_ui.OpponentAnalysisDialog') as factory:
                 parent.opponents_button.click()
-                factory.assert_called_once_with('Example', self.tmp.name, parent)
+                factory.assert_called_once_with('Example', self.tmp.name, parent, db_path=parent.db_path)
                 factory.return_value.exec_.assert_called_once()
         finally:
             parent.close()
