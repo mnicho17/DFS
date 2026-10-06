@@ -30,7 +30,7 @@ def distributions(entries, cap=50000):
             for category,values in counts.items()}
 
 
-def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cancelled=lambda:False):
+def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cancelled=lambda:False, draw_weights=None):
     """Fit marginal construction weights over bounded, freshly legal proposals.
 
     Opponent entries may repeat (duplication exists in real fields). Sampling never
@@ -65,6 +65,13 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
         values = [max(0, fn(p)) for p in pool]
         return [max(.05, x) for x in values] if any(values) else [max(.1, float(p.get('FlexProjection') or 0))**1.3 for p in pool]
     cw,fw = weights(_showdown_cpt_own),weights(_showdown_flex_own)
+    if draw_weights is not None:
+        for values,slot in ((cw,'Captain'),(fw,'FLEX')):
+            for i,p in enumerate(pool):
+                multiplier=draw_weights.get((slot,_pkey(p)),1)
+                if not isinstance(multiplier,(int,float)) or not math.isfinite(multiplier) or multiplier<=0:
+                    raise ValueError('Invalid experimental ownership draw multiplier.')
+                values[i]*=multiplier
     proposals,features = [],[]
     for attempt in range(max(200, count*100)):
         if attempt%100==0 and cancelled():

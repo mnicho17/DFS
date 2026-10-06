@@ -164,6 +164,23 @@ The original salary-proxy experiment remains available separately. Its synthetic
 athlete weights are not recorded forecasts. Whole-game holdouts and equal game
 weights apply to both experiments; missing qualified games remain unscored.
 
+The recorded comparison can include a third **ownership-calibrated historical
+model** through its visible experimental checkbox. The current and original
+historical models remain baselines. Two fixed passes adjust private draw weights
+from recorded Captain/FLEX ownership errors, resample legal proposals and refit
+the original earlier-game construction targets. A trial is retained only when
+ownership MAE decreases and mean construction-target distance is no more than
+0.02 above the initial historical sample. These constants are fixed before
+evaluation; observed later contest distributions and ranks do not select weights.
+No percentage totals are renormalized and no player forecasts are rewritten.
+
+Reports retain every trial's errors and acceptance decision, ownership targets,
+and before/after construction distances. All three models use the same diagnostic
+candidate bank and scenario seed. An ownership target can conflict with a
+construction target or lack legal proposal coverage; keeping the original sample
+is a disclosed result, not a reason to relax constraints. Matching recorded
+forecasts more closely does not establish their accuracy or improved returns.
+
 ```sql
 SELECT u.username, c.end_date, c.name, s.entries, s.best_rank,
        s.top_one_pct_entries

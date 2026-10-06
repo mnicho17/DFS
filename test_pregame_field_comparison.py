@@ -182,3 +182,27 @@ class PregameFieldTests(unittest.TestCase):
         self.assertFalse(errors);self.assertEqual(len(results),1)
         self.assertEqual(results[0]['draw_mode'],'recorded')
         self.assertEqual(before,logical_db(f.db))
+
+    def test_calibrated_third_model_uses_shared_sim_and_preserves_evidence(self):
+        f,r,m,s,snap,p=self.history();before=logical_db(f.db);files=source_bytes(f.root)
+        report=evaluate_history(f.db,'2026-09-24',count=50,seeds=(17,),draw_mode='recorded',
+            compare_sim=True,ownership_calibration=True,scenarios=30,candidate_count=20)
+        self.assertEqual(set(report['scores']),{'current','historical','calibrated'})
+        sim=report['games'][0]['models']['current'][0]['sim_comparison']
+        self.assertEqual(set(sim['models']),{'current','historical','calibrated'})
+        self.assertTrue(sim['outcome_moments_identical'])
+        self.assertIsNotNone(sim['calibrated_overlap_pct'])
+        self.assertIn('Calibrated seed 17: ownership MAE',render_evaluation(report))
+        self.assertEqual(before,logical_db(f.db));self.assertEqual(files,source_bytes(f.root))
+        f.change('UPDATE opponent_user_contest_stats SET best_rank=999,top_one_pct_entries=0')
+        self.assertEqual(report,evaluate_history(f.db,'2026-09-24',count=50,seeds=(17,),draw_mode='recorded',
+            compare_sim=True,ownership_calibration=True,scenarios=30,candidate_count=20))
+
+    def test_calibration_requires_recorded_inputs_and_is_explicit_in_dialog(self):
+        with self.assertRaisesRegex(ValueError,'qualified recorded'):
+            evaluate_history('unused','2026-09-24',ownership_calibration=True)
+        from opponent_history_ui import OpponentHistoryDialog
+        f,r,m,s,snap,p=self.history();d=OpponentHistoryDialog(f.db);self.addCleanup(d.deleteLater)
+        self.assertTrue(d.calibrate_ownership.isChecked())
+        d.calibrate_ownership.setChecked(False)
+        self.assertIsNone(d.profile);self.assertFalse(d.save_button.isEnabled())
