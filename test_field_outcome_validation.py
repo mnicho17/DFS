@@ -66,7 +66,7 @@ class FieldOutcomeTests(unittest.TestCase):
         self.assertEqual(a['accepted'],99);self.assertFalse(a['complete'])
 
     def test_score_and_explicit_identity_conflicts_block(self):
-        for conflict in ('score','identity','total'):
+        for conflict in ('score','identity'):
             f,r,m,s,_,_=self.history()
             def edit(rows):
                 h=rows[0]
@@ -125,3 +125,18 @@ class FieldOutcomeTests(unittest.TestCase):
         self.assertIn('Actual outcomes:',render_evaluation(report));self.assertIn('Payouts/ROI unavailable',render_evaluation(report))
         with self.assertRaisesRegex(ValueError,'qualified recorded'):
             evaluate_history('unused','2026-09-24',evaluate_outcomes=True)
+
+    def test_entry_total_discrepancies_block_ranks_without_rounding_independent_scores(self):
+        f,r,m,s,_,_=self.history();pool,_=self.qualify(f,r,m,s)
+        def edit(rows):
+            h=rows[0];rows[1][h.index('Points')]=str(Decimal(rows[1][h.index('Points')])-Decimal('0.00001'))
+        source=self.rewrite(r,edit);evidence=capture_outcomes(source,m,[])
+        self.assertEqual(evidence['total_discrepancies'],1)
+        self.assertEqual(evidence['total_discrepancy_examples'][0]['difference'],'-0.00001')
+        bank=freeze_bank(pool,20,lambda:False)
+        actual=evaluate_candidates(evidence,bank,{'current':bank})
+        self.assertEqual(actual['status'],'complete')
+        self.assertIsNone(actual['models']['current']['mean_supplied_entries_beaten_pct'])
+        self.assertTrue(all(row['supplied_rank_if_added'] is None for row in actual['models']['current']['rows']))
+        self.assertIn('no rounding',actual['standings_status'])
+        self.assertEqual(ownership_accuracy(evidence,pool,{})['denominator'],100)

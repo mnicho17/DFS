@@ -66,7 +66,7 @@ def capture_outcomes(source,manifest,related,cancelled=lambda:False):
         try:witness=he._roster(text,universe,'showdown')
         except ValueError:witness=None
         entries[ident]=(receipt,value,witness)
-    points=[];counts=Counter();duplicates=Counter();valid=0;mismatches=0
+    points=[];counts=Counter();duplicates=Counter();valid=0;mismatches=0;examples=[]
     by_key={p['key']:p for p in universe}
     for ident,(_,value,witness) in entries.items():
         ai._check(cancelled)
@@ -77,20 +77,22 @@ def capture_outcomes(source,manifest,related,cancelled=lambda:False):
         signature=tuple(sorted((s['role'],by_key[s['key']]['roles'][s['role']]['id']) for s in slots))
         duplicates[signature]+=1
         counts.update(signature)
-        # Compare exact reconstructed totals wherever coverage permits. A bad
-        # total blocks outcome scoring rather than calibrating to bad results.
+        # Preserve exact differences. They block standings comparisons, but
+        # cannot alter independent roster counts or candidate player scores.
         total=Decimal(0);known=True
         for slot in slots:
             p=by_key[slot['key']];score=base.get((ai._name(p['name']),p['team'],p['position'],p['game']))
             if score is None:known=False;break
             total+=score*(Decimal('1.5') if slot['role']=='CPT' else 1)
-        if known and value is not None and total!=value:mismatches+=1
-    if mismatches:raise ValueError('Reported entry totals disagree with exact reconstructed scores.')
+        if known and value is not None and total!=value:
+            mismatches+=1
+            if len(examples)<5:examples.append(dict(reported=str(value),reconstructed=str(total),difference=str(value-total)))
     accepted=len(entries)-len(conflicts)
     complete=(len(sizes)==1 and next(iter(sizes))==accepted and not invalid_size and not conflicts and valid==accepted)
     ai._verify(source,cancelled)
     return dict(base=base,universe=universe,points=sorted(points),counts=counts,duplicates=duplicates,
                 accepted=accepted,valid_rosters=valid,conflicting_entries=len(conflicts),complete=complete,
+                total_discrepancies=mismatches,total_discrepancy_examples=examples,
                 score_basis='selected original player-result table; cross-export conflicts checked',
                 source_hash=source['hash'])
 
@@ -134,18 +136,20 @@ def evaluate_candidates(evidence,bank,ordered):
         else:scores[_signature(lineup)]=total
     if missing:return dict(status='unavailable',reason='Missing selected-source actual player scores; no zeros or cross-export filling.',missing_players=sorted(missing),scored_candidates=len(scores),candidates=len(bank))
     points=evidence['points'];models={}
-    if not points:return dict(status='unavailable',reason='No exact supplied entry scores.')
     for name,lineups in ordered.items():
         selected=lineups[:min(20,len(bank))];rows=[]
         for lineup in selected:
             signature=_signature(lineup);value=scores[signature]
             higher=len(points)-bisect_right(points,value);equal=bisect_right(points,value)-bisect_left(points,value)
-            rows.append(dict(signature=signature,points=str(value),supplied_rank_if_added=higher+1,
-                supplied_equal_scores=equal,supplied_entries_beaten_pct=100*bisect_left(points,value)/len(points),
+            consistent=bool(points) and not evidence['total_discrepancies']
+            rows.append(dict(signature=signature,points=str(value),supplied_rank_if_added=higher+1 if consistent else None,
+                supplied_equal_scores=equal if consistent else None,supplied_entries_beaten_pct=100*bisect_left(points,value)/len(points) if consistent else None,
                 observed_duplicates_lower_bound=evidence['duplicates'].get(signature,0)))
         models[name]=dict(top_n=len(rows),mean_points=statistics.mean(float(r['points']) for r in rows),
-            mean_supplied_entries_beaten_pct=statistics.mean(r['supplied_entries_beaten_pct'] for r in rows),
+            mean_supplied_entries_beaten_pct=statistics.mean(r['supplied_entries_beaten_pct'] for r in rows) if consistent else None,
             mean_observed_duplicates_lower_bound=statistics.mean(r['observed_duplicates_lower_bound'] for r in rows),rows=rows)
     return dict(status='complete',scored_candidates=len(scores),supplied_scored_entries=len(points),accepted_entries=evidence['accepted'],models=models,
+        standings_status='unavailable: reported totals disagree with exact reconstructed totals; no rounding applied' if evidence['total_discrepancies'] else 'supplied-score comparison only; official ranks unavailable' if points else 'unavailable: no exact supplied entry scores',
+        total_discrepancies=evidence['total_discrepancies'],total_discrepancy_examples=evidence['total_discrepancy_examples'],
         payout_status='unavailable: no verified payout schedule or hypothetical-entry fee; no ROI inferred',
         note='Frozen diagnostic bank ranked before outcome evaluation. Supplied-entry comparisons are not official ranks; ties are explicit. Duplicates are observed lower bounds. Candidate entries are evaluated independently, not as an inserted portfolio.')

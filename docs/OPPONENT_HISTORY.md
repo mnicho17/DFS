@@ -187,7 +187,11 @@ RL-07A exact identity, role and score parsing. Other mapped exports of the same
 game are checked for conflicting scores, including salary revisions; they never
 fill a missing score in the selected export. Missing selected-source scores make
 the entire candidate-bank outcome comparison unavailable. Reconstructed supplied
-entry totals must agree exactly where player coverage permits.
+entry totals are compared exactly where player coverage permits. Any discrepancy,
+including a tiny export decimal difference, withholds standings/tie comparisons.
+Original totals are never rounded or overwritten. Independent roster ownership,
+candidate actual points and duplicate lower bounds remain available; discrepancy
+counts and examples explain the withheld metrics.
 
 Ownership comes from validated six-athlete historical rosters, not listed CSV
 percentages. The report compares recorded forecasts and sampled fields with

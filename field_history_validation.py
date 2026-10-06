@@ -244,7 +244,11 @@ def render_evaluation(report):
                     actual=sim['actual_outcomes']
                     if actual['status']=='complete':
                         lines.append(f"Actual outcomes: {actual['scored_candidates']} frozen candidates vs {actual['supplied_scored_entries']:,} supplied entry scores; unofficial comparison.")
-                        for name,v in actual['models'].items():lines.append(f"  {name}: top-{v['top_n']} mean actual points {v['mean_points']:.2f}; mean supplied entries beaten {v['mean_supplied_entries_beaten_pct']:.2f}%; observed duplicates lower bound {v['mean_observed_duplicates_lower_bound']:.2f}.")
+                        lines.append('  Standings: '+actual['standings_status'])
+                        if actual['total_discrepancies']:lines.append(f"  {actual['total_discrepancies']:,} exact entry-total discrepancies; examples: {actual['total_discrepancy_examples']}")
+                        for name,v in actual['models'].items():
+                            beaten=f"{v['mean_supplied_entries_beaten_pct']:.2f}%" if v['mean_supplied_entries_beaten_pct'] is not None else 'unavailable'
+                            lines.append(f"  {name}: top-{v['top_n']} mean actual points {v['mean_points']:.2f}; mean supplied entries beaten {beaten}; observed duplicates lower bound {v['mean_observed_duplicates_lower_bound']:.2f}.")
                         lines.append('  Payouts/ROI unavailable; no verified payout schedule or entry fee.')
                     else:lines.append('Actual outcomes unavailable: '+actual['reason'])
             elif sim:lines.append('SIM unavailable: '+sim['reason'])
