@@ -22,7 +22,7 @@ def saved_contests(db_path):
             'JOIN analysis_sources r ON r.hash=p.result_hash ORDER BY r.original_name')]
 
 
-def analyze_saved_contest(db_path, result_hash, cancelled=lambda: False, progress=lambda text: None):
+def analyze_saved_contest(db_path, result_hash, cancelled=lambda: False, progress=lambda text: None, *, capture_entries=False):
     from opponent_analysis import analyze_standings
     from data_paths import history_source_paths
     path = Path(db_path or history_source_paths()[0]).resolve()
@@ -43,21 +43,29 @@ def analyze_saved_contest(db_path, result_hash, cancelled=lambda: False, progres
     # Parse original historical salaries again, never use live player metadata.
     manifest = ai._salary_manifest(salary['snapshot'], cancelled)
     report = analyze_standings(result['snapshot'], manifest['format'], cancelled, progress,
-                               salary_players=manifest['players'])
+                               salary_players=manifest['players'], capture_entries=capture_entries)
     for source in (result, salary):
         ai._verify(source, cancelled)
     report['source_name'] = result['name']
     report['salary_evidence'] = dict(name=salary['name'], sha256=salary['hash'],
                                    association='saved, freshly verified', dates=manifest['dates'])
+    if capture_entries:
+        report['history_evidence'] = dict(result=result, salary=salary, players=manifest['players'])
     return report
 
 
-def construction_summary(lineups, salary_players, kind='showdown', checkpoint=lambda: None):
-    """Each metric has its own denominator; ambiguous identities stay unknown."""
+def salary_lookup(salary_players):
     lookup = defaultdict(list)
     for player in salary_players or []:
         for role in player['role'].split('/'):
             lookup[(ai._name(player['name']), role)].append(player)
+    return lookup
+
+
+def construction_summary(lineups, salary_players, kind='showdown', checkpoint=lambda: None, *, lookup=None):
+    """Each metric has its own denominator; ambiguous identities stay unknown."""
+    if lookup is None:
+        lookup = salary_lookup(salary_players)
     categories = defaultdict(Counter)
     denominators = Counter()
     unknown = 0

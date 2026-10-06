@@ -77,6 +77,9 @@ class OpponentAnalysisDialog(QtWidgets.QDialog):
         self.saved_button = QtWidgets.QPushButton('Analyze saved mapped contest…')
         self.saved_button.clicked.connect(self.open_saved)
         layout.addWidget(self.saved_button)
+        self.history_button = QtWidgets.QPushButton('Username history & field profiles…')
+        self.history_button.clicked.connect(self.open_history)
+        layout.addWidget(self.history_button)
         self.assumption = QtWidgets.QCheckBox('For my username: assume single-Captain entries were locked/non-SIM')
         self.assumption.setToolTip('A user assumption, not evidence from standings. Applies only to your username; incomplete roster coverage stays disclosed.')
         self.assumption.toggled.connect(self.update_context)
@@ -153,6 +156,10 @@ class OpponentAnalysisDialog(QtWidgets.QDialog):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'One contest standings CSV', self.folder, 'CSV files (*.csv)')
         if path:
             self.start(path)
+
+    def open_history(self):
+        from opponent_history_ui import OpponentHistoryDialog
+        OpponentHistoryDialog(self.db_path, self.search.text(), self).exec_()
 
     def open_saved(self):
         if self._thread is not None:

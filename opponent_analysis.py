@@ -78,7 +78,7 @@ def _overlap(counts, size):
     return sum(n*(n-1)//2 for n in counts.values()) / (size*(size-1)//2) if size > 1 else None
 
 
-def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, progress=lambda text: None, *, salary_players=None):
+def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, progress=lambda text: None, *, salary_players=None, capture_entries=False):
     """Analyze one CSV without changing history, settings, or source files.
 
     Entry IDs deduplicate rows; conflicting copies are excluded entirely.
@@ -229,13 +229,14 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
                                flex_pct=_pct(count-cpt, denominator) if cpt is not None else None))
         return result
     portfolios = []
-    from opponent_construction import construction_summary
+    from opponent_construction import construction_summary, salary_lookup
+    lookup = salary_lookup(salary_players) if salary_players is not None else None
     construction_by_user = defaultdict(list)
     construction_by_captain = defaultdict(lambda: defaultdict(list))
     for entry_id, entry in entries.items():
         if entry_id not in conflicts:
             construction_by_user[entry[0][0]].append((entry_slots.get(entry_id, []), 1))
-            if entry[6]:
+            if entry[6] and not capture_entries:
                 construction_by_captain[entry[0][0]][entry[6]].append((entry_slots.get(entry_id, []), 1))
     for index, (key, rows) in enumerate(sorted(users.items())):
         check()
@@ -248,7 +249,10 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
                 check()
             counts.update(row[5])
             role_counts.update(row[4])
-            pairs.update(itertools.combinations(row[5], 2))
+            # History stores the entry/slot rows; pair detail can be queried from
+            # those rows without constructing a second large copy during import.
+            if not capture_entries:
+                pairs.update(itertools.combinations(row[5], 2))
             signatures[row[4]] += 1
             if row[6]:
                 captains[row[6]] += 1
@@ -271,15 +275,15 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
             points_stddev=statistics.pstdev(points) if points else None,
             ranked_entries=len(ranks), best_rank=min(ranks) if ranks else None,
             top_10_entries=sum(r<=10 for r in ranks), top_100_entries=sum(r<=100 for r in ranks),
-            constructions=construction_summary(construction_by_user[key], salary_players, contest_format, check) if salary_players is not None else None,
+            constructions=construction_summary(construction_by_user[key], salary_players, contest_format, check, lookup=lookup) if salary_players is not None else None,
             captain_groups=[dict(captain=names[cpt],entries=len(group),
-                                 constructions=construction_summary(group,salary_players,contest_format,check))
+                                 constructions=construction_summary(group,salary_players,contest_format,check,lookup=lookup))
                             for cpt,group in sorted(construction_by_captain[key].items())]
-                if salary_players is not None and contest_format=='showdown' else [],
-            players=exposures(counts, captains, known_count),
+                if salary_players is not None and contest_format=='showdown' and not capture_entries else [],
+            players=[] if capture_entries else exposures(counts, captains, known_count),
             pairs=[dict(players=[names[p] for p in pair], player_keys=list(pair), entries=n,
                         denominator=known_count, pct=_pct(n, known_count)) for pair, n in pairs.most_common()],
-            lineups=[dict(players=[names[p] for p in sig if not p.startswith('CPT:')],
+            lineups=[] if capture_entries else [dict(players=[names[p] for p in sig if not p.startswith('CPT:')],
                           captain=next((names[p[4:]] for p in sig if p.startswith('CPT:')), None),
                           entries=n, field_copies=field_signatures[sig]) for sig, n in signatures.most_common()]))
     def cohort_summary(members):
@@ -296,12 +300,15 @@ def analyze_standings(path, contest_format='showdown', cancelled=lambda: False, 
         exact_groups[p['entries']].append(p)
     exact_cohorts = [dict(entry_count=count, **cohort_summary(members)) for count, members in sorted(exact_groups.items())]
     check()
-    return dict(schema_version=1, format=contest_format, source_name=path.name, source_sha256=digest.hexdigest(),
+    captured = [dict(entry_id=entry_id, username_key=e[0][0], username=e[1], rank=e[2], points=e[3],
+                     signature=list(e[4]) if e[4] else None, slots=entry_slots.get(entry_id, []))
+                for entry_id,e in sorted(entries.items()) if entry_id not in conflicts] if capture_entries else None
+    return dict(**({'history_entries': captured} if capture_entries else {}), schema_version=1, format=contest_format, source_name=path.name, source_sha256=digest.hexdigest(),
                 coverage=coverage, supplied_field_size=supplied_size, observed_field_sizes=sorted(field_sizes),
                 audit=dict(audit), entrants=len(portfolios), portfolios=portfolios, cohorts=cohorts, exact_count_cohorts=exact_cohorts,
                 units=dict(points='DraftKings points', exposures='percent_of_readable_entries', overlap='shared_players_per_entry_pair'),
                 field_players=exposures(field_players, field_captains, field_valid),
-                field_constructions=construction_summary([row for rows in construction_by_user.values() for row in rows], salary_players, contest_format, check)
+                field_constructions=construction_summary([row for rows in construction_by_user.values() for row in rows], salary_players, contest_format, check,lookup=lookup)
                     if salary_players is not None else None,
                 limitations=[
                     'One supplied contest, not a strategy recommendation. Repeated entries share game outcomes.',
