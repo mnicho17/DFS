@@ -17,6 +17,18 @@ from build_diagnostics import (
 
 
 class BuildDiagnosticsTests(unittest.TestCase):
+    def test_prepared_screening_reports_library_source_and_fresh_final_sim(self):
+        record=self._diagnostic()
+        record['settings']['compute_mode']='Deep'
+        record['settings']['sim_enabled']=True
+        record['candidates']['optimizer_target']=100
+        record['candidate_library']=dict(type='prepared_showdown',saved=10000,accepted=100,
+            valid_seen=1000,preparation_complete=True,scan_complete=False,screening_reused=100)
+        text=format_build_report(record)
+        self.assertIn('100 library',text)
+        self.assertIn('100 compatible sampled candidates reused',text)
+        self.assertIn('Detailed SIM and independent audits run fresh',text)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.env = mock.patch.dict(

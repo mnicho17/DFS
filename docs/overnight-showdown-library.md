@@ -91,14 +91,50 @@ reports distinguish complete/partial preparation, full/time-limited scans and
 sampled candidates. Captain-balanced admission is separate from final Captain
 exposure requirements. Defaults without a loaded prepared library are unchanged.
 
+## Optional overnight screening
+
+In Settings → Prepare Showdown Roster Library, select **Also screen a bounded
+candidate sample for Deep reuse**. Prepare a complete library first (raise the
+stored-roster limit if needed). Screening uses the current player inputs, rules,
+Captain allocation, candidate budget and Deep screening settings captured when
+the dialog opens. It admits at most 20,000 Captain-balanced candidates, saves
+that specific bank, and scores it in checkpointed batches. This is screening of
+a sample, not SIM of every stored roster and not a submitted portfolio.
+
+Pause/close waits for the worker to retire. Only whole batches with every
+requested screening scenario completed are committed. Resume uses the saved
+bank and skips its completed batches. A time or 512-MiB cache limit can leave
+partial screening. Deep uses only a fully screened compatible bank; otherwise
+it follows the existing fresh-screening path.
+
+Disposable caches live in the app's `showdown-screening` data folder, separately
+from the roster library. Exact player inputs (including projections and
+ownership), rules, salary strategy/cap, candidate budget, scenario/field settings,
+seed, library identity/count/completeness, Python runtime and app code identify
+each cache. Changed inputs get another cache; no stale score is promoted to a
+current result. Payload checksums and roster validation guard reuse. Rank-based
+metrics are recomputed over the full saved bank, rather than comparing ranks
+from different batches. Detailed SIM, independent audits, current exposure
+requirements and portfolio validation continue to run fresh.
+
+For an explicit saved snapshot, the equivalent CLI is:
+
+```powershell
+python scripts/screen_showdown_library.py input-snapshot.json showdown-rosters.sdlib --hours 1
+```
+
+CLI and packaged app code identities are intentionally distinct. Reuse requires
+the same runtime/app code used for preparation. Progress reports scored/total
+candidates and completion; the final summary records elapsed time and throughput.
+Elapsed preparation includes initial bank sampling and integrity checks.
+
 ## Remaining implementation stages
 
 1. Improve scope/storage estimates and large-slate partition management.
-2. Add optional overnight screening using a small, recorded scenario sample;
-   persist scoring-input and model identities independently of roster identity.
-3. Reuse compatible screening or rescore changed inputs, then run the existing
-   detailed SIM, exposure allocation and independent validation. A larger time
-   allowance must not silently change the user's chosen SIM settings.
+2. Expand screening beyond the bounded bank only after measuring cost and adding
+   explicit diversity/coverage controls and storage estimates.
+3. Consider compatible detailed-score reuse separately; independent validation
+   must remain fresh. A larger time allowance must not silently change chosen SIM settings.
 4. Measure full-size build performance and coverage before enabling default use.
 
 All-Captain enumeration is larger than an individual locked-Captain build. A

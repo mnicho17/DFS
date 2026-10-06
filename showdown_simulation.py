@@ -128,6 +128,14 @@ def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0,
     return field
 
 
+def rank_screening_metrics(rows):
+    ordered = {key: sorted(row[key] for row in rows) for key in ("sim_top_one_pct", "sim_top_five_pct", "sim_ceiling", "sim_return_score", "field_exact_matches")}
+    for i, row in enumerate(rows):
+        rank = lambda key: .5 if len(rows) <= 1 else (bisect.bisect_left(ordered[key], row[key]) + bisect.bisect_right(ordered[key], row[key]) - 1) / (2 * (len(rows) - 1))
+        row["sim_return_index"] = 100 * rank("sim_return_score")
+        row["sim_edge"] = 100 * (.40 * rank("sim_top_one_pct") + .20 * rank("sim_top_five_pct") + .15 * rank("sim_ceiling") + .15 * rank("sim_return_score") + .10 * (1 - rank("field_exact_matches")))
+
+
 @phase("primary_sim", simulation=True)
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
                       seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False, diagnostic_field=None):
@@ -227,11 +235,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
                     sim_return_score=returns[i] / max(1, completed),
                     field_exact_matches=field_counts[showdown_signature(lineup)])
         rows.append(base)
-    ordered = {key: sorted(row[key] for row in rows) for key in ("sim_top_one_pct", "sim_top_five_pct", "sim_ceiling", "sim_return_score", "field_exact_matches")}
-    for i, row in enumerate(rows):
-        rank = lambda key: .5 if len(rows) <= 1 else (bisect.bisect_left(ordered[key], row[key]) + bisect.bisect_right(ordered[key], row[key]) - 1) / (2 * (len(rows) - 1))
-        row["sim_return_index"] = 100 * rank("sim_return_score")
-        row["sim_edge"] = 100 * (.40 * rank("sim_top_one_pct") + .20 * rank("sim_top_five_pct") + .15 * rank("sim_ceiling") + .15 * rank("sim_return_score") + .10 * (1 - rank("field_exact_matches")))
+    rank_screening_metrics(rows)
     result = []
     for i, raw in enumerate(candidates):
         lu = ShowdownLineup(raw["Captain"], raw["Flex"])
@@ -360,7 +364,12 @@ def run_deep_showdown(worker, shortlist_fn):
             "validation_scenarios": 0, "shortlist_count": 0, "validation_top_overlap_pct": None,
             "candidate_bank_count": generated, "validation_time_limit_reached": False}
     if lineups and not stop(start + limit * screening_fraction):
-        coarse = simulate_showdown(retained + lineups, players, scenario_cache=getattr(worker,"scenario_cache",False),
+        reused=getattr(worker,'library_report',{}).get('screening_reused',0)
+        if reused and not retained:
+            coarse=dict(lineups=lineups,report=dict(scenarios=lineups[0].sim_metrics['sim_scenarios'],
+                field_lineups=lineups[0].sim_metrics['sim_field_lineups'],screening_reused=reused))
+        else:
+            coarse = simulate_showdown(retained + lineups, players, scenario_cache=getattr(worker,"scenario_cache",False),
             scenarios=min(options["screening"], max(250, worker.sim_scenarios)),
             field_lineup_count=min(1600, options["field"] or 1200), salary_cap=worker.salary_cap, seed=73129,
             cancel_callback=lambda: stop(start + limit * screening_fraction),

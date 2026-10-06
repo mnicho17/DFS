@@ -177,4 +177,46 @@ class PreparedIntegrationTests(unittest.TestCase):
         self.assertEqual(results[0]['sim_report']['candidate_library']['type'],'prepared_showdown')
 
 
+    def test_cached_worker_skips_only_screening_and_runs_fresh_validation(self):
+        from main_window import LineupBuildWorker
+        from captain_pool import prepare_captain_pool
+        from showdown_screening import prepare_screening,settings
+        import showdown_simulation
+        for i,p in enumerate(self.players):
+            p['FlexSalary']=6500+i*200;p['CptSalary']=p['FlexSalary']*1.5
+        current=self.locked();prepare(self.path,self.players,captain_keys=[player_key(p) for p in current[:2]])
+        options=dict(candidates=100,field=200,screening=250,shortlist=100)
+        adjusted,rules,_=prepare_captain_pool(current,{},2)
+        prepare_screening(self.path,adjusted,limit=100,salary_cap=50000,salary_strategy='Flexible',
+            rules=rules,screening=settings(options,250))
+        worker=LineupBuildWorker(current,kind='showdown',num_lineups=2,salary_cap=50000,
+            salary_strategy='Flexible',sim_enabled=True,sim_scenarios=250,compute_mode='Deep',
+            deep_time_limit_seconds=20,deep_options=options,candidate_library=str(self.path))
+        calls=[];original=showdown_simulation.simulate_showdown
+        def fresh(*args,**kwargs):
+            calls.append(kwargs['scenarios']);return original(*args,**kwargs)
+        results=[];errors=[];worker.finished.connect(results.append);worker.error.connect(errors.append)
+        with patch.object(showdown_simulation,'simulate_showdown',side_effect=fresh),patch('main_window.load_bounded',create=True,side_effect=AssertionError('unused')):
+            worker.run()
+        self.assertFalse(errors,errors)
+        self.assertEqual(len(results[0]['lineups']),2)
+        self.assertGreater(results[0]['sim_report']['candidate_library']['screening_reused'],0)
+        self.assertNotIn(250,calls);self.assertIn(2500,calls)
+
+    def test_dialog_runs_optional_screening_off_gui_thread(self):
+        for i,p in enumerate(self.players):
+            p['FlexSalary']=6500+i*200;p['CptSalary']=p['FlexSalary']*1.5
+        snapshot=create_snapshot(self.locked(),dict(sport='NFL',contest_kind='showdown',salary_cap=50000,
+            requested_lineups=2,nfl_sim_scenarios=250,deep_compute=dict(candidates=100,screening=250,field=20),salary_strategy='Flexible'),{})
+        dialog=PreparationDialog(snapshot);dialog.path.setText(str(self.path));dialog.screen.setChecked(True)
+        from showdown_screening import prepare_screening
+        threads=[]
+        def record(*args,**kwargs):
+            threads.append(threading.get_ident());return prepare_screening(*args,**kwargs)
+        with patch('showdown_screening.prepare_screening',side_effect=record):
+            dialog.begin();self.wait(lambda:dialog.thread is None)
+        self.assertTrue(dialog.pending['screening_complete'])
+        self.assertNotEqual(threads[0],threading.get_ident());dialog.close()
+
+
 if __name__=='__main__':unittest.main()
