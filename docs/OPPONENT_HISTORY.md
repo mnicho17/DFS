@@ -58,6 +58,50 @@ Renames and alternate accounts are not inferred.
 
 ## Comparing historical users
 
+### Testing construction profiles on later games
+
+In the username-history window, select **Showdown**, choose a historical cutoff,
+and click **Test later Showdown games**. At least two games must precede the date,
+and at least one must be on or after it. This read-only experiment uses the whole
+field; username, entry-count and successful-user filters do not apply.
+
+All contests sharing a game and date stay in the same training/test group,
+including different salary revisions. One contest with the most known
+constructions represents each game (ties use a stable contest key). Training
+averages each game's distribution equally; larger contests do not dominate.
+Later games and their outcome ranks never train the targets.
+
+The experimental sampler fits five marginal construction targets over bounded
+legal proposals: team split, Captain position, QB count, kicker/defense count,
+and salary left. It uses exact identities and salaries from the supplied slate,
+never copies an old athlete selection, and permits all legal under-cap spending.
+Absent targets are reported as missing from proposals, not proven infeasible.
+Opponent entries can repeat, as they do in real contest fields. No hard exposure
+or specialist limit is inferred from an absent historical construction.
+
+The report compares 300 opponents across three fixed seeds for each model/game.
+Total variation distance measures each construction distribution: lower is closer
+to the observed field, zero is identical, and one is disjoint. Scores average
+seeds within games, then give each comparable game equal weight. Incomplete
+generated fields are reported and excluded from scores. Per-game results and a
+training-evidence digest accompany the aggregate; the five-category average is
+descriptive, not an estimate of financial performance.
+
+Both models use the same explicitly selected hypothetical athlete draw weights:
+uniform, or a salary-based proxy `(salary / 1000, floored at 0.1)^1.3`. The proxy
+is the experiment's default; it weights plausible spending without using outcomes.
+These temporary weights are never saved as projections or ownership forecasts.
+Uniform weights may underfill the current sampler on broad historical salary lists;
+such fields remain visible as failures and are never scored as complete.
+Historical salary CSVs do not establish original pregame ownership, projections,
+availability or the complete eligible player pool. It does not measure SIM ranking
+or lineup returns, and marginal fits do not establish joint correlations or
+multi-entry opponent portfolio behavior. A better result here supports further
+testing with preserved pregame inputs; it does not authorize changing defaults.
+No simulation, optimizer, projection, ownership, ranking or lineup-limit setting
+is changed. Current source files and salary associations are verified again before
+the report is published; cancellation withholds the unfinished report.
+
 Preview reports show the field, selected user, and a successful historical cohort.
 By default that cohort requires at least three complete observed contests and a
 top-1% entry in at least two. Both minimums are editable. Entry-count bands help
