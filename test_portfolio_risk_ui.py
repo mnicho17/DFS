@@ -178,6 +178,9 @@ class PortfolioRiskQtTests(unittest.TestCase):
 
     def test_real_1000_occurrence_worker_view_measures_event_loop_responsiveness(self):
         repeat_archive(self.archive,1000);self.f.one(True);self.risk.reload();self.risk.source.setCurrentIndex(1)
+        # Report initialization has its own legacy bookkeeping. Finish it
+        # before measuring the read-only risk operation and its evidence.
+        self.dialog.refresh_report();self.drain()
         before=logical_db(self.f.db);files=source_bytes(self.f.root)
         self.dialog.show();self.dialog.results_tabs.setCurrentWidget(self.risk)
         ticks=[];timer=QtCore.QTimer();timer.setInterval(5);timer.timeout.connect(lambda:ticks.append(time.monotonic()))
