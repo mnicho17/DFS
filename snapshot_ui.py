@@ -43,14 +43,31 @@ class SnapshotActions:
     def on_load_candidate_library(self):
         if self._snapshot_busy():
             return
-        path,_=QtWidgets.QFileDialog.getOpenFileName(self,'Load Candidate Library','','Candidate library (*.dfslib)')
+        path,_=QtWidgets.QFileDialog.getOpenFileName(self,'Load Candidate Library','','Candidate libraries (*.dfslib *.sdlib *.sqlite)')
         if not path:return
         try:
+            from showdown_library import is_prepared_library,validate_library
+            if is_prepared_library(path):
+                if self._current_sport()!='NFL' or self._contest_mode()!='showdown':
+                    raise ValueError('Prepared Showdown libraries require NFL Showdown.')
+                recipe=self._current_build_recipe()
+                info=validate_library(path,self.players,salary_cap=float(recipe.get('salary_cap') or 50000),allow_partial=True)
+                partial=not info['complete']
+                if partial and QtWidgets.QMessageBox.question(self,'Partial roster library',
+                    'Preparation is incomplete. Missing candidates can affect Captain coverage and portfolio feasibility. Use this partial library?',
+                    QtWidgets.QMessageBox.Yes|QtWidgets.QMessageBox.No,QtWidgets.QMessageBox.No)!=QtWidgets.QMessageBox.Yes:
+                    return
+                self._candidate_library=path;self._candidate_library_allow_partial=partial
+                coverage='partial' if partial else 'complete'
+                self.lbl_snapshot_data.setText(f"Prepared roster library loaded: {info['saved']:,} saved; {coverage} coverage — Deep required")
+                self.status.showMessage('Choose Deep with SIM enabled, then Build. Current rules will be checked and a bounded Captain-balanced sample scored.',15000)
+                return
             from candidate_library import load_candidates
             recipe=self._current_build_recipe()
             _,report=load_candidates(path,self.players,kind=self._contest_mode(),
                 salary_cap=float(recipe.get('salary_cap') or 50000),salary_strategy=recipe.get('salary_strategy','Near Cap'),rules=self._portfolio_rules())
             self._candidate_library=path
+            self._candidate_library_allow_partial=False
             self.status.showMessage(f"Library loaded: {report['accepted']:,} eligible candidates. Choose Deep with SIM enabled, then Build. Current inputs will be used.",15000)
             self.lbl_snapshot_data.setText(f"Candidate library loaded: {report['accepted']:,} candidates — Deep required")
         except Exception as exc:
@@ -58,8 +75,20 @@ class SnapshotActions:
 
     def on_clear_candidate_library(self):
         self._candidate_library=''
+        self._candidate_library_allow_partial=False
         self._refresh_snapshot_label()
         self.status.showMessage('Candidate library cleared. Next build generates fresh candidates.',6000)
+
+    def on_prepare_showdown_library(self):
+        if self._snapshot_busy():return
+        try:
+            snapshot=self._capture_snapshot()
+            if snapshot['inputs']['recipe']['contest_kind']!='showdown':
+                raise ValueError('Select NFL Showdown before preparing a roster library.')
+            from showdown_library_ui import PreparationDialog
+            PreparationDialog(snapshot,self).exec_()
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self,'Preparation unavailable',str(exc))
 
     def _snapshot_busy(self):
         for name in ('_build_thread', '_own_thread'):

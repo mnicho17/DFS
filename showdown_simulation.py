@@ -259,7 +259,8 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
 
 
 def run_deep_showdown(worker, shortlist_fn):
-    start = time.perf_counter()
+    loading=getattr(worker,'library_report',{})
+    start = time.perf_counter() - (loading.get('loading_seconds',0) if loading.get('type')=='prepared_showdown' else 0)
     limit = worker.deep_time_limit_seconds
     deadline = start + limit
     stop = lambda when: worker._cancel_event.is_set() or time.perf_counter() >= when
@@ -432,6 +433,10 @@ def run_deep_showdown(worker, shortlist_fn):
         refinement_stop_callback=lambda: stop(deadline), refinement_polish_duplication=True,
         individual_ranking=options["selection_mode"] == "Individual ranking")
     selected["lineups"] = ranked_lineups(selected["lineups"])
+    if loading.get('type')=='prepared_showdown':
+        for lineup in selected['lineups']:
+            lineup.candidate_source='prepared_roster_library'
+            lineup.sim_metrics['candidate_source']='prepared_roster_library'
     for key in ("refinement_swaps", "duplication_refinement_swaps", "refinement_attempts", "refinement_seconds", "refinement_stop_reason"):
         deep[key] = selected["report"].get(key, "completed" if key.endswith("reason") else 0)
     deep["time_remaining_seconds"] = max(0, deadline - time.perf_counter())
