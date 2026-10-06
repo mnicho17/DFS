@@ -1,6 +1,7 @@
 from test_environment import install
 install()
 import copy
+from contextlib import closing
 from collections import Counter
 from pathlib import Path
 import tempfile
@@ -77,6 +78,44 @@ class PreparedIntegrationTests(unittest.TestCase):
         self.assertEqual(len(rows),4);self.assertFalse(report['preparation_complete'])
         with self.assertRaises(InterruptedError):
             load_bounded(self.path,current,limit=4,salary_strategy='Flexible',allow_partial=True,cancelled=lambda:True)
+
+    def test_unlocked_scan_excludes_setup_and_counts_library_only_twice(self):
+        import showdown_library as library
+        prepare(self.path,self.players)
+        clock=[0.0];counts=[];original=library._read
+        def slow_read(con,**kwargs):
+            counts.append(kwargs.get('verify_count',True))
+            result=original(con,**kwargs)
+            clock[0]+=5.0  # Setup exceeds each Captain's scan allowance.
+            return result
+        with patch.object(library,'_read',side_effect=slow_read),patch.object(library.time,'monotonic',side_effect=lambda:clock[0]):
+            rows,report=load_bounded(self.path,self.players,limit=16,seconds=.1,salary_strategy='Flexible')
+        self.assertEqual(len(rows),16)
+        self.assertTrue(report['scan_complete'])
+        self.assertEqual(sum(counts),2)
+        self.assertEqual(len(counts),len(self.players)+2)
+        self.assertTrue(all(c['sampled']==2 for c in report['captain_sampling']))
+
+    def test_partial_unlocked_library_cannot_silently_drop_unprepared_captains(self):
+        prepare(self.path,self.players,max_candidates=9)
+        with self.assertRaisesRegex(ValueError,'Partial library has no saved rosters'):
+            load_bounded(self.path,self.players,limit=16,salary_strategy='Flexible',allow_partial=True)
+
+    def test_bounded_scan_rejects_changed_saved_count_after_sampling(self):
+        import sqlite3
+        import showdown_library as library
+        prepare(self.path,self.players)
+        original=library.iter_candidates;changed=[False]
+        def mutate_after_scan(*args,**kwargs):
+            yield from original(*args,**kwargs)
+            if not changed[0]:
+                with closing(sqlite3.connect(self.path)) as con:
+                    with con:
+                        con.execute('DELETE FROM rosters WHERE (captain,flex) IN (SELECT captain,flex FROM rosters LIMIT 1)')
+                changed[0]=True
+        with patch.object(library,'iter_candidates',side_effect=mutate_after_scan):
+            with self.assertRaisesRegex(ValueError,'saved count'):
+                load_bounded(self.path,self.players,limit=16,salary_strategy='Flexible')
 
     def test_dialog_prepares_real_scoped_library_off_gui_thread(self):
         rows=self.locked()
