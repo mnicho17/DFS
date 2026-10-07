@@ -1148,16 +1148,20 @@ class LineupBuildWorker(QtCore.QObject):
                     from compute_settings import deep_candidate_budget as prepared_candidate_budget
                     try:
                         from showdown_screening import load_screening,settings as screening_settings
+                        screening_diagnostic={}
                         cached=None if self.allow_partial_library else load_screening(self.candidate_library,self.players,
                             limit=prepared_candidate_budget(self.num_lineups,self.deep_options,False),
                             salary_cap=self.salary_cap,salary_strategy=self.salary_strategy,rules=self.portfolio_rules,
-                            screening=screening_settings(self.deep_options,self.sim_scenarios),cancelled=self._cancel_event.is_set)
+                            screening=screening_settings(self.deep_options,self.sim_scenarios),cancelled=self._cancel_event.is_set,
+                            diagnostic=screening_diagnostic)
                         self.library_candidates,self.library_report=cached or load_bounded(self.candidate_library,self.players,
                             limit=prepared_candidate_budget(self.num_lineups,self.deep_options,False),
                             seconds=max(.1,min(30,self.deep_time_limit_seconds*.1)),
                             salary_cap=self.salary_cap,salary_strategy=self.salary_strategy,rules=self.portfolio_rules,
                             allow_partial=self.allow_partial_library,cancelled=self._cancel_event.is_set,
                             progress=lambda text:self.progress.emit(0,0,text))
+                        if not cached:
+                            self.library_report['screening_miss']=screening_diagnostic.get('reason','Partial libraries require fresh screening.')
                         from compute_ledger import library_loaded
                         library_loaded(dict(self.library_report,rejected=0,input_id='prepared_roster_library'),self.library_candidates)
                     except InterruptedError:

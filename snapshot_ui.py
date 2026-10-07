@@ -43,7 +43,7 @@ class SnapshotActions:
     def on_load_candidate_library(self):
         if self._snapshot_busy():
             return
-        path,_=QtWidgets.QFileDialog.getOpenFileName(self,'Load Candidate Library','','Candidate libraries (*.dfslib *.sdlib *.sqlite)')
+        path,_=QtWidgets.QFileDialog.getOpenFileName(self,'Load Candidate Library','','Candidate libraries (*.dfslib *.sdlib *.sdfull *.sqlite)')
         if not path:return
         try:
             from showdown_library import is_prepared_library,validate_library

@@ -123,17 +123,33 @@ def prepare_screening(library,players,*,limit=20000,salary_cap=50000,salary_stra
         elapsed_seconds=elapsed,rosters_per_second=(len(pending)-len([i for i in pending if i not in done]))/max(.001,elapsed))
 
 
-def load_screening(library,players,*,limit,salary_cap,salary_strategy,rules,screening,folder=None,cancelled=lambda:False):
+def load_screening(library,players,*,limit,salary_cap,salary_strategy,rules,screening,folder=None,cancelled=lambda:False,diagnostic=None):
     """Return a fully screened compatible bank, or fall back to fresh screening."""
     started=time.monotonic()
     path,context=target(library,players,limit=limit,salary_cap=salary_cap,
         salary_strategy=salary_strategy,rules=rules,screening=screening,folder=folder)
-    if not path.is_file() or path.stat().st_size>MAX_BYTES:return None
+    from showdown_full_screening import load as load_full
+    full=load_full(path,context,players,screening,cancelled=cancelled,diagnostic=diagnostic)
+    if full:
+        rows,report=full
+        report['loading_seconds']=time.monotonic()-started
+        return rows,report
+    if not path.is_file():
+        if diagnostic is not None:
+            diagnostic.setdefault('reason','No exact compatible screening cache; prepare screening with current inputs and settings.')
+        return None
+    if path.stat().st_size>MAX_BYTES:
+        if diagnostic is not None:diagnostic['reason']='Screening cache exceeds its supported size.'
+        return None
     with closing(sqlite3.connect(path.resolve().as_uri()+'?mode=ro',uri=True)) as con:
         con.execute('BEGIN');meta,rows=_bank(con,players)
-        if meta['context']!=context:return None
+        if meta['context']!=context:
+            if diagnostic is not None:diagnostic['reason']='Screening cache identity does not match current inputs.'
+            return None
         records=con.execute('SELECT id,payload,digest FROM scores ORDER BY id').fetchall()
-        if len(records)!=len(rows):return None
+        if len(records)!=len(rows):
+            if diagnostic is not None:diagnostic['reason']=f'Screening incomplete: {len(records):,}/{len(rows):,} candidates. Resume preparation.'
+            return None
         for expected,(index,payload,digest) in enumerate(records):
             if cancelled():raise InterruptedError('Screening cache loading cancelled.')
             data=json.loads(payload)

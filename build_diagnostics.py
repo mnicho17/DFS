@@ -625,10 +625,14 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         library = record.get("candidate_library") or {}
         if library:
             if library.get('type') == 'prepared_showdown':
-                lines.append(f"- Prepared roster library: {library.get('saved',0):,} saved; {library.get('valid_seen',0):,} valid rosters scanned; {library.get('accepted',0):,} sampled for fresh SIM")
+                lines.append(f"- Prepared roster library: {library.get('saved',0):,} saved; {library.get('valid_seen',0):,} valid rosters scanned; {library.get('accepted',0):,} admitted for fresh detailed SIM")
                 lines.append('- Library coverage: preparation '+('complete' if library.get('preparation_complete') else 'partial (explicitly allowed)')+'; current scan '+('complete' if library.get('scan_complete') else 'time limited')+'. Captain-balanced sampling is not full-library SIM or proof of portfolio feasibility.')
-                if library.get('screening_reused'):
+                if library.get('full_screened'):
+                    lines.append(f"- Full overnight screening: all {library['full_screened']:,} currently legal rosters screened; {library['screening_reused']:,} retained leaders reused. Detailed SIM and audits run fresh.")
+                elif library.get('screening_reused'):
                     lines.append(f"- Overnight screening: {library['screening_reused']:,} compatible sampled candidates reused; scan counts above describe original admission. Detailed SIM and independent audits run fresh.")
+                elif library.get('screening_miss'):
+                    lines.append('- Overnight screening not reused: '+str(library['screening_miss']))
             else:
                 lines.append(f"- Candidate library: {library.get('saved', 0):,} saved; {library.get('accepted', 0):,} accepted; {library.get('rejected', 0):,} rejected by current eligibility/rules. Scores recalculated with current inputs.")
         if sim.get("style_candidate_counts"):

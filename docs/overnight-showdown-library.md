@@ -128,17 +128,47 @@ the same runtime/app code used for preparation. Progress reports scored/total
 candidates and completion; the final summary records elapsed time and throughput.
 Elapsed preparation includes initial bank sampling and integrity checks.
 
-## Remaining implementation stages
+## Full slate preparation and full legal-roster screening
 
-1. Improve scope/storage estimates and large-slate partition management.
-2. Expand screening beyond the bounded bank only after measuring cost and adding
-   explicit diversity/coverage controls and storage estimates.
-3. Consider compatible detailed-score reuse separately; independent validation
-   must remain fresh. A larger time allowance must not silently change chosen SIM settings.
-4. Measure full-size build performance and coverage before enabling default use.
+Select **Full slate: prepare every Captain in separate partitions** before choosing
+New library. The `.sdfull` manifest and its adjacent `.sdfull.parts` folder form
+one library; keep both together. Every salary-file Captain is prepared even when
+current Captain locks are set. Each partition resumes independently and completed
+partitions are preserved. Coverage is complete only when all partitions finish.
+Current exclusions, locks, salary strategy and rules still apply when building.
 
-All-Captain enumeration is larger than an individual locked-Captain build. A
-56-player slate has 194,810,616 structural combinations before salary/team
-filtering; input exclusions or later eligibility can reduce relevant coverage.
-Preparing rosters does not remove SIM/portfolio costs or guarantee a build fits
-every requested constraint. Classic exhaustive enumeration is out of scope.
+Choose a 4/8/16/32-GiB storage budget and up to 12 hours per run. Storage is a soft
+checkpoint limit and can overshoot by one batch; insufficient space leaves partial
+coverage. Resume with more time or storage. Existing single-file libraries remain
+supported. Full libraries avoid the single-file total row limit by partitioning.
+
+For full screening, check the screening option and then **Screen every currently
+legal roster**. This streams all rosters passing the captured current inputs and
+rules, rather than admitting a sample first. Screening scenarios and field sizes
+stay unchanged. Completed batches save a cursor and bounded leaders, so Pause or
+a time limit can be resumed without rescoring completed batches. Partial screening
+is never reused as completed evidence. At most 20,000 leaders are retained, divided
+across eligible Captains with reserved construction strata (team split, QB count,
+combined kicker/defense count). These reservations do not change ranking, exposure
+limits or lineup-generation rules and do not guarantee a feasible portfolio.
+
+The checkpoint payload is capped at 128 MiB; a storage pause requires a smaller
+retention budget and a new job. Caches have exact input/code identities. Changed
+projections, ownership, locks or rules require a separate screening job. Full
+screening can take multiple nights; full roster enumeration does not imply every
+roster has received detailed SIM. Deep reuses completed retained leaders, then runs
+detailed SIM, independent audit and portfolio validation fresh. Reports explain
+missing/incomplete cache reuse and distinguish full screening from sampled admission.
+
+Equivalent explicit snapshot commands:
+
+```powershell
+python scripts/prepare_showdown_library.py --snapshot input-snapshot.json --output full-showdown.sdfull --hours 12 --storage-gib 8
+python scripts/screen_showdown_library.py input-snapshot.json full-showdown.sdfull --hours 12 --full
+```
+
+A 52-player slate has 122,151,120 structural combinations and a 56-player slate
+has 194,810,616, before salary/team filtering. Actual screening work depends on
+current eligibility and rules. Large-slate throughput, final portfolio cost,
+and optional detailed-score reuse remain follow-up work. Classic exhaustive
+enumeration is out of scope.

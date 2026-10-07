@@ -15,13 +15,17 @@ def main():
     parser.add_argument('snapshot');parser.add_argument('library')
     parser.add_argument('--hours',type=float,default=1)
     parser.add_argument('--cache-folder',type=Path)
+    parser.add_argument('--full',action='store_true',help='Stream every currently legal roster, retaining bounded leaders')
     args=parser.parse_args()
     inputs=load_snapshot(args.snapshot)['inputs'];recipe=inputs['recipe']
     if recipe['contest_kind']!='showdown':parser.error('NFL Showdown snapshot required')
     count=recipe.get('requested_lineups',150);options=recipe.get('deep_compute',{})
     players,rules,_=prepare_captain_pool(inputs['players'],inputs['rules'],count)
+    screening_job=prepare_screening
+    if args.full:
+        from showdown_full_screening import prepare as screening_job
     try:
-        result=prepare_screening(args.library,players,limit=deep_candidate_budget(count,options,False),
+        result=screening_job(args.library,players,limit=deep_candidate_budget(count,options,False),
             salary_cap=recipe['salary_cap'],salary_strategy=recipe.get('salary_strategy','Near Cap'),
             rules=rules,screening=settings(options,recipe.get('nfl_sim_scenarios',1000)),
             seconds=args.hours*3600,folder=args.cache_folder,progress=lambda value:print(json.dumps(value),flush=True))

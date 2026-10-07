@@ -96,6 +96,9 @@ def _read(con, *, verify_count=True):
 
 
 def status(path):
+    if Path(path).suffix=='.sdfull':
+        from showdown_full_library import status as full_status
+        return full_status(path)
     with closing(sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True)) as con:
         con.execute('BEGIN')
         state = _read(con)
@@ -196,8 +199,14 @@ def prepare(path, players, *, salary_cap=50000, seconds=3600, batch_size=2000,
 
 def iter_candidates(path, players, *, salary_cap=50000, salary_floor=0, rules=None,
                     allow_partial=False, cancelled=lambda: False, captain_key=None,
-                    _validated_info=None):
+                    _validated_info=None,_after_roster=None):
     """Stream fresh player objects; never reuse stored forecasts or SIM outputs."""
+    if Path(path).suffix=='.sdfull':
+        from showdown_full_library import iter_candidates as full_stream
+        yield from full_stream(path,players,salary_cap=salary_cap,salary_floor=salary_floor,rules=rules,
+            allow_partial=allow_partial,cancelled=cancelled,captain_key=captain_key,_validated_info=_validated_info,
+            _after_roster=_after_roster)
+        return
     current = copy.deepcopy(players)
     with closing(sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True)) as con:
         con.execute('BEGIN')
@@ -227,8 +236,21 @@ def iter_candidates(path, players, *, salary_cap=50000, salary_floor=0, rules=No
         if not requested:
             return
         query = ('SELECT captain,flex FROM rosters WHERE captain IN (' +
-                 ','.join('?' for _ in requested) + ') ORDER BY captain,flex')
-        for captain_index, encoded in con.execute(query, requested):
+                 ','.join('?' for _ in requested) + ')')
+        arguments=list(requested)
+        if _after_roster is not None:
+            indices_by_key={p['key']:i for i,p in enumerate(prepared)}
+            try:
+                after_cpt=indices_by_key[_after_roster[0]]
+                after_flex=sorted(indices_by_key[k] for k in _after_roster[1])
+                if len(after_flex)!=5 or len(set(after_flex))!=5 or after_cpt in after_flex:raise ValueError
+                encoded_after=struct.pack('<5H',*after_flex)
+            except (KeyError,IndexError,TypeError,ValueError) as exc:
+                raise ValueError('Screening resume roster is invalid.') from exc
+            query+=' AND (captain>? OR (captain=? AND flex>?))'
+            arguments.extend((after_cpt,after_cpt,encoded_after))
+        query+=' ORDER BY captain,flex'
+        for captain_index, encoded in con.execute(query, arguments):
             if cancelled():
                 return
             try:
@@ -252,11 +274,18 @@ def iter_candidates(path, players, *, salary_cap=50000, salary_floor=0, rules=No
 
 def is_prepared_library(path):
     if not Path(path).is_file(): return False
+    if Path(path).suffix=='.sdfull':
+        from showdown_full_library import _read as read_full
+        read_full(path)
+        return True
     with closing(sqlite3.connect(Path(path).resolve().as_uri()+'?mode=ro',uri=True)) as con:
         return con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='preparation'").fetchone() is not None
 
 
 def validate_library(path,players,*,salary_cap=50000,allow_partial=False):
+    if Path(path).suffix=='.sdfull':
+        from showdown_full_library import validate as full_validate
+        return full_validate(path,players,salary_cap=salary_cap,allow_partial=allow_partial)
     with closing(sqlite3.connect(Path(path).resolve().as_uri()+'?mode=ro',uri=True)) as con:
         con.execute('BEGIN');state=_read(con)
         if _structure(players,state['structure']['salary_cap'],state['structure']['captains']) != state['structure']:
@@ -291,11 +320,16 @@ def load_bounded(path,players,*,limit=20000,seconds=30,salary_cap=50000,
     if not info['complete']:
         # Preparation advances Captain by Captain. Explicit partial opt-in must
         # not silently discard Captains that have not been reached yet.
-        with closing(sqlite3.connect(Path(path).resolve().as_uri()+'?mode=ro',uri=True)) as con:
-            state=_read(con,verify_count=False)
-            indices={p['key']:i for i,p in enumerate(state['structure']['players'])}
-            missing=[key for key in captains if con.execute(
-                'SELECT 1 FROM rosters WHERE captain=? LIMIT 1',(indices[key],)).fetchone() is None]
+        if Path(path).suffix=='.sdfull':
+            from showdown_full_library import states
+            _,parts=states(path)
+            missing=[key for key in captains if not parts.get(key) or not parts[key]['saved']]
+        else:
+            with closing(sqlite3.connect(Path(path).resolve().as_uri()+'?mode=ro',uri=True)) as con:
+                state=_read(con,verify_count=False)
+                indices={p['key']:i for i,p in enumerate(state['structure']['players'])}
+                missing=[key for key in captains if con.execute(
+                    'SELECT 1 FROM rosters WHERE captain=? LIMIT 1',(indices[key],)).fetchone() is None]
         if missing:
             raise ValueError(f'Partial library has no saved rosters for {len(missing)} current Captains '
                 f'(including {", ".join(missing[:3])}). Resume preparation with a higher stored-roster limit, '
