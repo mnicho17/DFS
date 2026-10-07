@@ -2,10 +2,10 @@
 
 The new `showdown_library` backend enumerates legal six-player NFL Showdown
 rosters directly. It is separate from the existing searched candidate libraries.
-The app now offers explicit preparation and loading. Prepared builds use a
-bounded Captain-balanced sample through the existing fresh SIM and portfolio
-pipeline. Automated scheduling and persistent overnight SIM screening remain
-future work.
+The app offers explicit preparation, loading and resumable coarse screening.
+Prepared builds use a bounded Captain-balanced bank through the existing detailed
+SIM and portfolio pipeline. Optional full-slate partitions and streaming legal-roster
+screening are described below. Automated scheduling remains future work.
 
 ## What preparation saves
 

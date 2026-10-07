@@ -2001,3 +2001,24 @@ Lineup-limit warnings and optimization errors include **Copy Error**. Click it t
 Fast Showdown builds now add a bounded exploration pass when a capped player is overrepresented in the generated candidates. It keeps the original bank, explores alternatives without up to four overrepresented players, then applies the same final portfolio limits. This adds at most 20 seconds of exploration and up to 600 candidates for large requests. Locks and original player tags are preserved; final selection still rejects incomplete or noncompliant portfolios. This addresses candidate coverage, not proof that every requested portfolio is feasible.
 
 Fast Showdown also skips the Classic-only field comparison when finishing its report, preventing a roster-format error after successful selection.
+
+## Full Showdown roster libraries and screening
+
+Open **Settings > Prepare Showdown Roster Library**. For all-Captain coverage,
+select **Full slate: prepare every Captain in separate partitions**, choose a new
+`.sdfull` file, and set the time and storage budgets. Keep the manifest and its
+adjacent `.sdfull.parts` folder together. Captain locks apply when building; full
+preparation covers every salary-file Captain. Pause/close saves checkpoints and
+waits for the worker to finish. Resume until every partition reports complete.
+
+The screening option normally scores a bounded sample. Check **Screen every
+currently legal roster** to stream all rosters passing the captured inputs and
+rules instead. This can require multiple nights. Complete batches save a resume
+cursor; up to 20,000 leaders are retained across Captains and construction strata.
+Changed inputs or app code require a new compatible screening job. Partial jobs
+are not reused as completed evidence.
+
+After completion, load the library and run Deep. The report identifies reused
+screening or explains a cache miss. Detailed SIM, independent audit and portfolio
+limits run fresh. Full screening does not guarantee the retained leaders can
+fulfill every portfolio request. See [storage and CLI details](overnight-showdown-library.md).
