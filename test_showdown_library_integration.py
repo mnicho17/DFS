@@ -132,6 +132,29 @@ class PreparedIntegrationTests(unittest.TestCase):
         self.assertEqual(status(self.path)['checked'],42)
         self.assertIn('complete',dialog.message.text());dialog.close();dialog.deleteLater()
 
+    def test_dialog_full_partition_and_stream_screening_off_gui_thread(self):
+        from showdown_full_screening import prepare as actual
+        rows=self.locked()
+        for i,p in enumerate(rows):
+            p['FlexSalary']=6500+i*200;p['CptSalary']=p['FlexSalary']*1.5
+        snapshot=create_snapshot(rows,dict(sport='NFL',contest_kind='showdown',salary_cap=50000,
+            salary_strategy='Flexible',requested_lineups=2,nfl_sim_scenarios=250),{})
+        dialog=PreparationDialog(snapshot);dialog.full.setChecked(True)
+        dialog.path.setText(str(self.path.with_suffix('.sdfull')))
+        dialog.screen.setChecked(True);dialog.full_screen.setChecked(True)
+        gui=threading.get_ident();seen=[]
+        def checked(*args,**kwargs):
+            seen.append(threading.get_ident()!=gui)
+            kwargs['folder']=Path(self.temp.name)/'cache'
+            return actual(*args,**kwargs)
+        with patch('showdown_full_screening.prepare',side_effect=checked):
+            dialog.begin();self.wait(lambda:dialog.thread is None)
+        self.assertEqual(seen,[True]);self.assertTrue(status(dialog.path.text())['complete'])
+        self.assertEqual(status(dialog.path.text())['partition_count'],len(rows))
+        self.assertIn('screening complete',dialog.message.text())
+        dialog.describe(dict(screened=23,screening_total=None,screening_complete=False))
+        self.assertIn('counting',dialog.message.text());dialog.close();dialog.deleteLater()
+
     def test_dialog_close_waits_for_worker_retirement(self):
         snapshot=create_snapshot(self.players,dict(sport='NFL',contest_kind='showdown',salary_cap=50000),{})
         dialog=PreparationDialog(snapshot);dialog.path.setText(str(self.path));dialog.show()
