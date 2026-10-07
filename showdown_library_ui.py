@@ -53,6 +53,7 @@ class PreparationWorker(QtCore.QObject):
                         salary_cap=self.salary_cap,salary_strategy=recipe.get('salary_strategy','Near Cap'),rules=rules,
                         screening=settings(options,recipe.get('nfl_sim_scenarios',1000)),seconds=remaining,
                         cancelled=self.stop.is_set,progress=self.update))
+            result['screening_requested']=bool(self.screen_snapshot)
             self.finished.emit(result)
         except Exception as exc:
             self.error.emit(str(exc))
@@ -87,12 +88,12 @@ class PreparationDialog(QtWidgets.QDialog):
         self.full.toggled.connect(self.change_format)
         form=QtWidgets.QFormLayout();form.addRow('Maximum preparation time',self.hours);form.addRow('Stored roster limit',self.limit);layout.addLayout(form)
         form.addRow('Full-library storage budget',self.storage)
-        self.screen=QtWidgets.QCheckBox('Also screen a bounded candidate sample for Deep reuse')
+        self.screen=QtWidgets.QCheckBox('Also prepare screening for Deep reuse')
         self.screen.setToolTip('Only complete libraries can be screened. Completed batches are saved for resume. Select the option below to screen every currently legal roster. Final SIM and audits run fresh.')
         layout.addWidget(self.screen)
         self.full_screen=QtWidgets.QCheckBox('Screen every currently legal roster (may require multiple nights)')
         self.full_screen.setEnabled(False)
-        self.screen.toggled.connect(self.full_screen.setEnabled)
+        self.screen.toggled.connect(self.change_screen)
         self.full_screen.setToolTip('Scores every legal roster under captured inputs and rules, retaining at most 20,000 leaders across Captains and constructions. Resume with identical inputs. Detailed SIM and audit remain fresh.')
         layout.addWidget(self.full_screen)
         self.message=QtWidgets.QLabel('Choose a new library or an existing checkpoint. Complete coverage is reported only after every combination is checked.')
@@ -102,6 +103,10 @@ class PreparationDialog(QtWidgets.QDialog):
         row=QtWidgets.QHBoxLayout();row.addWidget(self.start);row.addWidget(self.pause);layout.addLayout(row)
         self.start.clicked.connect(self.begin);self.pause.clicked.connect(self.cancel)
         self.controls=(self.new,self.open,self.hours,self.limit,self.start,self.screen,self.full,self.storage,self.full_screen)
+
+    def change_screen(self,enabled):
+        self.full_screen.setEnabled(enabled)
+        if not enabled:self.full_screen.setChecked(False)
 
     def change_format(self,full):
         self.limit.setEnabled(not full);self.storage.setEnabled(full)
@@ -137,6 +142,8 @@ class PreparationDialog(QtWidgets.QDialog):
             return
         extra=f" {result['completed_partitions']}/{result['partition_count']} Captain partitions complete." if 'partition_count' in result else ''
         if result.get('pause_reason'):extra+=' Paused: '+result['pause_reason']+'.'
+        if result.get('screening_requested') is False:extra+=' Screening was not requested; roster completion does not mean screening is complete.'
+        elif result.get('screening_requested') and 'screened' not in result:extra+=' Screening has not completed; resume with screening enabled.'
         self.message.setText(f"{result['saved']:,} saved rosters; {result['checked']:,} combinations checked. Coverage: "+('complete.' if result['complete'] else 'partial; resume to continue.')+extra)
 
     def begin(self):
