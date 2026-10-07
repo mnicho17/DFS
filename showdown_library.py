@@ -249,27 +249,59 @@ def iter_candidates(path, players, *, salary_cap=50000, salary_floor=0, rules=No
                 raise ValueError('Screening resume roster is invalid.') from exc
             query+=' AND (captain>? OR (captain=? AND flex>?))'
             arguments.extend((after_cpt,after_cpt,encoded_after))
+        # Skip excluded players and salary-invalid prefixes inside SQLite, before
+        # spending the bounded scan allowance constructing Python rosters.
+        flex_values=[(struct.pack('<H',i),float(lookup[p['key']]['FlexSalary']))
+                     for i,p in enumerate(prepared) if p['key'] in lookup and not lookup[p['key']].get('FadeFlex')]
+        # Keep malformed records visible to the existing corruption checks.
+        query+=' AND ((1=1'
+        placeholders=','.join('?' for _ in flex_values) or 'NULL'
+        for offset in (1,3,5,7,9):
+            query+=f' AND substr(flex,{offset},2) IN ({placeholders})'
+            arguments.extend(encoded for encoded,_ in flex_values)
+        salary_terms=['CASE captain '+' '.join('WHEN ? THEN ?' for _ in requested)+' ELSE 0 END']
+        for i in requested:arguments.extend((i,float(lookup[prepared[i]['key']]['CptSalary'])))
+        for offset in (1,3,5,7,9):
+            salary_terms.append(f'CASE substr(flex,{offset},2) '+
+                (' '.join('WHEN ? THEN ?' for _ in flex_values) or 'WHEN NULL THEN 0')+' ELSE 0 END')
+            for encoded,value in flex_values:arguments.extend((encoded,value))
+        query+=' AND ('+salary_terms[0]+'+('+'+'.join(salary_terms[1:])+')) BETWEEN ? AND ?'
+        arguments.extend((float(salary_floor),cap))
+        malformed=["typeof(flex)!='blob'", "hex(flex) NOT GLOB '??00??00??00??00??00'"]
+        malformed += [f'substr(flex,{offset},2)>=substr(flex,{offset+2},2)' for offset in (1,3,5,7)]
+        malformed.append('substr(flex,9,1)>=?');arguments.append(bytes([len(prepared)]))
+        malformed.append('instr(flex,CAST(char(captain,0) AS BLOB))>0')
+        query+=') OR '+' OR '.join(malformed)+')'
         query+=' ORDER BY captain,flex'
-        for captain_index, encoded in con.execute(query, arguments):
-            if cancelled():
-                return
-            try:
-                indices = list(struct.unpack('<5H', encoded))
-            except (struct.error, TypeError) as exc:
-                raise ValueError('Library roster identity is damaged.') from exc
-            if sorted(set(indices)) != indices or captain_index in indices or indices[-1] >= len(prepared):
-                raise ValueError('Library roster identity is damaged.')
-            keys = [prepared[captain_index]['key'], *(prepared[i]['key'] for i in indices)]
-            if any(k not in lookup for k in keys):
-                continue
-            cpt, *flex = [lookup[k] for k in keys]
-            if cpt.get('FadeCpt') or keys[0] in locked or (captains and keys[0] not in captains):
-                continue
-            if any(p.get('FadeFlex') for p in flex) or not locked.issubset(set(keys[1:])) or not _group_ok(set(keys), groups):
-                continue
-            salary = float(cpt['CptSalary']) + sum(float(p['FlexSalary']) for p in flex)
-            if salary_floor <= salary <= cap and len({p['Team'] for p in [cpt, *flex]}) == 2:
-                yield ShowdownLineup(cpt, flex)
+        # Filtered queries may inspect many rejected rows before yielding one.
+        con.set_progress_handler(lambda: int(bool(cancelled())),1000)
+        try:
+            for captain_index, encoded in con.execute(query, arguments):
+                if cancelled():
+                    return
+                try:
+                    indices = list(struct.unpack('<5H', encoded))
+                except (struct.error, TypeError) as exc:
+                    raise ValueError('Library roster identity is damaged.') from exc
+                if sorted(set(indices)) != indices or captain_index in indices or indices[-1] >= len(prepared):
+                    raise ValueError('Library roster identity is damaged.')
+                keys = [prepared[captain_index]['key'], *(prepared[i]['key'] for i in indices)]
+                if any(k not in lookup for k in keys):
+                    continue
+                cpt, *flex = [lookup[k] for k in keys]
+                if cpt.get('FadeCpt') or keys[0] in locked or (captains and keys[0] not in captains):
+                    continue
+                if any(p.get('FadeFlex') for p in flex) or not locked.issubset(set(keys[1:])) or not _group_ok(set(keys), groups):
+                    continue
+                salary = float(cpt['CptSalary']) + sum(float(p['FlexSalary']) for p in flex)
+                if salary_floor <= salary <= cap and len({p['Team'] for p in [cpt, *flex]}) == 2:
+                    yield ShowdownLineup(cpt, flex)
+        except sqlite3.OperationalError as exc:
+            if str(exc)=='interrupted' and cancelled():return
+            raise
+        finally:
+            con.set_progress_handler(None,0)
+
 
 
 def is_prepared_library(path):

@@ -79,6 +79,29 @@ class PreparedIntegrationTests(unittest.TestCase):
         with self.assertRaises(InterruptedError):
             load_bounded(self.path,current,limit=4,salary_strategy='Flexible',allow_partial=True,cancelled=lambda:True)
 
+    def test_bounded_scan_skips_large_inactive_prefix_without_changing_roster_set(self):
+        from itertools import combinations
+        import showdown_library as library
+        rows=[]
+        for i in range(12):
+            row=copy.deepcopy(self.players[i%8])
+            row.update(Name=f'Player {i:02}',FlexID=str(i+1),CptID=str(i+101),
+                FlexNamePlusID=f'Player {i:02} ({i+1})',FlexSalary=7500,CptSalary=11250,
+                Team='A' if i%2 else 'B')
+            rows.append(row)
+        prepare(self.path,rows)
+        for row in rows[:5]:row['InjuryStatus']='OUT'
+        clock=[0.0]
+        def tick():clock[0]+=.0001;return clock[0]
+        with patch.object(library.time,'monotonic',side_effect=tick):
+            result,report=load_bounded(self.path,rows,limit=100,seconds=.1,salary_strategy='Near Cap')
+        expected=set()
+        for cpt in rows[5:]:
+            for flex in combinations([p for p in rows[5:] if p is not cpt],5):
+                expected.add((player_key(cpt),tuple(sorted(player_key(p) for p in flex))))
+        self.assertEqual(signatures(result),expected)
+        self.assertTrue(report['scan_complete'])
+
     def test_unlocked_scan_excludes_setup_and_counts_library_only_twice(self):
         import showdown_library as library
         prepare(self.path,self.players)
@@ -131,6 +154,16 @@ class PreparedIntegrationTests(unittest.TestCase):
         self.assertEqual(seen,[True]);self.assertTrue(status(self.path)['complete'])
         self.assertEqual(status(self.path)['checked'],42)
         self.assertIn('complete',dialog.message.text());dialog.close();dialog.deleteLater()
+
+    def test_disabling_screening_clears_full_screen_and_completion_is_explicit(self):
+        snapshot=create_snapshot(self.players,dict(sport='NFL',contest_kind='showdown',salary_cap=50000),{})
+        dialog=PreparationDialog(snapshot)
+        dialog.screen.setChecked(True);dialog.full_screen.setChecked(True)
+        dialog.screen.setChecked(False)
+        self.assertFalse(dialog.full_screen.isChecked());self.assertFalse(dialog.full_screen.isEnabled())
+        dialog.describe(dict(saved=100,checked=100,complete=True,screening_requested=False))
+        self.assertIn('Screening was not requested',dialog.message.text())
+        dialog.close();dialog.deleteLater()
 
     def test_dialog_full_partition_and_stream_screening_off_gui_thread(self):
         from showdown_full_screening import prepare as actual

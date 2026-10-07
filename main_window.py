@@ -1156,7 +1156,7 @@ class LineupBuildWorker(QtCore.QObject):
                             diagnostic=screening_diagnostic)
                         self.library_candidates,self.library_report=cached or load_bounded(self.candidate_library,self.players,
                             limit=prepared_candidate_budget(self.num_lineups,self.deep_options,False),
-                            seconds=max(.1,min(30,self.deep_time_limit_seconds*.1)),
+                            seconds=max(.1,min(60 if str(self.candidate_library).lower().endswith('.sdfull') else 30,self.deep_time_limit_seconds*.1)),
                             salary_cap=self.salary_cap,salary_strategy=self.salary_strategy,rules=self.portfolio_rules,
                             allow_partial=self.allow_partial_library,cancelled=self._cancel_event.is_set,
                             progress=lambda text:self.progress.emit(0,0,text))

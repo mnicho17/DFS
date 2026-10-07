@@ -93,8 +93,7 @@ exposure requirements. Defaults without a loaded prepared library are unchanged.
 
 ## Optional overnight screening
 
-In Settings → Prepare Showdown Roster Library, select **Also screen a bounded
-candidate sample for Deep reuse**. Prepare a complete library first (raise the
+In Settings → Prepare Showdown Roster Library, select **Also prepare screening for Deep reuse**. Prepare a complete library first (raise the
 stored-roster limit if needed). Screening uses the current player inputs, rules,
 Captain allocation, candidate budget and Deep screening settings captured when
 the dialog opens. It admits at most 20,000 Captain-balanced candidates, saves
@@ -172,3 +171,14 @@ has 194,810,616, before salary/team filtering. Actual screening work depends on
 current eligibility and rules. Large-slate throughput, final portfolio cost,
 and optional detailed-score reuse remain follow-up work. Classic exhaustive
 enumeration is out of scope.
+
+Bounded library loading skips currently excluded players and salary-invalid rosters
+inside SQLite before constructing candidates. Query progress remains cancellable
+and time limited; malformed stored rosters remain subject to integrity checks.
+Screening disabled in the dialog also clears the full-screening selection. Roster
+completion alone does not establish screening completion.
+
+Full `.sdfull` builds allow up to 60 seconds for scanning (at most 10% of the
+selected Deep budget); single-file libraries retain the 30-second cap. Large
+rejected prefixes can still exhaust a bounded scan. Completed compatible screening
+remains the preferred path; scan failure does not prove infeasibility.
