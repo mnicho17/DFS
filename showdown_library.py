@@ -267,12 +267,10 @@ def iter_candidates(path, players, *, salary_cap=50000, salary_floor=0, rules=No
             for encoded,value in flex_values:arguments.extend((encoded,value))
         query+=' AND ('+salary_terms[0]+'+('+'+'.join(salary_terms[1:])+')) BETWEEN ? AND ?'
         arguments.extend((float(salary_floor),cap))
-        malformed=["typeof(flex)!='blob'",'length(flex)!=10']
+        malformed=["typeof(flex)!='blob'", "hex(flex) NOT GLOB '??00??00??00??00??00'"]
         malformed += [f'substr(flex,{offset},2)>=substr(flex,{offset+2},2)' for offset in (1,3,5,7)]
-        malformed += [f'substr(flex,{offset+1},1)!=?' for offset in (1,3,5,7,9)]
-        arguments.extend([b'\x00']*5)
         malformed.append('substr(flex,9,1)>=?');arguments.append(bytes([len(prepared)]))
-        malformed += [f'substr(flex,{offset},2)=CAST(char(captain,0) AS BLOB)' for offset in (1,3,5,7,9)]
+        malformed.append('instr(flex,CAST(char(captain,0) AS BLOB))>0')
         query+=') OR '+' OR '.join(malformed)+')'
         query+=' ORDER BY captain,flex'
         # Filtered queries may inspect many rejected rows before yielding one.

@@ -177,3 +177,8 @@ inside SQLite before constructing candidates. Query progress remains cancellable
 and time limited; malformed stored rosters remain subject to integrity checks.
 Screening disabled in the dialog also clears the full-screening selection. Roster
 completion alone does not establish screening completion.
+
+Full `.sdfull` builds allow up to 60 seconds for scanning (at most 10% of the
+selected Deep budget); single-file libraries retain the 30-second cap. Large
+rejected prefixes can still exhaust a bounded scan. Completed compatible screening
+remains the preferred path; scan failure does not prove infeasibility.

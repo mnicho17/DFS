@@ -147,6 +147,21 @@ class ShowdownLibraryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'not eligible'):
             list(iter_candidates(self.path,current))
 
+    def test_sql_filter_does_not_hide_corruption_inside_excluded_rosters(self):
+        import struct
+        damaged=[b'bad',struct.pack('<5H',1,2,3,4,99),struct.pack('<5H',1,2,3,4,256),
+                 struct.pack('<5H',1,1,2,3,4),struct.pack('<5H',5,4,3,2,1),
+                 struct.pack('<5H',0,1,2,3,4),'0123456789']
+        current=copy.deepcopy(self.players);current[1]['InjuryStatus']='OUT'
+        for index,encoded in enumerate(damaged):
+            with self.subTest(encoded=encoded):
+                path=Path(self.temp.name)/f'corrupt-{index}.sdlib'
+                prepare(path,self.players)
+                with closing(sqlite3.connect(path)) as con,con:
+                    con.execute('UPDATE rosters SET flex=? WHERE captain=0 AND flex=(SELECT flex FROM rosters WHERE captain=0 LIMIT 1)',(encoded,))
+                with self.assertRaisesRegex(ValueError,'damaged'):
+                    list(iter_candidates(path,current,salary_floor=47000))
+
     def test_malformed_compact_roster_is_rejected(self):
         prepare(self.path,self.players)
         with closing(sqlite3.connect(self.path)) as conn, conn:
