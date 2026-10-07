@@ -65,7 +65,7 @@ def _leaders(state,players,limit,screening):
     for cpt,flex,payload in state.get('leaders',[]):
         row=ShowdownLineup(lookup[cpt],[lookup[k] for k in flex])
         validate_showdown_lineup(row,players,state['context']['salary_cap'])
-        leaders.add(_restore(row,payload,screening))
+        leaders.add(_restore(row,payload,screening,salary_cap=state['context']['salary_cap']))
     return leaders
 
 

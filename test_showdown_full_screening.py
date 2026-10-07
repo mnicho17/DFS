@@ -9,6 +9,34 @@ from contextlib import closing
 
 class FullScreeningTests(unittest.TestCase):
     setUp=fixtures.ScreeningTests.setUp
+    def test_reused_full_scores_have_fresh_construction_metadata(self):
+        from optimizers import attach_showdown_metrics,ShowdownLineup
+        from showdown_simulation import simulate_showdown
+        prepare(self.library,self.players,**self.kw)
+        rows,_=load_screening(self.library,self.players,**self.kw)
+        for row in rows:
+            fresh=attach_showdown_metrics([ShowdownLineup(row['Captain'],row['Flex'])],50000)[0]
+            for key in ('duplicate_risk','sim_leverage','showdown_projection','showdown_correlation_flags',
+                        'showdown_cpt_ownership','showdown_total_ownership','candidate_archetype'):
+                self.assertEqual(row.sim_metrics[key],fresh.sim_metrics[key])
+            self.assertEqual(row.candidate_archetype,fresh.candidate_archetype)
+            self.assertTrue(row.sim_metrics['showdown_correlation_flags'])
+            self.assertGreater(row.sim_metrics['duplicate_risk'],0)
+        validated=simulate_showdown(rows,self.players,salary_cap=50000,**self.kw['screening'])['lineups']
+        for old,new in zip(rows,validated):
+            self.assertEqual(old.sim_metrics['duplicate_risk'],new.sim_metrics['duplicate_risk'])
+            self.assertEqual(old.sim_metrics['showdown_correlation_flags'],new.sim_metrics['showdown_correlation_flags'])
+            self.assertEqual(old.sim_top_hits,new.sim_top_hits)
+
+    def test_reused_construction_uses_the_requested_salary_cap(self):
+        kw=dict(self.kw,salary_cap=46000)
+        prepare(self.library,self.players,**kw)
+        rows,_=load_screening(self.library,self.players,**kw)
+        self.assertTrue(rows)
+        for row in rows:
+            salary=float(row['Captain']['CptSalary'])+sum(float(p['FlexSalary']) for p in row['Flex'])
+            self.assertEqual(row.sim_metrics['showdown_salary_left'],46000-salary)
+
     def test_full_stream_covers_tail_and_reuses_bounded_leaders(self):
         expected=list(iter_candidates(self.library,self.players,salary_cap=50000,rules={}))
         result=prepare(self.library,self.players,batch_size=23,**self.kw)

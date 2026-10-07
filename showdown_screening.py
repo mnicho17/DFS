@@ -45,7 +45,7 @@ def _payload(row):
         values=getattr(row,'sim_scenario_values',{}))))
 
 
-def _restore(row,payload,screening):
+def _restore(row,payload,screening,*,salary_cap=50000):
     metrics=payload['metrics'];n=screening['scenarios']
     if metrics.get('sim_scenarios')!=n or metrics.get('sim_field_lineups',0)<=0:
         raise ValueError('Incomplete screening scores.')
@@ -54,7 +54,14 @@ def _restore(row,payload,screening):
     for name,hits in zip(('sim_top_hits','sim_top_five_hits','sim_win_hits'),payload['hits']):
         if any(type(i) is not int or not 0<=i<n for i in hits):raise ValueError('Invalid screening hits.')
         setattr(row,name,set(hits))
-    row.sim_metrics=metrics
+    # SIM evidence is reusable; construction metadata must be rebuilt from
+    # the current roster just as it is on ordinary prepared-library loading.
+    from optimizers import attach_showdown_metrics
+    attach_showdown_metrics([row],salary_cap)
+    fresh={k:v for k,v in row.sim_metrics.items() if k not in ('sim_edge','sim_return_index')}
+    row.sim_metrics=dict(metrics)
+    row.sim_metrics.update(fresh)
+    row.sim_metrics['candidate_source']='prepared_roster_library'
     row.sim_scenario_values={int(k):v for k,v in payload['values'].items()}
     row.candidate_source='prepared_roster_library'
     return row
@@ -103,7 +110,7 @@ def prepare_screening(library,players,*,limit=20000,salary_cap=50000,salary_stra
         for index,payload,digest in con.execute('SELECT id,payload,digest FROM scores'):
             data=json.loads(payload)
             if not 0<=index<len(rows) or fingerprint(data)!=digest:raise ValueError('Screening cache is damaged.')
-            _restore(rows[index],data,screening);done.add(index)
+            _restore(rows[index],data,screening,salary_cap=salary_cap);done.add(index)
         from showdown_simulation import simulate_showdown
         pending=[i for i in range(len(rows)) if i not in done]
         for start in range(0,len(pending),batch_size):
@@ -154,7 +161,7 @@ def load_screening(library,players,*,limit,salary_cap,salary_strategy,rules,scre
             if cancelled():raise InterruptedError('Screening cache loading cancelled.')
             data=json.loads(payload)
             if index!=expected or fingerprint(data)!=digest:raise ValueError('Screening cache is damaged.')
-            _restore(rows[index],data,screening)
+            _restore(rows[index],data,screening,salary_cap=salary_cap)
         from showdown_simulation import rank_screening_metrics
         rank_screening_metrics([r.sim_metrics for r in rows])
         return rows,dict(meta['library_report'],screening_reused=len(rows),
