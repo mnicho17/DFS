@@ -182,3 +182,8 @@ Full `.sdfull` builds allow up to 60 seconds for scanning (at most 10% of the
 selected Deep budget); single-file libraries retain the 30-second cap. Large
 rejected prefixes can still exhaust a bounded scan. Completed compatible screening
 remains the preferred path; scan failure does not prove infeasibility.
+
+On cache admission, construction metadata (projection, ownership, duplication
+risk, correlation flags, leverage and archetype) is rebuilt from current compatible
+players and the requested salary cap. Saved SIM points, finish rates, hits and
+scenario values are preserved; detailed SIM and portfolio validation remain fresh.
