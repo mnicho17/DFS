@@ -13,22 +13,38 @@ class PreparationWorker(QtCore.QObject):
     finished=QtCore.pyqtSignal(dict)
     error=QtCore.pyqtSignal(str)
 
-    def __init__(self,path,players,seconds,limit,salary_cap,captain_keys=None):
+    def __init__(self,path,players,seconds,limit,salary_cap,captain_keys=None,screen_snapshot=None):
         super().__init__()
         self.path,self.players,self.seconds,self.limit,self.salary_cap=path,copy.deepcopy(players),seconds,limit,salary_cap
         self.stop=threading.Event();self.last_update=0
         self.captain_keys=captain_keys
+        self.screen_snapshot=screen_snapshot
 
     def update(self,value):
         now=time.monotonic()
-        if now-self.last_update>=1 or value['complete']:
+        if now-self.last_update>=1 or value.get('complete') or value.get('screening_complete'):
             self.last_update=now;self.progress.emit(value)
 
     @QtCore.pyqtSlot()
     def run(self):
         try:
-            self.finished.emit(prepare(self.path,self.players,seconds=self.seconds,max_candidates=self.limit,
-                salary_cap=self.salary_cap,cancelled=self.stop.is_set,progress=self.update,captain_keys=self.captain_keys))
+            started=time.monotonic()
+            result=prepare(self.path,self.players,seconds=self.seconds,max_candidates=self.limit,
+                salary_cap=self.salary_cap,cancelled=self.stop.is_set,progress=self.update,captain_keys=self.captain_keys)
+            if self.screen_snapshot and result['complete'] and not self.stop.is_set():
+                from captain_pool import prepare_captain_pool
+                from compute_settings import deep_candidate_budget
+                from showdown_screening import prepare_screening,settings
+                inputs=self.screen_snapshot['inputs'];recipe=inputs['recipe']
+                count=recipe.get('requested_lineups',150);options=recipe.get('deep_compute',{})
+                players,rules,_=prepare_captain_pool(self.players,inputs['rules'],count)
+                remaining=self.seconds-(time.monotonic()-started)
+                if remaining>0:
+                    result.update(prepare_screening(self.path,players,limit=deep_candidate_budget(count,options,False),
+                        salary_cap=self.salary_cap,salary_strategy=recipe.get('salary_strategy','Near Cap'),rules=rules,
+                        screening=settings(options,recipe.get('nfl_sim_scenarios',1000)),seconds=remaining,
+                        cancelled=self.stop.is_set,progress=self.update))
+            self.finished.emit(result)
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -41,7 +57,7 @@ class PreparationDialog(QtWidgets.QDialog):
         self.thread=self.worker=None;self.stop=None;self.pending=None;self.closing=False
         self.setWindowTitle('Prepare Showdown Roster Library')
         layout=QtWidgets.QVBoxLayout(self)
-        note=QtWidgets.QLabel('Prepare reusable rosters while the PC is awake. With Captain locks, preparation covers those Captains; otherwise it covers all Captains. All FLEX combinations are considered, with current exclusions and other rules applied later. No SIM runs here. Limits can leave partial coverage.')
+        note=QtWidgets.QLabel('Prepare reusable rosters while the PC is awake. With Captain locks, preparation covers those Captains; otherwise it covers all Captains. All FLEX combinations are considered, with current exclusions and rules applied later. Optional screening below scores a bounded sample using current inputs. Limits can leave partial coverage.')
         note.setWordWrap(True);layout.addWidget(note)
         self.path=QtWidgets.QLineEdit();self.path.setReadOnly(True);layout.addWidget(self.path)
         row=QtWidgets.QHBoxLayout()
@@ -54,13 +70,16 @@ class PreparationDialog(QtWidgets.QDialog):
         for value in (250000,1000000,5000000,10000000,50000000):self.limit.addItem(f'{value:,} saved rosters',value)
         self.limit.setCurrentIndex(3)
         form=QtWidgets.QFormLayout();form.addRow('Maximum preparation time',self.hours);form.addRow('Stored roster limit',self.limit);layout.addLayout(form)
+        self.screen=QtWidgets.QCheckBox('Also screen a bounded candidate sample for Deep reuse')
+        self.screen.setToolTip('Only complete libraries can be screened. Completed batches are saved for resume. Final SIM and audits run fresh; millions of stored rosters are not all scored.')
+        layout.addWidget(self.screen)
         self.message=QtWidgets.QLabel('Choose a new library or an existing checkpoint. Complete coverage is reported only after every combination is checked.')
         self.message.setWordWrap(True);layout.addWidget(self.message)
         self.start=QtWidgets.QPushButton('Start / Resume');self.pause=QtWidgets.QPushButton('Pause and save')
         self.pause.setEnabled(False)
         row=QtWidgets.QHBoxLayout();row.addWidget(self.start);row.addWidget(self.pause);layout.addLayout(row)
         self.start.clicked.connect(self.begin);self.pause.clicked.connect(self.cancel)
-        self.controls=(self.new,self.open,self.hours,self.limit,self.start)
+        self.controls=(self.new,self.open,self.hours,self.limit,self.start,self.screen)
 
     def choose_new(self):
         path,_=QtWidgets.QFileDialog.getSaveFileName(self,'New Showdown Roster Library','showdown-rosters.sdlib','Showdown roster library (*.sdlib)')
@@ -81,13 +100,18 @@ class PreparationDialog(QtWidgets.QDialog):
         except Exception as exc:self.message.setText(str(exc))
 
     def describe(self,result):
+        if 'screened' in result:
+            self.message.setText(f"Screened {result['screened']:,}/{result['screening_total']:,} sampled candidates; "+
+                ('screening complete. Final SIM remains fresh.' if result['screening_complete'] else 'partial screening; resume to continue.'))
+            return
         self.message.setText(f"{result['saved']:,} saved rosters; {result['checked']:,} combinations checked. Coverage: "+('complete.' if result['complete'] else 'partial; resume to continue.'))
 
     def begin(self):
         if self.thread is not None or not self.path.text():return
         recipe=self.snapshot['inputs']['recipe']
         self.worker=PreparationWorker(self.path.text(),self.snapshot['inputs']['players'],
-            self.hours.currentData()*3600,self.limit.currentData(),recipe.get('salary_cap',50000),self.scope)
+            self.hours.currentData()*3600,self.limit.currentData(),recipe.get('salary_cap',50000),self.scope,
+            self.snapshot if self.screen.isChecked() else None)
         self.stop=self.worker.stop;self.pending=None
         self.thread=QtCore.QThread(self);self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
