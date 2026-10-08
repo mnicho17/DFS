@@ -202,3 +202,18 @@ requires screening again. Full-slate roster libraries can be reused, and the poo
 filters candidates before simulation. Open the preparation dialog after saving
 the pool so it captures the updated inputs. This does not remove the cost of
 scanning qualifying FLEX combinations for the remaining Captains.
+# Screening compatibility and refresh times
+
+Coarse screening ignores only the observation timestamps `NFLUsageCheckedAt`,
+`NFLUsageFetchedAt`, `LiveStatusUpdatedAt`, `NFLVegasUpdatedAt`,
+`NFLNewsUpdatedAt`, and `NFLUsageHistory.checked_at`. A refresh that changes only
+these fields can resume or reuse screening. Original player records, snapshots,
+archives and safety evidence retain their timestamps; restored candidates use
+the current player records. Final SIM, audits and freshness checks still run.
+
+Changes to forecasts, ownership, status, availability, depth, usage values,
+news/weather/odds values, Captain pool, locks, exclusions, rules, player order,
+library identity, screening settings, model code or Python runtime remain strict.
+Unknown fields are included by default. No prior-cache migration is performed:
+the identity-schema/code update requires screening once after updating. The
+running app and existing cache files are not modified by this repository change.

@@ -20,6 +20,23 @@ from showdown_library import validate_library, load_bounded
 
 MAX_BYTES=512*1024**2
 
+# Observation times do not enter coarse scoring or eligibility. Preserve them
+# in caller inputs, snapshots and safety evidence; exclude only these audited
+# paths from screening compatibility. Unknown fields remain strict by default.
+OBSERVATION_TIMES = frozenset(('NFLUsageCheckedAt', 'NFLUsageFetchedAt',
+    'LiveStatusUpdatedAt', 'NFLVegasUpdatedAt', 'NFLNewsUpdatedAt'))
+
+
+def scoring_players(players):
+    rows = copy.deepcopy(players)
+    for player in rows:
+        for key in OBSERVATION_TIMES:
+            player.pop(key, None)
+        history = player.get('NFLUsageHistory')
+        if isinstance(history, dict):
+            history.pop('checked_at', None)
+    return rows
+
 
 def settings(options, sim_scenarios):
     from compute_settings import normalize_deep_settings
@@ -31,7 +48,7 @@ def settings(options, sim_scenarios):
 def target(library,players,*,limit,salary_cap,salary_strategy,rules,screening,folder=None):
     info=validate_library(library,players,salary_cap=salary_cap)
     # Player iteration order participates in seeded scenario generation.
-    context=dict(schema=1,library=info,players=copy.deepcopy(players),
+    context=dict(schema=2,library=info,players=scoring_players(players),
         limit=limit,salary_cap=float(salary_cap),salary_strategy=salary_strategy,rules=rules,
         screening=screening,model=code_id(),python=sys.version)
     identity=fingerprint(context)
