@@ -39,6 +39,8 @@ class CapDiagnosticsTests(unittest.TestCase):
         self.assertEqual(text(compare([],[],4,{}, {},{})),[])
         rows,_=bank();rows[-1]['Flex'][0]['Position']=''
         self.assertEqual(compare(rows,rows[:4],4,{}, {},{})['status'],'unavailable')
+        rows,_=bank();selected=copy.deepcopy(rows[:4]);selected[0]['Captain']['Position']=''
+        self.assertEqual(compare(rows,selected,4,{}, {},{})['status'],'unavailable')
 
     def test_selector_report_does_not_change_selected_lineups(self):
         rows,qb=bank();rules=dict(min_unique=1,balance_ownership=True)

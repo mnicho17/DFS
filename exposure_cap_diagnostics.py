@@ -28,7 +28,7 @@ def compare(candidates, selected, requested, starting, effective, players):
         return dict(status='unavailable', reason='A complete scored candidate bank is required.')
     from optimizers import _position_tokens
     if any(not (_position_tokens(p) & {'QB','RB','WR','TE','K','DST'})
-            for row in candidates for p in [row['Captain']]+list(row['Flex'])):
+            for row in candidates + selected for p in [row['Captain']]+list(row['Flex'])):
         return dict(status='unavailable', reason='Complete position metadata is required.')
     ranked = ranked_lineups(candidates)[:requested]
     rank_counts, selected_counts = _counts(ranked), _counts(selected)
