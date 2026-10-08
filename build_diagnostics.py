@@ -390,6 +390,10 @@ def create_build_diagnostic(
             "constrained_player_count": len(rules.get("player_constraints") or {}),
         },
         "portfolio": {
+            **({"zero_qb_rule": dict(portfolio['zero_qb_rule'])}
+               if portfolio.get('zero_qb_rule') else {}),
+            **({"exposure_cap_diagnostic": dict(portfolio['exposure_cap_diagnostic'])}
+               if portfolio.get('exposure_cap_diagnostic') else {}),
             "compliant": bool(portfolio.get("compliant", not warnings)),
             "warning_count": len(warnings),
             "warnings": warnings,
@@ -782,6 +786,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
                 f"Captain {_number(guardrails.get('captain_pct')):.0f}% max; "
                 f"combined K/DST Captain {_number(guardrails.get('specialist_captain_pct')):.0f}% max"
             )
+    from zero_qb_rules import text as zero_qb_text
+    lines.extend(zero_qb_text(portfolio))
     from exposure_cap_diagnostics import text as cap_pressure_text
     lines.extend(cap_pressure_text(portfolio.get('exposure_cap_diagnostic')))
     from portfolio_recovery import format_recovery

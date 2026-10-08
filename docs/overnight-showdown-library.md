@@ -223,3 +223,15 @@ Game-day checks preserve existing ownership when these same scoring inputs are u
 Kicker events use one available recorded starter per team when depth 1 or an explicit STARTER status identifies exactly one player. That player supplies both opportunity rates and the team scoring budget. Missing or conflicting starter evidence retains the deterministic projection/player-key fallback; unavailable kickers cannot claim the budget. This model update requires new screening and scenario preparation.
 
 Completed scored Showdown portfolios report automatic-cap pressure: ranked leaders versus selected QB/specialist construction, and starting/effective automatic player and Captain caps. The comparison does not rerun selection, change limits, or isolate a causal effect. Manual limits and locks are not labeled automatic caps. Unscored banks do not supply a ranked comparison.
+
+In Portfolio Rules, **Showdown zero-QB maximum** optionally limits the percentage
+of submitted lineups without a QB at Captain or FLEX. The default is **Unset**;
+0% requires a QB in every lineup. Percentage maxima round down against the
+requested entry count (10% of 150 permits 15 zero-QB lineups). The rule is explicit:
+repair, automatic exposure-cap recovery, retained entries and refinement cannot
+relax it. Conflicting limits stop the build without releasing a partial portfolio.
+Active limits require complete roster position metadata. The copied build report
+shows the actual count and allowed count. Recipes and snapshots preserve the rule;
+older snapshots restore Unset. Changing this portfolio-only setting preserves
+prepared roster libraries and compatible coarse screening scores. It does not
+change projections, simulation, ownership or individual lineup ranking.

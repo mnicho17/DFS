@@ -238,6 +238,8 @@ Portfolio rules shape the whole set rather than one lineup at a time.
 
 - Showdown has separate Captain minimum and maximum controls.
 
+- **Showdown zero-QB maximum** limits the percentage of lineups without a QB at Captain or FLEX. It starts **Unset**. Set 0% to require a QB in every lineup, or 10% to allow at most 15 zero-QB lineups in a 150-entry build. Counts round down. This explicit limit is never relaxed: conflicting retained entries, player caps or other rules stop the build without releasing a partial portfolio. The build report shows the actual count and cap. Changing this setting preserves compatible prepared screening scores; recipes and snapshots save it.
+
 - Minimum uniqueness requires a set number of different players between lineups.
 
 - Team and game caps prevent too much concentration in one source.

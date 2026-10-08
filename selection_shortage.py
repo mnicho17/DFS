@@ -38,6 +38,9 @@ def describe(requested, selected, remaining, meta, conflicts, limits, counts,
                         blocked[f"{label.title()} {key}: cap {cap}/{requested}"] += 1
         if m['specialist_captain'] and limits['specialist'] is not None and counts['specialist'] >= limits['specialist']:
             blocked[f"K/DST Captain cap {limits['specialist']}/{requested} (automatic)"] += 1
+        zero_cap = limits.get("zero_qb")
+        if m.get("zero_qb") and zero_cap is not None and counts.get("zero_qb", 0) >= zero_cap:
+            blocked[f"Zero-QB maximum {zero_cap}/{requested} (explicit)"] += 1
         kicker_cap = limits.get('kicker_captain')
         if m.get('kicker_captain') and kicker_cap is not None and counts.get('kicker_captain', 0) >= kicker_cap:
             blocked[f"Kicker Captain cap {kicker_cap}/{requested} (automatic)"] += 1

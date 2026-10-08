@@ -44,13 +44,22 @@ class BuildDiagnosticsTests(unittest.TestCase):
         from portfolio_rules import player_key
         rows, qb = bank(); key = player_key(qb)
         data = compare(rows, rows[12:16], 4, {'total':{key:3}}, {'total':{key:3}}, {key:qb})
-        record = self._diagnostic()
-        record['portfolio']['exposure_cap_diagnostic'] = data
+        record = create_build_diagnostic(context={'kind':'showdown'},timing_report={},
+            portfolio_report={'exposure_cap_diagnostic':data})
         report = format_build_report(record)
         self.assertIn('Automatic exposure-cap pressure', report)
         self.assertIn('starting automatic cap 3/4', report)
         self.assertIn('ranked 1 above effective cap', report)
         self.assertIn('zero QB 4/4', report)
+
+    def test_zero_qb_rule_survives_build_record_and_copied_report(self):
+        from portfolio_rules import portfolio_report
+        from test_zero_qb_rules import lineup
+        rows=[lineup(0,0),lineup(1,1)]
+        portfolio=portfolio_report(rows,{'max_zero_qb_pct':10},kind='showdown',requested=2)
+        record=create_build_diagnostic(context={'kind':'showdown'},timing_report={},portfolio_report=portfolio)
+        self.assertEqual(record['portfolio']['zero_qb_rule']['limit'],0)
+        self.assertIn('Zero-QB maximum (explicit): 0/2 selected; cap 0/2 (10%)',format_build_report(record))
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

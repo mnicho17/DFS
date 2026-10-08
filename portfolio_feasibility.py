@@ -72,6 +72,9 @@ def valid_portfolio(rows, retained, meta, conflicts, limits, group_ok, conflict_
     cap = limits['specialist']
     if cap is not None and sum(meta[key]['specialist_captain'] for key in ids) > cap:
         return False
+    zero_cap = limits.get("zero_qb")
+    if zero_cap is not None and sum(meta[key].get("zero_qb", False) for key in ids) > zero_cap:
+        return False
     kicker_cap = limits.get('kicker_captain')
     return kicker_cap is None or sum(meta[key].get('kicker_captain', False) for key in ids) <= kicker_cap
 
@@ -144,6 +147,7 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
         counts = {name: Counter() for name in ('total', 'captain', 'team', 'game')}
         specialist = 0
         kicker_captains = 0
+        zero_qb = 0
 
         # Retained lineups are fixed and must themselves satisfy every hard rule.
         valid_seed = True
@@ -167,6 +171,7 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
             counts['game'].update(data['games'])
             specialist += int(data['specialist_captain'])
             kicker_captains += int(data.get('kicker_captain', False))
+            zero_qb += int(data.get("zero_qb", False))
             if any(value is not None and counts['total'][key] > value
                    for key, value in limits['total'].items()):
                 valid_seed = False
@@ -182,6 +187,9 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
                 valid_seed = False
                 break
             if limits['specialist'] is not None and specialist > limits['specialist']:
+                valid_seed = False
+                break
+            if limits.get("zero_qb") is not None and zero_qb > limits["zero_qb"]:
                 valid_seed = False
                 break
             if limits.get('kicker_captain') is not None and kicker_captains > limits['kicker_captain']:
@@ -219,6 +227,8 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
                 continue
             if data['specialist_captain'] and limits['specialist'] is not None and specialist >= limits['specialist']:
                 continue
+            if data.get("zero_qb") and limits.get("zero_qb") is not None and zero_qb >= limits["zero_qb"]:
+                continue
             if data.get('kicker_captain') and limits.get('kicker_captain') is not None and kicker_captains >= limits['kicker_captain']:
                 continue
 
@@ -231,6 +241,7 @@ def diversity_first_witness(pool, retained, meta, conflicts, limits, group_ok, s
             counts['game'].update(data['games'])
             specialist += int(data['specialist_captain'])
             kicker_captains += int(data.get('kicker_captain', False))
+            zero_qb += int(data.get("zero_qb", False))
             blocked.add(row_id)
             for group_index in groups_by_id[row_id]:
                 blocked.update(group_list[group_index])
@@ -293,6 +304,8 @@ def repair(pool,retained,selected,meta,conflicts,limits,group_ok,score,seconds=1
             for key in set().union(*(meta[id(lu)][field] for lu in all_rows)):maximum(field,key,limits[label])
         if limits['specialist'] is not None:
             problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if meta[id(lu)]['specialist_captain']) <= limits['specialist']
+        if limits.get("zero_qb") is not None:
+            problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if meta[id(lu)].get("zero_qb", False)) <= limits["zero_qb"]
         if limits.get('kicker_captain') is not None:
             problem += pulp.lpSum(variables[id(lu)] for lu in all_rows if meta[id(lu)].get('kicker_captain', False)) <= limits['kicker_captain']
         remaining = deadline-time.perf_counter()

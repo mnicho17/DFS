@@ -157,6 +157,7 @@ class SnapshotActions:
         finally:
             del blockers
         self.players = copy.deepcopy(inputs['players'])
+        self.spin_zero_qb_max.setValue(float(inputs["rules"].get("max_zero_qb_pct", -1)))
         self.portfolio_groups = copy.deepcopy(inputs['rules'].get('groups') or [])
         self.lbl_portfolio_groups.setText(f'Groups: {len(self.portfolio_groups)}')
         self.last_live_check_summary = copy.deepcopy(value.get('freshness') or {})

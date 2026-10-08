@@ -15,6 +15,14 @@ from test_showdown_library import players
 
 
 class ScreeningTests(unittest.TestCase):
+    def test_zero_qb_portfolio_limit_reuses_saved_scores(self):
+        prepare_screening(self.library,self.players,**self.kw)
+        changed=dict(self.kw,rules={'max_zero_qb_pct':0})
+        with patch('showdown_simulation.simulate_showdown',side_effect=AssertionError('must reuse saved scores')):
+            rows,report=load_screening(self.library,self.players,**changed)
+        self.assertEqual(report['screening_reused'],16)
+        self.assertEqual(len(rows),16)
+
     def timed_players(self, stamp):
         rows = copy.deepcopy(self.players)
         for player in rows:
