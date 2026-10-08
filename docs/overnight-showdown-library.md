@@ -219,3 +219,5 @@ the identity-schema/code update requires screening once after updating. The
 running app and existing cache files are not modified by this repository change.
 
 Game-day checks preserve existing ownership when these same scoring inputs are unchanged. Changes to relevant inputs or missing ownership trigger quick ownership estimates; the check reports whether ownership was preserved or recalculated. Explicit ownership recalculation remains available.
+
+Kicker events use one available recorded starter per team when depth 1 or an explicit STARTER status identifies exactly one player. That player supplies both opportunity rates and the team scoring budget. Missing or conflicting starter evidence retains the deterministic projection/player-key fallback; unavailable kickers cannot claim the budget. This model update requires new screening and scenario preparation.
