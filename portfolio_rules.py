@@ -941,11 +941,11 @@ def select_portfolio(
             after = total_counts[key] - int(key in out_meta["keys"]) + int(key in keys)
             if limit is not None and after > limit:
                 return False
-            if automatic_recovery and after < min_total.get(key, 0):
+            if (automatic_recovery or zero_qb_limit is not None) and after < min_total.get(key, 0):
                 return False
         out_captain = out_meta["captain_key"]
         in_captain = in_meta["captain_key"]
-        if automatic_recovery:
+        if automatic_recovery or zero_qb_limit is not None:
             for key in out_meta['flex_keys'] | in_meta['flex_keys']:
                 cap = max_flex.get(key)
                 after = total_counts[key] - cpt_counts[key] - int(key in out_meta['flex_keys']) + int(key in in_meta['flex_keys'])
@@ -956,7 +956,7 @@ def select_portfolio(
             after = cpt_counts[key] - int(key == out_captain) + int(key == in_captain)
             if limit is not None and after > limit:
                 return False
-            if automatic_recovery and after < min_cpt.get(key, 0):
+            if (automatic_recovery or zero_qb_limit is not None) and after < min_cpt.get(key, 0):
                 return False
         specialist_after = (
             specialist_cpt_count
@@ -1175,6 +1175,14 @@ def select_portfolio(
         warnings.append(f"Automatic Showdown exposure guardrails were relaxed {auto_relaxations} times to fill the requested portfolio; displayed starting caps are not final limits.")
     if not refinement_passes:
         refinement_stop_reason = "disabled in individual ranking" if individual_ranking else "disabled"
+    if zero_qb_limit is not None:
+        if cancelled():
+            raise ValueError('Selection cancelled')
+        final_limits = dict(feasibility_limits, total=max_total, captain=max_cpt, specialist=specialist_cpt_limit)
+        if not valid_portfolio(selected, retained, candidate_meta, current_uniqueness_conflicts,
+                final_limits, lambda keys: _group_ok(keys, normalized['groups'])):
+            from selection_shortage import PortfolioSelectionShortage
+            raise PortfolioSelectionShortage('Final portfolio failed explicit rule validation; no partial portfolio was released.')
     report = portfolio_report(selected, normalized, kind=kind, requested=requested)
     if kind == 'showdown':
         from specialist_diagnostics import compare

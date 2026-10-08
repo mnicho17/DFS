@@ -100,6 +100,13 @@ class ZeroQbTests(unittest.TestCase):
         self.assertIn(fixed,result['lineups'])
         self.assertEqual(sum(is_zero(r) for r in result['lineups']),1)
 
+    def test_active_limit_preserves_manual_minimums_without_auto_recovery(self):
+        rows=[lineup(i,1) for i in range(6)]
+        for row in rows[3:]:row['Flex'][1].update(Name='Required',FlexID='Required')
+        result=self.choose(rows,rules=dict(player_constraints={'Required':dict(MinPct=100)}),
+                           refinement_passes=30,automatic_recovery=False)
+        self.assertTrue(all(any(p['FlexID']=='Required' for p in r['Flex']) for r in result['lineups']))
+
     def test_cancelled_repair_does_not_publish_a_portfolio(self):
         with self.assertRaisesRegex(ValueError,'cancelled'):
             self.choose([lineup(i) for i in range(4)],selection_cancel_callback=lambda:True)
