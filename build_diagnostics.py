@@ -782,6 +782,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
                 f"Captain {_number(guardrails.get('captain_pct')):.0f}% max; "
                 f"combined K/DST Captain {_number(guardrails.get('specialist_captain_pct')):.0f}% max"
             )
+    from exposure_cap_diagnostics import text as cap_pressure_text
+    lines.extend(cap_pressure_text(portfolio.get('exposure_cap_diagnostic')))
     from portfolio_recovery import format_recovery
     lines.extend('- ' + line for line in format_recovery(portfolio.get('portfolio_recovery')))
     selected_sources = dict(sim.get("selected_sources") or {})

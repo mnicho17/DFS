@@ -1176,6 +1176,11 @@ def select_portfolio(
         }
         if auto_guardrails else {}
     )
+    if auto_guardrails:
+        from exposure_cap_diagnostics import compare as compare_cap_pressure
+        report['exposure_cap_diagnostic'] = compare_cap_pressure(all_lineups, selected, requested,
+            starting_caps, automatic_caps(dict(total=max_total, captain=max_cpt,
+            specialist=specialist_cpt_limit), auto_total_keys, auto_cpt_keys), player_lookup)
     for warning in warnings:
         if warning not in report["warnings"]:
             report["warnings"].append(warning)
@@ -1503,6 +1508,8 @@ def _report_text(report: Dict[str, Any]) -> str:
         captain = f" | CPT {float(row.get('cpt_pct', 0.0)):.1f}%" if float(row.get("cpt_pct", 0.0)) > 0 else ""
         lines.append(f"- {row.get('name')}: {float(row.get('pct', 0.0)):.1f}%{captain}")
     lines.append("")
+    from exposure_cap_diagnostics import text as cap_pressure_text
+    lines.extend(cap_pressure_text(report.get('exposure_cap_diagnostic')))
     warnings = report.get("warnings") or []
     if warnings:
         lines.append("Needs attention:")

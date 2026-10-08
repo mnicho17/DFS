@@ -38,6 +38,20 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertIn('100 compatible sampled candidates reused',text)
         self.assertIn('Detailed SIM and independent audits run fresh',text)
 
+    def test_automatic_cap_pressure_appears_in_copied_build_report(self):
+        from exposure_cap_diagnostics import compare
+        from test_exposure_cap_diagnostics import bank
+        from portfolio_rules import player_key
+        rows, qb = bank(); key = player_key(qb)
+        data = compare(rows, rows[12:16], 4, {'total':{key:3}}, {'total':{key:3}}, {key:qb})
+        record = self._diagnostic()
+        record['portfolio']['exposure_cap_diagnostic'] = data
+        report = format_build_report(record)
+        self.assertIn('Automatic exposure-cap pressure', report)
+        self.assertIn('starting automatic cap 3/4', report)
+        self.assertIn('ranked 1 above effective cap', report)
+        self.assertIn('zero QB 4/4', report)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.env = mock.patch.dict(

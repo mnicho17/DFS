@@ -119,6 +119,16 @@ class ObjectiveParityTests(unittest.TestCase):
             observational_lines=set(text(specialist))
             report['text']='\n'.join(line for line in report['text'].split('\n') if line not in observational_lines)
             value['build_report']='\n'.join(line for line in value['build_report'].split('\n') if line not in observational_lines)
+        # New read-only cap reporting is outside the frozen historical receipt.
+        cap_diagnostic = report.pop('exposure_cap_diagnostic', None)
+        if cap_diagnostic:
+            from exposure_cap_diagnostics import text as cap_text
+            cap_lines = cap_text(cap_diagnostic)
+            if cap_lines:
+                block = '\n' + '\n'.join(cap_lines)
+                report['text'] = report['text'].replace(block, '')
+                value['build_report'] = value['build_report'].replace(block, '')
+        value['diagnostic']['portfolio'].pop('exposure_cap_diagnostic', None)
         value['diagnostic']['portfolio'].pop('specialist_diagnostics',None)
         report['text'] = '\n'.join(line for line in report['text'].split('\n')
                                    if line.strip() and not line.startswith('Showdown guardrails:'))
