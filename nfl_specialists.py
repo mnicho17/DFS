@@ -8,7 +8,7 @@ import random
 import hashlib
 import math
 
-MODEL = 'kicker-events-projection-defense-v2'
+MODEL = 'kicker-events-recorded-starter-defense-v3'
 
 
 def points_allowed_score(points):
@@ -80,6 +80,23 @@ def sample_game(rng, teams, environments, game_z, targets, defense_targets, kick
     return events
 
 
+
+def team_kicker(players):
+    """Prefer one available recorded starter; retain deterministic legacy fallback.
+
+    Depth 1 and explicit STARTER are role evidence. Conflicting/missing evidence
+    does not prove a starter: use the existing projection/key fallback then.
+    Locks and personal fades do not establish a real-world kicking role.
+    """
+    from nfl_eligibility import depth, unavailable
+    from nfl_simulation import _projection, player_key
+    available = [p for p in players if not unavailable(p)]
+    starters = [p for p in available if depth(p) == 1
+                or str(p.get('NFLAvailability') or '').strip().upper() == 'STARTER']
+    if len(starters) == 1:
+        return starters[0]
+    return max(available, key=lambda p: (_projection(p), player_key(p))) if available else None
+
 def specialist_outcomes(rng, players, outcomes, game_factor, team_environment):
     from nfl_simulation import _game, _team, _opponent, _position, _projection, player_key
     # Separate stream preserves every offensive draw and permits paired audits.
@@ -96,20 +113,22 @@ def specialist_outcomes(rng, players, outcomes, game_factor, team_environment):
         if len(teams) != 2:
             continue  # Incomplete fixture retains the legacy draw.
         form = dict(team_environment)
-        targets, defenses, kicking = {}, {}, {}
+        targets, defenses, kicking, starters = {}, {}, {}, {}
         for team in teams:
             offense = [p for p in pool if _team(p)==team and _position(p) in {'QB','RB','WR','TE'} and _projection(p)>0]
             expected = sum(_projection(p) for p in offense)
             actual = sum(outcomes[player_key(p)] for p in offense)
             if expected:
                 form[team] = .5 * form.get(team, 0) + .5 * _clip(2 * math.log(max(.1, actual/expected)), -2.5, 2.5)
-            for pos, target in (('K', targets), ('DST', defenses)):
+            for pos, target in (('DST', defenses),):
                 values = [_projection(p) for p in pool if _team(p)==team and _position(p)==pos]
                 if values:
                     target[team] = max(values)
             kickers = [p for p in pool if _team(p)==team and _position(p)=='K']
-            if kickers:
-                starter=max(kickers,key=lambda p:(_projection(p),player_key(p)))
+            starter = team_kicker(kickers)
+            starters[team] = starter
+            if starter is not None:
+                targets[team] = _projection(starter)
                 if starter.get('ProjectionSource')=='Automatic kicker opportunities' and starter.get('NFLKickerOpportunities'):
                     kicking[team]=dict(starter['NFLKickerOpportunities'])
                     baseline=float(starter.get('KickerProjection') or 0)
@@ -129,7 +148,7 @@ def specialist_outcomes(rng, players, outcomes, game_factor, team_environment):
             if _position(p)=='K':
                 # Multiple listed kickers share one team scoring budget, never
                 # each receive a complete game's opportunities.
-                kickers = [q for q in pool if _team(q)==team and _position(q)=='K']
-                starter = max(kickers, key=lambda q: (_projection(q), player_key(q)))
-                result[player_key(p)] = float(kicker_score(events[team]) if player_key(p)==player_key(starter) else 0)
+                starter = starters.get(team)
+                result[player_key(p)] = float(kicker_score(events[team])
+                    if starter is not None and player_key(p)==player_key(starter) else 0)
     return result
