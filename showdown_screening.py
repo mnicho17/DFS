@@ -20,7 +20,8 @@ from showdown_library import validate_library, load_bounded
 
 MAX_BYTES=512*1024**2
 
-# Observation times do not enter coarse scoring or eligibility. Preserve them
+# Observation times and the change-since-check flag do not enter coarse
+# scoring or eligibility. Preserve them
 # in caller inputs, snapshots and safety evidence; exclude only these audited
 # paths from screening compatibility. Unknown fields remain strict by default.
 OBSERVATION_TIMES = frozenset(('NFLUsageCheckedAt', 'NFLUsageFetchedAt',

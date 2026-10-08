@@ -18,7 +18,7 @@ class RefreshOwnershipTests(unittest.TestCase):
         if not initialized:
             window.players[0].pop('OwnershipSource')
         before = copy.deepcopy(window.players)
-        window._auto_fade_out_players.return_value = 0
+        window._auto_fade_out_players.side_effect = lambda: MainWindow._auto_fade_out_players(window)
         def refresh(players):
             players[0].update(change)
             return dict(sleeper=1)
@@ -45,6 +45,9 @@ class RefreshOwnershipTests(unittest.TestCase):
                 window, _, summary = self.run_refresh(change)
                 window.recalc_ownership_quick.assert_called_once_with()
                 self.assertEqual(summary['ownership_action'], 'recalculated')
+                if change.get('InjuryStatus') == 'OUT':
+                    self.assertTrue(window.players[0]['FadeFlex'])
+                    self.assertTrue(window.players[0]['FadeCpt'])
                 self.assertIn('Ownership recalculated', window.status.showMessage.call_args.args[0])
 
     def test_missing_ownership_initializes_estimates(self):
