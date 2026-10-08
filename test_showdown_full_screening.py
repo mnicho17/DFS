@@ -9,6 +9,23 @@ from contextlib import closing
 
 class FullScreeningTests(unittest.TestCase):
     setUp=fixtures.ScreeningTests.setUp
+    def test_timestamp_refresh_resumes_full_stream_and_reuses_completed_scores(self):
+        original = fixtures.ScreeningTests.timed_players(self, '2026-10-08T10:00:00Z')
+        current = fixtures.ScreeningTests.timed_players(self, '2026-10-08T11:00:00Z')
+        stop = [False]
+        first = prepare(self.library, original, batch_size=23, cancelled=lambda:stop[0],
+            progress=lambda _:stop.__setitem__(0, True), **self.kw)
+        self.assertEqual(first['screened'], 23)
+        resumed = prepare(self.library, current, batch_size=23, **self.kw)
+        saved, _ = load_screening(self.library, current, **self.kw)
+        complete = prepare(self.library, current, batch_size=23, **dict(self.kw, folder=self.root/'other'))
+        fresh, _ = load_screening(self.library, current, **dict(self.kw, folder=self.root/'other'))
+        self.assertEqual(resumed['screened'], complete['screened'])
+        self.assertEqual([r.sim_metrics for r in saved], [r.sim_metrics for r in fresh])
+        self.assertEqual(signatures(saved), signatures(fresh))
+        with patch('showdown_simulation.simulate_showdown', side_effect=AssertionError('rescored')):
+            self.assertTrue(prepare(self.library, current, **self.kw)['screening_complete'])
+
     def test_reused_full_scores_have_fresh_construction_metadata(self):
         from optimizers import attach_showdown_metrics,ShowdownLineup
         from showdown_simulation import simulate_showdown
