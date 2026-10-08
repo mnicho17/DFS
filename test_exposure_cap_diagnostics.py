@@ -37,6 +37,8 @@ class CapDiagnosticsTests(unittest.TestCase):
         rows,_=bank();rows[-1].sim_metrics={}
         self.assertEqual(compare(rows,rows[:4],4,{}, {},{})['status'],'unavailable')
         self.assertEqual(text(compare([],[],4,{}, {},{})),[])
+        rows,_=bank();rows[-1]['Flex'][0]['Position']=''
+        self.assertEqual(compare(rows,rows[:4],4,{}, {},{})['status'],'unavailable')
 
     def test_selector_report_does_not_change_selected_lineups(self):
         rows,qb=bank();rules=dict(min_unique=1,balance_ownership=True)

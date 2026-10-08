@@ -26,6 +26,10 @@ def compare(candidates, selected, requested, starting, effective, players):
     if not candidates or any(not isinstance(getattr(r,'sim_metrics',{}).get('sim_scenarios'),(int,float))
             or not math.isfinite(r.sim_metrics['sim_scenarios']) or r.sim_metrics['sim_scenarios'] <= 0 for r in candidates):
         return dict(status='unavailable', reason='A complete scored candidate bank is required.')
+    from optimizers import _position_tokens
+    if any(not (_position_tokens(p) & {'QB','RB','WR','TE','K','DST'})
+            for row in candidates for p in [row['Captain']]+list(row['Flex'])):
+        return dict(status='unavailable', reason='Complete position metadata is required.')
     ranked = ranked_lineups(candidates)[:requested]
     rank_counts, selected_counts = _counts(ranked), _counts(selected)
     rows=[]
