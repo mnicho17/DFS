@@ -187,3 +187,18 @@ On cache admission, construction metadata (projection, ownership, duplication
 risk, correlation flags, leverage and archetype) is rebuilt from current compatible
 players and the requested salary cap. Saved SIM points, finish rates, hits and
 scenario values are preserved; detailed SIM and portfolio validation remain fresh.
+# Configuring the Captain pool
+
+Use **Settings > Showdown Captain Pool...** before preparing screening. Check the
+players eligible at Captain and save. Unchecked players receive a Captain fade;
+their FLEX eligibility and exposure settings are preserved. This pool does not
+force equal Captain exposure. Existing Captain locks still restrict the pool and
+use their existing exposure reconciliation. Unavailable players and FLEX locks
+cannot be enabled from this checklist. **All eligible** restores Captain
+eligibility for the available players.
+
+The pool is captured in build snapshots and screening compatibility. Changing it
+requires screening again. Full-slate roster libraries can be reused, and the pool
+filters candidates before simulation. Open the preparation dialog after saving
+the pool so it captures the updated inputs. This does not remove the cost of
+scanning qualifying FLEX combinations for the remaining Captains.

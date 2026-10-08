@@ -8,6 +8,22 @@ from learning_db import load_nfl_field_calibration
 
 
 class SnapshotActions:
+    def on_captain_pool(self):
+        if self._snapshot_busy():
+            self.status.showMessage('Wait for the current build to finish.', 5000)
+            return
+        if self._current_sport() != 'NFL' or self._contest_mode() != 'showdown':
+            QtWidgets.QMessageBox.information(self, 'Captain Pool', 'Load an NFL Showdown slate first.')
+            return
+        try:
+            from captain_pool_ui import CaptainPoolDialog
+            if CaptainPoolDialog(self.players, self).exec_() == QtWidgets.QDialog.Accepted:
+                self._refresh_players_table()
+                self._update_lineup_space_dashboard()
+                self.status.showMessage('Captain eligibility saved. Prepare screening again for this pool.', 8000)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, 'Captain Pool', str(exc))
+
     def on_projection_sensitivity(self):
         if self._snapshot_busy():
             self.status.showMessage('Wait for the current build to finish.',5000)
