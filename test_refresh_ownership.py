@@ -35,6 +35,7 @@ class RefreshOwnershipTests(unittest.TestCase):
                 for key in ('OwnershipSource', 'ProjOwnPct', 'ProjCptOwnPct', 'ProjFlexOwnPct'):
                     self.assertEqual(window.players[0][key], before[0][key])
                 self.assertEqual(summary['ownership_action'], 'preserved')
+                self.assertEqual(summary['ownership_simulation_replaced'], 0)
                 window._record_live_check.assert_called_once_with(summary)
                 self.assertIn('Ownership preserved', window.status.showMessage.call_args.args[0])
 
@@ -45,6 +46,7 @@ class RefreshOwnershipTests(unittest.TestCase):
                 window, _, summary = self.run_refresh(change)
                 window.recalc_ownership_quick.assert_called_once_with()
                 self.assertEqual(summary['ownership_action'], 'recalculated')
+                self.assertEqual(summary['ownership_simulation_replaced'], 1)
                 if change.get('InjuryStatus') == 'OUT':
                     self.assertTrue(window.players[0]['FadeFlex'])
                     self.assertTrue(window.players[0]['FadeCpt'])
@@ -54,3 +56,4 @@ class RefreshOwnershipTests(unittest.TestCase):
         window, _, summary = self.run_refresh({}, initialized=False)
         window.recalc_ownership_quick.assert_called_once_with()
         self.assertEqual(summary['ownership_action'], 'recalculated')
+        self.assertEqual(summary['ownership_simulation_replaced'], 0)

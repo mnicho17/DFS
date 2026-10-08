@@ -102,6 +102,8 @@ Choose **Load Player CSV** and select a DraftKings salary file. The player table
 
 - **Own%** is the projected field ownership used by build and SIM logic.
 
+The ownership status below the live-data strip shows the current source and player counts. If a live refresh changes scoring inputs and replaces lineup-simulation ownership with quick estimates, an amber notice remains visible until you run ownership simulation again. Copied build reports include these sources and the notice; loading a saved snapshot restores its saved provenance. Initial quick estimates are labeled without a replacement warning.
+
 - **Tags** show locks, fades, and related choices.
 
 - Exposure columns hold maximum and minimum portfolio limits.
