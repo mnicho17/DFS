@@ -118,7 +118,11 @@ def iter_candidates(path,players,**kwargs):
     elif validated['identity']!=meta['identity']:
         raise ValueError('Full-library identity changed during loading.')
     locked={player_key(p) for p in players if p.get('LockCpt')}
-    keys=[k for k in meta['structure']['captains'] if (key is None or k==key) and (not locked or k in locked)]
+    from showdown_simulation import active_showdown_players
+    eligible={player_key(p) for p in active_showdown_players(players)
+              if not p.get('FadeCpt') and not p.get('LockFlex')}
+    keys=[k for k in meta['structure']['captains'] if k in eligible and
+          (key is None or k==key) and (not locked or k in locked)]
     for captain in keys:
         part=partition_path(path,captain)
         if part.exists():yield from stream_part(part,players,captain_key=captain,**kwargs)

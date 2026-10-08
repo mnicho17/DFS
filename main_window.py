@@ -7952,6 +7952,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         settings_menu.addAction("Ownership Sensitivity...", self.on_ownership_sensitivity)
         settings_menu.addAction("Projection Sensitivity...", self.on_projection_sensitivity)
         settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
+        settings_menu.addAction("Showdown Captain Pool...", self.on_captain_pool)
         settings_menu.addAction("Prepare Showdown Roster Library...", self.on_prepare_showdown_library)
         settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
         settings_menu.addAction("Open Automatic Build Archives...", self.on_open_build_archives)
