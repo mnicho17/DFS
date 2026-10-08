@@ -328,6 +328,7 @@ def create_build_diagnostic(
         "field_diagnostic": dict(sim.get('field_diagnostic') or {}),
         "ownership_leverage": dict(sim.get('ownership_leverage') or {}),
         "projection_coverage": coverage,
+        **({"ownership_refresh": dict(context["ownership_refresh"])} if context.get("ownership_refresh") else {}),
         "data_freshness": str(context.get('data_freshness') or ''),
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
@@ -568,6 +569,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         "DFS Optimizer Build Report",
         f"Input ID: {record.get('input_id') or 'not recorded'}",
         f"Data: {record.get('data_freshness') or 'freshness not recorded'}",
+        *(["Ownership: " + record["ownership_refresh"]["sources"]] if (record.get("ownership_refresh") or {}).get("sources") else []),
+        *([record["ownership_refresh"]["notice"]] if (record.get("ownership_refresh") or {}).get("notice") else []),
         f"Run: {_created_label(record.get('created_at'))}",
         f"Status: {str(record.get('status') or 'completed').title()}",
         *([f"Saved repair: {record['application'].get('status', 'unknown')} ({record['application'].get('reason', 'unknown')})"]

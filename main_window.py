@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 
+from ownership_refresh_notice import describe as describe_ownership
 from PyQt5 import QtCore, QtGui, QtWidgets
 from saved_repair import BuildReceipt, signatures, validate_proposal
 
@@ -8099,6 +8100,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         live_strip_layout.addWidget(self.lbl_readiness)
 
         left_layout.addWidget(live_strip)
+        self.lbl_ownership_source = QtWidgets.QLabel()
+        self.lbl_ownership_source.setObjectName("ownershipSourceStatus")
+        self.lbl_ownership_source.setWordWrap(True)
+        self.lbl_ownership_source.hide()
+        left_layout.addWidget(self.lbl_ownership_source)
 
 
 
@@ -12333,6 +12339,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         from showdown_screening import scoring_players
 
+        previous_fallback = (self.last_live_check_summary or {}).get("ownership_simulation_replaced", 0) if isinstance(self.last_live_check_summary, dict) else 0
+        simulated_count = sum(p.get("OwnershipSource") == "Lineup simulation" for p in self.players)
         ownership_inputs = scoring_players(self.players)
         has_ownership = all(p.get("OwnershipSource") for p in self.players) and bool(self.players)
 
@@ -12360,6 +12368,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             else:
                 self.recalc_ownership_quick()
                 ownership_message = "Ownership recalculated using quick estimates: inputs changed or ownership missing."
+            summary["ownership_simulation_replaced"] = (simulated_count or previous_fallback) if not preserve_ownership else previous_fallback
             summary["ownership_action"] = "preserved" if preserve_ownership else "recalculated"
             summary["ownership_message"] = ownership_message
             self._record_live_check(summary)
@@ -12882,6 +12891,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def _refresh_players_table(self) -> None:
+
+        ownership = describe_ownership(self.players, self.last_live_check_summary)
+        self.lbl_ownership_source.setText("Ownership: " + ownership["sources"] + ("\n" + ownership["notice"] if ownership["notice"] else ""))
+        self.lbl_ownership_source.setVisible(bool(self.players))
+        self.lbl_ownership_source.setStyleSheet("color: " + ("#FFD180" if ownership["notice"] else "#C7D2E3") + "; background-color: #10151f; padding: 3px 8px;")
 
         selected_keys = set()
 
@@ -13619,6 +13633,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             "input_id": snapshot['input_id'] if snapshot else '',
 
+            "ownership_refresh": describe_ownership(self.players, self.last_live_check_summary),
             "data_freshness": freshness_text(self.last_live_check_summary, getattr(self, '_snapshot_replay', False)),
 
             "projection_review_count": sum(bool(p.get('ProjectionNeedsReview')) for p in self.players),
