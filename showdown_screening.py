@@ -26,11 +26,13 @@ MAX_BYTES=512*1024**2
 OBSERVATION_TIMES = frozenset(('NFLUsageCheckedAt', 'NFLUsageFetchedAt',
     'LiveStatusUpdatedAt', 'NFLVegasUpdatedAt', 'NFLNewsUpdatedAt'))
 
+OBSERVATION_FLAGS = frozenset(("LiveStatusChanged",))
+
 
 def scoring_players(players):
     rows = copy.deepcopy(players)
     for player in rows:
-        for key in OBSERVATION_TIMES:
+        for key in OBSERVATION_TIMES | OBSERVATION_FLAGS:
             player.pop(key, None)
         history = player.get('NFLUsageHistory')
         if isinstance(history, dict):

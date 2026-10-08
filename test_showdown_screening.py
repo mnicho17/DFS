@@ -25,11 +25,14 @@ class ScreeningTests(unittest.TestCase):
     def test_observation_refresh_reuses_scores_and_preserves_raw_evidence(self):
         original = self.timed_players('2026-10-08T10:00:00Z')
         current = self.timed_players('2026-10-08T11:00:00Z')
+        for player in original: player["LiveStatusChanged"] = True
+        for player in current: player["LiveStatusChanged"] = False
         before = copy.deepcopy(current)
         prepare_screening(self.library, original, **self.kw)
         rows, report = load_screening(self.library, current, **self.kw)
         self.assertEqual(report['screening_reused'], 16)
         self.assertEqual(rows[0]['Captain']['LiveStatusUpdatedAt'], '2026-10-08T11:00:00Z')
+        self.assertFalse(rows[0]["Captain"]["LiveStatusChanged"])
         fresh = simulate_showdown(rows, current, salary_cap=50000, **self.kw['screening'])['lineups']
         for saved, scored in zip(rows, fresh):
             self.assertEqual(saved.sim_metrics['sim_mean'], scored.sim_metrics['sim_mean'])
@@ -48,7 +51,7 @@ class ScreeningTests(unittest.TestCase):
         original = self.timed_players('2026-10-08T10:00:00Z')
         prepare_screening(self.library, original, **self.kw)
         for field, value in [('InjuryStatus','OUT'), ('NFLDepthOrder',2),
-                ('NFLQBEligible',False), ('FadeCpt',True), ('LockFlex',True),
+                ('LiveStatusConflict',True), ('NFLQBEligible',False), ('FadeCpt',True), ('LockFlex',True),
                 ('FlexProjection',99), ('FlexOwnership',99), ('NFLNewsScore',2),
                 ('NFLVegasGameTotal',80), ('UnknownTimestamp','new')]:
             changed = self.timed_players('2026-10-08T11:00:00Z'); changed[0][field] = value

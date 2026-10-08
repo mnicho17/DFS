@@ -207,7 +207,7 @@ scanning qualifying FLEX combinations for the remaining Captains.
 Coarse screening ignores only the observation timestamps `NFLUsageCheckedAt`,
 `NFLUsageFetchedAt`, `LiveStatusUpdatedAt`, `NFLVegasUpdatedAt`,
 `NFLNewsUpdatedAt`, and `NFLUsageHistory.checked_at`. A refresh that changes only
-these fields can resume or reuse screening. Original player records, snapshots,
+these fields or the observation flag `LiveStatusChanged` can resume or reuse screening. Original player records, snapshots,
 archives and safety evidence retain their timestamps; restored candidates use
 the current player records. Final SIM, audits and freshness checks still run.
 
@@ -217,3 +217,5 @@ library identity, screening settings, model code or Python runtime remain strict
 Unknown fields are included by default. No prior-cache migration is performed:
 the identity-schema/code update requires screening once after updating. The
 running app and existing cache files are not modified by this repository change.
+
+Game-day checks preserve existing ownership when these same scoring inputs are unchanged. Changes to relevant inputs or missing ownership trigger quick ownership estimates; the check reports whether ownership was preserved or recalculated. Explicit ownership recalculation remains available.

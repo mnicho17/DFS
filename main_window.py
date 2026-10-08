@@ -12316,6 +12316,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
     def _run_live_nfl_check(self, *, show_dialog: bool, full_context: bool) -> Dict[str, Any]:
 
+        from showdown_screening import scoring_players
+
+        ownership_inputs = scoring_players(self.players)
+        has_ownership = all(p.get("OwnershipSource") for p in self.players) and bool(self.players)
+
         self._snapshot_replay = False
 
         self._refresh_snapshot_label()
@@ -12332,11 +12337,17 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 summary = refresh_live_nfl_data(self.players)
 
-            self._record_live_check(summary)
-
             faded = self._auto_fade_out_players()
 
-            self.recalc_ownership_quick()
+            preserve_ownership = has_ownership and ownership_inputs == scoring_players(self.players)
+            if preserve_ownership:
+                ownership_message = "Ownership preserved: scoring inputs unchanged."
+            else:
+                self.recalc_ownership_quick()
+                ownership_message = "Ownership recalculated using quick estimates: inputs changed or ownership missing."
+            summary["ownership_action"] = "preserved" if preserve_ownership else "recalculated"
+            summary["ownership_message"] = ownership_message
+            self._record_live_check(summary)
 
             self._refresh_players_table()
 
@@ -12344,7 +12355,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 f"Game-day check complete: {int(summary.get('sleeper', 0))}/{len(self.players)} players matched."
 
-                + (f" Auto-faded {faded}." if faded else ""),
+                + (f" Auto-faded {faded}." if faded else "")
+                + " " + ownership_message,
 
                 7000,
 
@@ -12384,7 +12396,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 f"Next active players promoted: {int(summary.get('replacement_promotions', 0))}."
 
-                f"{change_text}",
+                f"\n{ownership_message}{change_text}",
 
             )
 
