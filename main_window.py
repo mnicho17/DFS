@@ -12851,6 +12851,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         from nfl_pipeline import apply_ownership
 
         apply_ownership(self.players, own_map or {})
+        self.last_live_check_summary.pop("ownership_simulation_replaced", None)
 
         meta = (own_map or {}).get('meta', {}) or {}
 

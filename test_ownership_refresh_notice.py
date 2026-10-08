@@ -1,6 +1,7 @@
 import copy
 import json
 import unittest
+from unittest import mock
 
 from ownership_refresh_notice import describe
 from build_diagnostics import create_build_diagnostic, format_build_report
@@ -19,6 +20,17 @@ class OwnershipNoticeTests(unittest.TestCase):
     def test_fresh_simulation_and_empty_slate_clear_notice(self):
         for players in ([], [{'OwnershipSource': 'Lineup simulation'}]):
             self.assertEqual(describe(players, {'ownership_simulation_replaced': 1})['notice'], '')
+        from main_window import MainWindow
+        window = mock.Mock()
+        window.players = [{'Name': 'Test', 'OwnershipSource': 'Quick roster-slot estimate'}]
+        window.last_live_check_summary = {'ownership_simulation_replaced': 1, 'sleeper': 1}
+        MainWindow._on_own_sim_finished(window, {})
+        self.assertNotIn('ownership_simulation_replaced', window.last_live_check_summary)
+        self.assertEqual(window.last_live_check_summary['sleeper'], 1)
+        # Explicit quick recalculation after a fresh simulation has no old refresh warning.
+        window.players[0]['OwnershipSource'] = 'Quick roster-slot estimate'
+        self.assertEqual(describe(window.players, window.last_live_check_summary)['notice'], '')
+
 
     def test_initial_quick_estimates_are_not_a_fallback(self):
         self.assertEqual(describe([{'OwnershipSource': 'Quick roster-slot estimate'}])['notice'], '')
