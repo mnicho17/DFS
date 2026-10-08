@@ -2648,7 +2648,7 @@ class LineupBuildWorker(QtCore.QObject):
                     "refinement_swaps", "duplication_refinement_swaps", "refinement_attempts",
 
                     "refinement_stop_reason", "refinement_seconds", "effective_min_unique",
-                    "specialist_diagnostics",
+                    "specialist_diagnostics", "exposure_cap_diagnostic",
 
                 ):
 
@@ -8147,6 +8147,17 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         portfolio_grid.addWidget(self.chk_portfolio_balance, 0, 2, 1, 2)
 
+        self.spin_zero_qb_max = QtWidgets.QDoubleSpinBox()
+        self.spin_zero_qb_max.setObjectName("portfolioZeroQbMaximum")
+        self.spin_zero_qb_max.setRange(-1, 100)
+        self.spin_zero_qb_max.setDecimals(1)
+        self.spin_zero_qb_max.setSpecialValueText("Unset")
+        self.spin_zero_qb_max.setSuffix("%")
+        self.spin_zero_qb_max.setValue(-1)
+        self.spin_zero_qb_max.setToolTip("Showdown only: maximum percentage of lineups without a QB at Captain or FLEX. 0 requires a QB in every lineup. An explicit hard rule; conflicts stop the build.")
+        portfolio_grid.addWidget(QtWidgets.QLabel("Showdown zero-QB maximum"), 3, 0, 1, 2)
+        portfolio_grid.addWidget(self.spin_zero_qb_max, 3, 2)
+
         portfolio_grid.addWidget(QtWidgets.QLabel("Team maximum"), 1, 0)
 
         portfolio_grid.addWidget(self.spin_team_exposure, 1, 1)
@@ -9394,6 +9405,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             "deep_compute": dict(self.deep_compute_settings),
 
+            **({"max_zero_qb_pct": self.spin_zero_qb_max.value()} if self.spin_zero_qb_max.value() >= 0 else {}),
             "min_unique": self.spin_portfolio_unique.value(),
 
             "team_max_pct": self.spin_team_exposure.value(),
@@ -9749,6 +9761,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.app_settings.setValue("build/deep_compute_json", json.dumps(self.deep_compute_settings))
 
         self._update_deep_compute_button()
+
+        self.spin_zero_qb_max.setValue(float(value.get("max_zero_qb_pct", -1)))
 
         if "min_unique" in value:
 
@@ -10714,6 +10728,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         return {
 
+            **({"max_zero_qb_pct": float(self.spin_zero_qb_max.value())} if self.spin_zero_qb_max.value() >= 0 and self.tabs_lineups.currentIndex() == 0 else {}),
             "min_unique": int(self.spin_portfolio_unique.value()),
 
             "max_team_pct": float(self.spin_team_exposure.value()),

@@ -51,6 +51,9 @@ def settings(options, sim_scenarios):
 def target(library,players,*,limit,salary_cap,salary_strategy,rules,screening,folder=None):
     info=validate_library(library,players,salary_cap=salary_cap)
     # Player iteration order participates in seeded scenario generation.
+    rules = copy.deepcopy(rules)
+    if rules is not None:
+        rules.pop("max_zero_qb_pct", None)
     context=dict(schema=2,library=info,players=scoring_players(players),
         limit=limit,salary_cap=float(salary_cap),salary_strategy=salary_strategy,rules=rules,
         screening=screening,model=code_id(),python=sys.version)

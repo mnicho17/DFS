@@ -44,6 +44,8 @@ def _max_count(value: Any, total: int) -> Optional[int]:
 
 def normalize_rules(rules: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     raw = dict(rules or {})
+    from zero_qb_rules import maximum
+    zero_qb_pct = maximum(raw.get("max_zero_qb_pct"))
     groups = []
     for item in raw.get("groups") or []:
         if not isinstance(item, dict):
@@ -82,6 +84,7 @@ def normalize_rules(rules: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 normalized_constraint[field] = value
         constraints[stable_key] = normalized_constraint
     return {
+        **({"max_zero_qb_pct": zero_qb_pct} if zero_qb_pct is not None else {}),
         "min_unique": max(1, min(8, int(raw.get("min_unique", 1) or 1))),
         "max_team_pct": _pct(raw.get("max_team_pct"), 100.0),
         "max_game_pct": _pct(raw.get("max_game_pct"), 100.0),
@@ -257,6 +260,10 @@ def select_portfolio(
         raise ValueError("Core penalty must be between 0 and 10")
     requested = max(1, int(requested or 1))
     normalized = normalize_rules(rules)
+    from zero_qb_rules import count_limit, is_zero
+    zero_qb_limit = count_limit(normalized.get("max_zero_qb_pct"), requested) if str(kind).lower() == "showdown" else None
+    if zero_qb_limit is not None:
+        allow_relaxation = False
     kind = str(kind or "classic").lower()
 
     retained_by_signature: Dict[Tuple[str, ...], Any] = {}
@@ -277,6 +284,14 @@ def select_portfolio(
         # Existing retained entries are user data; filter only new candidates.
         pool = [lineup for lineup in pool if not _qb_captain_opposing_dst(lineup)]
     all_lineups = retained + pool
+
+    if zero_qb_limit is not None:
+        for lineup in all_lineups:
+            feasibility_checkpoint()
+            is_zero(lineup)
+        if sum(is_zero(lu) for lu in retained) > zero_qb_limit:
+            from selection_shortage import PortfolioSelectionShortage
+            raise PortfolioSelectionShortage("Retained lineups exceed the explicit zero-QB maximum. Change the limit or unsave conflicting entries; no partial portfolio was released.")
 
     player_lookup: Dict[str, Dict[str, Any]] = {
         key: dict(value) for key, value in normalized["player_constraints"].items()
@@ -382,6 +397,7 @@ def select_portfolio(
     # The pairwise check keeps the configured uniqueness contract intact.
     unrestricted_full_pool = (
         not retained
+        and zero_qb_limit is None
         and len(pool) <= requested
         and not normalized["groups"]
         and not any(value > 0 for value in min_total.values())
@@ -441,7 +457,7 @@ def select_portfolio(
         keys, teams, games = _lineup_sets(lineup, kind)
         captain = lineup_captain(lineup, kind)
         candidate_meta[id(lineup)] = {
-            "eligible": not automatic_recovery or explicit_lineup_ok(keys, player_key(captain or {}), player_lookup),
+            "eligible": not (automatic_recovery or zero_qb_limit is not None) or explicit_lineup_ok(keys, player_key(captain or {}), player_lookup),
             "cores": tuple(combinations(sorted(keys), 2)) + tuple(combinations(sorted(keys), 3)) if core_penalty else (),
             "keys": keys,
             "flex_keys": keys - {player_key(captain or {})},
@@ -454,6 +470,7 @@ def select_portfolio(
             "specialist_captain": bool(
                 captain and str(captain.get("Position") or "").strip().upper() in {"K", "DST", "D/ST", "DEF"}
             ),
+            "zero_qb": is_zero(lineup) if zero_qb_limit is not None else False,
             "kicker_captain": bool(captain and "K" in _position_tokens(captain)),
             "sim": _sim_metrics(lineup),
             "archetype": str(
@@ -484,6 +501,7 @@ def select_portfolio(
     archetype_counts: Counter[str] = Counter()
     specialist_cpt_count = 0
     kicker_cpt_count = 0
+    zero_qb_count = 0
 
     for lineup in retained:
         meta = candidate_meta[id(lineup)]
@@ -496,6 +514,7 @@ def select_portfolio(
             cpt_counts[meta["captain_key"]] += 1
         if meta["specialist_captain"]:
             specialist_cpt_count += 1
+        zero_qb_count += int(meta["zero_qb"])
         if meta["kicker_captain"]:
             kicker_cpt_count += 1
         sim_top_counts.update(meta["top_hits"])
@@ -537,7 +556,7 @@ def select_portfolio(
             if limit is not None and total_counts[key] >= limit:
                 return False
         captain_key = meta["captain_key"]
-        if automatic_recovery and any(max_flex.get(key) is not None and total_counts[key] - cpt_counts[key] >= max_flex[key]
+        if (automatic_recovery or zero_qb_limit is not None) and any(max_flex.get(key) is not None and total_counts[key] - cpt_counts[key] >= max_flex[key]
                                       for key in meta['flex_keys']):
             return False
         if captain_key:
@@ -545,6 +564,8 @@ def select_portfolio(
             if limit is not None and cpt_counts[captain_key] >= limit:
                 return False
         if meta["specialist_captain"] and specialist_cpt_limit is not None and specialist_cpt_count >= specialist_cpt_limit:
+            return False
+        if meta["zero_qb"] and zero_qb_limit is not None and zero_qb_count >= zero_qb_limit:
             return False
         if meta["kicker_captain"] and kicker_cpt_limit is not None and kicker_cpt_count >= kicker_cpt_limit:
             return False
@@ -655,8 +676,8 @@ def select_portfolio(
     auto_relaxations = 0
     feasibility_limits = dict(requested=requested, total=max_total, captain=max_cpt,
         team=max_team, game=max_game, specialist=specialist_cpt_limit,
-        kicker_captain=kicker_cpt_limit)
-    if automatic_recovery:
+        kicker_captain=kicker_cpt_limit, zero_qb=zero_qb_limit)
+    if automatic_recovery or zero_qb_limit is not None:
         feasibility_limits.update(min_total=min_total, min_captain=min_cpt, flex=max_flex)
     if feasibility_only:
         from portfolio_feasibility import diversity_first_witness, repair
@@ -729,6 +750,7 @@ def select_portfolio(
             cpt_counts[chosen_meta["captain_key"]] += 1
         if chosen_meta["specialist_captain"]:
             specialist_cpt_count += 1
+        zero_qb_count += int(chosen_meta["zero_qb"])
         if chosen_meta["kicker_captain"]:
             kicker_cpt_count += 1
         chosen_top_hits = chosen_meta["top_hits"]
@@ -746,7 +768,7 @@ def select_portfolio(
     fallback_used = False
     from portfolio_feasibility import valid_portfolio
     recovery = recovery_diagnostics(requested, len(selected), starting_caps)
-    needs_repair = len(selected) < requested or (automatic_recovery and not valid_portfolio(
+    needs_repair = len(selected) < requested or ((automatic_recovery or zero_qb_limit is not None) and not valid_portfolio(
         selected, retained, candidate_meta, current_uniqueness_conflicts, feasibility_limits,
         lambda keys: _group_ok(keys, normalized['groups'])))
     if needs_repair and not allow_relaxation:
@@ -787,8 +809,8 @@ def select_portfolio(
             from selection_shortage import PortfolioSelectionShortage, describe
             message = describe(requested, selected, remaining, candidate_meta,
                 current_uniqueness_conflicts,
-                dict(total=max_total, captain=max_cpt, team=max_team, game=max_game, specialist=specialist_cpt_limit, kicker_captain=kicker_cpt_limit),
-                dict(total=total_counts, captain=cpt_counts, team=team_counts, game=game_counts, specialist=specialist_cpt_count, kicker_captain=kicker_cpt_count),
+                dict(total=max_total, captain=max_cpt, team=max_team, game=max_game, specialist=specialist_cpt_limit, kicker_captain=kicker_cpt_limit, zero_qb=zero_qb_limit),
+                dict(total=total_counts, captain=cpt_counts, team=team_counts, game=game_counts, specialist=specialist_cpt_count, kicker_captain=kicker_cpt_count, zero_qb=zero_qb_count),
                 player_lookup, current_min_unique, auto_total_keys, auto_cpt_keys,
                 lambda keys: _group_ok(keys, normalized['groups']))
             if recovery['automatic_recovery_ran']:
@@ -807,12 +829,14 @@ def select_portfolio(
             counter.clear()
         specialist_cpt_count = 0
         kicker_cpt_count = 0
+        zero_qb_count = 0
         for lu in selected:
             m = candidate_meta[id(lu)]
             core_counts.update(m['cores']);total_counts.update(m['keys']);flex_counts.update(m['flex_keys']);team_counts.update(m['teams']);game_counts.update(m['games'])
             if m['captain_key']:cpt_counts[m['captain_key']] += 1
             specialist_cpt_count += int(m['specialist_captain'])
             kicker_cpt_count += int(m['kicker_captain'])
+            zero_qb_count += int(m['zero_qb'])
             sim_top_counts.update(m['top_hits']);sim_top_five_counts.update(m['top_five_hits']);sim_win_counts.update(m['win_hits'])
             sim_value_counts.update(m['scenario_values'].keys())
             if m['archetype']:archetype_counts[m['archetype']] += 1
@@ -941,6 +965,8 @@ def select_portfolio(
         )
         if specialist_cpt_limit is not None and specialist_after > specialist_cpt_limit:
             return False
+        if zero_qb_limit is not None and zero_qb_count - int(out_meta["zero_qb"]) + int(in_meta["zero_qb"]) > zero_qb_limit:
+            return False
         kicker_after = kicker_cpt_count - int(out_meta["kicker_captain"]) + int(in_meta["kicker_captain"])
         if kicker_cpt_limit is not None and kicker_after > kicker_cpt_limit:
             return False
@@ -1031,7 +1057,7 @@ def select_portfolio(
         return delta + duplication_bonus
 
     def apply_swap(outgoing: Any, incoming: Any) -> None:
-        nonlocal specialist_cpt_count, kicker_cpt_count
+        nonlocal specialist_cpt_count, kicker_cpt_count, zero_qb_count
         out_meta = candidate_meta[id(outgoing)]
         in_meta = candidate_meta[id(incoming)]
         index = selected.index(outgoing)
@@ -1057,6 +1083,7 @@ def select_portfolio(
             cpt_counts[in_meta["captain_key"]] += 1
         specialist_cpt_count += int(in_meta["specialist_captain"]) - int(out_meta["specialist_captain"])
         kicker_cpt_count += int(in_meta["kicker_captain"]) - int(out_meta["kicker_captain"])
+        zero_qb_count += int(in_meta["zero_qb"]) - int(out_meta["zero_qb"])
         remaining.remove(incoming)
         remaining.append(outgoing)
 
@@ -1425,6 +1452,14 @@ def portfolio_report(
         report['showdown_policy'] = dict(kicker_captain_limit=kicker_captain_limit,
             kicker_captain_count=kicker_captain_count, kicker_captain_pct=5.0,
             qb_captain_opposing_dst_blocked=True)
+    if kind == "showdown" and normalized.get("max_zero_qb_pct") is not None:
+        from zero_qb_rules import count_limit, is_zero
+        cap = count_limit(normalized["max_zero_qb_pct"], target)
+        count = sum(is_zero(lu) for lu in lineups)
+        report["zero_qb_rule"] = dict(pct=normalized["max_zero_qb_pct"], limit=cap, count=count, requested=target)
+        if count > cap:
+            warnings.append(f"Explicit zero-QB maximum exceeded ({count}/{target}; cap {cap}).")
+            report["compliant"] = False
     report["text"] = _report_text(report)
     return report
 
@@ -1442,6 +1477,8 @@ def _report_text(report: Dict[str, Any]) -> str:
         "",
         "Top player exposure:",
     ]
+    from zero_qb_rules import text as zero_qb_text
+    lines.extend(zero_qb_text(report))
     core_plan = report.get("core_plan") or []
     if core_plan:
         lines.insert(3, "Core Plan targets:")

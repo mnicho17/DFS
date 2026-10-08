@@ -13,7 +13,7 @@ RECIPE_KEYS = (
     "ownership_sims", "showdown_field_templates", "ownership_mode", "ownership_weight",
     "build_style", "mlb_stack_preference", "salary_strategy", "nfl_sim_enabled",
     "nfl_sim_scenarios", "nfl_field_preset", "nfl_compute_mode", "min_unique",
-    "team_max_pct", "game_max_pct", "balance_ownership", "deep_compute", "auto_entry_target",
+    "max_zero_qb_pct", "team_max_pct", "game_max_pct", "balance_ownership", "deep_compute", "auto_entry_target",
 )
 
 
@@ -40,6 +40,13 @@ def normalize_recipe(recipe: Mapping[str, Any]) -> Dict[str, Any]:
     for key in ("showdown_field_templates", "nfl_sim_enabled", "balance_ownership", "auto_entry_target"):
         if key in cleaned:
             cleaned[key] = bool(cleaned[key])
+    if "max_zero_qb_pct" in cleaned:
+        from zero_qb_rules import maximum
+        value = maximum(cleaned["max_zero_qb_pct"])
+        if value is None:
+            cleaned.pop("max_zero_qb_pct")
+        else:
+            cleaned["max_zero_qb_pct"] = value
     if "deep_compute" in cleaned:
         cleaned["deep_compute"] = normalize_deep_settings(cleaned["deep_compute"])
     return cleaned

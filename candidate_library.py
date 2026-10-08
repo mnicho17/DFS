@@ -22,10 +22,13 @@ MAX_CANDIDATES = 100000
 def candidate_generation_id(snapshot):
     """Objective-neutral compatibility; the full input ID remains provenance.
 
-    Only recorded intent is excluded. All player, salary, game, roster, rules,
-    calibration and other recipe inputs still participate in this fingerprint.
+    Recorded objective and the explicit zero-QB portfolio maximum are excluded;
+    neither changes candidate generation. All other player, salary, game, roster,
+    rules, calibration and recipe inputs participate in this fingerprint.
     """
     inputs = validate_snapshot(snapshot)['inputs']
+    inputs["recipe"].pop("max_zero_qb_pct", None)
+    inputs["rules"].pop("max_zero_qb_pct", None)
     inputs['recipe'].pop('contest_objective', None)
     inputs['contest'].pop('objective', None)
     inputs['contest'].pop('contest_objective', None)
