@@ -1611,7 +1611,7 @@ def simulate_nfl_contest(
                 label: count / max(1, sum(script_counts.values())) * 100.0
                 for label, count in sorted(script_counts.items())
             },
-            "specialist_model": "shared-specialist-events-v1",
+            "specialist_model": "kicker-events-projection-defense-v2",
             "volatility_model": "role-aware-player-volatility-v1",
             "rare_event_model": "guardrailed-breakout-tails-v1",
             "payout_model": "exact-rank-tie-split-v1" if contest_profile else "payout-shape-proxy-v1",
@@ -1857,7 +1857,7 @@ def simulate_nfl_portfolio_contest(
             label: count / script_total * 100.0
             for label, count in sorted(script_counts.items())
         },
-        "specialist_model": "shared-specialist-events-v1",
+        "specialist_model": "kicker-events-projection-defense-v2",
             "volatility_model": "role-aware-player-volatility-v1",
         "rare_event_model": "guardrailed-breakout-tails-v1",
     }

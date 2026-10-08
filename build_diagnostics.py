@@ -687,8 +687,12 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     if sim.get("kicker_opportunity_count"):
         lines.append(f"- Kicker opportunity forecasts: {sim['kicker_opportunity_count']} players use weekly attempts, accuracy and distance data (experimental)")
     if sim.get("specialist_model"):
-        lines.append("- Specialist scoring: shared possession events (experimental); K/DST projections guide event rates, not guaranteed SIM means")
-        lines.append("- Specialist limits: offense remains projection-based; event rates await historical calibration")
+        if sim['specialist_model'] == 'kicker-events-projection-defense-v2':
+            lines.append("- Specialist scoring: kicker opportunity events; defense uses projection-centered draws with game/opponent correlation and a -4 floor")
+            lines.append("- Specialist limits: defense event override disabled after forecast drift; kicker tails and defense distributions await historical calibration")
+        else:
+            lines.append("- Specialist scoring: shared possession events (experimental); K/DST projections guide event rates, not guaranteed SIM means")
+            lines.append("- Specialist limits: offense remains projection-based; event rates await historical calibration")
     if sim.get("volatility_model"):
         lines.append("- Scenario model: game scripts, role-aware player ranges, and guarded rare ceiling outcomes")
         cache = sim.get('scenario_cache') or {}
