@@ -1,4 +1,4 @@
-"""Shared possession events for kickers; projection-based defense draws.
+"""Shared possession events for K/DST; heuristic rates, not fitted forecasts.
 
 Offensive fantasy points remain a separate model, coupled through team form.
 This is not a play-by-play simulation. Unmodeled events: special-teams returns,
@@ -8,7 +8,7 @@ import random
 import hashlib
 import math
 
-MODEL = 'kicker-events-projection-defense-v2'
+MODEL = 'shared-specialist-events-v1'
 
 
 def points_allowed_score(points):
@@ -121,12 +121,10 @@ def specialist_outcomes(rng, players, outcomes, game_factor, team_environment):
             team = _team(p)
             if team not in events:
                 continue
-            # The heuristic possession model cannot reproduce low DST forecasts:
-            # its bounded strength mapping imposed a sacks/takeaways/PA floor.
-            # Retain the projection-centered DST draw already in outcomes until
-            # defense event rates have been calibrated against observed results.
-            # Team events still supply kicker opportunities, including return PATs.
-            if _position(p)=='K':
+            opponent = next(t for t in teams if t != team)
+            if _position(p)=='DST':
+                result[player_key(p)] = float(defense_score(events[team], events[opponent]))
+            elif _position(p)=='K':
                 # Multiple listed kickers share one team scoring budget, never
                 # each receive a complete game's opportunities.
                 kickers = [q for q in pool if _team(q)==team and _position(q)=='K']

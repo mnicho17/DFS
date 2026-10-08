@@ -17,6 +17,15 @@ from build_diagnostics import (
 
 
 class BuildDiagnosticsTests(unittest.TestCase):
+    def test_specialist_model_description_preserves_historical_event_reports(self):
+        record = self._diagnostic()
+        record['sim']['specialist_model'] = 'kicker-events-projection-defense-v2'
+        self.assertIn('defense uses projection-centered draws', format_build_report(record))
+        record['sim']['specialist_model'] = 'shared-specialist-events-v1'
+        text = format_build_report(record)
+        self.assertIn('K/DST projections guide event rates', text)
+        self.assertNotIn('defense event override disabled', text)
+
     def test_prepared_screening_reports_library_source_and_fresh_final_sim(self):
         record=self._diagnostic()
         record['settings']['compute_mode']='Deep'

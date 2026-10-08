@@ -37,3 +37,12 @@ Run with `python scripts/run_isolated_tests.py test_co01_parity`.
 Do not regenerate this fixture from the implementation under test to make a
 failure disappear. A future intentional strategy change requires a separately
 reviewed baseline and explanation.
+
+The defense forecast-drift fix intentionally changes specialist scoring. Original
+CO-01 evidence remains unchanged. Historical captures now use the frozen
+`nfl_specialists_v1.py` from main commit
+`d3c73ba99883a7046892f758fea62caa48a1d505`, and label that captured model v1.
+The production model is separately checked across all objectives without this
+override; dedicated specialist regressions audit the new forecast means and
+preserved offense/kicker draws. No golden metrics, identities or exports are
+removed from the original exact comparison.

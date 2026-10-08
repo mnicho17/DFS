@@ -14,6 +14,7 @@ from test_environment import install, network_attempts
 install()
 
 import copy
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -43,7 +44,7 @@ def stable(value):
     return value
 
 
-def evidence(kind, objective=None, compute_telemetry=False):
+def evidence(kind, objective=None, compute_telemetry=False, historical=False):
     players = _fixture_players() if kind == 'classic' else _showdown_players()
     original = copy.deepcopy(players)
     kwargs = {} if objective is None else {'contest_objective': objective}
@@ -62,6 +63,8 @@ def evidence(kind, objective=None, compute_telemetry=False):
     def simulate(rows, *args, **kwargs):
         candidates = [roster_keys(row, kind) for row in rows]
         result = real(rows, *args, **kwargs)
+        if historical:
+            result['report']['specialist_model'] = 'shared-specialist-events-v1'
         stages.append(dict(candidates=candidates, count=len(candidates),
             scored=[dict(signature=roster_keys(row, kind),
                          metrics=stable(row.sim_metrics)) for row in result['lineups']],
@@ -134,6 +137,18 @@ class ObjectiveParityTests(unittest.TestCase):
     def test_showdown_golden_and_all_objectives(self):
         self.check_kind('showdown')
 
+    def test_current_specialist_model_keeps_all_objectives_computationally_equal(self):
+        for kind in ('classic', 'showdown'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as folder:
+                output = Path(folder) / 'evidence.json'
+                run = subprocess.run([sys.executable, str(Path(__file__).resolve()), kind, str(output), 'current'],
+                    env=dict(os.environ, PYTHONHASHSEED='0'), capture_output=True, text=True, timeout=180)
+                self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+                actual = json.loads(output.read_text())
+                expected = self.compatible_evidence(actual['None'])
+                for objective, result in actual.items():
+                    self.assertEqual(self.compatible_evidence(result), expected, objective)
+
     def check_kind(self, kind):
         fixture = json.loads((Path(__file__).parent / 'tests' / 'fixtures' / 'co01-golden.json').read_text())
         expected = fixture[kind]
@@ -153,8 +168,18 @@ class ObjectiveParityTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    kind, destination = sys.argv[1:]
-    values = {str(objective): evidence(kind, objective)
-              for objective in (None, 'TOURNAMENT', 'DOUBLE_UP', 'MULTIPLIER')}
+    kind, destination = sys.argv[1:3]
+    historical = len(sys.argv) == 3
+    def capture():
+        return {str(objective): evidence(kind, objective, historical=historical)
+                for objective in (None, 'TOURNAMENT', 'DOUBLE_UP', 'MULTIPLIER')}
+    if historical:
+        spec = importlib.util.spec_from_file_location('co01_specialists_v1',
+            Path(__file__).parent / 'tests' / 'fixtures' / 'nfl_specialists_v1.py')
+        baseline = importlib.util.module_from_spec(spec); spec.loader.exec_module(baseline)
+        with patch('nfl_specialists.specialist_outcomes', baseline.specialist_outcomes):
+            values = capture()
+    else:
+        values = capture()
     assert not network_attempts, network_attempts
     Path(destination).write_text(json.dumps(values, sort_keys=True))
