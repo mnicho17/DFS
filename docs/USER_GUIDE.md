@@ -2034,3 +2034,15 @@ fulfill every portfolio request. See [storage and CLI details](overnight-showdow
 In Results & Learning, use **Review SIM Builds** after saving a qualified results-to-salary pairing. Choose the contest and then the exact pregame capture. The dialog shows completion time, full input and capture identities, model, scenario count, and actual-score coverage. No row is selected automatically.
 
 This association affects scoring-distribution validation only. It preserves the automatic forecast snapshot and does not establish that the selected build was submitted. Qualification requires the exact historical salary/player pool, scheduled games, immutable source hashes, and completion before the earliest kickoff. A changed or invalid saved choice produces an unavailable comparison; it never silently substitutes another build. Selecting a different qualifying capture replaces the association. Previewing or canceling makes no saved changes.
+
+### Ownership and salary-band compatibility
+
+The sampled opponent-field report checks whether verified Showdown Captain/FLEX ownership percentages imply an average salary compatible with the requested salary-band mix. Exact slot ownership determines average salary by summing each player's Captain salary times Captain ownership plus FLEX salary times FLEX ownership. The integer band targets provide lower and upper bounds for that average.
+
+An incompatible result means both sets of targets cannot be met simultaneously. More feedback passes do not resolve that conflict. This diagnostic changes no forecasts, draw weights, salary bands, generation or selection rules. A compatible average is only a necessary condition; it does not prove joint roster feasibility or ownership accuracy. Missing/unverified units, incomplete slot totals or ambiguous player keys withhold this check.
+
+### Automatic Showdown ownership and field spending
+
+NFL **Recalc Own% (Sim)** now estimates ownership from legal opponents using the same salary-band spending prior as detailed SIM. It draws from projections without fitting to existing ownership forecasts. Only completed samples of six distinct athletes, both teams and legal slot salaries contribute; canceled or incomplete samples do not replace ownership. Model and sample size are recorded with the resulting automatic ownership.
+
+The legacy Field Templates switch applies to other Showdown sports and is hidden for NFL. Classic estimation remains unchanged. Existing supplied/manual ownership continues to be used by detailed SIM; estimates are replaced when you explicitly recalculate ownership. Saved historical forecasts and evidence are not rewritten. Recalculating ownership changes current model inputs, so prepared screening based on previous ownership must be refreshed. Shared spending assumptions do not guarantee exact ownership matching or historical accuracy.

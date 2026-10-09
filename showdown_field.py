@@ -1,5 +1,6 @@
 """Experimental salary-band prior for legal Showdown opponent entries."""
 import random
+import math
 from collections import Counter
 from optimizers import ShowdownLineup, _salary, _cpt_salary, _showdown_cpt_own, _showdown_flex_own
 
@@ -10,6 +11,34 @@ BANDS = ((.01, .60), (.03, .25), (.06, .10), (.15, .05))
 
 class OpponentField(list):
     pass
+
+
+def ownership_salary_check(pool, targets, count, salary_cap):
+    """Necessary marginal-salary condition, not a proof of joint feasibility."""
+    from optimizers import _pkey
+    if count <= 0 or sum(targets) != count or len(targets) != len(BANDS):
+        return None
+    if len({_pkey(p) for p in pool}) != len(pool):
+        return None
+    captain, flex, expected = 0.0, 0.0, 0.0
+    for player in pool:
+        if player.get('OwnershipUnits') != 'percent_of_entries':
+            return None
+        try:
+            c, f = float(player['ProjCptOwnPct']), float(player['ProjFlexOwnPct'])
+            cs, fs = _cpt_salary(player), _salary(player)
+        except (KeyError, ValueError, TypeError):
+            return None
+        if not all(math.isfinite(v) for v in (c, f, cs, fs)) or not 0 <= c <= 100 or not 0 <= f <= 100 or min(cs, fs) <= 0:
+            return None
+        captain += c; flex += f
+        expected += (c * cs + f * fs) / 100
+    if abs(captain - 100) > 1e-6 or abs(flex - 500) > 1e-6:
+        return None
+    lower = sum(n * salary_cap * (1 - BANDS[i][0]) for i, n in enumerate(targets)) / count
+    upper = sum(n * salary_cap * (1 - (BANDS[i-1][0] if i else 0)) for i, n in enumerate(targets)) / count
+    return dict(ownership_implied_mean=round(expected, 2), band_mean_min=round(lower, 2),
+                band_mean_max=round(upper, 2), incompatible=expected < lower - .01 or expected > upper + .01)
 
 
 def sample_field(pool, count, *, salary_cap=50000, seed=0, cancel_callback=None):
@@ -44,6 +73,9 @@ def _sample_field(pool, count, *, salary_cap=50000, seed=0, cancel_callback=None
     accepted = [0]*4; overflow = []
     labels = [f'{int((BANDS[i-1][0] if i else 0)*100)}–{int(edge*100)}% unused' for i,(edge,_) in enumerate(BANDS)]
     field.diagnostic['salary_band_targets'] = dict(zip(labels, targets))
+    check = ownership_salary_check(pool, targets, count, salary_cap)
+    if check is not None:
+        field.diagnostic['ownership_salary_check'] = check
     for attempt in range(max(200, count*40)):
         if len(field)>=count or (cancel_callback and cancel_callback()):
             break

@@ -89,6 +89,13 @@ def format_field(report):
     if report['candidate_fallback']:
         lines.append('- Field generation failed; candidates were used as fallback opponents. This is not an independently generated field.')
     fit=report.get('ownership_fit') or {}
+    salary_check=(report.get('sampling') or {}).get('ownership_salary_check')
+    if salary_check:
+        lines.append(f"- Ownership/salary compatibility: slot ownership implies mean salary ${salary_check['ownership_implied_mean']:,.2f}; requested salary-band mix permits ${salary_check['band_mean_min']:,.2f}–${salary_check['band_mean_max']:,.2f} on average.")
+        if salary_check['incompatible']:
+            lines.append('- Incompatible targets: exact ownership percentages and the requested salary-band mix cannot both be met. More ownership feedback passes cannot resolve this conflict. No targets or settings were changed.')
+        else:
+            lines.append('- Mean-salary condition satisfied; this does not prove joint player/slot feasibility or ownership accuracy.')
     if fit.get('status')=='completed':
         lines.append(f"- Ownership matching: MAE {fit['before_mae_pp']:.2f} → {fit['after_mae_pp']:.2f} pp; {fit['passes']} feedback passes. Legal field with lowest error retained; targets are not guaranteed. This is matching to forecasts, not historical accuracy.")
     elif fit:
