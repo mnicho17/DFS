@@ -18,6 +18,7 @@ from optimizers import (ShowdownOptimizer, ShowdownLineup, MultiSportClassicOpti
 
 STYLES = ('Strategic', 'Balanced', 'Contrarian', 'Chalk', 'Randomized')
 MAX_CANDIDATES = 100000
+CLASSIC_ROSTER_FORMAT = 'nfl-classic-player-keys-v1'
 
 def candidate_generation_id(snapshot):
     """Objective-neutral compatibility; the full input ID remains provenance.
@@ -80,6 +81,8 @@ def initialize(path, snapshot):
                 candidate_generation_id=candidate_generation_id(snapshot),
                 code_id=code_id(),snapshot=json.dumps(snapshot),
                 slate_id=slate_id(snapshot['inputs']['players'],snapshot['inputs']['recipe']['contest_kind'])).items())
+            if snapshot['inputs']['recipe']['contest_kind'] == 'classic':
+                con.execute('INSERT INTO library_meta VALUES (?,?)', ('roster_format', CLASSIC_ROSTER_FORMAT))
 
 def metadata(path):
     if not Path(path).is_file():
@@ -166,7 +169,13 @@ def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress
 @instrument_library
 def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Cap', rules=None):
     meta=metadata(path)
-    if meta.get('code_id') != code_id():
+    current_code=code_id()
+    portable_classic = (kind == 'classic' and
+        meta['snapshot']['inputs']['recipe']['contest_kind'] == 'classic' and
+        meta.get('roster_format') == CLASSIC_ROSTER_FORMAT)
+    if meta.get('roster_format') and not portable_classic:
+        raise ValueError('Unsupported candidate roster format.')
+    if not portable_classic and meta.get('code_id') != current_code:
         raise ValueError('This library uses different app code. Use the original version, or start a new library.')
     if slate_id(players,kind) != meta['slate_id']:
         raise ValueError('Candidate library belongs to a different player slate or contest type. Load the matching slate first.')
@@ -203,4 +212,44 @@ def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Ca
             rows.append(lineup)
     if not rows:
         raise ValueError('No saved candidates satisfy the current player status, salary and lineup rules. Clear the library to generate fresh candidates.')
-    return rows,dict(saved=meta['count'],accepted=len(rows),rejected=rejected,input_id=meta['input_id'])
+    report=dict(saved=meta['count'],accepted=len(rows),rejected=rejected,input_id=meta['input_id'],
+                code_changed=meta.get('code_id') != current_code)
+    if kind == 'classic':
+        report['coverage'] = classic_coverage(rows, list(lookup.values()))
+    return rows,report
+
+
+def classic_coverage(rows, players):
+    """Describe accepted candidates, never impose portfolio or sampling quotas."""
+    from collections import Counter
+    from optimizers import _nfl_lineup_features
+    quarterbacks=Counter()
+    stacks=Counter()
+    for row in rows:
+        for player in row:
+            if str(player.get('Position') or '').upper() == 'QB':
+                quarterbacks[player_key(player)] += 1
+        features=_nfl_lineup_features(row)
+        stacks[f"QB+{features['qb_stack']} / BB{features['bringback']}"] += 1
+    eligible={player_key(p):str(p.get('Name') or player_key(p)) for p in players
+              if str(p.get('Position') or '').upper() == 'QB' and not unavailable(p)
+              and not p.get('FadeFlex')}
+    locked_qbs={player_key(p) for p in players if p.get('LockFlex')
+                and str(p.get('Position') or '').upper() == 'QB'}
+    if locked_qbs:
+        eligible={key:name for key,name in eligible.items() if key in locked_qbs}
+    missing=[dict(key=key,name=eligible[key]) for key in sorted(set(eligible)-set(quarterbacks))]
+    return dict(quarterbacks=dict(sorted(quarterbacks.items())),
+                stack_shapes=dict(sorted(stacks.items())),uncovered_quarterbacks=missing,
+                exhaustive=False)
+
+
+def coverage_text(report):
+    coverage=report.get('coverage')
+    if not coverage:
+        return ''
+    missing=coverage['uncovered_quarterbacks']
+    return (f"Classic coverage: {len(coverage['quarterbacks'])} Quarterbacks; "
+            f"{len(coverage['stack_shapes'])} stack shapes; {len(missing)} eligible Quarterbacks without candidates. "
+            + ('Missing: '+', '.join(p['name'] for p in missing)+'. ' if missing else '')
+            + 'This is a sampled library; coverage does not prove portfolio feasibility.')

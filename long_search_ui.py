@@ -1,7 +1,7 @@
 """Simple desktop controls for checkpointed candidate generation."""
 import copy
 from PyQt5 import QtCore, QtGui, QtWidgets
-from candidate_library import metadata, run_search, load_candidates
+from candidate_library import metadata, run_search, load_candidates, coverage_text
 
 class SearchWorker(QtCore.QObject):
     progress=QtCore.pyqtSignal(str)
@@ -21,12 +21,21 @@ class SearchWorker(QtCore.QObject):
             reserve=min(self.seconds*.25,options['minutes']*60) if self.prepare else 0
             count=run_search(self.path,self.snapshot,seconds=max(1,self.seconds-reserve),
                              cancelled=self.stop.is_set,progress=self.progress.emit,candidate_limit=self.candidate_limit)
+            coverage=''
+            inputs=self.snapshot.get('inputs',{})
+            recipe=inputs.get('recipe',{})
+            if count and recipe.get('contest_kind') == 'classic':
+                _,report=load_candidates(self.path,inputs['players'],kind='classic',
+                    salary_cap=float(recipe.get('salary_cap') or 50000),
+                    salary_strategy=recipe.get('salary_strategy','Near Cap'),rules=inputs.get('rules'))
+                coverage=coverage_text(report)+' '
+                self.progress.emit(coverage)
             prepared=''
             if self.prepare and count and not self.stop.is_set():
                 from scenario_preparation import prepare_scenarios
                 prepared=prepare_scenarios(self.path,self.snapshot,seconds=max(0,self.seconds-(time.monotonic()-started)),
                     cancelled=self.stop.is_set,progress=self.progress.emit)
-            self.finished.emit(f'{count:,} unique lineups saved. '+prepared+' Load this library and run Deep to score and rank current inputs.')
+            self.finished.emit(f'{count:,} unique lineups saved. '+coverage+prepared+' Load this library and run Deep to score and rank current inputs.')
         except Exception as exc:
             self.finished.emit('Search stopped: '+str(exc))
 
