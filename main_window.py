@@ -4142,6 +4142,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.attach_salary_button.clicked.connect(self.review_salary_matches)
 
         buttons.addWidget(self.attach_salary_button)
+        self.sim_build_review_button = QtWidgets.QPushButton("Review SIM Builds")
+        self.sim_build_review_button.setObjectName("reviewSIMValidationBuildsButton")
+        self.sim_build_review_button.clicked.connect(lambda: self.review_sim_builds())
+        buttons.addWidget(self.sim_build_review_button)
+
 
 
 
@@ -4424,6 +4429,36 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             text += f" Elapsed: {result['seconds']:.1f}s. Timing recorded by the compute ledger when storage is available."
         self.coverage.finish(text)
 
+    def review_sim_builds(self, import_id=None):
+        if self._import_thread is not None or self.history_refresh.busy:
+            return
+        from distribution_build_selection_ui import SIMBuildWorker, SIMBuildDialog
+        worker = SIMBuildWorker(self.db_path, import_id)
+        cancelled = worker.cancelled
+        def ready(result):
+            if result.get('cancelled') or cancelled.is_set():
+                return
+            if import_id is None:
+                imports = result.get('imports', [])
+                if not imports:
+                    QtWidgets.QMessageBox.information(self, 'SIM Builds', 'Save a qualified salary/results pairing first.')
+                    return
+                labels = [str(i+1)+'. '+r[1] for i,r in enumerate(imports)]
+                name, ok = QtWidgets.QInputDialog.getItem(self, 'SIM Builds', 'Results contest', labels, 0, False)
+                if ok:
+                    self.review_sim_builds(imports[labels.index(name)][0])
+            else:
+                dialog = SIMBuildDialog(result, self)
+                if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                    save_worker = SIMBuildWorker(self.db_path, import_id, dialog.choice)
+                    self._start_background_import(save_worker, self._on_sim_build_saved)
+        self._start_background_import(worker, ready)
+
+    def _on_sim_build_saved(self, result):
+        if result.get('committed'):
+            self.import_status_label.setText(result['message'])
+            self.refresh_report()
+
     def review_salary_matches(self, result_hash='') -> None:
         if self._import_thread is not None:
             return
@@ -4563,7 +4598,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.coverage.setEnabled(enabled)
         self.risk.setEnabled(enabled)
         self.hindsight.setEnabled(enabled)
-        for control in (self.import_new_button, self.import_button, self.attach_salary_button,
+        for control in (self.sim_build_review_button, self.import_new_button, self.import_button, self.attach_salary_button,
                         self.refresh_button, self.analyze_button, self.stats_button, self.opponents_button,
                         self.choose_results_button, self.choose_salary_button, self.clear_salary_button,
                         self.save_username_button, self.username_edit, self.stats_season,
