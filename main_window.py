@@ -7888,6 +7888,18 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         brand.setObjectName("workspaceBrand")
 
         command_layout.addWidget(brand)
+        from app_version import identity, label, RELEASE_URL
+        from html import escape
+        build = identity()
+        self.lbl_app_version = QtWidgets.QLabel(
+            '<a style="color: #C7D2E3;" href="' + RELEASE_URL + '">' + escape(label(build)) + '</a>')
+        self.lbl_app_version.setObjectName("appVersionLabel")
+        self.lbl_app_version.setOpenExternalLinks(True)
+        self.lbl_app_version.setToolTip(
+            "Running " + build['source'] + " build: " + label(build)
+            + "\nClick to compare with the latest published release. Source builds may be newer than that release.")
+        command_layout.addWidget(self.lbl_app_version)
+
 
         command_layout.addSpacing(8)
 
