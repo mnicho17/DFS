@@ -25,6 +25,9 @@ def compare_distributions(conn,import_id,input_id,kind,scores,folder,*,cancelled
                 value=load_distribution(path);p=value['payload']
                 if p['input_id']!=input_id or p['kind']!=kind:continue
                 if selection and value['capture_id']!=selection['capture_id']:continue
+                if selection:
+                    import hashlib
+                    if hashlib.sha256(path.read_bytes()).hexdigest()!=selection['capture_digest']:continue
                 finished=dt.datetime.fromisoformat(p['finished_at']);started=dt.datetime.fromisoformat(p['started_at'])
                 if not finished.tzinfo or not started.tzinfo or started>finished:continue
                 candidates.append((finished,value))
