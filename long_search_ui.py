@@ -47,6 +47,7 @@ class LongSearchDialog(QtWidgets.QDialog):
         intro=QtWidgets.QLabel('Build a reusable candidate library for this NFL slate. All five styles run in small batches. '
             'Progress is saved after each batch and saved combinations are excluded from later searches. '
             'Stops at the candidate target or time limit, whichever comes first. Leave the app open and the PC awake; pause before closing. '
+            'New Classic libraries also run smaller Quarterback-focused batches to broaden coverage. '
             'Optional scenario preparation uses the saved inputs. Load the library and run Deep to check current inputs and select your portfolio.')
         intro.setWordWrap(True);layout.addWidget(intro)
         row=QtWidgets.QHBoxLayout();self.path=QtWidgets.QLineEdit();self.path.setReadOnly(True);row.addWidget(self.path)
@@ -78,6 +79,12 @@ class LongSearchDialog(QtWidgets.QDialog):
     def new_library(self):
         try:
             self.snapshot=self.parent()._capture_snapshot()
+            if self.snapshot['inputs']['recipe']['contest_kind'] == 'classic':
+                from build_snapshots import create_snapshot
+                inputs=self.snapshot['inputs']
+                recipe=dict(inputs['recipe'],classic_coverage_expansion=True)
+                self.snapshot=create_snapshot(inputs['players'],recipe,inputs['rules'],
+                    inputs['calibration'],inputs['contest'],self.snapshot.get('freshness'))
             from pathlib import Path
             from build_diagnostics import build_history_path
             folder=Path(build_history_path()).parent/'candidates'
