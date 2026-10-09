@@ -271,6 +271,12 @@ class OwnershipSimWorker(QtCore.QObject):
 
     def _simulate(self) -> Dict[str, Dict[str, float]]:
 
+        if self.mode == 'showdown' and self.sport == 'NFL':
+            from showdown_ownership import estimate_ownership
+            return estimate_ownership(self.players, self.num_sims, salary_cap=self.salary_cap,
+                                      cancelled=lambda: self._cancel,
+                                      progress=lambda done, total, text: self.progress.emit(done, total, text))
+
         start = time.time()
 
         counts_total: Dict[str, int] = {}
@@ -10081,7 +10087,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         if hasattr(self, "chk_sd_template_sim"):
 
-            self.chk_sd_template_sim.setVisible(is_showdown)
+            self.chk_sd_template_sim.setVisible(is_showdown and sport_u != 'NFL')
 
 
 
@@ -12780,6 +12786,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             k = _pkey(p)
 
             p["OwnershipSource"] = "Quick roster-slot estimate"
+            p.pop('OwnershipModel', None)
+            p.pop('OwnershipSampleSize', None)
             p["OwnershipUnits"] = "percent_of_entries"
             p["ProjOwnPct"] = float(tot.get(k, 0.0) or 0.0)
 
