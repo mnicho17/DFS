@@ -165,7 +165,7 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             from distribution_validation import compare_distributions
             with conn:
                 compare_distributions(conn,import_id,snapshot_check.get('input_id'),
-                    'showdown' if field[1]==6 else 'classic',scores,Path(db_path or history_db_path()).parent)
+                    'showdown' if field[1]==6 else 'classic',scores,Path(db_path or history_db_path()).parent,cancelled=cancelled)
             date_source='filename-unverified' if inferred_date else 'unknown'
             if not inferred_date and snapshot_check.get('date'):
                 inferred_date=snapshot_check['date'];date_source='saved contest-ID schedule'

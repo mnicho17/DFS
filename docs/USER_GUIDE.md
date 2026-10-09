@@ -2028,3 +2028,9 @@ After completion, load the library and run Deep. The report identifies reused
 screening or explains a cache miss. Detailed SIM, independent audit and portfolio
 limits run fresh. Full screening does not guarantee the retained leaders can
 fulfill every portfolio request. See [storage and CLI details](overnight-showdown-library.md).
+
+### Select a saved SIM build for validation
+
+In Results & Learning, use **Review SIM Builds** after saving a qualified results-to-salary pairing. Choose the contest and then the exact pregame capture. The dialog shows completion time, full input and capture identities, model, scenario count, and actual-score coverage. No row is selected automatically.
+
+This association affects scoring-distribution validation only. It preserves the automatic forecast snapshot and does not establish that the selected build was submitted. Qualification requires the exact historical salary/player pool, scheduled games, immutable source hashes, and completion before the earliest kickoff. A changed or invalid saved choice produces an unavailable comparison; it never silently substitutes another build. Selecting a different qualifying capture replaces the association. Previewing or canceling makes no saved changes.
