@@ -18,6 +18,7 @@ from optimizers import (ShowdownOptimizer, ShowdownLineup, MultiSportClassicOpti
 
 STYLES = ('Strategic', 'Balanced', 'Contrarian', 'Chalk', 'Randomized')
 MAX_CANDIDATES = 100000
+CLASSIC_ROSTER_FORMAT = 'nfl-classic-player-keys-v1'
 
 def candidate_generation_id(snapshot):
     """Objective-neutral compatibility; the full input ID remains provenance.
@@ -80,6 +81,10 @@ def initialize(path, snapshot):
                 candidate_generation_id=candidate_generation_id(snapshot),
                 code_id=code_id(),snapshot=json.dumps(snapshot),
                 slate_id=slate_id(snapshot['inputs']['players'],snapshot['inputs']['recipe']['contest_kind'])).items())
+            if snapshot['inputs']['recipe']['contest_kind'] == 'classic':
+                con.execute('INSERT INTO library_meta VALUES (?,?)', ('roster_format', CLASSIC_ROSTER_FORMAT))
+        # Add search provenance only after compatibility has been established.
+        con.execute('CREATE TABLE IF NOT EXISTS coverage_batches (batch INTEGER PRIMARY KEY, quarterback TEXT NOT NULL)')
 
 def metadata(path):
     if not Path(path).is_file():
@@ -107,6 +112,47 @@ def roster_keys(lineup, kind):
         return [player_key(lineup['Captain'])] + sorted(player_key(p) for p in lineup['Flex'])
     return sorted(player_key(p) for p in lineup)
 
+
+def classic_expansion_pool(players, index):
+    """Interleave general search with QB-focused batches; retain all manual flags."""
+    quarterbacks=sorted((p for p in players if str(p.get('Position') or '').upper() == 'QB'
+                         and not unavailable(p) and not p.get('FadeFlex')),key=player_key)
+    if any(p.get('LockFlex') for p in quarterbacks):
+        return players, None, index % len(STYLES), len(STYLES)
+    width=len(quarterbacks)+1
+    offset=index % width
+    style=(index // width) % len(STYLES)
+    if offset == 0:
+        return players, None, style, width*len(STYLES)
+    target=player_key(quarterbacks[offset-1])
+    pool=copy.deepcopy(players)
+    for player in pool:
+        if str(player.get('Position') or '').upper() == 'QB' and player_key(player) != target:
+            player['FadeFlex']=True
+    return pool, target, style, width*len(STYLES)
+
+
+def valid_classic_candidate(row, players, cap, strategy, rules):
+    """Check a generated roster against the frozen search pool before checkpointing."""
+    keys=roster_keys(row,'classic')
+    lookup={player_key(p):p for p in players}
+    if len(keys) != 9 or len(set(keys)) != 9 or any(key not in lookup for key in keys):
+        return False
+    roster=[lookup[key] for key in keys]
+    if not lineup_is_complete_for_sport(roster,'NFL'):
+        return False
+    if any(unavailable(p) or p.get('FadeFlex') or p.get('NFLQBEligible') is False for p in roster):
+        return False
+    if not {player_key(p) for p in players if p.get('LockFlex')}.issubset(keys):
+        return False
+    if not _group_ok(set(keys),normalize_rules(rules)['groups']):
+        return False
+    salaries=[float(p.get('FlexSalary') or 0) for p in roster]
+    floor=(_salary_floor_for_strategy(cap,strategy,'NFL')
+           if any(v in strategy.lower() for v in ('near','max')) else 0)
+    return (all(math.isfinite(s) and s > 0 for s in salaries) and floor <= sum(salaries) <= cap
+            and len({p.get('Team') for p in roster}) >= 2)
+
 @instrument_search
 def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress=lambda text:None, batch_size=200,
                candidate_limit=MAX_CANDIDATES):
@@ -132,33 +178,43 @@ def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress
                     else {tuple(keys) for keys in saved_keys})
         stagnant=0
         while not stop() and count < candidate_limit:
-            style=STYLES[index % len(STYLES)]; seed=1337+index*104729
+            batch_players=players; target=None; cycle=len(STYLES); style_index=index % len(STYLES)
+            expanded=kind == 'classic' and recipe.get('classic_coverage_expansion')
+            if expanded:
+                batch_players,target,style_index,cycle=classic_expansion_pool(players,index)
+            style=STYLES[style_index]; seed=1337+index*104729
             start=time.monotonic()
-            progress(f'Batch {index+1}: {style}; {count:,}/{candidate_limit:,} saved candidates')
+            focus=f'; Quarterback coverage: {target}' if target else ''
+            progress(f'Batch {index+1}: {style}{focus}; {count:,}/{candidate_limit:,} saved candidates')
             kwargs=dict(salary_cap=cap,seed=seed,own_mode=recipe.get('ownership_mode','Balanced'),
                         own_weight=float(recipe.get('ownership_weight') or 0),build_style=style)
             opt=ShowdownOptimizer(players,**kwargs) if kind=='showdown' else MultiSportClassicOptimizer(
-                players,sport='NFL',salary_strategy=recipe.get('salary_strategy','Near Cap'),**kwargs)
+                batch_players,sport='NFL',salary_strategy=recipe.get('salary_strategy','Near Cap'),**kwargs)
             # Short batches bound lost work on power failure. Repeated seeds are avoided on resume.
             exclusion_args=({'excluded_signatures':exclusions} if kind=='showdown'
                             else {'exact_excluded_signatures':exclusions})
-            rows=opt.build_lineups(num_lineups=min(batch_size,candidate_limit-count),cancel_callback=stop,
+            rows=opt.build_lineups(num_lineups=min(batch_size,25 if target else batch_size,candidate_limit-count),cancel_callback=stop,
                                   **exclusion_args)
             added=0
             with con:
                 for row in rows:
                     if count+added >= candidate_limit:break
+                    if expanded and not valid_classic_candidate(row,batch_players,cap,
+                            recipe.get('salary_strategy','Near Cap'),inputs['rules']):
+                        continue
                     keys=roster_keys(row,kind)
                     encoded=json.dumps(keys,separators=(',',':'))
                     added+=con.execute('INSERT OR IGNORE INTO candidates VALUES (?,?,?,?,?)',
                                 (encoded,encoded,index,style,seed)).rowcount
                     exclusions.add((keys[0],tuple(keys[1:])) if kind=='showdown' else tuple(keys))
                 con.execute('INSERT INTO batches VALUES (?,?,?,?,?)',(index,style,seed,added,time.monotonic()-start))
+                if target:
+                    con.execute('INSERT INTO coverage_batches VALUES (?,?)',(index,target))
             count=con.execute('SELECT count(*) FROM candidates').fetchone()[0]
             index+=1
             stagnant=stagnant+1 if added==0 else 0
-            if stagnant >= len(STYLES):
-                progress('Stopped after five styles added no new candidates. Saved work is retained; this does not prove the slate is exhausted.')
+            if stagnant >= cycle:
+                progress('Stopped after all scheduled pools and five styles added no new candidates. Saved work is retained; this does not prove the slate is exhausted.')
                 break
     progress(f'Search paused/completed: {count:,} unique candidates saved. Load the library and build to simulate current outcomes.')
     return count
@@ -166,7 +222,13 @@ def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress
 @instrument_library
 def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Cap', rules=None):
     meta=metadata(path)
-    if meta.get('code_id') != code_id():
+    current_code=code_id()
+    portable_classic = (kind == 'classic' and
+        meta['snapshot']['inputs']['recipe']['contest_kind'] == 'classic' and
+        meta.get('roster_format') == CLASSIC_ROSTER_FORMAT)
+    if meta.get('roster_format') and not portable_classic:
+        raise ValueError('Unsupported candidate roster format.')
+    if not portable_classic and meta.get('code_id') != current_code:
         raise ValueError('This library uses different app code. Use the original version, or start a new library.')
     if slate_id(players,kind) != meta['slate_id']:
         raise ValueError('Candidate library belongs to a different player slate or contest type. Load the matching slate first.')
@@ -203,4 +265,44 @@ def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Ca
             rows.append(lineup)
     if not rows:
         raise ValueError('No saved candidates satisfy the current player status, salary and lineup rules. Clear the library to generate fresh candidates.')
-    return rows,dict(saved=meta['count'],accepted=len(rows),rejected=rejected,input_id=meta['input_id'])
+    report=dict(saved=meta['count'],accepted=len(rows),rejected=rejected,input_id=meta['input_id'],
+                code_changed=meta.get('code_id') != current_code)
+    if kind == 'classic':
+        report['coverage'] = classic_coverage(rows, list(lookup.values()))
+    return rows,report
+
+
+def classic_coverage(rows, players):
+    """Describe accepted candidates, never impose portfolio or sampling quotas."""
+    from collections import Counter
+    from optimizers import _nfl_lineup_features
+    quarterbacks=Counter()
+    stacks=Counter()
+    for row in rows:
+        for player in row:
+            if str(player.get('Position') or '').upper() == 'QB':
+                quarterbacks[player_key(player)] += 1
+        features=_nfl_lineup_features(row)
+        stacks[f"QB+{features['qb_stack']} / BB{features['bringback']}"] += 1
+    eligible={player_key(p):str(p.get('Name') or player_key(p)) for p in players
+              if str(p.get('Position') or '').upper() == 'QB' and not unavailable(p)
+              and not p.get('FadeFlex')}
+    locked_qbs={player_key(p) for p in players if p.get('LockFlex')
+                and str(p.get('Position') or '').upper() == 'QB'}
+    if locked_qbs:
+        eligible={key:name for key,name in eligible.items() if key in locked_qbs}
+    missing=[dict(key=key,name=eligible[key]) for key in sorted(set(eligible)-set(quarterbacks))]
+    return dict(quarterbacks=dict(sorted(quarterbacks.items())),
+                stack_shapes=dict(sorted(stacks.items())),uncovered_quarterbacks=missing,
+                exhaustive=False)
+
+
+def coverage_text(report):
+    coverage=report.get('coverage')
+    if not coverage:
+        return ''
+    missing=coverage['uncovered_quarterbacks']
+    return (f"Classic coverage: {len(coverage['quarterbacks'])} Quarterbacks; "
+            f"{len(coverage['stack_shapes'])} stack shapes; {len(missing)} eligible Quarterbacks without candidates. "
+            + ('Missing: '+', '.join(p['name'] for p in missing)+'. ' if missing else '')
+            + 'This is a sampled library; coverage does not prove portfolio feasibility.')

@@ -78,7 +78,7 @@ class SnapshotActions:
                 self.lbl_snapshot_data.setText(f"Prepared roster library loaded: {info['saved']:,} saved; {coverage} coverage — Deep required")
                 self.status.showMessage('Choose Deep with SIM enabled, then Build. Current rules will be checked and a bounded Captain-balanced sample scored.',15000)
                 return
-            from candidate_library import load_candidates
+            from candidate_library import load_candidates, coverage_text
             recipe=self._current_build_recipe()
             _,report=load_candidates(path,self.players,kind=self._contest_mode(),
                 salary_cap=float(recipe.get('salary_cap') or 50000),salary_strategy=recipe.get('salary_strategy','Near Cap'),rules=self._portfolio_rules())
@@ -86,6 +86,8 @@ class SnapshotActions:
             self._candidate_library_allow_partial=False
             self.status.showMessage(f"Library loaded: {report['accepted']:,} eligible candidates. Choose Deep with SIM enabled, then Build. Current inputs will be used.",15000)
             self.lbl_snapshot_data.setText(f"Candidate library loaded: {report['accepted']:,} candidates — Deep required")
+            if report.get('coverage'):
+                QtWidgets.QMessageBox.information(self,'Classic Candidate Coverage',coverage_text(report))
         except Exception as exc:
             QtWidgets.QMessageBox.warning(self,'Library Not Loaded',str(exc))
 

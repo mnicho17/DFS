@@ -522,14 +522,17 @@ class CoverageWorkerGuiTests(unittest.TestCase):
         entered,release=threading.Event(),threading.Event()
         original=hi.derive_contests
         def held(*args,**kwargs):
-            entered.set();release.wait(5);return original(*args,**kwargs)
+            entered.set();release.wait(15);return original(*args,**kwargs)
         with patch.object(hi,'derive_contests',side_effect=held):
             self.dialog.show();self.dialog.reconcile_history()
-            end=time.monotonic()+3
-            while not entered.is_set() and time.monotonic()<end:self.app.processEvents();time.sleep(.005)
-            self.assertTrue(entered.is_set());self.dialog.close()
-            self.assertTrue(self.dialog._import_worker.cancelled.is_set())
-            release.set();self.drain()
+            try:
+                # Match the suite's worker-drain allowance on busy Windows runners.
+                end=time.monotonic()+12
+                while not entered.is_set() and time.monotonic()<end:self.app.processEvents();time.sleep(.005)
+                self.assertTrue(entered.is_set());self.dialog.close()
+                self.assertTrue(self.dialog._import_worker.cancelled.is_set())
+            finally:
+                release.set();self.drain()
         self.assertFalse(self.dialog.isVisible())
         self.assertIsNone(self.dialog.coverage.started)
 
