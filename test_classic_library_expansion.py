@@ -138,5 +138,17 @@ class ClassicExpansionTests(unittest.TestCase):
         self.assertEqual(original,before)
         dialog.close();parent.close()
 
+    def test_incompatible_resume_does_not_add_provenance_table_to_old_library(self):
+        from candidate_library import initialize
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'older.dfslib';snapshot=self.snapshot()
+            initialize(path,snapshot)
+            with connect(path) as con:con.execute('DROP TABLE coverage_batches')
+            before=path.read_bytes()
+            with patch('candidate_library.code_id',return_value='different-code'):
+                with self.assertRaisesRegex(ValueError,'different inputs or app code'):
+                    run_search(path,snapshot)
+            self.assertEqual(path.read_bytes(),before)
+
 
 if __name__=='__main__':unittest.main()

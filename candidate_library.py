@@ -69,7 +69,6 @@ def initialize(path, snapshot):
         con.execute('CREATE TABLE IF NOT EXISTS library_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
         con.execute('CREATE TABLE IF NOT EXISTS candidates (signature TEXT PRIMARY KEY, roster TEXT NOT NULL, batch INTEGER NOT NULL, style TEXT NOT NULL, seed INTEGER NOT NULL)')
         con.execute('CREATE TABLE IF NOT EXISTS batches (id INTEGER PRIMARY KEY, style TEXT NOT NULL, seed INTEGER NOT NULL, count INTEGER NOT NULL, elapsed REAL NOT NULL)')
-        con.execute('CREATE TABLE IF NOT EXISTS coverage_batches (batch INTEGER PRIMARY KEY, quarterback TEXT NOT NULL)')
         meta = dict(con.execute('SELECT key,value FROM library_meta'))
         if meta:
             saved = metadata(path)
@@ -84,6 +83,8 @@ def initialize(path, snapshot):
                 slate_id=slate_id(snapshot['inputs']['players'],snapshot['inputs']['recipe']['contest_kind'])).items())
             if snapshot['inputs']['recipe']['contest_kind'] == 'classic':
                 con.execute('INSERT INTO library_meta VALUES (?,?)', ('roster_format', CLASSIC_ROSTER_FORMAT))
+        # Add search provenance only after compatibility has been established.
+        con.execute('CREATE TABLE IF NOT EXISTS coverage_batches (batch INTEGER PRIMARY KEY, quarterback TEXT NOT NULL)')
 
 def metadata(path):
     if not Path(path).is_file():
