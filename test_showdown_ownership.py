@@ -60,3 +60,11 @@ class ShowdownOwnershipTests(unittest.TestCase):
             with self.assertRaises(ValueError):estimate_ownership(_showdown_players(),n)
         players=_showdown_players();players[0]['FlexProjection']=float('nan')
         with self.assertRaises(ValueError):estimate_ownership(players,80)
+
+    def test_opponent_estimate_uses_same_pool_despite_personal_locks_and_fades(self):
+        players=_showdown_players();expected=estimate_ownership(players,80,seed=3)
+        players[0].update(LockCpt=True,LockFlex=True,FadeCpt=True)
+        players[1]['FadeFlex']=True
+        before=copy.deepcopy(players)
+        self.assertEqual(expected,estimate_ownership(players,80,seed=3))
+        self.assertEqual(players,before)

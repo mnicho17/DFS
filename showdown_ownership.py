@@ -18,8 +18,7 @@ def estimate_ownership(players, count, *, salary_cap=50000, seed=73129,
     progress(0, count, 'Sampling legal Showdown opponents with salary bands')
     if cancelled():
         return {}
-    pool = active_showdown_players([dict(p, LockCpt=False, LockFlex=False) for p in copy.deepcopy(players)
-                                    if not p.get('FadeCpt') and not p.get('FadeFlex')])
+    pool = active_showdown_players([dict(p, LockCpt=False, LockFlex=False) for p in copy.deepcopy(players)])
     for player in pool:
         for prefix, key in [('Cpt', 'ProjCptOwnPct'), ('Flex', 'ProjFlexOwnPct')]:
             projection = float(player.get(prefix+'Projection') or 0)
