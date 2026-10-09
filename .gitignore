@@ -8,3 +8,4 @@ dfs_debug.log*
 history/
 output/
 tmp/
+build_info_generated.py

@@ -62,6 +62,8 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 
 
 
+The main toolbar shows the running version and build ID beside **DFS**. A suffix such as `+32` means 32 commits after that release; `modified` identifies local tracked-file changes. Click the version to open the latest published release for comparison. Source updates can be newer than the downloadable release. Packaged executables retain their build identity without requiring Git.
+
 The pictured examples use representative NFL data. Player names, projections, ownership, live context, and SIM results will differ by slate.
 
 
