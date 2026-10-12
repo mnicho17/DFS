@@ -273,6 +273,7 @@ def review_report(conn,username=''):
     from learning_db import _dk_username
     ensure_tables(conn)
     lines=['','Construction & Scenario Review — descriptive, no automatic tuning']
+    lines.append('- Legacy cached cohort estimates may include export/snapshot metadata. Salary estimates are hidden; use revision-bound Historical database evidence below. These cohorts are not verified complete fields.')
     reviews=conn.execute('SELECT payload,checked_at FROM construction_reviews ORDER BY checked_at').fetchall()
     if not reviews:lines.append('- Click Analyze Saved Results to compare field constructions and store player scores.')
     for encoded,checked in reviews:
@@ -281,9 +282,8 @@ def review_report(conn,username=''):
             if key=='yours' and _dk_username(username)!=p.get('username'):continue
             b=g[key]
             if not b['n']:continue
-            salary=f"${b['salary_sum']/b['salary_n']:,.0f} ({b['salary_n']} covered)" if b['salary_n'] else 'unknown'
             own=f"{b['own_sum']/b['own_n']:.1f}% ({b['own_n']} covered)" if b['own_n'] else 'unknown'
-            lines.append(f"  {label}: {b['n']:,} entries; construction metadata {b['mapped']:,}/{b['n']:,}; duplicated {100*b['duplicates']/b['n']:.1f}%; average salary {salary}; average slot ownership {own}.")
+            lines.append(f"  {label}: {b['n']:,} entries; legacy construction metadata {b['mapped']:,}/{b['n']:,}; duplicated {100*b['duplicates']/b['n']:.1f}%; average slot ownership {own}.")
         keys=set(field['features'])|set(g['top1']['features'])
         ranked=sorted(keys,key=lambda k:abs(g['top1']['features'].get(k,0)/max(1,g['top1']['mapped'])-field['features'].get(k,0)/max(1,field['mapped'])),reverse=True)
         important=['0 defenses','1 defense','2 defenses'] if p['format']=='Showdown' and p.get('construction_version',0)>=2 else []

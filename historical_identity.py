@@ -21,7 +21,7 @@ from compute_ledger import instrument_reconciliation, phase
 from results_audit import _number
 
 SCHEMA_VERSION = 1
-METHOD_VERSION = 3
+METHOD_VERSION = 4
 STATES = ('UNRESOLVED', 'CANDIDATE', 'SALARY_QUALIFIED', 'SNAPSHOT_QUALIFIED',
           'BUILD_QUALIFIED', 'OUTCOME_QUALIFIED')
 MAX_RESULTS = 200_000
@@ -191,6 +191,8 @@ def _outcomes(source, salary, cancelled):
     from review_build_evidence import roster_key, name_key
     observed, conflicts, limitations = defaultdict(set), set(), []
     coverage = Counter()
+    from historical_field_report import FieldRows
+    field_rows = FieldRows(salary)
     scan_complete = False
     rows = []
     try:
@@ -232,6 +234,7 @@ def _outcomes(source, salary, cancelled):
                 continue
             coverage['entry_rows'] += 1
             text = row.get('Lineup') or row.get('Roster') or ''
+            field_rows.add(text)
             parsed = roster_key(text)
             if not text.strip():
                 coverage['blank_roster_rows'] += 1
@@ -272,6 +275,7 @@ def _outcomes(source, salary, cancelled):
                 conflicting_scores=sorted(conflicts), scores=rows, limitations=limitations,
                 checked_roster_totals=coverage['checked_roster_rows'],
                 conflicting_roster_totals=coverage['conflicting_total_rows'],
+                field_row_summary=field_rows.payload(scan_complete),
                 roster_row_coverage=dict(counts, scan_complete=scan_complete,
                     usable=scan_complete and bool(coverage['score_supported_roster_rows']) and not conflicts and not limitations,
                     basis='source rows only; duplicate EntryIds are not deduplicated; not complete-field or submission evidence'),
@@ -375,6 +379,7 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
         return result
     roster_coverage = outcome['roster_row_coverage']
     result['results_evidence']['roster_row_coverage'] = roster_coverage
+    result['results_evidence']['field_row_summary'] = outcome['field_row_summary']
     if not roster_coverage['readable_roster_rows']:
         blockers.append('unreadable_result_rosters')
     elif roster_coverage['blank_roster_rows'] or roster_coverage['malformed_roster_rows']:

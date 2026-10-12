@@ -427,7 +427,7 @@ class ResultsLearningTests(unittest.TestCase):
         self.assertEqual(report["field_contests"], 1)
         self.assertEqual(report["field_entries"], 30)
         self.assertIn("Contest field learning", report["text"])
-        self.assertIn("Entries sharing a duplicated roster", report["text"])
+        self.assertIn("Legacy observed entries sharing a duplicated roster", report["text"])
 
     def test_large_field_format_infers_nfl_and_150_max_without_row_expansion(self):
         path = os.path.join(self.temp.name, "contest-standings-185073514.csv")

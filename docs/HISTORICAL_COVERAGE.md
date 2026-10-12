@@ -140,3 +140,35 @@ Opening cost grows with stored derived JSON, not source CSV size. Reconciliation
 still performs the existing bounded fresh inventory and score scan; no speculative
 caching or compute optimization was added. RL-05A scan limits remain visible as
 blockers. A long verification phase may show elapsed time without a percent total.
+
+Results & Learning **Copy Report** includes the cached reconciliation timestamp,
+method versions, exclusive evidence states, pending imports, invalid cached rows
+and score-supported source-row coverage. These cached state counts are historical;
+reconcile again after changing files or associations.
+
+Reconciliation method 4 also records `results_evidence.field_row_summary` in the
+existing hash-protected JSON. The second streaming results pass resolves each
+roster against its exact qualified salary revision (including separate Captain
+salary/ID). It uses no export or current-slate metadata fallback. Blank/malformed
+rosters, unknown or ambiguous identities, invalid Showdown team splits and rosters
+over $50,000 are counted separately and excluded from salary/construction metrics.
+The salary mean uses supported source rows as its denominator. Counts include
+duplicate EntryId rows and establish neither unique entries nor field completeness.
+Missing actual scores do not prevent salary reporting and still block unsupported
+outcome qualification. Cancellation, scan failure or changed results clear the
+proposed summary; reconciliation retains its existing atomic commit protection.
+
+Copy Report uses one catalog/evidence database snapshot and current file-verified
+pairings to gate these aggregates. A changed, invalid, ambiguous or different salary
+association hides its old metrics until reconciliation; old cached records cannot
+fall back to global export metadata. The report does not rebuild history itself.
+Use **Reconcile Historical Coverage** (or **Analyze Saved Results**, which ends in
+reconciliation) once after updating to populate the new summary. Source CSVs,
+salary associations and existing generation calibration tables are preserved.
+
+Older field summaries are labeled as legacy observed summaries with unverified
+completeness. Their salary, QB-stack and FLEX-mix figures are suppressed; cached
+cohort salary estimates are also hidden. Other legacy diagnostic estimates remain
+explicitly labeled. Existing generation calibration receipts remain visible and
+unchanged; this reporting fix does not tune ownership, projections, SIM, ranking
+or lineup generation.
