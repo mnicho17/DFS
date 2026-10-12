@@ -351,8 +351,38 @@ class HistoricalIdentityTests(unittest.TestCase):
 
     def test_scan_limit_does_not_choose_partial_snapshot_candidate(self):
         self.fixture();self.snapshot()
-        with patch('review_build_evidence.MAX_FILES',0):
+        with patch('review_build_evidence.HISTORY_MAX_FILES',0):
             self.assertIn('snapshot_evidence_scan_incomplete',self.one()['blockers'])
+
+    def test_history_scans_beyond_report_file_and_byte_budgets(self):
+        import review_build_evidence as be
+        self.fixture();self.snapshot();self.archive()
+        source = next((self.root/'snapshots').glob('*.json'))
+        for index in range(105):
+            (source.parent/f'copy-{index:03}.json').write_bytes(source.read_bytes())
+        with patch.object(be, 'MAX_TOTAL_BYTES', 1):
+            data = self.one()
+        self.assertEqual(data['state'], 'OUTCOME_QUALIFIED')
+        self.assertFalse(data['source_issues'])
+        reader = be.Reader(lambda: False)
+        self.assertEqual(len(reader.paths(source.parent, '.json')), be.MAX_FILES)
+        self.assertIn('file_count_limit', reader.issues)
+
+    def test_history_byte_limit_withholds_qualification(self):
+        self.fixture();self.snapshot();self.archive()
+        with patch('review_build_evidence.HISTORY_MAX_TOTAL_BYTES', 1):
+            self.assertIn('snapshot_evidence_scan_incomplete', self.one()['blockers'])
+
+    def test_directory_enumeration_checks_cancellation(self):
+        import review_build_evidence as be
+        for index in range(20):
+            (self.root/f'{index}.json').write_text('{}')
+        calls = []
+        def cancelled():
+            calls.append(True)
+            return len(calls) > 5
+        with self.assertRaises(be.Cancelled):
+            be.Reader(cancelled, historical=True).paths(self.root, '.json')
 
     def test_outcome_coverage_independent_of_build_identity(self):
         self.fixture();self.snapshot()

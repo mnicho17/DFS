@@ -91,7 +91,7 @@ def _inventory(root, cancelled, evidence_reader=None):
     from review_build_evidence import Reader, snapshot, timestamp, archive_identity
     # Use one cancellation exception throughout the reconciliation API, including
     # directory enumeration before individual files are opened.
-    reader = evidence_reader or Reader(lambda: _check(cancelled))
+    reader = evidence_reader or Reader(lambda: _check(cancelled), historical=True)
     snapshots, archives, issues = {}, {}, Counter()
     for folder, suffix in (('snapshots', '.json'), ('build-archives', '.zip')):
         for path in reader.paths(Path(root) / folder, suffix):
