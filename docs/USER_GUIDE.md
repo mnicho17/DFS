@@ -1535,6 +1535,14 @@ score coverage and specific blockers. The overview's stage counts are independen
 complete player scores can exist without a build archive. **Ready** requires the
 full chain. Conflicts are included in **Needs review**.
 
+The overview also shows **scoped roster scores** and excluded blank/malformed
+rows. Contest details separate readable rows, known-score rows, unknown selected
+scores, missing totals and conflicting totals. These are source-row counts,
+including duplicate EntryIds, not complete-field or unique-entry claims. An
+unknown unused eligible score can prevent full-pool hindsight while known roster
+rows remain available. Reconcile existing imported evidence to refresh these
+counts; uploading the same files again is unnecessary.
+
 ![Historical Coverage showing synthetic historical contests](images/historical-coverage.png)
 
 The tab opens saved coverage without reparsing original standings. Saved states

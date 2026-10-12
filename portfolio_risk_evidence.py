@@ -64,7 +64,7 @@ def source_catalog(db_path):
 class CaptureReader(be.Reader):
     """Collect validated data during the authority's one inventory pass."""
     def __init__(self, cancelled):
-        super().__init__(cancelled)
+        super().__init__(cancelled, historical=True)
         self.snapshots, self.archives, self.directories = {}, defaultdict(list), {}
 
     @staticmethod
