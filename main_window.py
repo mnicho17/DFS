@@ -4434,6 +4434,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if result.get('committed'):
             text += f" Elapsed: {result['seconds']:.1f}s. Timing recorded by the compute ledger when storage is available."
         self.coverage.finish(text)
+        if result.get('committed') and not result.get('cancelled'):
+            self.refresh_report()
 
     def review_sim_builds(self, import_id=None):
         if self._import_thread is not None or self.history_refresh.busy:

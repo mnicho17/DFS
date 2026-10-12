@@ -121,6 +121,25 @@ class LearningReportUITests(unittest.TestCase):
             build.assert_not_called()
             self.assertIsNone(self.dialog._import_thread)
 
+    def test_reconciliation_refreshes_report_after_worker_retirement(self):
+        with patch('historical_coverage_ui.reconcile',return_value=[]), patch('main_window.generate_learning_report',side_effect=self.slow_report):
+            self.dialog.report.setPlainText('Old report')
+            self.dialog.reconcile_history()
+            self.wait_until(self.entered.is_set)
+            self.assertTrue(self.dialog._import_job.get('report'))
+            self.assertEqual(len(self.calls),1)
+            self.assertEqual(self.calls[0][1]['db_path'],self.db)
+            self.assertEqual(self.dialog.report.toPlainText(),'Old report')
+            self.release.set()
+            self.wait_until(lambda:self.dialog._import_thread is None)
+        self.assertEqual(self.dialog.report.toPlainText(),'Completed report')
+
+    def test_cancelled_or_uncommitted_reconciliation_does_not_refresh_report(self):
+        with patch.object(self.dialog,'refresh_report') as refresh:
+            self.dialog._on_coverage_finished(dict(cancelled=True,committed=False,message='Cancelled'))
+            self.dialog._on_coverage_finished(dict(committed=False,message='Failed'))
+            refresh.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

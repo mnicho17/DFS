@@ -21,7 +21,7 @@ from compute_ledger import instrument_reconciliation, phase
 from results_audit import _number
 
 SCHEMA_VERSION = 1
-METHOD_VERSION = 4
+METHOD_VERSION = 5
 STATES = ('UNRESOLVED', 'CANDIDATE', 'SALARY_QUALIFIED', 'SNAPSHOT_QUALIFIED',
           'BUILD_QUALIFIED', 'OUTCOME_QUALIFIED')
 MAX_RESULTS = 200_000
@@ -181,7 +181,7 @@ def _result_rows(source, cancelled):
             yield row
 
 
-def _outcomes(source, salary, cancelled):
+def _outcomes(source, salary, cancelled, *, usernames=()):
     """Full-pool scores and scoped roster-row coverage are separate evidence.
 
     Two streaming passes avoid retaining an entire field in memory. Missing
@@ -191,27 +191,32 @@ def _outcomes(source, salary, cancelled):
     from review_build_evidence import roster_key, name_key
     observed, conflicts, limitations = defaultdict(set), set(), []
     coverage = Counter()
-    from historical_field_report import FieldRows
+    from historical_field_report import FieldRows, RankRows, positive_integer
+    from opponent_analysis import username_key
     field_rows = FieldRows(salary)
+    rank_rows = RankRows()
     scan_complete = False
     rows = []
     try:
         with open(source['snapshot'], newline='', encoding='utf-8-sig') as handle:
             header = next(csv.reader(handle), [])
-        if not {'Player', 'FPTS'} <= set(header):
+        has_scores = {'Player', 'FPTS'} <= set(header)
+        if not has_scores:
             limitations.append('missing_player_score_table')
-        else:
-            for row in _result_rows(source, cancelled):
-                name = _name(row.get('Player') or '')
-                if not name:
-                    continue
-                role = str(row.get('Roster Position') or '').strip().upper()
-                key = ('@cpt:' if role in ('CPT', 'CAPTAIN') else '') + name
-                value = _number(row.get('FPTS'))
-                if value is not None:
-                    observed[key].add(value)
-                if len(observed) > MAX_SCORE_ROWS:
-                    raise OverflowError('score identity budget')
+        for row in _result_rows(source, cancelled):
+            rank_rows.add(row)
+            if not has_scores:
+                continue
+            name = _name(row.get('Player') or '')
+            if not name:
+                continue
+            role = str(row.get('Roster Position') or '').strip().upper()
+            key = ('@cpt:' if role in ('CPT', 'CAPTAIN') else '') + name
+            value = _number(row.get('FPTS'))
+            if value is not None:
+                observed[key].add(value)
+            if len(observed) > MAX_SCORE_ROWS:
+                raise OverflowError('score identity budget')
         for key, values in observed.items():
             if max(values) - min(values) > .02:
                 conflicts.add(key)
@@ -229,12 +234,14 @@ def _outcomes(source, salary, cancelled):
             rows.append(dict(player_id=player['id'], name=player['name'], role=player['role'], actual=score,
                              basis='base_score_x1.5' if captain else 'observed_base_score'))
         by_role = {('@cpt:' if r['role']=='CPT' else '')+name_key(r['name']):r['actual'] for r in rows}
+        rank_size, rank_basis = rank_rows.receipt()
+        field_rows = FieldRows(salary, usernames=usernames,rank_size=rank_size,rank_basis=rank_basis)
         for row in _result_rows(source, cancelled):
             if not (row.get('EntryId') or row.get('EntryName')):
                 continue
             coverage['entry_rows'] += 1
             text = row.get('Lineup') or row.get('Roster') or ''
-            field_rows.add(text)
+            field_rows.add(text, rank=positive_integer(row.get('Rank')),username=username_key(str(row.get('EntryName') or '')))
             parsed = roster_key(text)
             if not text.strip():
                 coverage['blank_roster_rows'] += 1
@@ -271,11 +278,14 @@ def _outcomes(source, salary, cancelled):
     counts = {key:coverage[key] for key in ('entry_rows','blank_roster_rows','malformed_roster_rows',
         'readable_roster_rows','missing_total_rows','unknown_score_roster_rows','checked_roster_rows',
         'conflicting_total_rows','score_supported_roster_rows')}
+    field_summary = field_rows.payload(scan_complete)
+    from learning_db import _infer_field_preset
+    field_summary['entry_preset'] = _infer_field_preset(' '.join([source.get('name',''),*source.get('manifest',{}).get('contest_names',[])]))
     return dict(eligible_player_roles=len(rows), known_scores=len(rows)-unknown, unknown_scores=unknown,
                 conflicting_scores=sorted(conflicts), scores=rows, limitations=limitations,
                 checked_roster_totals=coverage['checked_roster_rows'],
                 conflicting_roster_totals=coverage['conflicting_total_rows'],
-                field_row_summary=field_rows.payload(scan_complete),
+                field_row_summary=field_summary,
                 roster_row_coverage=dict(counts, scan_complete=scan_complete,
                     usable=scan_complete and bool(coverage['score_supported_roster_rows']) and not conflicts and not limitations,
                     basis='source rows only; duplicate EntryIds are not deduplicated; not complete-field or submission evidence'),
@@ -365,7 +375,9 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
         conflicts.append('stored_result_player_role_conflict')
         blockers.append('incomplete_stored_player_role_coverage')
         return result
-    outcome = _outcomes(source, salary, cancelled)
+    from opponent_analysis import username_key
+    usernames = sorted({username_key(str(r['raw'].get('entryname') or '')) for r in rows} - {''})
+    outcome = _outcomes(source, salary, cancelled, usernames=usernames)
     result['actual_score_evidence'] = outcome
     try:
         _verify(by_hash[selected], cancelled)
