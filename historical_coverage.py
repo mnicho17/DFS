@@ -4,7 +4,7 @@ The fast view reads the last committed derived state. Only explicit background
 reconciliation revalidates files. Cached evidence cannot authorize analysis.
 """
 from collections import Counter
-from contextlib import closing
+from contextlib import closing, nullcontext
 import hashlib
 import json
 from pathlib import Path
@@ -106,15 +106,17 @@ def aggregate(contests):
     return result
 
 
-def load_saved(db_path):
+def load_saved(db_path, *, conn=None):
     """Read cached JSON and catalog counts, never open/hash/reparse source files."""
     path = Path(db_path).resolve()
     result = dict(contests=(), updated_at=None, pending_imports=0, invalid_rows=0, labels={})
-    if not path.exists():
+    if conn is None and not path.exists():
         return result
     from historical_identity import QualifiedHistoricalContest
-    with closing(sqlite3.connect(path.as_uri()+'?mode=ro', uri=True)) as conn:
-        conn.execute('BEGIN')
+    owned = conn is None
+    with closing(sqlite3.connect(path.as_uri()+'?mode=ro', uri=True)) if owned else nullcontext(conn) as conn:
+        if owned:
+            conn.execute('BEGIN')
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         saved, imports, dates = [], set(), []
         if 'historical_contest_identities' in tables:
