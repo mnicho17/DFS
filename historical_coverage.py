@@ -30,7 +30,9 @@ REASONS = {
     'incomplete_stored_player_role_coverage': 'Some stored result players/roles are not covered by the salary revision.',
     'source_revision_changed_during_reconciliation': 'A source revision changed during reconciliation.',
     'restore_immutable_source_revision': 'Restore the original saved source revision and reconcile again.',
-    'unreadable_result_rosters': 'Some result rosters are unreadable and excluded from qualification.',
+    'unreadable_result_rosters': 'No readable result rosters are available from a complete source scan.',
+    'excluded_unreadable_result_rows': 'Blank or malformed source roster rows were excluded; valid rows remain available. Full-field coverage is not established.',
+    'excluded_unreadable_stored_rows': 'Unreadable stored personal roster rows were excluded; valid rows remain available.',
     'unknown_eligible_actual_scores': 'Some eligible player-role scores are unknown. They are not treated as zero.',
     'conflicting_actual_scores': 'The source contains conflicting actual scores.',
     'unreadable_stored_result_rosters': 'Some stored result rosters are unreadable.',
@@ -84,12 +86,21 @@ def capabilities(data):
 def aggregate(contests):
     result = coverage(contests)
     levels, groups, supported = Counter(), Counter(), Counter()
+    roster_rows = Counter()
     for contest in contests:
         data = contest.data
         levels.update({k:int(v) for k,v in evidence_levels(data).items()})
         groups.update({k:int(v) for k,v in categories(data).items()})
         supported.update({k:int(v) for k,v in capabilities(data).items()})
-    result.update(coverage_version=1, evidence_levels=dict(levels), categories=dict(groups),
+        scoped = (data.get('results_evidence') or {}).get('roster_row_coverage') or {}
+        qualified = bool((data.get('salary_evidence') or {}).get('qualified'))
+        if qualified and scoped.get('scan_complete'):
+            roster_rows.update({k:scoped.get(k,0) for k in ('entry_rows','blank_roster_rows','malformed_roster_rows','readable_roster_rows')})
+            roster_rows['complete_source_scans'] += 1
+            if scoped.get('usable'):
+                roster_rows['usable_sources'] += 1
+                roster_rows['score_supported_roster_rows'] += scoped['score_supported_roster_rows']
+    result.update(coverage_version=2, roster_row_coverage=dict(roster_rows), evidence_levels=dict(levels), categories=dict(groups),
         capability_evidence=dict(supported),
         capability_basis='cached prerequisites only; the legacy hindsight count describes the full evidence ladder, not RL-07A readiness; Hindsight independently requalifies salary, exact actuals, rules and optional snapshot; generated evidence does not establish timings or submission')
     return result
@@ -175,6 +186,12 @@ def detail_text(data):
         lines += [f"Salary revision: {salary.get('revision_hash','')[:12]}",
                   'Association: ' + salary.get('association_method','unknown').replace('_',' ')]
     roles = r.get('stored_player_role_coverage') or {}
+    scoped = r.get('roster_row_coverage') or {}
+    if scoped:
+        lines += [f"Source roster-row scan: {'complete' if scoped['scan_complete'] else 'incomplete'}; {scoped['entry_rows']} entry rows.",
+                  f"Excluded roster rows: {scoped['blank_roster_rows']} blank, {scoped['malformed_roster_rows']} malformed.",
+                  f"Readable rows: {scoped['readable_roster_rows']}; score-supported: {scoped['score_supported_roster_rows']}; unknown player scores: {scoped['unknown_score_roster_rows']}; missing totals: {scoped['missing_total_rows']}; conflicting totals: {scoped['conflicting_total_rows']}.",
+                  f"Scoped score evidence: {'available' if scoped['usable'] else 'unavailable'}. Counts describe rows, including duplicate EntryIds; not unique entries or complete-field coverage."]
     if roles:
         lines.append(f"Stored player/role coverage: {roles['matched']} / {roles['observed']}")
     snap = data.get('snapshot_evidence') or {}

@@ -248,6 +248,112 @@ class HistoricalIdentityTests(unittest.TestCase):
         self.fixture(scores=[-2,10,10,10,10,10]);self.snapshot();self.archive()
         self.assertEqual(self.one()['state'],'OUTCOME_QUALIFIED')
 
+    def test_blank_and_malformed_rows_are_excluded_without_losing_valid_rows(self):
+        import historical_coverage as hc
+        self.fixture();self.snapshot();self.archive()
+        self.replace_result(lambda rows: rows.extend([
+            ['31','9991','Synthetic_User','0','','123','2026-09-21','','',''],
+            ['32','9992','Synthetic_User','0','FLEX Alpha','123','2026-09-21','','','']]))
+        self.change('UPDATE analysis_sources SET manifest=? WHERE hash=?',
+                    (json.dumps(ai._results_manifest(self.source['snapshot'],lambda:False)),self.source['hash']))
+        self.change("UPDATE historical_results SET raw_json=json_set(raw_json,'$.Lineup','') WHERE result_id=(SELECT MIN(result_id) FROM historical_results)")
+        before=self.query('SELECT * FROM historical_results')
+        d=self.one(True);coverage=d['results_evidence']['roster_row_coverage']
+        self.assertEqual(d['state'],'OUTCOME_QUALIFIED')
+        self.assertEqual(coverage['entry_rows'],32)
+        self.assertEqual(coverage['blank_roster_rows'],1)
+        self.assertEqual(coverage['malformed_roster_rows'],1)
+        self.assertEqual(coverage['score_supported_roster_rows'],30)
+        self.assertTrue(coverage['usable'])
+        self.assertIn('excluded_unreadable_result_rows',d['limitations'])
+        self.assertIn('excluded_unreadable_stored_rows',d['limitations'])
+        self.assertEqual(self.query('SELECT * FROM historical_results'),before)
+        report=hc.detail_text(d)
+        self.assertIn('1 blank, 1 malformed',report)
+        self.assertIn('not unique entries or complete-field coverage',report)
+        summary=hc.aggregate(hi.qualified_contests(self.db))['roster_row_coverage']
+        self.assertEqual(summary['usable_sources'],1)
+        self.assertEqual(summary['score_supported_roster_rows'],30)
+        self.assertEqual(summary['blank_roster_rows'],1)
+
+    def test_known_roster_scores_do_not_require_unknown_unselected_player(self):
+        self.fixture()
+        salary=copy.deepcopy(self.salary['manifest'])
+        salary['players'].append(dict(salary['players'][-1],name='Unknown Unselected',id='99999'))
+        outcome=hi._outcomes(self.source,salary,lambda:False)
+        self.assertFalse(outcome['complete'])
+        self.assertEqual(outcome['unknown_scores'],1)
+        self.assertTrue(outcome['roster_row_coverage']['usable'])
+        self.assertEqual(outcome['roster_row_coverage']['score_supported_roster_rows'],30)
+
+    def test_unknown_selected_score_is_excluded_and_not_zero_filled(self):
+        self.fixture(scores=[10,10,None,10,10,10]);self.snapshot();self.archive()
+        d=self.one();coverage=d['results_evidence']['roster_row_coverage']
+        self.assertEqual(d['state'],'BUILD_QUALIFIED')
+        self.assertEqual(coverage['unknown_score_roster_rows'],30)
+        self.assertEqual(coverage['score_supported_roster_rows'],0)
+        self.assertFalse(coverage['usable'])
+        self.assertIn('unknown_eligible_actual_scores',d['blockers'])
+
+    def test_entirely_blank_source_rosters_do_not_qualify(self):
+        self.fixture();self.snapshot();self.archive()
+        self.replace_result(lambda rows: [row.__setitem__(4,'') for row in rows[1:]])
+        d=self.one()
+        self.assertEqual(d['state'],'BUILD_QUALIFIED')
+        self.assertIn('unreadable_result_rosters',d['blockers'])
+        self.assertFalse(d['results_evidence']['roster_row_coverage']['usable'])
+
+    def test_late_scores_and_conflicts_are_read_beyond_personal_row_budget(self):
+        self.fixture();self.snapshot();self.archive()
+        def late(rows):
+            side=[row[7:] for row in rows[1:7]]
+            for row in rows[1:]:row[7:]=['','','']
+            for row,values in zip(rows[-6:],side):row[7:]=values
+        self.replace_result(late)
+        with patch.object(hi,'MAX_RESULTS',10):
+            outcome=hi._outcomes(self.source,self.salary['manifest'],lambda:False)
+        self.assertTrue(outcome['complete'])
+        self.assertEqual(outcome['roster_row_coverage']['score_supported_roster_rows'],30)
+        self.replace_result(lambda rows: rows.append(['','','','','','','','Alpha','FLEX','99']))
+        with patch.object(hi,'MAX_RESULTS',10):
+            outcome=hi._outcomes(self.source,self.salary['manifest'],lambda:False)
+        self.assertFalse(outcome['complete'])
+        self.assertFalse(outcome['roster_row_coverage']['usable'])
+        self.assertIn('alpha',outcome['conflicting_scores'])
+
+    def test_outcome_row_byte_and_identity_limits_discard_partial_coverage(self):
+        self.fixture();self.snapshot();self.archive()
+        for constant,value in [('MAX_OUTCOME_ROWS',10),('MAX_OUTCOME_BYTES',1),('MAX_SCORE_ROWS',1)]:
+            with self.subTest(constant=constant),patch.object(hi,constant,value):
+                outcome=hi._outcomes(self.source,self.salary['manifest'],lambda:False)
+            self.assertIn('player_score_read_limit',outcome['limitations'])
+            self.assertFalse(outcome['complete'])
+            self.assertEqual(outcome['known_scores'],0)
+            self.assertFalse(outcome['roster_row_coverage']['scan_complete'])
+            self.assertFalse(outcome['roster_row_coverage']['usable'])
+
+    def test_late_roster_total_conflict_blocks_scoped_evidence(self):
+        self.fixture();self.snapshot();self.archive()
+        self.replace_result(lambda rows: rows[-1].__setitem__(3,'999'))
+        d=self.one();outcome=d['actual_score_evidence']
+        self.assertEqual(outcome['roster_row_coverage']['conflicting_total_rows'],1)
+        self.assertFalse(outcome['roster_row_coverage']['usable'])
+        self.assertIn('roster_actual_total_conflict',d['blockers'])
+
+    def test_second_pass_cancellation_and_changed_source_are_not_partial_success(self):
+        self.fixture()
+        calls=[]
+        def cancelled():
+            calls.append(True)
+            return len(calls)>40
+        with self.assertRaises(ai.ImportCancelled):
+            hi._outcomes(self.source,self.salary['manifest'],cancelled)
+        with patch.object(hi,'_verify',side_effect=ValueError('source changed')):
+            outcome=hi._outcomes(self.source,self.salary['manifest'],lambda:False)
+        self.assertFalse(outcome['roster_row_coverage']['usable'])
+        self.assertFalse(outcome['roster_row_coverage']['scan_complete'])
+        self.assertEqual(outcome['known_scores'],0)
+
     def test_missing_stored_roster_blocks_outcome(self):
         self.fixture();self.snapshot();self.archive()
         self.change("UPDATE historical_results SET raw_json='{}'")
@@ -481,6 +587,7 @@ class HistoricalIdentityTests(unittest.TestCase):
             self.assertEqual(d['state'],'BUILD_QUALIFIED')
             self.assertIn('cross_contest_actual_score_conflict',d['conflicts'])
             self.assertFalse(d['actual_score_evidence']['complete'])
+            self.assertFalse(d['actual_score_evidence']['roster_row_coverage']['usable'])
 
 
 if __name__=='__main__':unittest.main()

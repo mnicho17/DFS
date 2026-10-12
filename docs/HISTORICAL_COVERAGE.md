@@ -47,6 +47,49 @@ the supplied salary universe, exact actuals and supported rules; its snapshot-lo
 comparison is optional. RL-07B remains unimplemented. Build archives do not establish submitted
 portfolios or phase timings. Zero and negative scores remain known observations.
 
+## Scoped imported roster coverage
+
+Imported files remain immutable sources cataloged in `analysis_sources`. Derived
+coverage is stored in `historical_contest_identities.payload`; reconciliation
+updates these derived records atomically without rewriting original observations.
+No re-upload is needed when the source is already cataloged and hash-valid.
+
+The overview and contest details distinguish full eligible-pool score coverage
+from scoped source roster-row coverage. Blank and malformed lineup rows are
+excluded and counted. Readable rows with known selected-player scores and a
+matching observed total can provide scoped score evidence even when an unused
+eligible player has no score. Unknown scores are never filled with zero. Missing
+totals, unknown selected-player scores and conflicting totals have separate counts.
+A score/identity conflict, source change or truncated scan withholds usable scoped
+evidence. Cross-contest score contradictions also withhold it.
+
+These counts describe source rows, including repeated EntryIds, rather than unique
+entries or users. They do not establish complete standings, submitted portfolios,
+ROI, or full-pool hindsight readiness. Existing username/field analysis retains its
+own identity validation and duplicate-entry handling. Full-pool RL-07 qualification
+still requires exact actuals for every eligible athlete and its existing safeguards.
+Unreadable stored personal rows are excluded when valid personal rows remain;
+wholly unreadable personal coverage stays blocked.
+
+Standings scores and roster coverage use two streaming passes, capped at 2 million
+rows per pass and a 1 GB source file, with at most 5,000 observed score identities.
+This is separate from the 200,000-row stored-personal-observation budget. Late
+scores and conflicts are read through EOF within the budget. Cancellation is checked
+per row, and source hashes are verified after both passes. Exhaustion discards
+partial score/coverage results and discloses the scan blocker.
+
+For a read-only SQLite audit of reconciled counts, query the existing JSON payload:
+
+```sql
+SELECT identity_id, state,
+       json_extract(payload, '$.results_evidence.source_hash') AS result_hash,
+       json_extract(payload, '$.salary_evidence.revision_hash') AS salary_hash,
+       json_extract(payload, '$.results_evidence.roster_row_coverage') AS roster_rows,
+       json_extract(payload, '$.blockers') AS blockers,
+       json_extract(payload, '$.conflicts') AS conflicts
+FROM historical_contest_identities;
+```
+
 ## Explicit choices
 
 Salary review uses the existing authoritative `pairing_state` and `save_pair` APIs.
@@ -78,7 +121,7 @@ unavailable because the archives do not prove submission.
 ## Shareable report and acceptance
 
 DFS Review schema 2 remains backward compatible. Its historical section adds
-`coverage_version=1`, independent evidence-level counts, category counts and
+`coverage_version=2`, independent evidence-level counts, category counts and
 capability-prerequisite counts. It uses freshly derived evidence under the existing
 report read transaction. No identity IDs, source hashes, paths, filenames, usernames
 or raw payloads are added to the shareable section. Existing preview, cancellation,
