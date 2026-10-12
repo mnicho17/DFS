@@ -172,3 +172,37 @@ cohort salary estimates are also hidden. Other legacy diagnostic estimates remai
 explicitly labeled. Existing generation calibration receipts remain visible and
 unchanged; this reporting fix does not tune ownership, projections, SIM, ranking
 or lineup generation.
+
+Method 5 / field-row summary version 2 adds descriptive rank and username cohorts
+to the same two streaming passes. Copy Report separates Classic and Showdown,
+then Single Entry, 3-Max, 20-Max, 150-Max and Unclassified groups using recorded
+contest/source names. Old version-1 summaries can immediately be separated by
+format/preset; their salary metrics remain usable but they do not supply cohorts.
+Reconcile once for the new comparison columns. Successful reconciliation now
+refreshes the main report automatically after its worker retires. Cancellation,
+failure and closing do not launch a hidden report.
+
+Each comparison shows field rows, rank-cutoff 5%, rank-cutoff 1%, rank-1 rows,
+and the selected username's submitted source rows. Positive integral ranks are
+required for rank cohorts; ties are included. A consistent supplied field size
+sets the percentile cutoffs but does not prove field completeness. Without a
+supplied size, cutoffs use the number of observed source rows (including blank
+rosters and duplicate EntryIds) and are explicitly labeled as observed-row rank
+cutoffs. Conflicting/invalid supplied sizes disable percentile cohorts instead
+of choosing an arbitrary size. Missing ranks remain disclosed in field/user
+cohorts, and each column shows supported-row and contributing-source counts.
+No payouts, profitability or independent-game advantage are inferred.
+
+Personal cohorts are computed for usernames represented in the stored historical
+observations, never for arbitrary inferred users. Copy Report selects the current
+username using the existing DraftKings suffix/case normalization. Up to 256
+observed usernames per source may be captured; above that bound no arbitrary
+subset is chosen, and the report discloses unavailable personal cohorts. All-user
+history remains accessible through the existing normalized opponent database.
+Incomplete scans clear every proposed cohort. Reconciliation remains atomic and
+continues to revalidate the exact results and salary revisions.
+
+Construction percentages use each cohort's supported rows. Kicker/defense counts
+and team splits no longer mix Classic and Showdown. Individual kicker/defense
+counts and Captain-with-opposing-FLEX-defense frequency are descriptive report
+features; they do not add exclusions, change exposure limits or tune generation.

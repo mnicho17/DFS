@@ -11,7 +11,7 @@ from unittest.mock import patch
 import analysis_imports as ai
 import historical_identity as hi
 from historical_coverage import load_saved
-from historical_field_report import FieldRows, summarize, report_lines
+from historical_field_report import FieldRows, RankRows, summarize, report_lines
 from learning_db import generate_learning_report, load_nfl_field_calibration
 import test_historical_identity as fixtures
 
@@ -176,13 +176,118 @@ class FieldReportTests(unittest.TestCase):
 
     def test_mixed_formats_keep_construction_denominators_separate(self):
         saved,pairs = self.saved()
+        data = saved['contests'][0].data
+        other = copy.deepcopy(data)
+        other['results_evidence']['source_hash'] = 'classic-source'
+        other['salary_evidence']['format'] = 'classic'
+        payload = other['results_evidence']['field_row_summary']
+        payload['features'] = {'FLEX position: RB':30,'Kicker/defense slots: 1':30}
+        payload['cohorts'] = {}
+        saved['contests'] += (hi.QualifiedHistoricalContest(json.dumps(other)),)
+        pairs['results'].append(dict(pairs['results'][0],hash='classic-source'))
         summary = summarize(saved,pairs)
-        summary['counts'].update(supported_rows=60,classic_supported_rows=30,entry_rows=60)
-        summary['features']['FLEX position: RB'] = 30
         text = '\n'.join(report_lines(saved,summary))
         self.assertIn('Captain position: QB: 30/30 (100.0%)',text)
         self.assertIn('FLEX position: RB: 30/30 (100.0%)',text)
         self.assertNotIn('Captain position: QB: 30/60',text)
+        self.assertIn('Kicker/defense slots: 0: 30/30',text)
+        self.assertIn('Kicker/defense slots: 1: 30/30',text)
+        self.assertIn('Classic / Unclassified',text)
+        self.assertIn('Showdown / Unclassified',text)
+
+    def test_cohorts_use_ties_and_their_own_supported_denominators(self):
+        rows = FieldRows(self.salary,usernames=['me'],rank_size=100,rank_basis='supplied field size; completeness unverified')
+        rows.add(self.text,rank=1,username='me')
+        rows.add(self.text,rank=1,username='other')
+        rows.add('',rank=1,username='me')
+        rows.add(self.text,rank=5,username='other')
+        rows.add(self.text,rank=None,username='me')
+        groups=rows.payload(True)['cohorts']
+        self.assertEqual(groups['field']['counts']['supported_rows'],4)
+        self.assertEqual(groups['top1']['counts']['entry_rows'],3)
+        self.assertEqual(groups['top1']['counts']['supported_rows'],2)
+        self.assertEqual(groups['top5']['counts']['supported_rows'],3)
+        self.assertEqual(groups['rank1']['counts']['supported_rows'],2)
+        self.assertEqual(groups['user:me']['counts']['supported_rows'],2)
+        self.assertEqual(groups['user:me']['counts']['missing_rank_rows'],1)
+
+    def test_rank_basis_never_infers_complete_field_from_observed_rows(self):
+        ranks=RankRows()
+        for i in range(100): ranks.add(dict(EntryId=str(i)))
+        size,basis=ranks.receipt()
+        self.assertEqual(size,100)
+        self.assertIn('observed source-row',basis)
+        self.assertIn('completeness unverified',basis)
+        ranks.add(dict(EntryId='a',FieldSize='200'))
+        self.assertEqual(ranks.receipt(),(200,'supplied field size; completeness unverified'))
+        ranks.add(dict(EntryId='b',FieldSize='300'))
+        self.assertIsNone(ranks.receipt()[0])
+        rows=FieldRows(self.salary,rank_size=None)
+        rows.add(self.text,rank=1)
+        self.assertIn('rank1',rows.cohorts)
+        self.assertNotIn('top1',rows.cohorts)
+
+    def test_invalid_field_sizes_disable_percentile_cutoffs(self):
+        for value in ('0','-1','nan','inf','1.5','unknown','1e308'):
+            with self.subTest(value=value):
+                ranks=RankRows();ranks.add(dict(EntryId='1',FieldSize=value))
+                self.assertIsNone(ranks.receipt()[0])
+
+    def test_current_username_is_selected_without_other_users_leaking_into_yours(self):
+        saved,pairs=self.saved()
+        first=summarize(saved,pairs,'SYNTHETIC_USER (1/20)')
+        group=first['scopes'][0]['cohorts']['yours']
+        self.assertEqual(group['counts']['supported_rows'],30)
+        self.assertNotIn('yours',summarize(saved,pairs,'Someone Else')['scopes'][0]['cohorts'])
+        self.assertNotIn('yours',summarize(saved,pairs,'')['scopes'][0]['cohorts'])
+
+    def test_entry_presets_are_separate_and_unclassified_remains_explicit(self):
+        saved,pairs=self.saved()
+        first=saved['contests'][0].data
+        first['results_evidence']['field_row_summary']['entry_preset']='Single Entry'
+        second=copy.deepcopy(first)
+        second['results_evidence']['source_hash']='20max'
+        second['results_evidence']['field_row_summary']['entry_preset']='20-Max'
+        saved['contests']=(hi.QualifiedHistoricalContest(json.dumps(first)),hi.QualifiedHistoricalContest(json.dumps(second)))
+        pairs['results'].append(dict(pairs['results'][0],hash='20max'))
+        scopes=summarize(saved,pairs)['scopes']
+        self.assertEqual({s['preset'] for s in scopes},{'Single Entry','20-Max'})
+        self.assertTrue(all(s['counts']['supported_rows']==30 for s in scopes))
+
+    def test_older_summary_still_splits_format_but_does_not_supply_cohorts(self):
+        saved,pairs=self.saved()
+        data=saved['contests'][0].data
+        payload=data['results_evidence']['field_row_summary']
+        payload['version']=1;payload.pop('cohorts')
+        saved['contests']=(hi.QualifiedHistoricalContest(json.dumps(data)),)
+        summary=summarize(saved,pairs)
+        self.assertEqual(summary['mean_salary'],32500)
+        self.assertEqual(summary['scopes'][0]['old_sources'],1)
+        self.assertEqual(summary['scopes'][0]['cohorts'],{})
+        self.assertIn('older summaries lack cohort', '\n'.join(report_lines(saved,summary)))
+
+    def test_username_budget_does_not_retain_arbitrary_subset(self):
+        rows=FieldRows(self.salary,usernames=[str(i) for i in range(257)])
+        rows.add(self.text,username='0')
+        payload=rows.payload(True)
+        self.assertTrue(payload['username_limit_exceeded'])
+        self.assertEqual(set(payload['cohorts']),{'field'})
+
+    def test_cohorts_are_cleared_on_scan_failure(self):
+        rows=FieldRows(self.salary,usernames=['me'],rank_size=100)
+        rows.add(self.text,rank=1,username='me')
+        self.assertEqual(rows.payload(False)['cohorts'],{})
+
+    def test_opposing_defense_and_kicker_features_are_descriptive(self):
+        salary=copy.deepcopy(self.salary)
+        for p in salary['players']:
+            if p['name']=='Bravo': p['position']='DST'
+            if p['name']=='Charlie': p['position']='K'
+        rows=FieldRows(salary);rows.add(self.text)
+        self.assertEqual(rows.features['Captain with opposing FLEX defense: yes'],1)
+        self.assertEqual(rows.features['Kickers: 1'],1)
+        self.assertEqual(rows.features['Defenses: 1'],1)
+        self.assertEqual(rows.counts['supported_rows'],1)
 
 
 if __name__ == '__main__':

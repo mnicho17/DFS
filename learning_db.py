@@ -1114,7 +1114,7 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
         try:
             pairings = pairing_state(path, conn=conn)
             saved_evidence = load_saved(path, conn=conn)
-            field_evidence = summarize(saved_evidence, pairings)
+            field_evidence = summarize(saved_evidence, pairings, username)
         finally:
             conn.execute('RELEASE learning_evidence_report')
         field_metadata_coverage = field_evidence['metadata_coverage_pct']

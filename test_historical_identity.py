@@ -564,8 +564,8 @@ class HistoricalIdentityTests(unittest.TestCase):
     def test_source_change_during_read_invalidates_proposed_qualification(self):
         self.fixture();self.snapshot()
         read=hi._outcomes
-        def change_after_read(*args):
-            value=read(*args)
+        def change_after_read(*args, **kwargs):
+            value=read(*args, **kwargs)
             Path(self.salary['snapshot']).write_text('changed after validation')
             return value
         with patch.object(hi,'_outcomes',side_effect=change_after_read):d=self.one(True)
