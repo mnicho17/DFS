@@ -9482,7 +9482,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "nfl_sim_scenarios": self.spin_nfl_sim_scenarios.value(),
 
             "nfl_field_preset": self.combo_field_preset.currentText(),
-            "showdown_history_field": self.chk_showdown_history.isChecked(),
+            **({"showdown_history_field": True} if self.chk_showdown_history.isChecked() else {}),
             "auto_entry_target": self.chk_auto_entry_target.isChecked(),
 
             "nfl_compute_mode": self.combo_nfl_compute_mode.currentText(),
