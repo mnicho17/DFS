@@ -139,6 +139,19 @@ class ObjectiveParityTests(unittest.TestCase):
         for stage in value['stages']:
             stage['candidates'].sort()
             stage['scored'].sort(key=lambda row: row['signature'])
+            (stage['report'].get('projection_coverage') or {}).pop('defense_forecasts', None)
+        # Only the new read-only defense provenance receipt/text is additive.
+        # Candidate identities, all scores, selections and exports remain exact.
+        from defense_forecast_review import format_defense_forecasts
+        defenses = (value['diagnostic'].get('projection_coverage') or {}).pop('defense_forecasts', None)
+        if defenses:
+            block = '\n' + '\n'.join(format_defense_forecasts(defenses))
+            if format_defense_forecasts(defenses):
+                value['build_report'] = value['build_report'].replace(block, '')
+            if defenses.get('review_players'):
+                warning = f"{defenses['review_players']} defenses use historical-average estimates. See Defense forecast review; no projections were changed."
+                warnings = value['diagnostic']['portfolio'].get('warnings') or []
+                value['diagnostic']['portfolio']['warnings'] = [w for w in warnings if w != warning]
         # The field-use receipt is additive reporting. Keep all sampled fields,
         # candidate metrics, selections and exports in the frozen comparison.
         value['build_report'] = '\n'.join(line for line in value['build_report'].split('\n')

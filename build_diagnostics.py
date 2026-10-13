@@ -272,6 +272,9 @@ def create_build_diagnostic(
     forecast_review = (coverage.get('forecast_checks') or {}).get('review_players',0)
     if forecast_review:
         warnings.append(f'{forecast_review} players have automatic forecast review signals. See Automatic forecast checks; no projections were changed.')
+    defense_reviews = (coverage.get('defense_forecasts') or {}).get('review_players', 0)
+    if defense_reviews:
+        warnings.append(f'{defense_reviews} defenses use historical-average estimates. See Defense forecast review; no projections were changed.')
     if coverage.get('missing_count'):
         warnings.append(f"{coverage['missing_count']} eligible players have missing or invalid forecasts. See Projection and usage coverage.")
     elif projection_reviews and not coverage:

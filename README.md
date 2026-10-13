@@ -648,6 +648,8 @@ Checks review automatic skill-player estimates when base points differ from a po
 The copied report shows at most six review findings and two limited-evidence notices, with all findings retained in build diagnostics. Warnings summarize the number of players needing review. Player names are included under the existing report privacy notice. Supplied/manual projections are preserved and excluded from automatic-workload comparisons; K/DST are outside these skill-player checks. No projections, lineups, exposure limits or simulation weights are changed. Continue importing results after contests to evaluate original forecasts against outcomes; these checks do not train the model.
 
 
+Build reports also include **Defense forecast review — recorded inputs** for the actual NFL build pool. This section shows each defense's forecast source, base and effective FLEX points, historical PPG, and recorded game total/spread. Historical-average estimates receive a separate review notice; the existing automatic workload checks still assess skill players only. A recorded total/spread does not establish that the defense forecast was adjusted for that matchup, and missing context is not zero. Imported and manual forecasts are shown without judging their accuracy. These notices use saved inputs only and do not change forecasts, simulation outcomes, lineup ranking, exposure limits, or history evidence.
+
 ### Automatic entry targets
 
 **Auto from lineup count** is on by default in the NFL Build controls. Request 1 for Single Entry; 2–3 for 3-Max; 4–20 for 20-Max; 21–150 for 150-Max. More than 150 uses 150-Max assumptions while keeping individually ranked alternatives, so a 450-lineup request remains a browsing bank rather than claiming one legal 450-entry portfolio.
