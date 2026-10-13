@@ -52,7 +52,7 @@ def _distance(predicted, observed):
     return .5*sum(abs(predicted.get(k,0)-observed.get(k,0)) for k in predicted.keys()|observed.keys())
 
 
-def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda text:None, *, count=300, seeds=(17,101,509), draw_mode='salary_proxy', snapshot_root=None, compare_sim=False, scenarios=200, candidate_count=100, ownership_calibration=False, evaluate_outcomes=False):
+def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda text:None, *, count=300, seeds=(17,101,509), draw_mode='salary_proxy', snapshot_root=None, compare_sim=False, scenarios=200, candidate_count=100, ownership_calibration=False, evaluate_outcomes=False, production_blend=False):
     cutoff = date.fromisoformat(cutoff).isoformat()
     if not isinstance(count,int) or not 50<=count<=1000 or not seeds or len(seeds)>5 or len(set(seeds))!=len(seeds) or any(not isinstance(s,int) for s in seeds):
         raise ValueError('Use 50–1000 opponents and 1–5 distinct integer seeds.')
@@ -63,6 +63,11 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
     if ownership_calibration and draw_mode!='recorded':
         raise ValueError('Ownership calibration requires qualified recorded inputs.')
     model_names=('current','historical','calibrated') if ownership_calibration else ('current','historical')
+    if production_blend:
+        if draw_mode!='recorded':
+            raise ValueError('Production blend validation requires qualified recorded pregame inputs.')
+        model_names+=('production_blend',)
+    profiles={}
     if evaluate_outcomes and (draw_mode!='recorded' or not compare_sim):
         raise ValueError('Actual-outcome evaluation requires qualified recorded inputs and shared SIM.')
     audit=None
@@ -120,6 +125,17 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
         for i,row in enumerate(heldout):
             ai._check(cancelled);progress(f'Testing later game {i+1}/{len(heldout)}: {row["game"][1]} {row["date"]}')
             snapshot_receipt=None
+            profile=None
+            if production_blend:
+                from learning_db import _infer_field_preset
+                from showdown_history_field import prepare_profile
+                preset=_infer_field_preset(row['name'])
+                try:
+                    if preset not in profiles:profiles[preset]=prepare_profile(db_path,cutoff,preset,cancelled,progress)
+                    profile=profiles[preset]
+                except ai.ImportCancelled:raise
+                except Exception as exc:
+                    excluded.append(dict(name=row['name'],reason='Production history qualification: '+str(exc)));continue
             if audit:
                 try:
                     row['pool'],snapshot_receipt=audit.qualify(sources[row['result_hash']],manifests[row['salary_hash']],row['salary_hash'],conn)
@@ -153,11 +169,16 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
                     calibrated=sample_calibrated_history_field(row['pool'],count,priors,seed=seed,cancelled=cancelled)
                 fields=dict(current=current,historical=historical)
                 if calibrated is not None:fields['calibrated']=calibrated
+                blended=None
+                if production_blend:
+                    from showdown_history_field import sample_field as sample_blend
+                    blended=sample_blend(row['pool'],count,profile,seed=seed,cancelled=cancelled)
+                    fields['production_blend']=blended
                 ai._check(cancelled)
                 sim=None
                 if compare_sim and all(len(field)==count for field in fields.values()):
                     from pregame_sim_comparison import compare_sim as run_comparison
-                    sim=run_comparison(bank,row['pool'],current,historical,seed,scenarios,cancelled,calibrated=calibrated,outcomes=outcomes)
+                    sim=run_comparison(bank,row['pool'],current,historical,seed,scenarios,cancelled,calibrated=calibrated,outcomes=outcomes,production_blend=blended)
                 for name,field in fields.items():
                     sampled = distributions(field)
                     metric = {c:_distance(sampled[c],observed[c]) for c in CATEGORIES} if len(field)==count else None
@@ -171,7 +192,8 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
                         for name,trials in models.items()} if usable else None
             results.append(dict(**{k:row[k] for k in ('key','date','game','result_hash','salary_hash','name')},
                 entries=entries,known_entries=known,unknown_entries=entries-known,observed=observed,
-                models=models,comparable=usable,mean_distances=averages,snapshot=snapshot_receipt,outcome_status=outcome_status))
+                models=models,comparable=usable,mean_distances=averages,snapshot=snapshot_receipt,outcome_status=outcome_status,
+                **(dict(production_profile=profile) if profile else {})))
     # Verify current associations outside the read snapshot; a remap during the
     # benchmark must not publish results bound to the superseded association.
     with closing(_connect(db_path,True)) as conn:
@@ -186,6 +208,10 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
                     raise ValueError('Historical evidence changed during testing; retry.')
         for digest,source in receipts.items():ai._verify(source,cancelled)
     if audit:audit.revalidate()
+    if production_blend:
+        from showdown_history_field import revalidate_profile
+        for profile in profiles.values():
+            revalidate_profile(profile,db_path,None,profile['payload']['preset'],cancelled,progress)
     usable = [r for r in results if r['comparable']]
     scores = {name:{c:statistics.mean(r['mean_distances'][name][c] for r in usable) for c in CATEGORIES}
               for name in model_names} if usable else {}
@@ -205,6 +231,9 @@ def evaluate_history(db_path, cutoff, cancelled=lambda:False, progress=lambda te
         report['limitations'][0]='Recorded-input experiment: exact historical salary identities, matching kickoff timestamps, integrity and pregame timing required. Checksums/timestamps establish consistency, not authenticity.'
         report['limitations'][1]='Both models use the same frozen eligible pool, forecasts and slot ownership with verified percentage units/totals. Personal Captain/FLEX locks are cleared for opponents; no present-day data or hindsight availability is inferred.'
         report['limitations'].append('Current SIM code runs on recorded inputs, not the old executable. Rankings use a frozen diagnostic bank, not original submitted lineups. Simulated top-1% rates are model-dependent and do not establish realized returns. Ownership drift is reported rather than silently renormalized.')
+    if production_blend:
+        report['production_blend']=True
+        report['limitations'].append('Production blend uses separate entry-limit profiles frozen strictly before the training cutoff, 35% historical weight, and production ownership/construction guards. Baseline fallbacks remain in scores and are disclosed; gains in simulated top-1% are not proof of realized returns.')
     if ownership_calibration:report['limitations'].append('Calibration is a third experimental model, not a replacement baseline. Two fixed ownership-weight adjustment passes use only frozen pregame targets and earlier-game construction priors. A 0.02 construction-distance guard is fixed in advance; later game outcomes do not select weights. Lower forecast drift does not establish forecast accuracy or better returns.')
     if evaluate_outcomes:report['limitations'].append('Actual results are evaluation only: ranks and outcomes never select sampling weights or pregame candidate order. Uncertified exports permit only readable-subset ownership diagnostics and supplied-score comparisons; missing scores are not zero, duplication is a lower bound, official ranks and ROI are unavailable without complete evidence and verified payouts. Cross-export score conflicts block outcome evaluation.')
     return report
@@ -254,6 +283,9 @@ def render_evaluation(report):
             elif sim:lines.append('SIM unavailable: '+sim['reason'])
         for model,trials in game['models'].items():
             for trial in trials:
+                history=trial['diagnostic'].get('history_use')
+                if history:
+                    lines.append(f"Production blend seed {trial['seed']}: {history['status']}; {history['games']} prior games / {history['preset']}; "+history.get('reason','35% historical construction weight.'))
                 fit=trial.get('ownership_fit',{})
                 if model=='calibrated' and fit.get('status')=='completed':
                     lines.append(f"Calibrated seed {trial['seed']}: ownership MAE {fit['before_mae_pp']:.2f} → {fit['after_mae_pp']:.2f} pp; construction-target distance {fit['before_construction_distance']:.3f} → {fit['after_construction_distance']:.3f}; {fit['passes']} bounded passes.")

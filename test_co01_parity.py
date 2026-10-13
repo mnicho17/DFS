@@ -139,6 +139,10 @@ class ObjectiveParityTests(unittest.TestCase):
         for stage in value['stages']:
             stage['candidates'].sort()
             stage['scored'].sort(key=lambda row: row['signature'])
+        # The field-use receipt is additive reporting. Keep all sampled fields,
+        # candidate metrics, selections and exports in the frozen comparison.
+        value['build_report'] = '\n'.join(line for line in value['build_report'].split('\n')
+            if not line.startswith('- Historical field use: not enabled'))
         return value
 
     def test_classic_golden_and_all_objectives(self):

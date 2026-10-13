@@ -1143,6 +1143,15 @@ class LineupBuildWorker(QtCore.QObject):
                 if self.captain_adjustments:
                     self.progress.emit(0, self.num_lineups, adjustment_text(self.captain_adjustments))
 
+            profile = self.field_calibration.get('showdown_field_profile')
+            if profile:
+                if self.kind != 'showdown' or self.sport != 'NFL' or not self.sim_enabled or not self.compute_mode.casefold().startswith('deep'):
+                    raise ValueError('Historical Showdown fields require NFL Deep with SIM enabled.')
+                from learning_db import history_db_path
+                from showdown_history_field import revalidate_profile
+                revalidate_profile(profile, history_db_path(), self.players, self.field_preset, self._cancel_event.is_set,
+                    lambda text: self.progress.emit(0, self.num_lineups, text))
+
             if self.candidate_library:
                 if self.retained_lineups:
                     raise ValueError("Clear the candidate library before repairing an existing portfolio.")
@@ -1159,7 +1168,7 @@ class LineupBuildWorker(QtCore.QObject):
                         cached=None if self.allow_partial_library else load_screening(self.candidate_library,self.players,
                             limit=prepared_candidate_budget(self.num_lineups,self.deep_options,False),
                             salary_cap=self.salary_cap,salary_strategy=self.salary_strategy,rules=self.portfolio_rules,
-                            screening=screening_settings(self.deep_options,self.sim_scenarios),cancelled=self._cancel_event.is_set,
+                            screening=screening_settings(self.deep_options,self.sim_scenarios,profile),cancelled=self._cancel_event.is_set,
                             diagnostic=screening_diagnostic)
                         self.library_candidates,self.library_report=cached or load_bounded(self.candidate_library,self.players,
                             limit=prepared_candidate_budget(self.num_lineups,self.deep_options,False),
@@ -2896,7 +2905,7 @@ class LineupBuildWorker(QtCore.QObject):
                 self.error.emit(str(exc))
 
         except Exception:
-            if self.repair_source == "saved" and self._cancel_event.is_set():
+            if self._cancel_event.is_set() and (self.repair_source == "saved" or self.field_calibration.get('showdown_field_profile')):
                 self._finish_cancelled_repair()
             else:
                 self.error.emit(traceback.format_exc())
@@ -2925,6 +2934,12 @@ class LineupBuildWorker(QtCore.QObject):
 
 
     def _emit_finished(self, payload):
+        profile = self.field_calibration.get('showdown_field_profile')
+        if profile and not payload.get('cancelled') and not self._cancel_event.is_set():
+            from learning_db import history_db_path
+            from showdown_history_field import revalidate_profile
+            revalidate_profile(profile, history_db_path(), self.players, self.field_preset, self._cancel_event.is_set,
+                lambda text: self.progress.emit(0, self.num_lineups, 'Final history evidence check: '+text))
         if getattr(self, 'captain_adjustments', []) and not payload.get('cancelled'):
             report = payload.setdefault('portfolio_report', {})
             report['captain_pool_adjustments'] = self.captain_adjustments
@@ -7497,6 +7512,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         row2.addWidget(self.combo_field_preset)
 
+        self.chk_showdown_history = QtWidgets.QCheckBox("Use historical field (experimental)")
+        self.chk_showdown_history.setToolTip("Deep only. Prepare a verified profile for this slate and entry target; builds disclose application or fallback.")
+        self.btn_showdown_history = QtWidgets.QPushButton("Prepare field history…")
+        self.btn_showdown_history.clicked.connect(self.on_prepare_showdown_history)
+        row2.addWidget(self.chk_showdown_history)
+        row2.addWidget(self.btn_showdown_history)
+
 
 
         self.lbl_nfl_compute_mode = QtWidgets.QLabel("Build depth")
@@ -9460,6 +9482,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "nfl_sim_scenarios": self.spin_nfl_sim_scenarios.value(),
 
             "nfl_field_preset": self.combo_field_preset.currentText(),
+            **({"showdown_history_field": True} if self.chk_showdown_history.isChecked() else {}),
             "auto_entry_target": self.chk_auto_entry_target.isChecked(),
 
             "nfl_compute_mode": self.combo_nfl_compute_mode.currentText(),
@@ -9806,6 +9829,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self.spin_nfl_sim_scenarios.setValue(int(value["nfl_sim_scenarios"]))
 
         self._set_recipe_combo(self.combo_field_preset, value.get("nfl_field_preset"))
+        self.chk_showdown_history.setChecked(bool(value.get("showdown_history_field", False)))
 
         recipe_mode = str(value.get("nfl_compute_mode") or "")
 
@@ -10072,6 +10096,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self.lbl_field_preset.setVisible(is_nfl_classic)
 
             self.combo_field_preset.setVisible(is_nfl_classic)
+            self.chk_showdown_history.setVisible(sport_u == "NFL" and not is_nfl_classic)
+            self.btn_showdown_history.setVisible(sport_u == "NFL" and not is_nfl_classic)
 
             self.lbl_nfl_compute_mode.setVisible(sport_u == "NFL")
 
@@ -13582,6 +13608,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             except Exception:
 
                 logger.exception("NFL field calibration could not be loaded; using baseline preset")
+
+        elif str(sport or "").strip().upper() == "NFL" and kind == "showdown" and sim_enabled:
+            try:
+                field_calibration = self._snapshot_calibration()
+            except Exception as exc:
+                QtWidgets.QMessageBox.warning(self, "Historical Field", str(exc))
+                return
 
 
 

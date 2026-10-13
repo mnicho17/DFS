@@ -23,12 +23,13 @@ def freeze_bank(pool,count,cancelled):
     return list(unique.values())[:count]
 
 
-def compare_sim(bank,pool,current,historical,seed,scenarios,cancelled,calibrated=None,outcomes=None):
+def compare_sim(bank,pool,current,historical,seed,scenarios,cancelled,calibrated=None,outcomes=None,production_blend=None):
     ai._check(cancelled)
     if len(bank)<20:return dict(status='unavailable',reason='Fewer than 20 distinct diagnostic candidates; no ranking comparison.')
     models={}
     fields=dict(current=current,historical=historical)
     if calibrated is not None:fields['calibrated']=calibrated
+    if production_blend is not None:fields['production_blend']=production_blend
     for name,field in fields.items():
         run=simulate_showdown(deepcopy(bank),deepcopy(pool),scenarios=scenarios,field_lineup_count=len(field),
             seed=seed,diagnostic_field=field,cancel_callback=cancelled,scenario_cache=False)

@@ -8,6 +8,26 @@ from learning_db import load_nfl_field_calibration
 
 
 class SnapshotActions:
+    def on_prepare_showdown_history(self):
+        if self._snapshot_busy():
+            self.status.showMessage('Wait for the current build to finish.', 5000)
+            return
+        try:
+            if self._current_sport() != 'NFL' or self._contest_mode() != 'showdown':
+                raise ValueError('Load an NFL Showdown slate first.')
+            from showdown_history_ui import HistoryFieldDialog
+            dialog = HistoryFieldDialog(self.players, self.combo_field_preset.currentText(), self)
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                self.showdown_field_profile = copy.deepcopy(dialog.profile)
+                self.chk_auto_entry_target.setChecked(False)
+                self.combo_field_preset.setCurrentText(dialog.profile['payload']['preset'])
+                if getattr(self, '_snapshot_replay', False):
+                    self._snapshot_calibration_data = dict(showdown_field_profile=copy.deepcopy(dialog.profile))
+                self.chk_showdown_history.setChecked(True)
+                self.status.showMessage('Historical field prepared. Use Deep with SIM; sources will be checked again before generation.', 10000)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self, 'Historical Field', str(exc))
+
     def on_captain_pool(self):
         if self._snapshot_busy():
             self.status.showMessage('Wait for the current build to finish.', 5000)
@@ -119,6 +139,18 @@ class SnapshotActions:
         return False
 
     def _snapshot_calibration(self):
+        if self._contest_mode() == 'showdown':
+            if not self.chk_showdown_history.isChecked():
+                calibration = copy.deepcopy(getattr(self, '_snapshot_calibration_data', {})) if getattr(self, '_snapshot_replay', False) else {}
+                calibration.pop('showdown_field_profile', None)
+                return calibration
+            profile = (getattr(self, '_snapshot_calibration_data', {}).get('showdown_field_profile')
+                       if getattr(self, '_snapshot_replay', False) else getattr(self, 'showdown_field_profile', None))
+            if not profile:
+                raise ValueError('Prepare a historical field profile before enabling it.')
+            from showdown_history_field import validate_profile
+            validate_profile(profile, self.players, self.combo_field_preset.currentText())
+            return dict(showdown_field_profile=copy.deepcopy(profile))
         if getattr(self, '_snapshot_replay', False):
             return copy.deepcopy(self._snapshot_calibration_data)
         return load_nfl_field_calibration(self.combo_field_preset.currentText()) if self._contest_mode() == 'classic' else {}
