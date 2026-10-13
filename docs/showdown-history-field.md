@@ -41,6 +41,8 @@ and increase mean slot ownership error by no more than 0.50 percentage points
 relative to the current field. Otherwise the current field is retained. Missing
 verified ownership also retains the current field. Infeasible construction targets
 are disclosed; no hard quotas or changes to the user's portfolio limits result.
+Historical spending profiles require the recorded $50,000 cap; a different cap
+retains the current field with a disclosed reason.
 
 Preparation runs in a cancellable worker. Profiles are frozen in snapshot
 calibration, with source hashes, dates, per-game counts/distributions and a profile

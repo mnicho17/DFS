@@ -2905,7 +2905,7 @@ class LineupBuildWorker(QtCore.QObject):
                 self.error.emit(str(exc))
 
         except Exception:
-            if self.repair_source == "saved" and self._cancel_event.is_set():
+            if self._cancel_event.is_set() and (self.repair_source == "saved" or self.field_calibration.get('showdown_field_profile')):
                 self._finish_cancelled_repair()
             else:
                 self.error.emit(traceback.format_exc())

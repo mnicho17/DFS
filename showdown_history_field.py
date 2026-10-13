@@ -138,6 +138,9 @@ def sample_field(pool, count, profile, *, salary_cap=50000, seed=0, cancelled=la
         cutoff=p['cutoff'], games=len(p['training']), entries=sum(r['known'] for r in p['training']),
         history_weight=HISTORY_WEIGHT, coverage_basis=p['coverage_basis'], validation_status=p['validation_status'])
     baseline.diagnostic['history_use'] = receipt
+    if salary_cap != 50000:
+        receipt['reason'] = 'Historical salary-spending profiles require the recorded $50,000 cap.'
+        return baseline
     if cancelled() or len(baseline) != count or not count:
         receipt['reason'] = 'Baseline field incomplete or cancelled.'
         return baseline

@@ -113,6 +113,9 @@ class HistoryFieldIntegrationTests(unittest.TestCase):
         self.assertEqual(actual.diagnostic['history_use']['status'],'baseline fallback')
         self.assertIn('verified',actual.diagnostic['history_use']['reason'])
         self.assertIn('not enabled','\n'.join(format_field(summarize_field(baseline,pool,showdown=True))))
+        different_cap=sample_field(pool,80,p,salary_cap=60000)
+        self.assertEqual(different_cap.diagnostic['history_use']['status'],'baseline fallback')
+        self.assertIn('$50,000',different_cap.diagnostic['history_use']['reason'])
 
     def test_guarded_application_and_incomplete_trial_fallback(self):
         pool=self.pool(); baseline=baseline_sample(pool,80,seed=4); p=profile(distributions(baseline))
@@ -181,6 +184,15 @@ class HistoryFieldIntegrationTests(unittest.TestCase):
         with patch('showdown_history_field.revalidate_profile',side_effect=ValueError('Source receipt changed')):
             worker.run()
         self.assertTrue(errors);self.assertIn('Source receipt changed',str(errors[0]))
+        cancelled=LineupBuildWorker(pool,kind='showdown',sport='NFL',sim_enabled=True,num_lineups=2,salary_cap=50000,
+            field_calibration=dict(showdown_field_profile=p),compute_mode='Deep')
+        finished=[];errors=[];cancelled.finished.connect(finished.append);cancelled.error.connect(errors.append)
+        def stop(*args,**kwargs):
+            cancelled.request_cancel()
+            raise ai.ImportCancelled('Cancelled')
+        with patch('showdown_history_field.revalidate_profile',side_effect=stop):cancelled.run()
+        self.assertFalse(errors);self.assertTrue(finished[0]['cancelled'])
+        self.assertFalse(finished[0]['lineups'])
 
     def test_recorded_holdout_compares_actual_production_blend(self):
         from test_pregame_field_comparison import PregameFieldTests
