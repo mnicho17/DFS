@@ -45,13 +45,19 @@ class PreparationWorker(QtCore.QObject):
                 inputs=self.screen_snapshot['inputs'];recipe=inputs['recipe']
                 count=recipe.get('requested_lineups',150);options=recipe.get('deep_compute',{})
                 players,rules,_=prepare_captain_pool(self.players,inputs['rules'],count)
+                profile=inputs.get('calibration',{}).get('showdown_field_profile')
+                if profile:
+                    from learning_db import history_db_path
+                    from showdown_history_field import revalidate_profile
+                    revalidate_profile(profile,history_db_path(),players,recipe.get('nfl_field_preset','150-Max'),
+                        self.stop.is_set,lambda text:self.update(dict(history_verification=text)))
                 remaining=self.seconds-(time.monotonic()-started)
                 if remaining>0:
                     if self.full_screen:
                         from showdown_full_screening import prepare as prepare_screening
                     result.update(prepare_screening(self.path,players,limit=deep_candidate_budget(count,options,False),
                         salary_cap=self.salary_cap,salary_strategy=recipe.get('salary_strategy','Near Cap'),rules=rules,
-                        screening=settings(options,recipe.get('nfl_sim_scenarios',1000)),seconds=remaining,
+                        screening=settings(options,recipe.get('nfl_sim_scenarios',1000),profile),seconds=remaining,
                         cancelled=self.stop.is_set,progress=self.update))
             result['screening_requested']=bool(self.screen_snapshot)
             self.finished.emit(result)
@@ -134,6 +140,9 @@ class PreparationDialog(QtWidgets.QDialog):
         except Exception as exc:self.message.setText(str(exc))
 
     def describe(self,result):
+        if 'history_verification' in result:
+            self.message.setText(result['history_verification'])
+            return
         if 'screened' in result:
             total=result.get('screening_total')
             scope=f"{total:,}" if total is not None else 'all legal rosters (counting)'

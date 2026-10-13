@@ -21,7 +21,7 @@ def model_version():
         return code_id()
     root = Path(__file__).parent
     names = ('repeatability.py', 'nfl_simulation.py', 'showdown_simulation.py',
-             'showdown_field.py', 'nfl_specialists.py', 'nfl_workload.py',
+             'showdown_field.py', 'showdown_history_field.py', 'historical_field.py', 'historical_ownership.py', 'nfl_specialists.py', 'nfl_workload.py',
              'nfl_kickers.py', 'nfl_eligibility.py', 'optimizers.py', 'lineup_ranking.py', 'ownership_strategy.py', 'projection_sensitivity.py', 'usage_history.py')
     return fingerprint({n: hashlib.sha256((root/n).read_text(encoding='utf-8').encode()).hexdigest() for n in names})
 
@@ -118,7 +118,7 @@ def run_repeatability(path, *, batches=5, scenarios=5000, cancelled=lambda:False
             result=simulate_nfl_contest(candidates(p),copy.deepcopy(p['players']),field_config=p['field_config'],**kwargs)
         else:
             from showdown_simulation import simulate_showdown
-            result=simulate_showdown(candidates(p),copy.deepcopy(p['players']),**kwargs)
+            result=simulate_showdown(candidates(p),copy.deepcopy(p['players']),**kwargs,**p.get('field_config',{}))
         ordered=ranked_lineups(result.get('lineups') or [])
         result_keys=[identity(lu,p['kind']) for lu in ordered]
         if cancelled() or int(result.get('report',{}).get('scenarios',0))!=scenarios: break

@@ -41,11 +41,12 @@ def scoring_players(players):
     return rows
 
 
-def settings(options, sim_scenarios):
+def settings(options, sim_scenarios, history_profile=None):
     from compute_settings import normalize_deep_settings
     options=normalize_deep_settings(options)
     return dict(scenarios=min(options['screening'],max(250,sim_scenarios)),
-                field_lineup_count=min(1600,options['field'] or 1200),seed=73129)
+                field_lineup_count=min(1600,options['field'] or 1200),seed=73129,
+                **(dict(field_model="historical-blend-v1",history_profile=history_profile) if history_profile else {}))
 
 
 def target(library,players,*,limit,salary_cap,salary_strategy,rules,screening,folder=None):

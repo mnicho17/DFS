@@ -12,7 +12,7 @@ RECIPE_KEYS = (
     "sport", "contest_kind", "contest_objective", "requested_lineups", "salary_cap",
     "ownership_sims", "showdown_field_templates", "ownership_mode", "ownership_weight",
     "build_style", "mlb_stack_preference", "salary_strategy", "nfl_sim_enabled",
-    "nfl_sim_scenarios", "nfl_field_preset", "nfl_compute_mode", "min_unique",
+    "nfl_sim_scenarios", "nfl_field_preset", "nfl_compute_mode", "min_unique", "showdown_history_field",
     "max_zero_qb_pct", "team_max_pct", "game_max_pct", "balance_ownership", "deep_compute", "auto_entry_target",
 )
 

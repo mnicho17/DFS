@@ -86,13 +86,18 @@ def active_showdown_players(players):
     return pool
 
 
-def generate_showdown_field(players, count, *, salary_cap=50000, seed=0, cancel_callback=None, model='salary-bands-v1'):
+def generate_showdown_field(players, count, *, salary_cap=50000, seed=0, cancel_callback=None, model='salary-bands-v1', history_profile=None):
     if model == 'legacy':
         return _generate_showdown_field_legacy(players, count, salary_cap=salary_cap, seed=seed, cancel_callback=cancel_callback)
-    if model != 'salary-bands-v1':
+    if model not in ('salary-bands-v1', 'historical-blend-v1'):
         raise ValueError('Unknown Showdown field model')
     from showdown_field import sample_field
     pool = active_showdown_players([dict(p, LockCpt=False, LockFlex=False) for p in players])
+    if model == 'historical-blend-v1':
+        from showdown_history_field import sample_field as history_sample, validate_profile
+        validate_profile(history_profile, pool)
+        return history_sample(pool, count, history_profile, salary_cap=salary_cap, seed=seed,
+                              cancelled=cancel_callback or (lambda: False))
     return sample_field(pool, count, salary_cap=salary_cap, seed=seed, cancel_callback=cancel_callback)
 
 
@@ -138,7 +143,7 @@ def rank_screening_metrics(rows):
 
 @phase("primary_sim", simulation=True)
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
-                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False, diagnostic_field=None):
+                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False, diagnostic_field=None, history_profile=None):
     if diagnostic_field is not None and scenario_cache:
         raise ValueError('Explicit diagnostic fields cannot use the production scenario cache.')
     if not candidates:
@@ -148,7 +153,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         validate_showdown_lineup(lineup, pool, salary_cap)
     field_pool = active_showdown_players(opponent_players) if opponent_players is not None else pool
     if diagnostic_field is None:
-        field = generate_showdown_field(field_pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback, model=field_model)
+        field = generate_showdown_field(field_pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback, model=field_model, history_profile=history_profile)
     else:
         # Explicit comparison only. Canonicalize to the supplied frozen pool so
         # an ID-matching field cannot inject different salaries or forecasts.
@@ -188,7 +193,8 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     replay = ScenarioReplay(pool, [[showdown_signature(lu) for lu in bank] for bank in banks],
         kind='showdown', seed=seed, count=max(1,int(scenarios)),
         enabled=scenario_cache and outcome_transform is None, cancelled=cancel_callback,
-        context=dict(players=list(players),opponent_players=opponent_players,field_model=field_model,salary_cap=salary_cap))
+        context=dict(players=list(players),opponent_players=opponent_players,field_model=field_model,salary_cap=salary_cap,
+                     **({'history_profile':history_profile} if history_profile is not None else {})))
     completed = 0
     for scenario in range(max(1, int(scenarios))):
         if cancel_callback and cancel_callback():
@@ -263,6 +269,8 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
 
 
 def run_deep_showdown(worker, shortlist_fn):
+    profile = getattr(worker, 'field_calibration', {}).get('showdown_field_profile')
+    field_options = dict(field_model='historical-blend-v1', history_profile=profile) if profile else {}
     loading=getattr(worker,'library_report',{})
     start = time.perf_counter() - (loading.get('loading_seconds',0) if loading.get('type')=='prepared_showdown' else 0)
     limit = worker.deep_time_limit_seconds
@@ -369,7 +377,7 @@ def run_deep_showdown(worker, shortlist_fn):
             coarse=dict(lineups=lineups,report=dict(scenarios=lineups[0].sim_metrics['sim_scenarios'],
                 field_lineups=lineups[0].sim_metrics['sim_field_lineups'],screening_reused=reused))
         else:
-            coarse = simulate_showdown(retained + lineups, players, scenario_cache=getattr(worker,"scenario_cache",False),
+            coarse = simulate_showdown(retained + lineups, players, scenario_cache=getattr(worker,"scenario_cache",False), **field_options,
             scenarios=min(options["screening"], max(250, worker.sim_scenarios)),
             field_lineup_count=min(1600, options["field"] or 1200), salary_cap=worker.salary_cap, seed=73129,
             cancel_callback=lambda: stop(start + limit * screening_fraction),
@@ -394,7 +402,7 @@ def run_deep_showdown(worker, shortlist_fn):
             top = {showdown_signature(lu) for lu in sorted(short, key=rank, reverse=True)[:worker.num_lineups]}
             validation_end = deadline - min(60, limit * .20)
             if not stop(validation_end):
-                validated = simulate_showdown(short, players, scenario_cache=getattr(worker,"scenario_cache",False), scenarios=max(2500, worker.sim_scenarios),
+                validated = simulate_showdown(short, players, scenario_cache=getattr(worker,"scenario_cache",False), **field_options, scenarios=max(2500, worker.sim_scenarios),
                     field_lineup_count=options["field"] or 2700, salary_cap=worker.salary_cap, seed=90210, capture_distributions=True,
                     cancel_callback=lambda: stop(validation_end),
                     progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 3 of 4 - " + c))
@@ -414,11 +422,11 @@ def run_deep_showdown(worker, shortlist_fn):
             if deep.get('validation_scenarios', 0) >= 1000:
                 from repeatability import capture_bank
                 deep['ranking_bank'] = capture_bank(short, players, kind='showdown',
-                    salary_cap=worker.salary_cap, field_count=options['field'] or 2700,
+                    salary_cap=worker.salary_cap, field_count=options['field'] or 2700, field_config=field_options,
                     input_id=getattr(worker, 'build_input_id', ''))
                 deep['ranking_audit'] = audit_ranking(short,
                     lambda audit_stop: simulate_showdown(short, players, scenarios=2000,
-                        field_lineup_count=options['field'] or 2700, salary_cap=worker.salary_cap,
+                        field_lineup_count=options['field'] or 2700, salary_cap=worker.salary_cap, **field_options,
                         seed=481516, cancel_callback=audit_stop,
                         progress_callback=lambda a,b,c: worker.progress.emit(a,b,'Phase 3 of 4 - Ranking audit: ' + c)),
                     showdown_signature, deadline=validation_end, cancelled=worker._cancel_event.is_set)
@@ -463,6 +471,9 @@ def run_deep_showdown(worker, shortlist_fn):
         sim_report.get('field_diagnostic') or {},showdown=True)
     sim_report['salary_filter'] = dict(excluded=salary_excluded, minimum=salary_floor(worker.salary_cap, worker.salary_strategy))
     sim_report["candidate_library"] = getattr(worker, "library_report", {})
+    if profile and not sim_report.get('field_diagnostic'):
+        sim_report['history_use_unscored'] = dict(profile_id=profile['profile_id'],
+            reason='Historical field requested; this build did not produce a fresh sampled-field receipt. Cached screening does not establish application in a fresh validation.')
     from projection_coverage import summarize_projection_coverage
     sim_report["projection_coverage"] = summarize_projection_coverage(players)
     sim_report["deep_build"] = dict(deep)
