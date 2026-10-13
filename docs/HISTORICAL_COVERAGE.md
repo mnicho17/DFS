@@ -206,3 +206,29 @@ Construction percentages use each cohort's supported rows. Kicker/defense counts
 and team splits no longer mix Classic and Showdown. Individual kicker/defense
 counts and Captain-with-opposing-FLEX-defense frequency are descriptive report
 features; they do not add exclusions, change exposure limits or tune generation.
+
+Copy Report also shows contest-by-contest comparisons and equal-slate matched
+percentage-point gaps within each format/preset. These use existing version-2
+cohorts; no new reconciliation method, source CSV pass or evidence migration is
+needed. Field and observed rank-cutoff comparisons require supported personal
+and comparator rows from the same contributing contest.
+
+Captain context uses the existing normalized opponent index, its current version
+and exact results/salary revisions. Complete personal readable and metadata
+coverage must match the cached personal cohort; conflicting duplicate-entry audit
+receipts are rejected. A single observed Captain across multiple personal rows
+uses the user's explicit lock assumption, not a recorded build/SIM receipt.
+Multiple Captains retain unknown settings; one submitted lineup alone does not
+establish a lock. Missing, stale or incomplete indexing remains unknown rather
+than falling back to current app settings or raw row-count agreement. Historical
+personal observation reads are bounded; exceeding the budget disables context.
+
+Within each context category, connected contests sharing any salary-manifest game
+on the same recorded date form one slate block, including overlapping Classic
+slates. Average contest rates within a block, then average blocks equally. This
+prevents large/repeated fields from dominating the summary. Missing date/game
+identity is excluded and counted; a different date is a different block. These
+are evidence groups, not proof of statistical independence. The report shows
+matched contest/block counts and unavailable comparisons. Context categories and
+entry presets are never pooled into an inferred normal-SIM cohort. No generated
+lineups, constraints, forecasts or model weights change.
