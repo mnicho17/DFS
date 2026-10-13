@@ -147,7 +147,7 @@ class FieldRows:
                     basis='source rows including duplicate EntryIds; exact salary roles/IDs; no export fallback; not unique entries or complete-field evidence')
 
 
-def summarize(saved, pairings, username=''):
+def summarize(saved, pairings, username='', *, observations=None):
     """Only current verified pairings may expose cached source-row metrics."""
     from historical_coverage import aggregate
     pairs = {p['hash']: p for p in pairings['results']}
@@ -157,6 +157,8 @@ def summarize(saved, pairings, username=''):
     from opponent_analysis import username_key
     from learning_db import _infer_field_preset
     selected = username_key(username)
+    from historical_contest_comparison import contest_record
+    observations = observations or dict(complete=True,imports={})
     for contest in saved['contests']:
         data = contest.data
         salary = data.get('salary_evidence') or {}
@@ -180,7 +182,8 @@ def summarize(saved, pairings, username=''):
         if kind not in ('showdown','classic'):
             continue
         preset = payload.get('entry_preset') or _infer_field_preset(pair.get('name',''))
-        scope = scopes.setdefault((kind,preset),dict(format=kind,preset=preset,sources=0,counts=Counter(),features=Counter(),cohorts={},cohort_sources=Counter(),rank_bases=Counter(),old_sources=0,user_limits=0))
+        scope = scopes.setdefault((kind,preset),dict(format=kind,preset=preset,sources=0,counts=Counter(),features=Counter(),cohorts={},cohort_sources=Counter(),rank_bases=Counter(),old_sources=0,user_limits=0,contests=[]))
+        scope['contests'].append(contest_record(data,pair,payload,username,observations))
         scope['sources'] += 1
         scope['counts'].update(payload['counts'])
         scope['features'].update(payload['features'])
@@ -255,5 +258,7 @@ def report_lines(saved, summary):
                     value = group.get('features',{}).get(feature,0)
                     cells.append(f'{100*value/denominator:.1f}% ({value:,}/{denominator:,})' if denominator else 'unavailable')
                 lines.append('| '+feature.replace('|','/')+' | '+' | '.join(cells)+' |')
+            from historical_contest_comparison import report_lines as contest_report_lines
+            lines.extend(contest_report_lines(scope))
         lines.append('- These are source-row frequencies, not independent games or evidence of a construction edge. Cohort contributing-source counts can differ when ranks or personal observations are missing; old summaries remain outside comparison denominators. No generation behavior or model weights are changed.')
     return lines
