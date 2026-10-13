@@ -8193,7 +8193,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self.tabs_workspace_controls.setObjectName("workspaceControlTabs")
 
-        self.tabs_workspace_controls.setMaximumHeight(230)
+        self.tabs_workspace_controls.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Maximum)
 
 
 
@@ -8206,6 +8206,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         strategy_grid.setHorizontalSpacing(8)
 
         strategy_grid.setVerticalSpacing(6)
+        strategy_grid.setAlignment(QtCore.Qt.AlignTop)
 
         from build_controls_ui import setup_build_controls
         setup_build_controls(self, strategy_panel, strategy_grid)

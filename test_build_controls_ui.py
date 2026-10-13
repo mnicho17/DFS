@@ -12,6 +12,34 @@ class BuildControlsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):cls.app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
+    def test_build_summary_and_history_row_fit_larger_fonts(self):
+        from PyQt5 import QtGui
+        w=MainWindow();self.addCleanup(w.close)
+        w.combo_sport.setCurrentText('NFL');w.tabs_lineups.setCurrentIndex(0)
+        w._set_build_controls_visible(True)
+        w.chk_showdown_history.setChecked(True)
+        for points in (10,14,18):
+            font=QtGui.QFont(w.font());font.setPointSize(points);w.setFont(font)
+            w.resize(1280,900);w.show();self.app.processEvents()
+            label=w.lbl_compute_summary
+            self.assertGreaterEqual(label.height(),label.heightForWidth(label.width()))
+            self.assertLess(label.geometry().bottom(),w.chk_showdown_history.geometry().top())
+            panel=w.chk_showdown_history.parentWidget()
+            self.assertTrue(panel.rect().contains(w.btn_showdown_history.geometry()))
+            self.assertTrue(w.btn_showdown_history.isVisible())
+        self.assertGreater(w.tabs_workspace_controls.height(),230)
+
+    def test_history_summary_updates_and_distinguishes_fast_from_deep(self):
+        w=MainWindow();self.addCleanup(w.close)
+        w.combo_sport.setCurrentText('NFL');w.tabs_lineups.setCurrentIndex(0)
+        w.chk_showdown_history.setChecked(True)
+        self.assertIn('choose a Deep profile',w.lbl_compute_summary.text())
+        self.assertNotIn('remains generic',w.lbl_compute_summary.text())
+        w.combo_nfl_compute_mode.setCurrentText('Deep (custom budget)');w.chk_nfl_contest_sim.setChecked(True)
+        self.assertIn('application or fallback',w.lbl_compute_summary.text())
+        w.chk_showdown_history.setChecked(False)
+        self.assertIn('remains generic',w.lbl_compute_summary.text())
+
     def test_profile_picker_preserves_search_rules_and_custom_cancel(self):
         with tempfile.TemporaryDirectory() as directory:
             settings=QtCore.QSettings(os.path.join(directory,'settings.ini'),QtCore.QSettings.IniFormat)
