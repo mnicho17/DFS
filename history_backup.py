@@ -12,11 +12,15 @@ import time
 import uuid
 
 
-def digest(path):
+def digest(path, progress=None):
     h = hashlib.sha256()
+    size=Path(path).stat().st_size; done=0; last=time.perf_counter()
     with Path(path).open('rb') as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b''):
             h.update(chunk)
+            done+=len(chunk)
+            if progress and time.perf_counter()-last >= 5:
+                progress(done,size);last=time.perf_counter()
     return h.hexdigest()
 
 
@@ -27,7 +31,7 @@ def inventory(source):
             raise ValueError('History contains a link outside the backup tree or a symbolic link')
         if path.is_file():
             stat = path.stat()
-            result[path.relative_to(source).as_posix()] = (stat.st_size, stat.st_mtime_ns)
+            result[path.relative_to(source).as_posix()] = (stat.st_size, stat.st_mtime_ns,stat.st_ctime_ns,stat.st_dev,stat.st_ino)
     return result
 
 
@@ -38,6 +42,32 @@ def object_path(root, sha):
     if not path.resolve().is_relative_to(root.resolve()):
         raise ValueError('Backup content path escapes the backup folder')
     return path
+
+
+def previous_entries(root, source_id):
+    """Only the newest complete, same-source receipt can authorize a fast skip."""
+    paths=sorted((root/'manifests').glob('*.json'),reverse=True)
+    if not paths:
+        return {}
+    path=paths[0]
+    if not path.resolve().is_relative_to(root.resolve()):
+        raise ValueError('Backup manifest escapes the backup store')
+    try:
+        value=json.loads(path.read_text(encoding='utf-8'))
+        if value.get('schema_version')==1 and value.get('source_id')==source_id and isinstance(value.get('entries'),dict):
+            return value['entries']
+    except (OSError,ValueError,TypeError):
+        pass
+    return {}
+
+
+def copy_progress(source, target, progress):
+    size=source.stat().st_size;done=0;last=time.perf_counter()
+    with source.open('rb') as reader,open(target,'wb') as writer:
+        while chunk:=reader.read(1024*1024):
+            writer.write(chunk);done+=len(chunk)
+            if time.perf_counter()-last >= 5:
+                progress(done,size);last=time.perf_counter()
 
 
 def backup_history(source, destination, *, verify_existing=False, progress=print):
@@ -54,18 +84,34 @@ def backup_history(source, destination, *, verify_existing=False, progress=print
     before = inventory(source)
     if not before:
         raise ValueError('History is empty; no backup was created')
-    entries = {}; copied = reused = written = 0
+    source_id=hashlib.sha256(os.path.normcase(str(source)).encode()).hexdigest()
+    prior=previous_entries(root,source_id) if not verify_existing else {}
+    entries = {}; copied = reused = written = skipped = hashed = 0
     source_seconds = copy_seconds = verify_seconds = 0.0
     for index, (name, stamp) in enumerate(before.items(), 1):
         path = source / name
-        t = time.perf_counter(); sha = digest(path); source_seconds += time.perf_counter()-t
+        old=prior.get(name,{})
+        sha=None
+        if isinstance(old,dict) and old.get('source_stamp')==list(stamp):
+            try:
+                obj=object_path(root,old['sha256'])
+                if obj.is_file() and obj.stat().st_size==stamp[0]:
+                    sha=old['sha256'];skipped+=1
+            except (ValueError,KeyError,TypeError):
+                pass
+        def bytes_progress(phase):
+            return lambda done,total:progress(f'History backup: {phase} {name}: {done/1024**2:,.0f}/{total/1024**2:,.0f} MiB')
+        if sha is None:
+            progress(f'History backup: checking {index}/{len(before)}: {name} ({stamp[0]/1024**2:,.1f} MiB)')
+            t = time.perf_counter(); sha = digest(path,bytes_progress('hashing')); source_seconds += time.perf_counter()-t
+            hashed+=1
         obj = object_path(root, sha)
         if obj.exists():
             if obj.stat().st_size != stamp[0]:
                 raise ValueError('Existing backup content has an unexpected size; run verification')
             if verify_existing:
                 t=time.perf_counter()
-                if digest(obj) != sha:
+                if digest(obj,bytes_progress('verifying existing')) != sha:
                     raise ValueError('Existing backup content failed verification')
                 verify_seconds += time.perf_counter()-t
             reused += 1
@@ -74,25 +120,26 @@ def backup_history(source, destination, *, verify_existing=False, progress=print
             fd, temporary = tempfile.mkstemp(dir=obj.parent, suffix='.partial')
             os.close(fd)
             try:
-                t=time.perf_counter();shutil.copyfile(path, temporary);copy_seconds += time.perf_counter()-t
+                progress(f'History backup: copying {name} ({stamp[0]/1024**2:,.1f} MiB)')
+                t=time.perf_counter();copy_progress(path,temporary,bytes_progress('copying'));copy_seconds += time.perf_counter()-t
                 t=time.perf_counter()
-                if digest(temporary) != sha:
+                if digest(temporary,bytes_progress('verifying new')) != sha:
                     raise ValueError('New backup content failed verification or source changed')
                 verify_seconds += time.perf_counter()-t
                 os.replace(temporary, obj)
             finally:
                 if os.path.exists(temporary):os.unlink(temporary)
             copied += 1; written += stamp[0]
-        entries[name] = dict(sha256=sha, size=stamp[0], mtime_ns=stamp[1])
+        entries[name] = dict(sha256=sha, size=stamp[0], mtime_ns=stamp[1],source_stamp=list(stamp))
         if index == 1 or index % 100 == 0 or index == len(before):
-            progress(f'History backup: {index}/{len(before)} files; {copied} new, {reused} reused')
+            progress(f'History backup: {index}/{len(before)} files; {copied} new, {reused} reused; {skipped} unchanged files skipped without reading')
     if inventory(source) != before:
         raise ValueError('History changed during backup; close DFS before retrying. Earlier backups are unchanged.')
-    stats = dict(files=len(entries), copied=copied, reused=reused, bytes_written=written,
+    stats = dict(files=len(entries), copied=copied, reused=reused, skipped_unchanged=skipped,source_files_hashed=hashed, bytes_written=written,
         source_hash_seconds=round(source_seconds, 3), copy_seconds=round(copy_seconds, 3),
         verification_seconds=round(verify_seconds, 3), total_seconds=round(time.perf_counter()-started, 3),
         reverified_existing=verify_existing)
-    manifest = dict(schema_version=1, created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    manifest = dict(schema_version=1, source_id=source_id,created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         entries=entries, stats=stats)
     manifests = root / 'manifests'
     if not manifests.resolve().is_relative_to(root.resolve()):raise ValueError('Manifest folder escapes backup store')
