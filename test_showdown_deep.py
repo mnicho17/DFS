@@ -73,12 +73,24 @@ class ShowdownDeepTests(unittest.TestCase):
             deep_time_limit_seconds=20, deep_options={"candidates": 160, "shortlist": 20, "field": 50, "screening": 250},
             retained_lineups=retained, portfolio_rules={"min_unique": 1, "balance_ownership": False})
         results, errors = [], []
+        from build_snapshots import fingerprint
+        worker.build_input_id = fingerprint(dict(test='prospective-screening-audit', players=players))
         worker.finished.connect(results.append)
         worker.error.connect(errors.append)
         worker.run()
         self.assertFalse(errors, errors)
         self.assertTrue(results)
         result = results[0]
+        from screening_audit import load_audit
+        from build_diagnostics import build_history_path
+        from pathlib import Path
+        receipt = result['sim_report']['deep_build']['screening_audit']
+        self.assertEqual(receipt['status'], 'saved')
+        evidence = load_audit(Path(build_history_path()).parent/'screening-audits'/receipt['filename'])['payload']
+        self.assertEqual(len(evidence['generated_order']), result['candidate_count'])
+        self.assertEqual(len(evidence['shortlisted']), result['timing_report']['shortlist_count'])
+        self.assertEqual({tuple(evidence['candidates'][i]['signature']) for i in evidence['selected']},
+                         {showdown_signature(lu) for lu in result['lineups']})
         self.assertEqual(len(result["lineups"]), 8)
         self.assertIn(showdown_signature(retained[0]), {showdown_signature(lu) for lu in result["lineups"]})
         self.assertGreater(result["timing_report"]["validation_scenarios"], 0)

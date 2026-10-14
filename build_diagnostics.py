@@ -325,6 +325,7 @@ def create_build_diagnostic(
         "feasible_shortlist_fallback_used": bool(portfolio.get('feasible_shortlist_fallback_used')),
         "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
         "ranking_bank": dict((sim.get('deep_build') or {}).get('ranking_bank') or {}),
+        "screening_audit": dict((sim.get('deep_build') or {}).get('screening_audit') or {}),
         "field_diagnostic": dict(sim.get('field_diagnostic') or {}),
         **({"history_use_unscored": dict(sim['history_use_unscored'])} if sim.get('history_use_unscored') else {}),
         "ownership_leverage": dict(sim.get('ownership_leverage') or {}),
@@ -720,6 +721,11 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             lines.append(f"- Repeatability shortlist saved: {bank['candidates']:,} candidates; bank {bank['bank_id'][:12]}. Open Settings > Ranking Repeatability.")
         elif bank:
             lines.append('- Repeatability shortlist was not saved; check local storage and rerun Deep.')
+        screening = record.get('screening_audit') or {}
+        if screening.get('status') == 'saved':
+            lines.append(f"- Screening audit saved: {screening['generated']:,} generated; {screening['salary_eligible']:,} salary eligible; {screening['retained']:,} retained; {screening['shortlisted']:,} shortlisted; coarse scoring {screening['screening_status']}. Audit-only file: history/screening-audits/{screening['filename']}.")
+        elif screening:
+            lines.append('- Screening audit not saved: ' + screening.get('reason', 'Unavailable.'))
         salary_filter = record.get('salary_filter') or {}
         if salary_filter:
             lines.append(f"- Showdown salary filter: {salary_filter.get('excluded', 0):,} candidates excluded before screening; minimum ${salary_filter.get('minimum', 0):,.0f}.")
