@@ -54,6 +54,7 @@ def setup_build_controls(window, panel, grid):
     w.combo_compute_profile.activated[str].connect(apply)
     w.chk_nfl_contest_sim.toggled.connect(lambda *_:sync_build_controls(w))
     w.spin_nfl_sim_scenarios.valueChanged.connect(lambda *_:sync_build_controls(w))
+    w.chk_showdown_history.toggled.connect(lambda *_:sync_build_controls(w))
 
 
 def sync_build_controls(w):
