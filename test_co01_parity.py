@@ -130,6 +130,11 @@ class ObjectiveParityTests(unittest.TestCase):
                 value['build_report'] = value['build_report'].replace(block, '')
         value['diagnostic']['portfolio'].pop('exposure_cap_diagnostic', None)
         value['diagnostic']['portfolio'].pop('specialist_diagnostics',None)
+        # Prospective screening evidence is observational; scoring remains exact.
+        screening = value['diagnostic'].pop('screening_audit', None)
+        if screening:
+            value['build_report'] = '\n'.join(line for line in value['build_report'].split('\n')
+                if not line.startswith('- Screening audit '))
         report['text'] = '\n'.join(line for line in report['text'].split('\n')
                                    if line.strip() and not line.startswith('Showdown guardrails:'))
         feasibility = value['diagnostic'].get('portfolio_feasibility') or {}

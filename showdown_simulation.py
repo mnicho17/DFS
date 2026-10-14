@@ -355,6 +355,15 @@ def run_deep_showdown(worker, shortlist_fn):
     compute_safe(observe_dedup, None, generated)
     eligible_salary = filter_salary_candidates(list(bank.values()), worker.salary_cap, worker.salary_strategy)
     salary_excluded = generated - len(eligible_salary)
+    from screening_audit import ScreeningAudit
+    from showdown_screening import settings as screening_settings
+    audit = ScreeningAudit(list(bank.values()), eligible_salary, retained, players,
+        input_id=getattr(worker, 'build_input_id', ''), cancelled=worker._cancel_event.is_set,
+        context=dict(salary_cap=worker.salary_cap, salary_strategy=worker.salary_strategy,
+            build_style=worker.build_style, own_mode=worker.own_mode, own_weight=worker.own_weight,
+            requested_count=worker.num_lineups,
+            rules=worker.portfolio_rules, deep_options=options, field_options=field_options,
+            screening=screening_settings(options, worker.sim_scenarios, profile)))
     bank = {showdown_signature(lu): lu for lu in eligible_salary}
     dst_stages['salary_eligible'] = defense_mix(list(bank.values()) + retained)
     if generated and not bank and not retained:
@@ -383,6 +392,8 @@ def run_deep_showdown(worker, shortlist_fn):
             cancel_callback=lambda: stop(start + limit * screening_fraction),
             progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 2 of 4 - " + c))
         deep["screening_scenarios"] = coarse["report"]["scenarios"]
+        if not deep["screening_scenarios"]:
+            audit.screened(coarse, [], set(), [])
         if deep["screening_scenarios"]:
             shortlist_limit = max(worker.num_lineups, options["shortlist"] or 900)
             reservations, coverage_reserved = shortlist_reservations(coarse['lineups'], targets, shortlist_limit, retained_keys)
@@ -395,6 +406,7 @@ def run_deep_showdown(worker, shortlist_fn):
                 individual_ranking=options['selection_mode'] == 'Individual ranking',
                 deadline=deadline - min(60, limit * .20), cancelled=worker._cancel_event.is_set)
             coverage_short = list(short)
+            audit.screened(coarse, short, reservations, feasible_fallback)
             qb_stages["shortlisted"] = quarterback_mix(short, scored=True)
             dst_stages['shortlisted'] = defense_mix(short, scored=True)
             sim_report = coarse["report"]
@@ -450,6 +462,7 @@ def run_deep_showdown(worker, shortlist_fn):
         refinement_stop_callback=lambda: stop(deadline), refinement_polish_duplication=True,
         individual_ranking=options["selection_mode"] == "Individual ranking")
     selected["lineups"] = ranked_lineups(selected["lineups"])
+    deep['screening_audit'] = audit.save(selected['lineups'], build_cancelled=worker._cancel_event.is_set())
     if loading.get('type')=='prepared_showdown':
         for lineup in selected['lineups']:
             lineup.candidate_source='prepared_roster_library'
