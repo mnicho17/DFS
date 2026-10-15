@@ -13,6 +13,8 @@ from portfolio_rules import player_key
 from optimizers import ShowdownLineup
 from showdown_screening import target,_payload,_restore,MAX_BYTES
 
+STALL_SECONDS = 300
+
 
 def _location(path,context):
     context=dict(context,mode='full-stream-v1')
@@ -87,6 +89,23 @@ def prepare(library,players,*,limit,salary_cap,salary_strategy,rules,screening,s
         state=existing or dict(context=context,cursor=None,screened=0,complete=False,leaders=[])
         committed_digest=fingerprint(existing) if existing is not None else None
         leaders=_leaders(state,players,limit,screening);batch=[];storage_stop=False
+        last_activity=last_saved=last_update=time.monotonic()
+        phase='Scanning for legal rosters';batch_done=0;stall_stop=False;incomplete_sim=False
+        def notify(force=False):
+            nonlocal last_update
+            now=time.monotonic()
+            if force or now-last_update>=1:
+                last_update=now
+                progress(dict(screened=state['screened'],screening_total=None,screening_complete=False,
+                    retained=len(state['leaders']),scope='every currently legal roster',screening_phase=phase,
+                    batch_candidates=len(batch),batch_scenarios=batch_done,batch_scenarios_total=screening['scenarios'],
+                    seconds_since_checkpoint=now-last_saved,remaining_seconds=max(0,deadline-now)))
+        def stopped():
+            nonlocal stall_stop
+            now=time.monotonic()
+            if now-last_activity>=STALL_SECONDS:stall_stop=True
+            notify()
+            return cancelled() or now>=deadline or stall_stop
         def checkpoint():
             nonlocal committed_digest
             payload=json.loads(json.dumps(state));raw=json.dumps(payload)
@@ -102,36 +121,46 @@ def prepare(library,players,*,limit,salary_cap,salary_strategy,rules,screening,s
             committed_digest=digest
             return True
         def score():
-            nonlocal storage_stop
+            nonlocal storage_stop,last_activity,last_saved,phase,batch_done,incomplete_sim
+            phase='Scoring current batch';batch_done=0;last_activity=time.monotonic()
+            def scored(done,total,text):
+                nonlocal batch_done,last_activity
+                if done>batch_done:last_activity=time.monotonic()
+                batch_done=done;notify()
             result=simulate_showdown(batch,players,salary_cap=salary_cap,**screening,scenario_cache=True,
-                cancel_callback=lambda:cancelled() or time.monotonic()>=deadline)
-            if cancelled() or result['report']['scenarios']!=screening['scenarios']:return False
+                cancel_callback=stopped,progress_callback=scored)
+            if cancelled() or result['report']['scenarios']!=screening['scenarios']:
+                incomplete_sim=True;return False
+            phase='Saving completed batch';last_activity=time.monotonic();notify()
             for row in result['lineups']:leaders.add(row)
             previous=dict(state)
             state.update(cursor=_roster(batch[-1]),screened=state['screened']+len(batch),
                 leaders=[[*_roster(row),_payload(row)] for row in leaders.rows()])
             if not checkpoint():
                 state.clear();state.update(previous);storage_stop=True;return False
-            progress(dict(screened=state['screened'],screening_total=None,screening_complete=False,
-                retained=len(state['leaders']),scope='every currently legal roster'))
-            batch.clear();return True
+            last_saved=last_activity=time.monotonic()
+            phase='Batch saved';notify(force=True)
+            batch.clear();phase='Scanning for legal rosters';return True
         if not state['complete']:
             if committed_digest is None:checkpoint()
             exhausted=True
             for row in iter_candidates(library,players,salary_cap=salary_cap,salary_floor=salary_floor(salary_cap,salary_strategy),
-                    rules=rules,cancelled=lambda:cancelled() or time.monotonic()>=deadline,
+                    rules=rules,cancelled=stopped,
                     _after_roster=state['cursor'],_validated_info=context['library']):
-                batch.append(row)
+                last_activity=time.monotonic();batch.append(row)
                 if len(batch)>=batch_size and not score():exhausted=False;break
-            if batch and exhausted:exhausted=score()
-            if exhausted and not cancelled() and time.monotonic()<deadline:
+            if batch and exhausted and not stopped():exhausted=score()
+            if exhausted and not stopped():
                 current=validate_library(library,players,salary_cap=salary_cap)
                 if current!=context['library']:raise ValueError('Source library changed during full screening.')
                 state['complete']=True
                 if not checkpoint():state['complete']=False;storage_stop=True
     return dict(screened=state['screened'],screening_total=state['screened'] if state['complete'] else None,
         screening_complete=state['complete'],retained=len(state['leaders']),elapsed_seconds=time.monotonic()-started,
-        pause_reason='retention storage budget' if storage_stop else ('' if state['complete'] else 'time/cancellation'))
+        pause_reason=('' if state['complete'] else 'retention storage budget' if storage_stop else
+            'cancelled by user' if cancelled() else 'time allowance reached' if time.monotonic()>=deadline else
+            'no screening progress for five minutes' if stall_stop else
+            'scoring batch incomplete; unfinished batch not saved' if incomplete_sim else 'screening interrupted'))
 
 
 def load(base_path,context,players,screening,cancelled=lambda:False,diagnostic=None):

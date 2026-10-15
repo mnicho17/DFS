@@ -14,7 +14,7 @@ class FullScreeningTests(unittest.TestCase):
         current = fixtures.ScreeningTests.timed_players(self, '2026-10-08T11:00:00Z')
         stop = [False]
         first = prepare(self.library, original, batch_size=23, cancelled=lambda:stop[0],
-            progress=lambda _:stop.__setitem__(0, True), **self.kw)
+            progress=lambda v:stop.__setitem__(0, v['screened']>0), **self.kw)
         self.assertEqual(first['screened'], 23)
         resumed = prepare(self.library, current, batch_size=23, **self.kw)
         saved, _ = load_screening(self.library, current, **self.kw)
@@ -68,7 +68,7 @@ class FullScreeningTests(unittest.TestCase):
     def test_full_cancel_resume_matches_uninterrupted(self):
         stop=[False]
         first=prepare(self.library,self.players,batch_size=23,cancelled=lambda:stop[0],
-            progress=lambda _:stop.__setitem__(0,True),**self.kw)
+            progress=lambda v:stop.__setitem__(0,v['screened']>0),**self.kw)
         self.assertEqual(first['screened'],23)
         diagnostic={}
         self.assertIsNone(load_screening(self.library,self.players,diagnostic=diagnostic,**self.kw))
@@ -87,6 +87,7 @@ class FullScreeningTests(unittest.TestCase):
             result=prepare(self.library,self.players,**self.kw)
         self.assertEqual(result['screened'],0)
         self.assertFalse(result['screening_complete'])
+        self.assertIn('batch incomplete',result['pause_reason'])
         self.assertIsNone(load_screening(self.library,self.players,**self.kw))
 
     def test_partitioned_full_screen_resume_crosses_captains(self):
@@ -95,7 +96,7 @@ class FullScreeningTests(unittest.TestCase):
         prepare_library(library,self.players)
         stop=[False]
         first=prepare(library,self.players,batch_size=23,cancelled=lambda:stop[0],
-            progress=lambda _:stop.__setitem__(0,True),**self.kw)
+            progress=lambda v:stop.__setitem__(0,v['screened']>0),**self.kw)
         self.assertFalse(first['screening_complete'])
         result=prepare(library,self.players,batch_size=23,**self.kw)
         self.assertEqual(result['screened'],len(list(iter_candidates(library,self.players))))
@@ -116,5 +117,67 @@ class FullScreeningTests(unittest.TestCase):
             con.execute("UPDATE screen_progress SET payload='{}'");con.commit()
         with self.assertRaisesRegex(ValueError,'damaged'):
             load_screening(self.library,self.players,**self.kw)
+
+    def test_scan_stall_pauses_without_marking_complete_and_can_resume(self):
+        clock=[0.];updates=[]
+        def stalled(*args,**kwargs):
+            clock[0]=301
+            self.assertTrue(kwargs['cancelled']())
+            yield from ()
+        with patch('showdown_full_screening.time.monotonic',side_effect=lambda:clock[0]), \
+                patch('showdown_library.iter_candidates',side_effect=stalled):
+            result=prepare(self.library,self.players,progress=updates.append,**self.kw)
+        self.assertFalse(result['screening_complete']);self.assertEqual(result['screened'],0)
+        self.assertIn('no screening progress',result['pause_reason'])
+        self.assertEqual(updates[-1]['screening_phase'],'Scanning for legal rosters')
+        self.assertTrue(prepare(self.library,self.players,**self.kw)['screening_complete'])
+
+    def test_deadline_and_user_pause_have_distinct_reasons(self):
+        clock=[0.]
+        def expired(*args,**kwargs):
+            clock[0]=11
+            self.assertTrue(kwargs['cancelled']())
+            yield from ()
+        with patch('showdown_full_screening.time.monotonic',side_effect=lambda:clock[0]), \
+                patch('showdown_library.iter_candidates',side_effect=expired):
+            result=prepare(self.library,self.players,seconds=10,**self.kw)
+        self.assertEqual(result['pause_reason'],'time allowance reached')
+        self.assertFalse(result['screening_complete'])
+        result=prepare(self.library,self.players,cancelled=lambda:True,**self.kw)
+        self.assertEqual(result['pause_reason'],'cancelled by user')
+
+    def test_scoring_heartbeat_does_not_commit_unfinished_batch(self):
+        clock=[0.];updates=[]
+        def partial(*args,**kwargs):
+            clock[0]=2
+            kwargs['progress_callback'](50,250,'scoring')
+            return dict(lineups=[],report=dict(scenarios=50))
+        with patch('showdown_full_screening.time.monotonic',side_effect=lambda:clock[0]), \
+                patch('showdown_simulation.simulate_showdown',side_effect=partial):
+            result=prepare(self.library,self.players,progress=updates.append,**self.kw)
+        self.assertEqual(result['screened'],0)
+        self.assertEqual(updates[-1]['batch_scenarios'],50)
+        self.assertEqual(updates[-1]['screening_phase'],'Scoring current batch')
+        self.assertIn('batch incomplete',result['pause_reason'])
+
+    def test_scoring_stall_uses_watchdog_but_advancing_scenarios_do_not(self):
+        for advancing in (False,True):
+            with self.subTest(advancing=advancing):
+                clock=[0.]
+                def partial(*args,**kwargs):
+                    if advancing:
+                        for done in (50,100,150):
+                            clock[0]+=200
+                            kwargs['progress_callback'](done,250,'scoring')
+                            self.assertFalse(kwargs['cancel_callback']())
+                    else:
+                        clock[0]=301
+                        self.assertTrue(kwargs['cancel_callback']())
+                    return dict(lineups=[],report=dict(scenarios=150 if advancing else 0))
+                with patch('showdown_full_screening.time.monotonic',side_effect=lambda:clock[0]), \
+                        patch('showdown_simulation.simulate_showdown',side_effect=partial):
+                    result=prepare(self.library,self.players,**self.kw)
+                self.assertEqual(result['screened'],0)
+                self.assertIn('batch incomplete' if advancing else 'no screening progress',result['pause_reason'])
 
 if __name__=='__main__':unittest.main()

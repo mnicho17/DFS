@@ -146,8 +146,16 @@ class PreparationDialog(QtWidgets.QDialog):
         if 'screened' in result:
             total=result.get('screening_total')
             scope=f"{total:,}" if total is not None else 'all legal rosters (counting)'
-            self.message.setText(f"Screened {result['screened']:,}/{scope} candidates; "+
-                ('screening complete. Final SIM remains fresh.' if result['screening_complete'] else 'partial screening; resume to continue.'))
+            if result['screening_complete']:detail='screening complete. Final SIM remains fresh.'
+            elif result.get('pause_reason'):
+                detail='Paused: '+result['pause_reason']+'. Completed batches are saved; resume with the same captured inputs.'
+            elif result.get('screening_phase'):
+                detail=result['screening_phase']+'. '
+                if result.get('batch_candidates'):
+                    detail+=f"Current batch: {result['batch_candidates']:,} rosters; {result.get('batch_scenarios',0):,}/{result.get('batch_scenarios_total',0):,} scenarios. "
+                detail+=f"Last checkpoint {result.get('seconds_since_checkpoint',0):.0f}s ago; {result.get('remaining_seconds',0)/60:.1f} min remaining."
+            else:detail='partial screening; resume to continue.'
+            self.message.setText(f"Screened {result['screened']:,}/{scope} candidates; "+detail)
             return
         extra=f" {result['completed_partitions']}/{result['partition_count']} Captain partitions complete." if 'partition_count' in result else ''
         if result.get('pause_reason'):extra+=' Paused: '+result['pause_reason']+'.'
