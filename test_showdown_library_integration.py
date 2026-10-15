@@ -165,6 +165,21 @@ class PreparedIntegrationTests(unittest.TestCase):
         self.assertIn('Screening was not requested',dialog.message.text())
         dialog.close();dialog.deleteLater()
 
+    def test_screening_phase_and_pause_reason_are_visible(self):
+        snapshot=create_snapshot(self.players,dict(sport='NFL',contest_kind='showdown',salary_cap=50000),{})
+        dialog=PreparationDialog(snapshot)
+        self.addCleanup(dialog.deleteLater)
+        dialog.describe(dict(screened=76800,screening_total=None,screening_complete=False,
+            screening_phase='Scoring current batch',batch_candidates=256,batch_scenarios=50,
+            batch_scenarios_total=1000,seconds_since_checkpoint=15,remaining_seconds=600))
+        self.assertIn('Scoring current batch',dialog.message.text())
+        self.assertIn('50/1,000 scenarios',dialog.message.text())
+        self.assertNotIn('resume to continue',dialog.message.text())
+        dialog.describe(dict(screened=76800,screening_total=None,screening_complete=False,
+            pause_reason='time allowance reached'))
+        self.assertIn('Paused: time allowance reached',dialog.message.text())
+        self.assertIn('Completed batches are saved',dialog.message.text())
+
     def test_dialog_full_partition_and_stream_screening_off_gui_thread(self):
         from showdown_full_screening import prepare as actual
         rows=self.locked()
