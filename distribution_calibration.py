@@ -52,7 +52,13 @@ def _metrics(rows):
         expected_above_p90_pct=100 * mean(r['expected_above_p90'] for r in rows),
         mean_score_mae=mean(abs(r['actual'] - r['mean']) for r in rows),
         actual_minus_mean_bias=mean(r['actual'] - r['mean'] for r in rows),
-        median_score_mae=mean(abs(r['actual'] - r['p50']) for r in rows))
+        median_score_mae=mean(abs(r['actual'] - r['p50']) for r in rows),
+        mean_p10_p90_width=mean(r['p90'] - r['p10'] for r in rows),
+        # Central 80% interval: alpha=.20, hence 2/alpha=10 per missed point.
+        # Coverage alone rewards arbitrarily wide ranges; this also charges width.
+        mean_p10_p90_interval_score=mean(r['p90'] - r['p10']
+            + 10 * max(r['p10'] - r['actual'], 0)
+            + 10 * max(r['actual'] - r['p90'], 0) for r in rows))
     # At-or-below CDF coverage includes ties. Tail metrics above use strict < / >.
     result['quantile_coverage'] = {}
     for q in ('p10', 'p25', 'p50', 'p75', 'p90'):
@@ -95,9 +101,13 @@ def summarize(rows):
         # One weight per game prevents large slates/repeated contests from
         # masquerading as independent model validations.
         equal_game = {key: statistics.mean(g[key] for g in game_metrics) for key in (
-            'below_p10_pct', 'inside_p10_p90_pct', 'above_p90_pct', 'mean_score_mae', 'actual_minus_mean_bias')}
+            'below_p10_pct', 'inside_p10_p90_pct', 'above_p90_pct', 'mean_score_mae', 'actual_minus_mean_bias',
+            'mean_p10_p90_width', 'mean_p10_p90_interval_score')}
         result['groups'].append(dict(kind=kind, model=model, axis=axis, label=label,
-            player_weighted=pooled, equal_game_weighted=equal_game))
+            player_weighted=pooled, equal_game_weighted=equal_game,
+            # No player/user names; expose QB game evidence without pooling models.
+            qb_games=[dict(game=game, **_metrics(group)) for game, group in sorted(by_game.items())]
+                if axis == 'position' and label == 'QB' else []))
     return result
 
 
@@ -123,6 +133,9 @@ def report_lines(summary):
         p = group['player_weighted']; g = group['equal_game_weighted']
         quantiles = ', '.join(q + '=' + (f"{v['at_or_below_pct']:.1f}% (n={v['player_games']})"
             if v['at_or_below_pct'] is not None else 'unavailable') for q, v in p['quantile_coverage'].items())
-        lines.append(f"- {group['kind']} / model {group['model'][:12]} / {group['axis']}: {group['label']}; {p['games']} games, {p['player_games']} player-games. At/below {quantiles}. Equal-game below/inside/above p10-p90: {g['below_p10_pct']:.1f}/{g['inside_p10_p90_pct']:.1f}/{g['above_p90_pct']:.1f}%; mean-score MAE {g['mean_score_mae']:.2f}; actual-minus-mean bias {g['actual_minus_mean_bias']:+.2f}.")
+        lines.append(f"- {group['kind']} / model {group['model'][:12]} / {group['axis']}: {group['label']}; {p['games']} games, {p['player_games']} player-games. At/below {quantiles}. Equal-game below/inside/above p10-p90: {g['below_p10_pct']:.1f}/{g['inside_p10_p90_pct']:.1f}/{g['above_p90_pct']:.1f}%; mean-score MAE {g['mean_score_mae']:.2f}; actual-minus-mean bias {g['actual_minus_mean_bias']:+.2f}; range width {g['mean_p10_p90_width']:.2f}; interval score {g['mean_p10_p90_interval_score']:.2f}.")
+        for game in group['qb_games']:
+            lines.append(f"  QB game {game['game']}: {game['player_games']} player-games; actual-minus-mean bias {game['actual_minus_mean_bias']:+.2f}; below/inside/above p10-p90 {game['below_p10_pct']:.1f}/{game['inside_p10_p90_pct']:.1f}/{game['above_p90_pct']:.1f}%; interval score {game['mean_p10_p90_interval_score']:.2f}.")
+    lines.append('- Interval score is range width plus 10 points per point missed below p10 or above p90; lower is better. Compare it on the same qualified outcomes alongside coverage and bias. Saved quantiles do not contain enough information to reconstruct CRPS.')
     lines.append('- Games, not duplicated entries or Captain multipliers, define evidence units. Within-game outcomes are correlated; no independence between players or accuracy guarantee is implied. Missing legacy p25/p75 stay unavailable. No weights, forecasts or compute settings are updated.')
     return lines

@@ -42,6 +42,48 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(result['excluded_repeated_or_conflicting'],149)
         self.assertEqual(self.all_group(result)['player_weighted']['player_games'],1)
 
+    def test_interval_score_penalizes_width_and_misses_with_exact_boundaries(self):
+        for actual, expected in ((5,8), (1,8), (9,8), (0,18), (10,18), (-2,38)):
+            with self.subTest(actual=actual):
+                group = self.all_group(summarize([row(actual=actual)]))['player_weighted']
+                self.assertEqual(group['mean_p10_p90_width'],8)
+                self.assertEqual(group['mean_p10_p90_interval_score'],expected)
+        wide = self.all_group(summarize([row(p10=-10,p90=20)]))['player_weighted']
+        self.assertEqual(wide['inside_p10_p90_pct'],100)
+        self.assertEqual(wide['mean_p10_p90_interval_score'],30)
+
+    def test_interval_score_keeps_equal_game_weighting(self):
+        rows = [row(name=str(i),actual=10) for i in range(10)]
+        rows += [row(game='CCC|DDD|2099-09-21T20:00:00+00:00',actual=5)]
+        group = self.all_group(summarize(rows))
+        self.assertAlmostEqual(group['player_weighted']['mean_p10_p90_interval_score'],188/11)
+        self.assertEqual(group['equal_game_weighted']['mean_p10_p90_interval_score'],13)
+
+    def test_qb_games_are_deterministic_separate_models_and_do_not_expose_names(self):
+        rows = [row(name='private QB',position='QB'),
+            row(name='other private QB',position='QB',actual=10),
+            row(name='third private QB',position='QB',model='c'*64),row()]
+        result = summarize(rows)
+        self.assertEqual(result,summarize(list(reversed(rows))))
+        groups = [g for g in result['groups'] if g['qb_games']]
+        self.assertEqual(len(groups),2)
+        self.assertTrue(all(g['axis']=='position' and g['label']=='QB' for g in groups))
+        first = next(g for g in groups if g['model']=='a'*64)['qb_games'][0]
+        self.assertEqual(first['player_games'],2)
+        self.assertEqual(first['mean_p10_p90_interval_score'],13)
+        text = json.dumps(result)+'\n'.join(report_lines(result))
+        self.assertNotIn('private',text)
+        self.assertIn('QB game AAA|BBB|2099-09-21',text)
+        self.assertIn('lower is better',text)
+
+    def test_repeated_captures_and_conflicts_cannot_change_interval_evidence(self):
+        first = row(position='QB',actual=10)
+        one = summarize([first])
+        repeated = summarize([first]*150)
+        self.assertEqual(one['groups'],repeated['groups'])
+        conflict = summarize([first,row(position='QB',actual=11,model='c'*64)])
+        self.assertEqual(conflict['groups'],[])
+
     def test_conflicting_actual_scores_exclude_all_formats_and_models(self):
         result = summarize([row(actual=5), row(actual=6, model='b'*64, kind='classic')])
         self.assertEqual(result['conflicting_player_games'],1)
