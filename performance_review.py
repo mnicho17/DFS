@@ -149,6 +149,8 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             with conn:
                 refresh_cached_profile(conn,import_id,path,cancelled)
             inferred_date=result_date(name) or result_date(Path(path).name)
+            if salary_receipt and salary_receipt.get('date_correction'):
+                inferred_date=salary_receipt['date_correction']['corrected_date']
             from learning_db import _import_username_entries
             with conn:
                 _import_username_entries(conn,path,import_id,username,dict(field_size=field[0],sport=field[2]),cancelled)
@@ -167,6 +169,8 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
                 compare_distributions(conn,import_id,snapshot_check.get('input_id'),
                     'showdown' if field[1]==6 else 'classic',scores,Path(db_path or history_db_path()).parent,cancelled=cancelled)
             date_source='filename-unverified' if inferred_date else 'unknown'
+            if salary_receipt and salary_receipt.get('date_correction'):
+                date_source='explicit saved date correction'
             if not inferred_date and snapshot_check.get('date'):
                 inferred_date=snapshot_check['date'];date_source='saved contest-ID schedule'
             snap_meta=snapshot_metadata(Path(db_path or history_db_path()).parent/'snapshots',inferred_date,{k for k in scores if not k.startswith('@cpt:')})

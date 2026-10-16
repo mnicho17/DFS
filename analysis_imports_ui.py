@@ -29,8 +29,20 @@ class CombinedImportWorker(QtCore.QObject):
     def run(self):
         try:
             if self.pair:
-                saved = save_pair(*self.pair[:2], db_path=self.db_path, confirm_date=self.pair[2], cancelled=self.cancelled.is_set)
+                corrected_import=None
+                if len(self.pair)>3:
+                    from analysis_date_corrections import save
+                    corrected_import=save(*self.pair[:2],self.pair[3],db_path=self.db_path,cancelled=self.cancelled.is_set)
+                    saved=True
+                else:
+                    saved = save_pair(*self.pair[:2], db_path=self.db_path, confirm_date=self.pair[2], cancelled=self.cancelled.is_set)
                 result = dict(pairs_added=int(saved), pair_only=True, errors=[])
+                if corrected_import and not self.cancelled.is_set():
+                    from performance_review import analyze_saved_results
+                    review=analyze_saved_results(username=self.username,import_ids={corrected_import},db_path=self.db_path,
+                        cancelled=self.cancelled.is_set,progress=lambda text:self.progress.emit(0,0,text),ledger_root=self.ledger_root)
+                    result['analysis_message']=review['message']
+                    result['coverage_reconciled']=review.get('identity_reconciled',False)
             else:
                 result = import_folders(self.results_folder, self.salary_folder, username=self.username,
                                         db_path=self.db_path, cancelled=self.cancelled.is_set, progress=self.progress.emit)
@@ -122,6 +134,7 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.rows = self.state['results']
         layout = QtWidgets.QVBoxLayout(self)
         label = QtWidgets.QLabel('Choose the exact contest and salary snapshot. Existing pairings stay fixed. '
+            'One salary file can serve multiple contests. '
             'Matching covers readable rosters; it does not establish a complete eligible pool or payouts.')
         label.setWordWrap(True)
         layout.addWidget(label)
@@ -136,6 +149,11 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         for row in self.rows:
             self.results.addItem(row['name'] + ' [' + row['hash'][:12] + '] — ' + row['status'], row)
         layout.addWidget(self.results)
+        self.correct_date=QtWidgets.QCheckBox('Review a contest-date correction (preserves the original file)')
+        layout.addWidget(self.correct_date)
+        self.date_reason=QtWidgets.QLineEdit()
+        self.date_reason.setPlaceholderText('Reason for correcting the recorded date (at least 8 characters)')
+        layout.addWidget(self.date_reason)
         self.salaries = QtWidgets.QComboBox()
         layout.addWidget(self.salaries)
         self.candidate_details = QtWidgets.QLabel()
@@ -160,6 +178,7 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         layout.addWidget(self.buttons)
         self.results.currentIndexChanged.connect(self._update)
         self.salaries.currentIndexChanged.connect(self._candidate_changed)
+        self.correct_date.toggled.connect(self._update)
         self._update()
         if result_hash:
             for index, row in enumerate(self.rows):
@@ -178,6 +197,8 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
             self.buttons.button(QtWidgets.QDialogButtonBox.Save).setEnabled(False)
             return
         notes = [f"Status: {row['status']}"]
+        notes.append('Recorded dates: '+(', '.join(row.get('dates',[])) or 'unknown'))
+        self.correct_date.setVisible(not row['saved_pair'] and any(c.get('date_correctable') for c in row['candidates']))
         if row['entries'] is not None:
             pct = f"{row['readable_pct']:.1f}%" if row['readable_pct'] is not None else 'n/a'
             notes.append(f"Readable result rosters: {row['readable']:,} / {row['entries']:,} ({pct})")
@@ -188,7 +209,7 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
             label = candidate['name'] + ' [' + candidate['hash'][:12] + ']'
             if not candidate['compatible']:
                 rejected.append(label + ': ' + candidate['reason'])
-            if candidate['compatible'] and not saved:
+            if (candidate['compatible'] or (self.correct_date.isChecked() and candidate.get('date_correctable'))) and not saved:
                 self.salaries.addItem(label, candidate)
                 notes.append(label + ': ' + candidate['reason'])
         if saved:
@@ -204,8 +225,9 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.diagnostics.setPlainText('\n\n'.join(rejected))
         self.show_diagnostics.setVisible(bool(rejected) and row['status'] != 'NO_COMPATIBLE_MATCH')
         self.details.setPlainText('\n\n'.join(notes))
-        self.salaries.setEnabled(row['status'] == 'READY_TO_PAIR')
-        self.buttons.button(QtWidgets.QDialogButtonBox.Save).setEnabled(row['status'] == 'READY_TO_PAIR')
+        enabled=not saved and self.salaries.count()>0
+        self.salaries.setEnabled(enabled)
+        self.buttons.button(QtWidgets.QDialogButtonBox.Save).setEnabled(enabled)
         self._candidate_changed()
 
     def _candidate_changed(self):
@@ -216,19 +238,31 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
             f"{candidate.get('player_roles','unknown')} player/role identities\n"
             f"Games: {', '.join(candidate.get('games',[])) or 'unknown'}\n"
             f"Imported: {candidate.get('imported_at','not recorded')} | revision {candidate['hash'][:12]}\n"
+            f"Already linked to {candidate.get('linked_contests',0)} contests; available for additional contests.\n"
             f"{candidate.get('reason','')}")
-        self.confirm_date.setVisible(bool(row and row['status'] == 'READY_TO_PAIR' and candidate and not candidate['automatic']))
+        correction=bool(candidate and candidate.get('date_correctable') and self.correct_date.isChecked())
+        self.date_reason.setVisible(correction)
+        self.confirm_date.setText('I confirm changing this contest date to '+', '.join(candidate.get('dates',[]))+'.' if correction else
+            'I confirm this salary slate belongs to the selected contest (result date missing).')
+        self.confirm_date.setVisible(bool(row and not row['saved_pair'] and candidate and (correction or not candidate['automatic'])))
         self.confirm_date.setChecked(False)
 
     def _select(self):
         row, candidate = self.results.currentData(), self.salaries.currentData()
-        if not row or not candidate or row['status'] != 'READY_TO_PAIR':
+        if not row or not candidate or row['saved_pair']:
             return
-        needs_date = not candidate['automatic']
+        correction=bool(self.correct_date.isChecked() and candidate.get('date_correctable'))
+        if not candidate['compatible'] and not correction:return
+        needs_date = correction or not candidate['automatic']
         if needs_date and not self.confirm_date.isChecked():
             QtWidgets.QMessageBox.information(self, 'Confirm the contest date', 'Confirm that this exact salary slate belongs to the selected contest.')
             return
         self.selection = (row['hash'], candidate['hash'], self.confirm_date.isChecked())
+        if correction:
+            if len(self.date_reason.text().strip())<8:
+                QtWidgets.QMessageBox.information(self,'Correction reason required','Record why this contest date should be corrected.')
+                return
+            self.selection+= (self.date_reason.text().strip(),)
         self.accept()
 
 
