@@ -200,6 +200,7 @@ def _results_manifest(path, cancelled):
                 observed.add((role, _name(label), numeric.group(1) if numeric else ''))
     if not entries:
         raise ValueError('No result entry rows found.')
+    csv_dates=sorted(dates)
     filename_dates = _dates(Path(path).name)
     games.update('@'.join(g) for g in re.findall(r'\b([A-Z]{2,3})\s*@\s*([A-Z]{2,3})\b', Path(path).name.upper()))
     if dates and filename_dates and dates != filename_dates:
@@ -207,7 +208,7 @@ def _results_manifest(path, cancelled):
     elif not dates:
         dates = filename_dates
     return dict(version=1, format=next(iter(formats)) if len(formats) == 1 else None,
-                dates=sorted(dates), games=sorted(games), date_source='CSV/filename (unverified)', contest_ids=sorted(contests),
+                dates=sorted(dates), csv_dates=csv_dates, games=sorted(games), date_source='CSV/filename (unverified)', contest_ids=sorted(contests),
                 contest_names=sorted(contest_names),
                 entries=entries, unreadable=unreadable, observed=sorted(observed))
 
@@ -228,9 +229,11 @@ def ensure_tables(conn):
 
 
 def _sources(conn):
-    return [dict(hash=h, kind=k, snapshot=p, name=n, source_path=s, manifest=json.loads(m), import_id=i, created_at=t)
+    sources=[dict(hash=h, kind=k, snapshot=p, name=n, source_path=s, manifest=json.loads(m), import_id=i, created_at=t)
             for h, k, p, n, s, m, i, t in conn.execute(
                 'SELECT hash,kind,snapshot,original_name,source_path,manifest,import_id,created_at FROM analysis_sources ORDER BY created_at,hash')]
+    from analysis_date_corrections import apply
+    return apply(conn,sources)
 
 
 def _salary_identity_index(salary):
@@ -351,10 +354,13 @@ def _pairing_state(conn, path, cancelled):
         reason = verification[result['hash']] or verification[salary['hash']]
         q = dict(compatible=False, automatic=False, reason=reason) if reason else qualify_pair(
             result, salary, _identity_index=identity_indexes[salary['hash']])
-        return dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'],
+        from analysis_date_corrections import candidate as date_candidate
+        correctable=not reason and not q['compatible'] and date_candidate(result,salary,identity_indexes.get(salary['hash']))
+        return dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'],date_correctable=bool(correctable),
                     automatic=q['automatic'], reason=q['reason'], dates=salary['manifest'].get('dates',[]),
                     format=salary['manifest'].get('format'), games=salary['manifest'].get('games',[]),
-                    player_roles=len(salary['manifest'].get('players',[])), imported_at=salary['created_at'])
+                    player_roles=len(salary['manifest'].get('players',[])), imported_at=salary['created_at'],
+                    linked_contests=sum(h==salary['hash'] for h in pairs.values()))
 
     output, qualified = [], 0
     for result in (s for s in sources if s['kind'] == 'results'):
@@ -373,6 +379,7 @@ def _pairing_state(conn, path, cancelled):
         entries, unreadable = manifest.get('entries'), manifest.get('unreadable', 0)
         readable = max(0, entries - unreadable) if entries is not None else None
         output.append(dict(hash=result['hash'], name=result['name'], salary_hash=saved_hash,
+                           dates=manifest['dates'],date_correction=result.get('date_correction'),
                            status=status, saved_pair=saved, candidates=candidates, entries=entries,
                            unreadable=unreadable, readable=readable,
                            readable_pct=100.0 * readable / entries if entries else None))
@@ -576,7 +583,8 @@ def paired_metadata(conn, import_id, cancelled=lambda: False):
         metadata[key] = value
     for key in collisions:
         metadata.pop(key, None)
-    return metadata, dict(salary_hash=salary['hash'], result_hash=result['hash'], source='explicit saved salary/results pair')
+    return metadata, dict(salary_hash=salary['hash'], result_hash=result['hash'], source='explicit saved salary/results pair',
+                         effective_dates=result['manifest']['dates'],date_correction=result.get('date_correction'))
 
 
 def report_lines(conn=None, *, state=None):
@@ -586,6 +594,14 @@ def report_lines(conn=None, *, state=None):
              f"- Qualified saved pairings: {state['qualified_saved_pairings']}; Invalid saved pairings: {state['invalid_saved_pairings']}."]
     label = 'Unpaired cataloged results' if state['warnings'] else 'Results awaiting a salary match'
     lines.append(f"- {label}: {state['unpaired_results']}. Compatible candidates are not saved pairings. Use Review Salary Matches.")
+    lines.append('- Each salary snapshot may serve multiple contests; pairing one result never consumes the salary file.')
+    for row in state['results']:
+        if row.get('date_correction'):
+            correction=row['date_correction']
+            lines.append(f"- Corrected contest date: {row['name']}; {', '.join(correction['original_dates']) or 'unknown'} → {correction['corrected_date']}; reason: {correction['reason']}. Original source preserved.")
+        elif row['status']=='NO_COMPATIBLE_MATCH':
+            correctable=[c['name'] for c in row['candidates'] if c.get('date_correctable')]
+            lines.append(f"- Unpaired: {row['name']}; "+('date correction requires review: '+', '.join(correctable) if correctable else 'no salary revision covers every observed player/role on the recorded date; see rejected candidates in Review Salary Matches.'))
     lines.extend('- WARNING: ' + warning for warning in state['warnings'])
     lines.extend([f"- Pairing database identity: {state['database_identity']}.",
                   '- Pairing validates observed roster identities and source revisions; full eligible-pool coverage and payouts remain unverified.'])
