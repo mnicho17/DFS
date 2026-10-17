@@ -137,6 +137,12 @@ def install_dashboard(window, layout):
     preparation.setToolTip('Review library policy, recorded freshness, readiness, historical field, and background work together.')
     from preparation_status_ui import open_preparation_status
     preparation.clicked.connect(lambda: open_preparation_status(window))
+    window.backup_summary = QtWidgets.QLabel('Backups: not configured')
+    bar.addWidget(window.backup_summary)
+    backups=QtWidgets.QPushButton('Backups…');backups.setObjectName('backupsButton')
+    from idle_backup_ui import open_backups
+    backups.clicked.connect(lambda:open_backups(window))
+    bar.addWidget(backups)
     bar.addWidget(preparation)
     bar.addWidget(button)
     layout.addLayout(bar)
