@@ -132,6 +132,12 @@ def install_dashboard(window, layout):
     button = QtWidgets.QPushButton('Tasks…')
     button.setObjectName('taskDashboardButton')
     bar.addWidget(summary, 1)
+    preparation = QtWidgets.QPushButton('Preparation…')
+    preparation.setObjectName('preparationStatusButton')
+    preparation.setToolTip('Review library policy, recorded freshness, readiness, historical field, and background work together.')
+    from preparation_status_ui import open_preparation_status
+    preparation.clicked.connect(lambda: open_preparation_status(window))
+    bar.addWidget(preparation)
     bar.addWidget(button)
     layout.addLayout(bar)
     dock = QtWidgets.QDockWidget('Task dashboard', window)

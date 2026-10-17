@@ -1,0 +1,115 @@
+from test_environment import install
+install()
+import copy
+import threading
+import unittest
+from unittest.mock import patch
+from PyQt5 import QtWidgets
+from main_window import MainWindow
+from preparation_status_ui import preparation_rows, PreparationStatusDialog
+
+
+class PreparationStatusTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def window(self):
+        w = MainWindow()
+        self.addCleanup(w.close)
+        return w
+
+    def rows(self,w):
+        return {row['key']: row for row in preparation_rows(w)}
+
+    def test_empty_state_is_not_ready_and_collection_does_no_source_work(self):
+        w = self.window()
+        before = copy.deepcopy(w._current_build_recipe())
+        with patch('build_preparation.discover_libraries',side_effect=AssertionError('No discovery')), \
+             patch.object(w.history_refresh,'start',side_effect=AssertionError('No refresh')):
+            rows = self.rows(w)
+        self.assertEqual(rows['readiness']['state'],'Load a slate')
+        self.assertEqual(rows['history']['state'],'No recorded refresh')
+        self.assertEqual(w._current_build_recipe(),before)
+
+    def test_automatic_library_configuration_is_not_reuse_evidence(self):
+        w = self.window()
+        w.combo_compute_profile.activated[str].emit('Baseline — 5 min cap')
+        row = self.rows(w)['library']
+        self.assertEqual(row['state'],'Automatic discovery configured')
+        self.assertIn('No library is verified',row['detail'])
+        w.action_auto_library.setChecked(False)
+        self.assertEqual(self.rows(w)['library']['state'],'Automatic discovery off')
+
+    def test_selected_partial_library_requires_deep_and_stays_explicit(self):
+        w = self.window()
+        w._candidate_library='external.sdlib'; w._candidate_library_allow_partial=True
+        row = self.rows(w)['library']
+        self.assertIn('Deep + SIM required',row['state'])
+        self.assertIn('Explicit partial coverage',row['detail'])
+        self.assertEqual(w._candidate_library,'external.sdlib')
+
+    def test_snapshot_replay_and_previous_build_are_separate_from_current(self):
+        w = self.window(); w._snapshot_replay=True
+        w.last_sim_report=dict(candidate_library=dict(library_path='older.sdfull',accepted=100))
+        rows=self.rows(w)
+        self.assertEqual(rows['inputs']['state'],'Snapshot replay')
+        self.assertEqual(rows['library']['state'],'Automatic discovery off for replay')
+        self.assertIn('previous build',rows['previous']['detail'])
+        self.assertIn('older.sdfull',rows['previous']['detail'])
+
+    def test_history_record_does_not_claim_current_freshness_and_live_stop_is_visible(self):
+        w=self.window(); controller=w.history_refresh
+        controller.text='History refresh complete.'
+        self.assertEqual(self.rows(w)['history']['state'],'Last recorded refresh')
+        self.assertIn('not proof',self.rows(w)['history']['detail'])
+        controller.thread=object(); controller.stop=threading.Event()
+        try:
+            self.assertEqual(self.rows(w)['history']['state'],'Refresh underway')
+            controller.stop.set()
+            self.assertEqual(self.rows(w)['history']['state'],'Stopping safely')
+        finally: controller.thread=None
+
+    def test_requested_field_profile_and_blocker_actions_are_not_silently_applied(self):
+        w=self.window(); w.chk_showdown_history.setChecked(True)
+        self.assertEqual(self.rows(w)['field']['state'],'Deep + SIM required')
+        w.combo_compute_profile.activated[str].emit('Baseline — 5 min cap')
+        self.assertEqual(self.rows(w)['field']['state'],'Profile missing')
+        w.showdown_field_profile={'recorded':'profile'}
+        self.assertIn('sources rechecked',self.rows(w)['field']['state'])
+        w.players=[{}]
+        w.last_readiness_report=dict(title='Blocked',blockers=1,reviews=0,checks=[dict(label='Identity',status='block',summary='Conflicting IDs',action='Review sources')])
+        row=self.rows(w)['readiness']
+        self.assertIn('1 blockers',row['state'])
+        self.assertIn('Review sources',row['detail'])
+
+    def test_dialog_tracks_concurrent_work_and_routes_selected_tool_explicitly(self):
+        w=self.window(); dialog=PreparationStatusDialog(w)
+        self.addCleanup(dialog.deleteLater)
+        key=w.tasks.start('Build')
+        w.tasks.update(key,'Checking compatible screening evidence')
+        dialog.refresh()
+        rows={row['key']:row for row in dialog.rows}
+        self.assertIn('1 tasks underway',rows['tasks']['state'])
+        self.assertIn('Checking compatible',rows['tasks']['detail'])
+        for index in range(dialog.table.topLevelItemCount()):
+            item=dialog.table.topLevelItem(index)
+            if item.text(0)=='Candidate library': dialog.table.setCurrentItem(item); break
+        before=copy.deepcopy(w._current_build_recipe())
+        dialog.open_tool()
+        self.assertTrue(w.action_show_build_controls.isChecked())
+        self.assertEqual(w._current_build_recipe(),before)
+        self.assertIsNotNone(w.findChild(QtWidgets.QPushButton,'preparationStatusButton'))
+
+    def test_opening_summary_does_not_refresh_or_modify_loaded_inputs(self):
+        from test_nfl_logic import _fixture_players
+        from preparation_status_ui import open_preparation_status
+        w=self.window(); w.players=_fixture_players()
+        before=copy.deepcopy(w.players)
+        recipe=copy.deepcopy(w._current_build_recipe())
+        with patch.object(w,'_run_live_nfl_check',side_effect=AssertionError('No implicit live refresh')), \
+             patch.object(w.history_refresh,'start',side_effect=AssertionError('No implicit history refresh')), \
+             patch.object(PreparationStatusDialog,'exec_',return_value=QtWidgets.QDialog.Rejected):
+            open_preparation_status(w)
+        self.assertEqual(w.players,before)
+        self.assertEqual(w._current_build_recipe(),recipe)

@@ -8133,7 +8133,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         settings_menu.addSection("Workspace")
 
-        self.action_show_build_controls = settings_menu.addAction("Show Build Controls")
+        self.action_show_build_controls = settings_menu.addAction("Advanced Build Controls")
 
         self.action_show_build_controls.setObjectName("showBuildControlsAction")
 
@@ -8256,7 +8256,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         from build_controls_ui import setup_build_controls
         setup_build_controls(self, strategy_panel, strategy_grid)
 
-        self.tabs_workspace_controls.addTab(strategy_panel, "Build")
+        from simple_build_ui import advanced_scroll_page
+        self.tabs_workspace_controls.addTab(advanced_scroll_page(strategy_panel), "Build")
 
 
 
@@ -8599,7 +8600,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         sd_controls = QtWidgets.QHBoxLayout()
 
-        sd_controls.addWidget(QtWidgets.QLabel("Lineups:"))
+        sd_count_label = QtWidgets.QLabel("Lineups:")
+        sd_controls.addWidget(sd_count_label)
 
         self.spin_sd = QtWidgets.QSpinBox()
 
@@ -8613,7 +8615,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        sd_controls.addWidget(QtWidgets.QLabel("Cap:"))
+        sd_cap_label = QtWidgets.QLabel("Cap:")
+        sd_controls.addWidget(sd_cap_label)
 
         self.edit_sd_cap = QtWidgets.QLineEdit("50000")
 
@@ -8707,7 +8710,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         cl_controls = QtWidgets.QHBoxLayout()
 
-        cl_controls.addWidget(QtWidgets.QLabel("Lineups:"))
+        cl_count_label = QtWidgets.QLabel("Lineups:")
+        cl_controls.addWidget(cl_count_label)
 
         self.spin_cl = QtWidgets.QSpinBox()
 
@@ -8721,7 +8725,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        cl_controls.addWidget(QtWidgets.QLabel("Cap:"))
+        cl_cap_label = QtWidgets.QLabel("Cap:")
+        cl_controls.addWidget(cl_cap_label)
 
         self.edit_cl_cap = QtWidgets.QLineEdit("50000")
 
@@ -9145,6 +9150,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.combo_field_preset.currentTextChanged.connect(self._update_workspace_summary)
         from entry_target import setup_entry_target
         setup_entry_target(self)
+        from simple_build_ui import setup_simple_build_panel
+        setup_simple_build_panel(self, left_layout, (sd_count_label, cl_count_label), (sd_cap_label, cl_cap_label))
 
         self.combo_nfl_compute_mode.currentTextChanged.connect(self._update_workspace_summary)
 
@@ -9163,6 +9170,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         if hasattr(self, "tabs_workspace_controls"):
 
             self.tabs_workspace_controls.setVisible(bool(visible))
+            if self.action_show_build_controls.isChecked() != bool(visible):
+                blocker = QtCore.QSignalBlocker(self.action_show_build_controls)
+                self.action_show_build_controls.setChecked(bool(visible))
+                del blocker
+            from simple_build_ui import sync_simple_build_panel
+            sync_simple_build_panel(self)
 
 
 
@@ -9345,6 +9358,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             parts.insert(0, self._active_recipe_name)
 
         self.lbl_workspace_summary.setText(" | ".join(parts))
+        from simple_build_ui import sync_simple_build_panel
+        sync_simple_build_panel(self)
 
 
 

@@ -623,7 +623,7 @@ Results reports reconcile overlapping same-date player scores across contests, d
 Deep Showdown now samples opponents with a documented experimental salary-spending distribution. Build reports show target/actual salary bands, fallback entries and explicit Captain/FLEX locks. Ownership percentage-point comparisons require recorded percent-of-entries units; old snapshots retain their original weights. See the guide for a frozen-candidate comparison command and limitations.
 
 
-Build controls now use one Compute profile picker. Search & output groups Deep search/selection choices, resource numbers stay collapsed for presets, and ownership-data controls live in Data and Learning. Settings > Show Build Controls reveals the panel. Existing recipe settings remain supported.
+The main Build panel keeps Lineups, NFL Time budget, Advanced, and Generate visible. The current setup is summarized beneath them. Advanced (also Settings > Advanced Build Controls) reveals the existing Build, Portfolio Rules, and Data and Learning tabs. Search & output groups Deep search/selection choices, resource numbers stay collapsed for presets, and ownership-data controls live in Data and Learning. Each format retains its original count and salary-cap inputs; existing recipes and settings remain supported.
 # Ranking repeatability
 
 **Settings > Ownership & Leverage** compares projected field ownership with the actual simulated field, top-candidate exposure and selected exposure for Classic and Showdown. Build reports disclose bounded ownership matching; Results & Learning separately audits recorded ownership forecasts against imported results. These are diagnostic comparisons, not automatic exposure recommendations or trained predictions.

@@ -56,4 +56,7 @@ def sync_entry_target(w, persist=False, count=None, kind=None):
             if auto:
                 for mode in ('Individual ranking','Portfolio selection'):text=text.replace(mode,target['selection_mode'])
             w.lbl_compute_summary.setText(text+'\nEntry target: '+summary)
-    finally:w._syncing_entry_target=False
+    finally:
+        w._syncing_entry_target=False
+        from simple_build_ui import sync_simple_build_panel
+        sync_simple_build_panel(w)

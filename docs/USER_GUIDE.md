@@ -34,6 +34,24 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 
 
 
+## Simple Build panel
+
+The main workspace now keeps **Lineups**, **Time budget** (NFL), **Advanced**, and **Generate** above the player list. Choose Showdown or Classic using the existing lineup tabs, set the count, optionally lock or fade players, then Generate. Each format retains its own lineup count and salary cap. The lineup toolbar below the player list now contains saving and export actions instead of duplicate count/cap inputs.
+
+**Time budget** maps directly to the existing Fast and Deep profiles. Timed choices use the corresponding Deep search and validation settings and may finish before the maximum time. Choosing Fast retains the existing SIM toggle. **Custom…** opens Advanced without changing compute mode, SIM, or budgets. If a recipe has custom Deep settings, the time selector shows its stored maximum instead of replacing it with a preset.
+
+**Advanced** reveals the existing Build, Portfolio Rules, and Data and Learning tabs. Salary caps, ownership influence, construction rules, historical-field preparation, and detailed compute settings remain editable there. Advanced Build controls scroll on smaller screens and at larger fonts. Closing Advanced does not reset any setting. The main summary shows the current format, automatic/manual entry target, style, salary strategy, cap, SIM state, and requested historical field; hover for further details. Entry targets are defaults, not verified contest sizes or payout schedules.
+
+The **Tasks…** dashboard remains available regardless of whether Advanced is expanded. No optimizer, projection, SIM-model, ranking, or experimental-default changes are part of this layout update.
+
+## Unified preparation summary
+
+Choose **Preparation…** beside **Tasks…** to review inputs, readiness blockers and next actions, candidate-library policy or explicit selection, requested historical field, recorded history refresh, and background work in one place. Select a row to read its details; the action button opens the corresponding existing tool.
+
+Opening the summary is report-only: it does not refresh live data, scan library contents or result folders, import records, apply profiles, alter settings, or relax rules. Readiness is computed using the existing local audit. The view updates from current app state while background work runs. Source refreshes and tool actions still require their existing explicit actions.
+
+**Automatic discovery configured** is a policy, not proof a library has been selected or validated. **Selected; rechecked during Generate** preserves the existing library admission checks. Recorded history refresh and previous-build library evidence are labeled as historical; neither proves compatibility or freshness for the current slate. A historical-field profile remains subject to the existing qualification and source revalidation during build.
+
 ## Task dashboard and automatic build preparation
 
 The **Tasks…** button stays on the main workspace beside a compact count of work underway and tasks needing attention. Open it to see builds, history refresh, results/learning operations, ownership estimation, and overnight preparation. Each task shows its current phase or outcome, elapsed time, and time since its last progress update. Select a task to inspect recent messages. **Cancel / pause selected task** uses that operation's existing safe cancellation or checkpoint mechanism; a stop request remains active until the worker retires. Tasks without cancellation support have no enabled stop button.
@@ -54,11 +72,11 @@ Turn off **Settings > Automatically reuse compatible libraries** to use fresh ge
 
 2. Choose **Slate Readiness**. For NFL, it refreshes a stale game-day check before auditing the slate.
 
-3. Choose **Showdown** or **Classic** and set the lineup count. If you saved a setup earlier, choose **Settings > Apply or Delete Recipes** first.
+3. Choose **Showdown** or **Classic** and set **Lineups** above the player list. If you saved a setup earlier, choose **Settings > Apply or Delete Recipes** first.
 
-4. Review **Build** and **Portfolio Rules**.
+4. Optionally open **Advanced** to review **Build** and **Portfolio Rules**; closing it preserves your settings.
 
-5. For NFL Classic, turn on **NFL SIM Edge** when you want field-based tournament scoring.
+5. For NFL, choose **Time budget**. Timed options use Deep; Fast preserves your SIM setting. The NFL Classic **NFL SIM Edge** toggle remains in **Advanced > Build**.
 
 6. Choose **Generate** and wait for the progress message to finish.
 
@@ -80,7 +98,7 @@ The pictured examples use representative NFL data. Player names, projections, ow
 
 
 
-The detailed Build, Portfolio Rules, and Data and Learning controls are folded away at startup so the player pool and generated lineups get most of the window. The quiet recipe summary beside the sport shows the active build style, salary approach, and, when applicable, SIM depth and contest preset. Choose **Settings > Show Build Controls** to change the detailed recipe. Choose **Settings > Show Saved Portfolio** to hide or restore the saved-lineup panel.
+The main Build panel keeps lineup count, NFL time budget, Advanced, and Generate visible. Its summary shows the current recipe beneath those controls. The detailed Build, Portfolio Rules, and Data and Learning controls are folded away at startup so the player pool and generated lineups get most of the window. Choose **Advanced** or **Settings > Advanced Build Controls** to change the detailed recipe. Choose **Settings > Show Saved Portfolio** to hide or restore the saved-lineup panel.
 
 
 
@@ -422,7 +440,7 @@ Large candidate pools, NFL simulation, and restrictive portfolio rules take more
 
 
 
-Choose a **Compute profile** in **Build**, then **Search & output** for search scope, selection mode and optional resource details. Fast remains the startup default; named Deep profiles apply their listed counts together. You can choose 1–60 minutes, up to 20,000 candidate lineups, a 2,000-lineup validation shortlist, 10,000 sampled validation opponents, 4–32 search seeds, and 250–1,000 screening scenarios. The Custom profile allows up to 10,000 validation scenarios; Deep uses at least 2,500. Screening uses the smaller of its configured count and the validation scenario setting, with a minimum of 250. Its opponent field stays smaller than the validation field.
+Choose **Time budget** on the main panel. For detailed settings, open **Advanced > Build**, choose a **Compute profile**, then **Search & output** for search scope, selection mode and optional resource details. Fast remains the startup default; named Deep profiles apply their listed counts together. You can choose 1–60 minutes, up to 20,000 candidate lineups, a 2,000-lineup validation shortlist, 10,000 sampled validation opponents, 4–32 search seeds, and 250–1,000 screening scenarios. The Custom profile allows up to 10,000 validation scenarios; Deep uses at least 2,500. Screening uses the smaller of its configured count and the validation scenario setting, with a minimum of 250. Its opponent field stays smaller than the validation field.
 
 
 
@@ -1348,7 +1366,7 @@ On one frozen Rams–49ers input, 681 diagnostic candidates and 2,000 shared sce
 
 ## Simplified build controls
 
-Choose **Settings > Show Build Controls** if the controls are folded away. The **Build** tab has one **Compute profile** selector: Fast, Baseline, Balanced, Thorough, Extended, Maximum and Custom. Choosing a Deep profile enables SIM and applies its counts together while preserving search scope, output selection and portfolio rules. Custom opens the resource editor with current values. Fast retains the existing Fast settings; NFL Classic can still enable its optional SIM and change its scenario count.
+Choose **Settings > Advanced Build Controls** if the controls are folded away. The **Build** tab has one **Compute profile** selector: Fast, Baseline, Balanced, Thorough, Extended, Maximum and Custom. Choosing a Deep profile enables SIM and applies its counts together while preserving search scope, output selection and portfolio rules. Custom opens the resource editor with current values. Fast retains the existing Fast settings; NFL Classic can still enable its optional SIM and change its scenario count.
 
 **Search & output** groups all-style search and Individual ranking/Portfolio selection. Preset resource counts are collapsed and read-only; use Show resource details to inspect them, or Custom to edit them. The main summary shows the active scope, selection method, time ceiling and validation count. When all five styles are searched, the single Build style selector is disabled and labeled accordingly. Named time profiles do not choose a build style or a portfolio strategy for you.
 
