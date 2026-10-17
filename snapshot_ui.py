@@ -94,6 +94,8 @@ class SnapshotActions:
                     QtWidgets.QMessageBox.Yes|QtWidgets.QMessageBox.No,QtWidgets.QMessageBox.No)!=QtWidgets.QMessageBox.Yes:
                     return
                 self._candidate_library=path;self._candidate_library_allow_partial=partial
+                from build_preparation import remember_library
+                remember_library(getattr(self, 'app_settings', None), path)
                 coverage='partial' if partial else 'complete'
                 self.lbl_snapshot_data.setText(f"Prepared roster library loaded: {info['saved']:,} saved; {coverage} coverage — Deep required")
                 self.status.showMessage('Choose Deep with SIM enabled, then Build. Current rules will be checked and a bounded Captain-balanced sample scored.',15000)
@@ -103,6 +105,8 @@ class SnapshotActions:
             _,report=load_candidates(path,self.players,kind=self._contest_mode(),
                 salary_cap=float(recipe.get('salary_cap') or 50000),salary_strategy=recipe.get('salary_strategy','Near Cap'),rules=self._portfolio_rules())
             self._candidate_library=path
+            from build_preparation import remember_library
+            remember_library(getattr(self, 'app_settings', None), path)
             self._candidate_library_allow_partial=False
             self.status.showMessage(f"Library loaded: {report['accepted']:,} eligible candidates. Choose Deep with SIM enabled, then Build. Current inputs will be used.",15000)
             self.lbl_snapshot_data.setText(f"Candidate library loaded: {report['accepted']:,} candidates — Deep required")
@@ -113,9 +117,11 @@ class SnapshotActions:
 
     def on_clear_candidate_library(self):
         self._candidate_library=''
+        if hasattr(self, 'action_auto_library'):
+            self.action_auto_library.setChecked(False)
         self._candidate_library_allow_partial=False
         self._refresh_snapshot_label()
-        self.status.showMessage('Candidate library cleared. Next build generates fresh candidates.',6000)
+        self.status.showMessage('Candidate library cleared. Automatic library reuse is off. Next build generates fresh candidates.',6000)
 
     def on_prepare_showdown_library(self):
         if self._snapshot_busy():return

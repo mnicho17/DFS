@@ -1,0 +1,110 @@
+from test_environment import install
+install()
+import copy
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+from PyQt5 import QtCore
+from build_preparation import discover_libraries, remember_library, remembered_libraries
+from showdown_library import prepare
+from test_showdown_library import players
+
+
+class BuildPreparationTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.players = players()
+
+    def discover(self, known=(), **kwargs):
+        return list(discover_libraries(known, self.root, self.players, 'showdown', 50000, **kwargs))
+
+    def test_complete_library_is_discovered_read_only_and_deduplicated(self):
+        path = self.root/'complete.sdlib'
+        prepare(path, self.players)
+        before = path.read_bytes()
+        found = self.discover((str(path), str(path)))
+        self.assertEqual(found, [str(path.resolve())])
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_partial_wrong_slate_and_corrupt_libraries_are_skipped(self):
+        partial, wrong, corrupt = (self.root/name for name in ('partial.sdlib', 'wrong.sdlib', 'corrupt.sdlib'))
+        prepare(partial, self.players, max_candidates=2)
+        other = copy.deepcopy(self.players)
+        for p in other: p['GameInfo'] = 'next game'
+        prepare(wrong, other)
+        corrupt.write_bytes(b'not sqlite')
+        messages = []
+        self.assertEqual(self.discover(progress=messages.append), [])
+        self.assertGreaterEqual(len(messages), 3)
+
+    def test_cancellation_and_time_budget_prevent_probing(self):
+        with patch('showdown_library.validate_library') as validate:
+            self.assertEqual(self.discover(cancelled=lambda: True), [])
+            self.assertEqual(self.discover(seconds=0), [])
+            validate.assert_not_called()
+
+    def test_external_path_is_remembered_and_clearable_without_disk_search(self):
+        settings = QtCore.QSettings(str(self.root/'settings.ini'), QtCore.QSettings.IniFormat)
+        settings.setValue('build/known_libraries', '{broken')
+        for i in range(30): remember_library(settings, self.root/f'{i}.sdlib')
+        remember_library(settings, self.root/'29.sdlib')
+        rows = remembered_libraries(settings)
+        self.assertEqual(len(rows), 24)
+        self.assertTrue(rows[0].endswith('29.sdlib'))
+        self.assertEqual(len(set(rows)), 24)
+
+    def test_automatic_load_failure_falls_back_but_explicit_selection_fails(self):
+        from main_window import LineupBuildWorker
+        def run(explicit):
+            worker = LineupBuildWorker(copy.deepcopy(self.players), kind='showdown', num_lineups=1,salary_cap=50000,
+                sim_enabled=True, compute_mode='Deep', automatic_libraries=('remembered.sdlib',),
+                candidate_library='explicit.sdlib' if explicit else '')
+            results, errors, progress = [], [], []
+            worker.finished.connect(results.append)
+            worker.error.connect(errors.append)
+            worker.progress.connect(lambda a,b,text: progress.append(text))
+            with patch('build_preparation.discover_libraries', return_value=iter(['remembered.sdlib'])), \
+                 patch.object(worker, '_load_candidate_library', side_effect=ValueError('coverage conflict')), \
+                 patch('showdown_simulation.run_deep_showdown', return_value=dict(kind='showdown',lineups=[])):
+                worker.run()
+            return worker, results, errors, progress
+        worker, results, errors, progress = run(False)
+        self.assertTrue(results)
+        self.assertFalse(errors)
+        self.assertEqual(worker.candidate_library, '')
+        self.assertTrue(any('fresh candidate search' in text for text in progress))
+        _, results, errors, _ = run(True)
+        self.assertFalse(results)
+        self.assertTrue(errors)
+
+    def test_auto_reuse_runs_existing_loader_and_records_provenance(self):
+        from main_window import LineupBuildWorker
+        worker = LineupBuildWorker(copy.deepcopy(self.players), kind='showdown', num_lineups=1,salary_cap=50000,
+            sim_enabled=True, compute_mode='Deep', automatic_libraries=('saved.sdlib',))
+        def load(profile):
+            worker.library_candidates = [object()]
+            worker.library_report = dict(accepted=1)
+            return True
+        with patch('build_preparation.discover_libraries', return_value=iter(['saved.sdlib'])), \
+             patch.object(worker, '_load_candidate_library', side_effect=load) as loader, \
+             patch('showdown_simulation.run_deep_showdown', return_value=dict(kind='showdown',lineups=[])):
+            worker.run()
+        loader.assert_called_once()
+        self.assertTrue(worker.library_report['automatic_discovery'])
+        self.assertEqual(worker.library_report['library_path'], 'saved.sdlib')
+
+    def test_fast_and_saved_repair_do_not_discover_libraries(self):
+        from main_window import LineupBuildWorker
+        for options in (dict(compute_mode='Fast'), dict(compute_mode='Deep',repair_source='saved')):
+            worker = LineupBuildWorker(copy.deepcopy(self.players),kind='showdown',num_lineups=1,salary_cap=50000,
+                sim_enabled=True,automatic_libraries=('saved.sdlib',),**options)
+            # Stop immediately after preparation without doing an optimizer run.
+            with patch('build_preparation.discover_libraries') as discovery, \
+                 patch('showdown_simulation.run_deep_showdown',return_value=dict(kind='showdown',lineups=[])), \
+                 patch('optimizers.ShowdownOptimizer.build_lineups',return_value=[]):
+                worker.run()
+            discovery.assert_not_called()
