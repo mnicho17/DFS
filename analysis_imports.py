@@ -458,7 +458,7 @@ def _snapshot(path, digest, root, cancelled):
 
 
 def import_folders(results_folder, salary_folder='', *, username='', db_path=None,
-                   cancelled=lambda: False, progress=lambda done, total, text: None):
+                   cancelled=lambda: False, progress=lambda done, total, text: None, watch_paths=None):
     """Commit complete files individually; duplicates never rerun result analysis.
 
     Missing configured roots abort before writes. Other per-file errors are
@@ -485,11 +485,16 @@ def import_folders(results_folder, salary_folder='', *, username='', db_path=Non
             for root in roots:
                 for folder, dirs, names in os.walk(root, followlinks=False, onerror=scan_error):
                     _check(cancelled)
+                    if watch_paths is not None and len(watch_paths) < 4096:
+                        watch_paths.append(str(Path(folder).resolve()))
                     dirs[:] = sorted(d for d in dirs if not Path(folder, d).is_symlink())
                     for name in sorted(names):
                         path = Path(folder, name)
                         if path.suffix.casefold() == '.csv' and not path.is_symlink():
-                            files.add(path.resolve())
+                            resolved = path.resolve()
+                            files.add(resolved)
+                            if watch_paths is not None and len(watch_paths) < 4096:
+                                watch_paths.append(str(resolved))
             for index, path in enumerate(sorted(files), 1):
                 _check(cancelled)
                 progress(index, len(files), f'Checking {path.name} ({index}/{len(files)})')

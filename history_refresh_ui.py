@@ -38,6 +38,8 @@ class HistoryRefreshController(QtCore.QObject):
         self._pending = None
         self._reports = 0
         self._deferred_start = False
+        from history_folder_watch import HistoryFolderWatch
+        self.watch = HistoryFolderWatch(self)
 
     def report_started(self):
         self._reports += 1
@@ -53,14 +55,35 @@ class HistoryRefreshController(QtCore.QObject):
     def busy(self):
         return self.thread is not None
 
+    def status_line(self):
+        if self.busy:
+            return self.text.split('\n')[0]
+        if self.watch.pending:
+            return 'History refresh queued; waiting for quiet sources and current app work.'
+        if self.watch.paused:
+            return self.watch.message
+        return self.text.split('\n')[0]
+
     def enabled(self):
         return str(self.settings.value('learning/auto_history_refresh', 'true')).lower() in ('true', '1')
 
     def startup(self):
         if self.enabled() and (self.settings.value('learning/results_folder', '') or self.settings.value('learning/salary_folder', '')):
-            self.start()
+            self.watch.arm()
+            self.start(automatic=True)
 
-    def start(self):
+    def set_enabled(self, value):
+        self.settings.setValue('learning/auto_history_refresh', bool(value))
+        if value:
+            self.watch.arm()
+        else:
+            self.watch.cancel_pending()
+            self.watch.arm()
+        self.changed.emit()
+
+    def start(self, *, automatic=False):
+        if self.watch.closed:
+            return False
         if self._reports:
             self._deferred_start = True
             return False
@@ -72,6 +95,8 @@ class HistoryRefreshController(QtCore.QObject):
             self.text = 'Choose Results and/or Salary folders in Results & Learning first.'
             self.changed.emit()
             return False
+        if not automatic:
+            self.watch.resume()
         self._pending = None
         self.text = 'Refreshing saved Results and Salary folders…'
         worker = self.worker = CombinedImportWorker(results, salaries,
@@ -107,6 +132,7 @@ class HistoryRefreshController(QtCore.QObject):
         self._pending = dict(errors=[message], failed=True)
 
     def cancel(self):
+        self.watch.pause()
         if self.busy:
             self.stop.set()
             self.text = 'Cancelling refresh; waiting for safe worker retirement…'
@@ -122,5 +148,6 @@ class HistoryRefreshController(QtCore.QObject):
         self.thread = self.worker = None
         thread.deleteLater()
         self._pending = None
+        self.watch.accept_result(result)
         self.changed.emit()
         self.completed.emit()

@@ -4,7 +4,7 @@ from compute_settings import DEEP_PROFILES, matching_deep_profile
 
 
 def setup_simple_build_panel(w, layout, count_labels, cap_labels):
-    panel = w.simple_build_panel = QtWidgets.QFrame(w)
+    panel = w.simple_build_panel = QtWidgets.QGroupBox('Build setup', w)
     panel.setObjectName('simpleBuildPanel')
     panel.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Maximum)
     grid = QtWidgets.QGridLayout(panel)

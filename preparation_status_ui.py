@@ -54,9 +54,11 @@ def preparation_rows(w):
     text = str(getattr(controller, 'text', '') or '')
     busy = bool(controller and controller.busy)
     stopping = bool(busy and controller.stop is not None and controller.stop.is_set())
-    state = 'Stopping safely' if stopping else 'Refresh underway' if busy else 'Last recorded refresh' if text else 'No recorded refresh'
+    watch = getattr(controller, 'watch', None)
+    state = 'Stopping safely' if stopping else 'Refresh underway' if busy else 'Refresh queued' if watch and watch.pending else 'Last recorded refresh' if text else 'No recorded refresh'
     add('history', 'Results / salary history', state,
         (text or 'Choose source folders and refresh in Results and Learning.')
+        + ('\n' + watch.message if watch else '')
         + '\nA recorded refresh is not proof the folders or source files are unchanged now. Historical-field qualification is checked separately.', 'Results and Learning')
     library = (getattr(w, 'last_sim_report', {}) or {}).get('candidate_library') or {}
     if library:
@@ -83,12 +85,21 @@ class PreparationStatusDialog(QtWidgets.QDialog):
         box.addWidget(note)
         self.table = QtWidgets.QTreeWidget()
         self.table.setHeaderLabels(['Preparation', 'Status'])
+        self.table.setObjectName('preparationTable')
+        self.table.setAlternatingRowColors(True)
         self.table.setRootIsDecorated(False)
         self.table.setColumnWidth(0, 270)
-        box.addWidget(self.table)
         self.details = QtWidgets.QPlainTextEdit()
         self.details.setReadOnly(True)
-        box.addWidget(self.details)
+        self.details.setObjectName('preparationText')
+        from pane_styles import labelled_pane
+        self.panes = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        self.panes.setHandleWidth(8)
+        self.panes.setChildrenCollapsible(False)
+        self.panes.addWidget(labelled_pane('Preparation overview', self.table, 'preparationOverview'))
+        self.panes.addWidget(labelled_pane('Selected item details and next steps', self.details, 'preparationDetails'))
+        self.panes.setSizes([250, 230])
+        box.addWidget(self.panes)
         buttons = QtWidgets.QHBoxLayout()
         self.action = QtWidgets.QPushButton('Open selected tool')
         self.action.clicked.connect(self.open_tool)
@@ -127,7 +138,9 @@ class PreparationStatusDialog(QtWidgets.QDialog):
         item = self.table.currentItem()
         key = item.data(0, QtCore.Qt.UserRole) if item else None
         row = next((row for row in self.rows if row['key'] == key), None)
-        self.details.setPlainText(row['detail'] if row else '')
+        text = row['detail'] if row else ''
+        if self.details.toPlainText() != text:
+            self.details.setPlainText(text)
         self.action.setEnabled(row is not None)
         self.action.setText(row['action'] if row else 'Open selected tool')
 

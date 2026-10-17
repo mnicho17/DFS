@@ -82,6 +82,10 @@ QToolTip { background-color: #202634; color: #F1F3F4; border: 1px solid #3A4354;
 """
 
 
+from pane_styles import PANE_QSS
+DARK_QSS += PANE_QSS
+
+
 # ---- ensure local folder is on sys.path ----
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
