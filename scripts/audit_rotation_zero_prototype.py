@@ -9,7 +9,12 @@ parser.add_argument('--db',required=True)
 parser.add_argument('--output-prefix',required=True)
 parser.add_argument('--completed-before',required=True)
 parser.add_argument('--interaction-study',action='store_true',help='Predeclared shared-gate and weaker-hurdle comparisons; no fitting')
+parser.add_argument('--joint-study',action='store_true',help='Predeclared finite-count and occupancy comparisons')
+parser.add_argument('--evaluation-after',help='Exclusive game-date boundary fixed before reading holdout scores')
 args=parser.parse_args()
+if args.evaluation_after:
+ dt.date.fromisoformat(args.evaluation_after)
+ if args.evaluation_after>=args.completed_before:parser.error('Holdout boundary must precede completion cutoff')
 dt.date.fromisoformat(args.completed_before)
 root=Path(args.output_prefix).resolve().parent
 root.mkdir(parents=True,exist_ok=True)
@@ -49,6 +54,10 @@ profile_options={'baseline':None,'frozen_hurdle':dict(opportunity_basis='frozen'
 if args.interaction_study:
  profile_options.update(shared_quarter=dict(team_gate_share=.25),
   weaker_hurdle=dict(zero_strength=.5),weaker_shared=dict(zero_strength=.5,team_gate_share=.25))
+if args.joint_study:
+ profile_options={'baseline':None,'sampled_hurdle':dict(opportunity_basis='sampled'),
+  'joint_counts':dict(joint_scoring='counts'),'joint_occupancy':dict(joint_scoring='occupancy')}
+report['evaluation']=dict(kind='temporal_holdout' if args.evaluation_after else 'development_retrospective',after=args.evaluation_after)
 report['prototype']['profiles']=profile_options
 report['prototype']['modes']=list(profile_options)
 report['limitations']=[v for v in report['limitations'] if not v.startswith('Kicker primary summaries')]
@@ -67,6 +76,7 @@ with _connect(db,True) as conn:
  catalog=[];manifests={}
  raw=conn.execute('SELECT contest_key,result_hash,salary_hash,start_date,end_date,name,audit_json FROM opponent_contests WHERE format=? AND version=? AND end_date<? ORDER BY end_date,contest_key',('showdown',VERSION,report['completed_before'])).fetchall()
  for key,r,s,start,end,name,encoded in raw:
+  if args.evaluation_after and end<=args.evaluation_after:continue
   try:
    if r not in sources or s not in sources or pairs.get(r)!=s:raise ValueError('Unresolved original source/salary association')
    verify(sources[r]);verify(sources[s])
@@ -96,7 +106,8 @@ with _connect(db,True) as conn:
     observations.update(comparison)
    from rotation_zero_prototype import RotationZeroPrototype,eligible
    keys=[player_key(p) for p in pool]
-   models={name:None if options is None else RotationZeroPrototype(**options) for name,options in profile_options.items()}
+   from joint_opportunity_prototype import JointOpportunityPrototype
+   models={name:None if options is None else JointOpportunityPrototype(scoring=options['joint_scoring']) if 'joint_scoring' in options else RotationZeroPrototype(**options) for name,options in profile_options.items()}
    values={name:{key:[] for key in keys} for name in models}
    target=[p for p in pool if eligible(p)]
    original=json.dumps(pool,sort_keys=True)
@@ -148,18 +159,18 @@ with _connect(db,True) as conn:
 for source in verified.values():ai._verify(source,lambda:False)
 audit.revalidate();assert version==model_version(),'Scoring source changed'
 report['summary']={}
-for profile in profile_options:
+for profile in profile_options if report['games'] else ():
  game_metrics=[{k:statistics.mean(r['profiles'][profile][k] for r in g['rows']) for k in ('bias','crps','interval_score','inside','predicted_zero','zero_brier')} for g in report['games'] if g['rows']]
  team_metrics=[{k:statistics.mean(t['profiles'][profile][k] for t in g['teams'] if t['profiles'][profile][k] is not None) for k in ('offense_mean','offense_sd','offense_p90','qb_receiver_correlation','rotation_pair_correlation','kicker_mean','kicker_zero','rotations_all_zero')} for g in report['games']]
  report['summary'][profile]=dict(games=len(game_metrics),observations=sum(len(g['rows']) for g in report['games']),
   **{k:statistics.mean(g[k] for g in game_metrics) for k in game_metrics[0]},
   interactions={k:statistics.mean(g[k] for g in team_metrics) for k in team_metrics[0]})
- if args.interaction_study:
+ if args.interaction_study or args.joint_study:
   report['summary'][profile]['subgroups']={}
   for label,is_zero in [('actual_zero',True),('actual_positive',False)]:
    groups=[[r['profiles'][profile]['crps'] for r in g['rows'] if (r['actual']==0)==is_zero] for g in report['games']]
    present=[statistics.mean(v) for v in groups if v]
    report['summary'][profile]['subgroups'][label]=dict(games=len(present),observations=sum(map(len,groups)),
     crps=statistics.mean(present) if present else None)
-report['status']='complete';save()
+report['status']='complete' if report['games'] else 'no_qualified_games';save()
 print(json.dumps(report['summary'],indent=2),flush=True)

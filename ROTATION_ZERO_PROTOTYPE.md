@@ -149,3 +149,39 @@ opportunity/scoring model. A gate alone trades zero calibration, positive-score
 shape and dependence against one another. Next validation should reserve new
 qualified games for holdout checks and assess observed joint events and
 positive tails before considering any default change.
+
+
+## Finite opportunity allocation follow-up (diagnostic only)
+
+`--joint-study` compares baseline, the original sampled hurdle, finite-count
+scoring and finite-count occupancy scoring. `joint_opportunity_prototype.py`
+allocates randomized integer carry/target budgets within each recorded team and
+position group, using the shared sampled workload probabilities. Every event
+has exactly one participant or goes to the unused reserve. Targets can produce
+at most one catch, with the frozen catch-rate assumption. The expected assigned
+counts equal the original sampled workloads; no teammate shares are refitted.
+
+Count scoring multiplies each qualified rotation score by realized weighted
+opportunities divided by expected weighted opportunities. Weights use the frozen
+workload's expected rushing and receiving points per event. Occupancy scoring
+uses the same counts but only distinguishes zero from positive opportunities;
+its compensating positive uplift uses the exact zero probability under the
+randomized finite budget. Both preserve conditional means in expectation.
+Zero expected opportunities with a positive score fail closed. Parent simulator
+RNG, inputs, QB/starter/DST draws and workload dictionaries remain unchanged.
+Kicker feedback runs after the altered rotation scores.
+
+This remains a partial joint model: all recorded workload participants compete
+for latent opportunities, but only qualified rotation scores use those counts.
+QB and starter scores do not yet reconcile to the realized events. Yards,
+touchdowns, bonuses and fumbles are not drawn as discrete events. Mean-preserving
+residual scaling can inflate tails. Conservation alone is not evidence of
+predictive improvement, and no production option enables these models.
+
+The development cutoff is exclusive October 12, 2026. Candidate temporal
+validation uses `--evaluation-after 2026-10-11 --completed-before 2026-10-17`.
+These boundaries were fixed before examining the new prototype results. Newer
+source games do not automatically constitute an independent blind holdout:
+previously inspected outcomes must be disclosed. If no games meet the existing
+source, pregame evidence and outcome scan safeguards, the report records
+`no_qualified_games` with no summary. No scan bounds are relaxed to fill it.
