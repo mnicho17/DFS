@@ -95,3 +95,57 @@ rotation correlations, and kicker feedback. All comparisons use the same seeds,
 qualified pregame evidence and source safeguards. Controls are not selected or
 fitted from these historical scores. Correlation alone cannot select a winner:
 shared gates can create excessive simultaneous failures or team upper tails.
+
+
+Why the original correlations fall: conditional on a baseline score X and zero
+probability q, the transformed score has mean X and additional variance
+X^2*q/(1-q). Independent gates add no conditional cross-player covariance.
+Pearson correlations therefore weaken even when the original cross-player
+covariance is retained. Shared gates add covariance through simultaneous zero
+and positive events; this does not demonstrate that their joint pattern matches
+real football outcomes. A weaker hurdle reduces both variance inflation and
+zero-outcome benefits. These are structural tradeoffs, not forecast-mean bugs.
+
+
+### Follow-up results, October 17, 2026
+
+Same eight games / 102 outcomes / three seeds x 2,000 scenarios per profile.
+All source/evidence revalidation and protected-draw assertions passed. Four
+new tests cover control bounds, conditional means/uplift, marginal versus joint
+zeros, and RNG/input/order invariance. No forecasts or production data changed.
+
+| Profile | Overall CRPS | Positive-outcome CRPS | Zero-outcome CRPS | Predicted zeros | Rotation correlation |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 2.6490 | 3.2020 | 1.2886 | 0.0% | .2346 |
+| Original sampled hurdle | 2.5449 | 3.2401 | .8722 | 24.4% | .1375 |
+| 25% shared gate | 2.5494 | 3.2448 | .8774 | 24.4% | .1554 |
+| Half-strength hurdle | 2.5805 | 3.1969 | 1.0802 | 12.2% | .1821 |
+| Half strength + 25% shared | 2.5837 | 3.2002 | 1.0839 | 12.2% | .1918 |
+
+Subgroups contain 31 zero and 71 positive outcomes, with within-game averages
+then equal-game weighting. Observed zeros were 30.5% with that weighting.
+Half strength has a tiny positive-outcome improvement over baseline (.0051),
+and a larger improvement over the original hurdle (.0433), but substantially
+underpredicts zeros. These are exploratory results on the same historical
+sample, not independent confirmation of improved forecasting.
+
+| Profile | Team offense SD | Team offense p90 | QB/receiver correlation | Simultaneous rotation zeros |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 30.1282 | 120.4328 | .5422 | 0.000% |
+| Original sampled hurdle | 30.8489 | 121.1491 | .5216 | 0.000% |
+| 25% shared gate | 30.9822 | 121.4123 | .5202 | 0.064% |
+| Half-strength hurdle | 30.3697 | 120.7781 | .5349 | 0.000% |
+| Half strength + 25% shared | 30.4242 | 120.7713 | .5337 | 0.031% |
+
+Simultaneous zeros means all eligible rotation players on a team score zero in
+one simulated scenario, averaged within game then across games. Simulated rates
+are sensitivity diagnostics; the experiment does not validate them against a
+large observed joint-event sample. Correlations in the baseline are references,
+not established truth. Shared gates raise team variance and do not improve
+marginal CRPS here. No profile is selected or activated.
+
+The remaining problem needs more independent evidence and a coherent joint
+opportunity/scoring model. A gate alone trades zero calibration, positive-score
+shape and dependence against one another. Next validation should reserve new
+qualified games for holdout checks and assess observed joint events and
+positive tails before considering any default change.
