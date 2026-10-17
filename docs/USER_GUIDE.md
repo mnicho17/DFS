@@ -34,6 +34,16 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 
 
 
+## Simple Build panel
+
+The main workspace now keeps **Lineups**, **Time budget** (NFL), **Advanced**, and **Generate** above the player list. Choose Showdown or Classic using the existing lineup tabs, set the count, optionally lock or fade players, then Generate. Each format retains its own lineup count and salary cap. The lineup toolbar below the player list now contains saving and export actions instead of duplicate count/cap inputs.
+
+**Time budget** maps directly to the existing Fast and Deep profiles. Timed choices use the corresponding Deep search and validation settings and may finish before the maximum time. Choosing Fast retains the existing SIM toggle. **Custom…** opens Advanced without changing compute mode, SIM, or budgets. If a recipe has custom Deep settings, the time selector shows its stored maximum instead of replacing it with a preset.
+
+**Advanced** reveals the existing Build, Portfolio Rules, and Data and Learning tabs. Salary caps, ownership influence, construction rules, historical-field preparation, and detailed compute settings remain editable there. Advanced Build controls scroll on smaller screens and at larger fonts. Closing Advanced does not reset any setting. The main summary shows the current format, automatic/manual entry target, style, salary strategy, cap, SIM state, and requested historical field; hover for further details. Entry targets are defaults, not verified contest sizes or payout schedules.
+
+The **Tasks…** dashboard remains available regardless of whether Advanced is expanded. No optimizer, projection, SIM-model, ranking, or experimental-default changes are part of this layout update.
+
 ## Task dashboard and automatic build preparation
 
 The **Tasks…** button stays on the main workspace beside a compact count of work underway and tasks needing attention. Open it to see builds, history refresh, results/learning operations, ownership estimation, and overnight preparation. Each task shows its current phase or outcome, elapsed time, and time since its last progress update. Select a task to inspect recent messages. **Cancel / pause selected task** uses that operation's existing safe cancellation or checkpoint mechanism; a stop request remains active until the worker retires. Tasks without cancellation support have no enabled stop button.
@@ -54,11 +64,11 @@ Turn off **Settings > Automatically reuse compatible libraries** to use fresh ge
 
 2. Choose **Slate Readiness**. For NFL, it refreshes a stale game-day check before auditing the slate.
 
-3. Choose **Showdown** or **Classic** and set the lineup count. If you saved a setup earlier, choose **Settings > Apply or Delete Recipes** first.
+3. Choose **Showdown** or **Classic** and set **Lineups** above the player list. If you saved a setup earlier, choose **Settings > Apply or Delete Recipes** first.
 
-4. Review **Build** and **Portfolio Rules**.
+4. Optionally open **Advanced** to review **Build** and **Portfolio Rules**; closing it preserves your settings.
 
-5. For NFL Classic, turn on **NFL SIM Edge** when you want field-based tournament scoring.
+5. For NFL, choose **Time budget**. Timed options use Deep; Fast preserves your SIM setting. The NFL Classic **NFL SIM Edge** toggle remains in **Advanced > Build**.
 
 6. Choose **Generate** and wait for the progress message to finish.
 
