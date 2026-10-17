@@ -91,7 +91,7 @@ class WorkerTask(QtCore.QObject):
                 state = 'Paused / partial'
             elif 'requested' in result and len(result.get('lineups') or []) < result['requested']:
                 state = 'Incomplete'
-            elif result.get('errors') or result.get('unpaired') or result.get('username_history', {}).get('errors'):
+            elif result.get('errors') or result.get('unpaired') or result.get('changed_sources') or result.get('username_history', {}).get('errors'):
                 state = 'Needs review'
             text = (self.formatter(result) if self.formatter else
                     str(result.get('error') or result.get('pause_reason') or
@@ -164,17 +164,27 @@ def task_panel(hub, parent):
     table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
     table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
     table.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.Stretch)
+    table.setAlternatingRowColors(True)
     table.setWordWrap(False)
     for column, width in enumerate((285, 140, 85, 170)):
         table.setColumnWidth(column, width)
     details = QtWidgets.QPlainTextEdit()
     details.setReadOnly(True)
-    details.setMaximumHeight(110)
+    details.setPlaceholderText('Select a task above to see recent progress messages.')
+    details.setObjectName('taskText')
+    details.setMinimumHeight(65)
     stop = QtWidgets.QPushButton('Cancel / pause selected task')
     stop.setObjectName('taskStop')
     stop.setEnabled(False)
-    box.addWidget(table)
-    box.addWidget(details)
+    from pane_styles import labelled_pane
+    panes = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+    panes.setObjectName('taskPaneSplitter')
+    panes.setHandleWidth(8)
+    panes.setChildrenCollapsible(False)
+    panes.addWidget(labelled_pane('Task progress and outcomes', table, 'taskOverview'))
+    panes.addWidget(labelled_pane('Selected task messages', details, 'taskDetails'))
+    panes.setSizes([230, 110])
+    box.addWidget(panes)
     box.addWidget(stop)
 
     def selected():
@@ -184,7 +194,9 @@ def task_panel(hub, parent):
     def selection():
         row = hub.rows.get(selected())
         stop.setEnabled(bool(row and row['cancel']))
-        details.setPlainText('\n'.join(row['log']) if row else '')
+        text = '\n'.join(row['log']) if row else ''
+        if details.toPlainText() != text:
+            details.setPlainText(text)
 
     def refresh():
         key = selected()

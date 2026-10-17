@@ -44,6 +44,16 @@ The main workspace now keeps **Lineups**, **Time budget** (NFL), **Advanced**, a
 
 The **Tasks…** dashboard remains available regardless of whether Advanced is expanded. No optimizer, projection, SIM-model, ranking, or experimental-default changes are part of this layout update.
 
+## Pane visibility and automatic history watching
+
+Build setup, preparation overview/details, and task progress/messages now have labeled pane boundaries with stronger contrast. Wider splitter handles make resizing easier; task and preparation panes can be resized vertically. Background updates preserve your scroll position when the selected details have not changed.
+
+With **Refresh history automatically (startup and folder changes)** enabled in Results and Learning, the app watches the configured Results/Salary folders and the CSV files/subfolders found during its existing import scan. A change queues a visible history-refresh request in **Tasks** and **Preparation**, waits for 30 seconds of quiet, and runs the existing validated importer after other tracked app work and history operations retire. Bursts of events coalesce into one request. No periodic content hashing or extra directory scan is used to detect changes; actual refresh retains the existing full hashing, source snapshots, reconciliation and mapping safeguards. Changed source revisions still require review and do not retarget prior mappings.
+
+Cancellation or refresh errors pause watching until **Refresh history now** resumes it. Turning automatic history off cancels queued automatic requests and removes watches; it does not cancel an already running import. Closing the app cancels queued work and retains existing safe worker retirement. The app must remain open for file notifications. Notifications are not source validation, and a quiet folder is not proof its history is current.
+
+Watch registration is bounded to 4,096 paths and may be limited by Windows or an unavailable drive. Results and Learning and Preparation show partial-registration or paused status; use **Refresh history now** for full coverage, after reconnecting drives, or if filesystem notifications were missed. Newly discovered subfolders/files are registered after import; application-owned analysis-source archives are excluded from watching.
+
 ## Unified preparation summary
 
 Choose **Preparation…** beside **Tasks…** to review inputs, readiness blockers and next actions, candidate-library policy or explicit selection, requested historical field, recorded history refresh, and background work in one place. Select a row to read its details; the action button opens the corresponding existing tool.

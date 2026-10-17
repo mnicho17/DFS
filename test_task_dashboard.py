@@ -52,7 +52,8 @@ class TaskDashboardTests(unittest.TestCase):
     def test_failure_partial_and_incomplete_are_not_reported_as_success(self):
         for result, expected in ((dict(complete=False), 'Paused / partial'),
                                  (dict(requested=50,lineups=[]), 'Incomplete'),
-                                 (dict(errors=['identity conflict']), 'Needs review')):
+                                 (dict(errors=['identity conflict']), 'Needs review'),
+                                 (dict(changed_sources=['revised.csv']), 'Needs review')):
             worker, thread, binding = self.watch()
             worker.finished.emit(result)
             thread.finished.emit()
@@ -143,3 +144,22 @@ class TaskDashboardTests(unittest.TestCase):
         self.assertEqual(self.hub.rows[binding.key]['state'], 'Completed')
         self.assertTrue(observed)
         self.assertTrue(all(t == self.app.thread() for t in observed))
+
+    def test_other_task_progress_preserves_selected_message_scroll(self):
+        from PyQt5.QtTest import QTest
+        panel=task_panel(self.hub,None); panel.resize(1000,500); panel.show()
+        self.addCleanup(panel.deleteLater)
+        selected=self.hub.start('Selected task')
+        self.hub.update(selected,'\n'.join('Message '+str(i) for i in range(100)))
+        other=self.hub.start('Other task')
+        QTest.qWait(150)
+        table=panel.findChild(QtWidgets.QTableWidget,'taskTable')
+        for index in range(table.rowCount()):
+            if table.item(index,0).data(QtCore.Qt.UserRole)==selected: table.setCurrentCell(index,0); break
+        text=panel.findChild(QtWidgets.QPlainTextEdit,'taskText')
+        self.app.processEvents(); text.verticalScrollBar().setValue(40)
+        before=text.verticalScrollBar().value()
+        self.assertGreater(before,0)
+        self.hub.update(other,'Unrelated new progress')
+        QTest.qWait(150)
+        self.assertEqual(text.verticalScrollBar().value(),before)

@@ -44,8 +44,10 @@ class CombinedImportWorker(QtCore.QObject):
                     result['analysis_message']=review['message']
                     result['coverage_reconciled']=review.get('identity_reconciled',False)
             else:
+                watch_paths = []
                 result = import_folders(self.results_folder, self.salary_folder, username=self.username,
-                                        db_path=self.db_path, cancelled=self.cancelled.is_set, progress=self.progress.emit)
+                                        db_path=self.db_path, cancelled=self.cancelled.is_set, progress=self.progress.emit, watch_paths=watch_paths)
+                result['watch_paths'] = watch_paths
                 ids = result.get('analysis_import_ids', [])
                 if ids and not self.cancelled.is_set():
                     from performance_review import analyze_saved_results

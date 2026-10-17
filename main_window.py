@@ -4281,9 +4281,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             from history_refresh_ui import HistoryRefreshController
             self.history_refresh = HistoryRefreshController(self.learning_settings, self.db_path, self)
         refresh_row = QtWidgets.QHBoxLayout()
-        self.auto_history = QtWidgets.QCheckBox('Refresh history automatically at startup')
+        self.auto_history = QtWidgets.QCheckBox('Refresh history automatically (startup and folder changes)')
         self.auto_history.setChecked(self.history_refresh.enabled())
-        self.auto_history.toggled.connect(lambda value: self.learning_settings.setValue('learning/auto_history_refresh', value))
+        self.auto_history.toggled.connect(self.history_refresh.set_enabled)
         refresh_row.addWidget(self.auto_history)
         self.history_refresh_button = QtWidgets.QPushButton('Refresh history now')
         self.history_refresh_button.clicked.connect(self.refresh_username_history)
@@ -4326,10 +4326,13 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.history_refresh.start()
 
     def update_history_status(self):
-        self.history_status.setPlainText(self.history_refresh.text)
+        text = self.history_refresh.text
+        if self.history_refresh.watch.pending or self.history_refresh.watch.paused:
+            text = self.history_refresh.status_line() + '\n' + text
+        self.history_status.setPlainText(text + '\n' + self.history_refresh.watch.message)
         busy = self.history_refresh.busy
         self.history_refresh_button.setEnabled(not busy and self._import_thread is None)
-        self.history_cancel_button.setEnabled(busy and not self.history_refresh.stop.is_set())
+        self.history_cancel_button.setEnabled((busy and not self.history_refresh.stop.is_set()) or self.history_refresh.watch.pending)
         self._set_import_controls(not busy and self._import_thread is None)
 
     def open_opponent_portfolios(self):
@@ -4374,7 +4377,6 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._initial_report_started = True
         self._start_background_import(worker, self._on_report_finished)
         self._import_job['report'] = True
-        self.history_refresh.report_started()
         self.import_status_label.setText('Building report and verifying saved evidence…')
 
     def _on_report_finished(self, result):
@@ -4428,6 +4430,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.results_folder.setText(folder)
             self.learning_settings.setValue("learning/results_folder", folder)
             self.learning_settings.sync()
+            self.history_refresh.watch.configuration_changed()
 
     def choose_salary_folder(self) -> None:
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Choose salary folder", self.salary_folder.text())
@@ -4435,11 +4438,13 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.salary_folder.setText(folder)
             self.learning_settings.setValue("learning/salary_folder", folder)
             self.learning_settings.sync()
+            self.history_refresh.watch.configuration_changed()
 
     def clear_salary_folder(self) -> None:
         self.salary_folder.clear()
         self.learning_settings.setValue("learning/salary_folder", "")
         self.learning_settings.sync()
+        self.history_refresh.watch.configuration_changed()
 
     def _suggest_risk_source(self, index) -> None:
         if self.results_tabs.widget(index) is self.risk:
@@ -4538,6 +4543,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
     def _on_combined_import_finished(self, result) -> None:
         from analysis_imports_ui import import_summary
         message = import_summary(result)
+        self.history_refresh.watch.accept_result(result)
         if result.get('username_history'):
             from history_refresh_ui import refresh_summary
             self.history_refresh.text = refresh_summary(result)
@@ -4640,6 +4646,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_worker = worker
         job = dict(thread=self._import_thread, completion=None)
         self._import_job = job
+        self.history_refresh.report_started()
+        job['history_protected'] = True
         self._import_worker.moveToThread(self._import_thread)
         self._import_thread.started.connect(self._import_worker.run)
         self._import_worker.progress.connect(lambda done, total, text: self._job_progress(job, done, total, text))
@@ -4880,7 +4888,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_thread = None
         self._import_worker = None
         self._import_job = None
-        if job.get('report'):
+        if job.get('history_protected') or job.get('report'):
             self.history_refresh.report_finished(resume=not (self._owns_history_refresh and self._close_after_import))
         self._finish_import_ui()
         if not job.get('report'):
@@ -4904,6 +4912,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        if self._owns_history_refresh:
+            self.history_refresh.watch.shutdown()
         if self._owns_history_refresh and self.history_refresh.busy:
             self._close_after_history_refresh = True
             self.history_refresh.cancel()
@@ -4925,6 +4935,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def reject(self) -> None:
+        if self._owns_history_refresh:
+            self.history_refresh.watch.shutdown()
         if self._owns_history_refresh and self.history_refresh.busy:
             self._close_after_history_refresh = True
             self.history_refresh.cancel()
@@ -7177,7 +7189,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         from learning_db import history_db_path
         self.history_refresh = HistoryRefreshController(self.app_settings, history_db_path(), self)
         self._close_after_history = False
-        self.history_refresh.changed.connect(lambda: self.status.showMessage(self.history_refresh.text.split('\n')[0]))
+        self.history_refresh.changed.connect(lambda: self.status.showMessage(self.history_refresh.status_line()))
         self.history_refresh.completed.connect(self._history_refresh_retired)
         QtCore.QTimer.singleShot(0, self.history_refresh.startup)
 
@@ -7194,6 +7206,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         root = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
 
         root.setObjectName("workspaceSplitter")
+        root.setHandleWidth(8)
 
         self.workspace_splitter = root
 
@@ -8403,6 +8416,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         player_area = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
 
         player_area.setObjectName("playerWorkspaceSplitter")
+        player_area.setHandleWidth(8)
 
         player_area.addWidget(self.tbl_players)
 
@@ -15088,6 +15102,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self._record_repair_attempt(receipt, payload)
 
     def closeEvent(self, event):
+        if getattr(self, 'history_refresh', None):
+            self.history_refresh.watch.shutdown()
         if getattr(self, 'history_refresh', None) and self.history_refresh.busy:
             self._close_after_history = True
             self.history_refresh.cancel()
