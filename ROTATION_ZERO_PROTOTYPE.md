@@ -69,3 +69,29 @@ The audit opens the database read-only. Its JSON includes exclusions, source
 hashes, snapshot receipts, per-player scores, team interaction summaries and
 model identity. Strict model/cache identity includes the prototype source;
 normal-build behavior is additionally checked against a prechange seeded golden.
+
+
+## Dependence and positive-outcome follow-up (diagnostic only)
+
+Use `--interaction-study` on the same audit command to add three predeclared
+comparisons: 25% shared team gates, half-strength independent hurdles, and
+half-strength hurdles with 25% shared team gates. Existing prototype defaults
+remain unchanged, and normal builds still do not invoke any hurdle.
+
+The shared-gate parameter is the probability that a team's rotation players
+use one common uniform draw in a scenario. Otherwise they use independent
+uniforms. Each player's marginal zero probability remains unchanged; same-team
+joint zero probabilities increase. Teams receive separate gate draws. This is
+a dependence sensitivity test, not an empirically fitted football mechanism.
+The hurdle strength multiplies the original zero probability; positive draws
+still divide by survival probability, preserving conditional offensive means.
+Half strength reduces both the number of zeros and the required positive uplift.
+It is not possible to retain the original positive conditional mean, introduce
+zeros, and preserve the original unconditional mean simultaneously.
+
+Reports include CRPS separately for actual-zero and actual-positive outcomes,
+player p95, team simultaneous-rotation-zero frequency, offense SD/p90, QB and
+rotation correlations, and kicker feedback. All comparisons use the same seeds,
+qualified pregame evidence and source safeguards. Controls are not selected or
+fitted from these historical scores. Correlation alone cannot select a winner:
+shared gates can create excessive simultaneous failures or team upper tails.

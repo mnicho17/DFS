@@ -8,6 +8,7 @@ parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--db',required=True)
 parser.add_argument('--output-prefix',required=True)
 parser.add_argument('--completed-before',required=True)
+parser.add_argument('--interaction-study',action='store_true',help='Predeclared shared-gate and weaker-hurdle comparisons; no fitting')
 args=parser.parse_args()
 dt.date.fromisoformat(args.completed_before)
 root=Path(args.output_prefix).resolve().parent
@@ -43,6 +44,13 @@ def scores(source,manifest,salary_hash):
 report['prototype']=dict(version='rotation-zero-prototype-v1',diagnostic_only=True,defaults_changed=False,
  modes=['baseline','frozen_hurdle','sampled_hurdle'],
  limitations='Conditional means of transformed players preserved in expectation; kicker means may drift through nonlinear offense feedback. Shared continuous workload budgets retained, not a discrete opportunity redistribution or full play-by-play model.')
+profile_options={'baseline':None,'frozen_hurdle':dict(opportunity_basis='frozen'),
+ 'sampled_hurdle':dict(opportunity_basis='sampled')}
+if args.interaction_study:
+ profile_options.update(shared_quarter=dict(team_gate_share=.25),
+  weaker_hurdle=dict(zero_strength=.5),weaker_shared=dict(zero_strength=.5,team_gate_share=.25))
+report['prototype']['profiles']=profile_options
+report['prototype']['modes']=list(profile_options)
 report['limitations']=[v for v in report['limitations'] if not v.startswith('Kicker primary summaries')]
 def corr(a,b):
  return statistics.correlation(a,b) if statistics.pstdev(a)>0 and statistics.pstdev(b)>0 else 0.
@@ -51,7 +59,7 @@ def metrics(values,actual):
  return dict(mean=statistics.mean(s),bias=statistics.mean(s)-actual,
   crps=sum(abs(v-actual) for v in s)/n-sum((2*i-n-1)*v for i,v in enumerate(s,1))/(n*n),
   interval_score=hi-lo+10*max(lo-actual,0)+10*max(actual-hi,0),inside=float(lo<=actual<=hi),predicted_zero=zero,
-  zero_brier=(zero-float(actual==0))**2)
+  zero_brier=(zero-float(actual==0))**2,p95=s[int((n-1)*.95)])
 save()
 with _connect(db,True) as conn:
  conn.execute('BEGIN');sources={s['hash']:s for s in ai._sources(conn)}
@@ -87,8 +95,8 @@ with _connect(db,True) as conn:
     if any(observations[k]!=v for k,v in comparison.items() if k in observations):raise ValueError('Cross-export exact player/role score conflict')
     observations.update(comparison)
    from rotation_zero_prototype import RotationZeroPrototype,eligible
-   keys=[player_key(p) for p in pool];models={'baseline':None,'frozen_hurdle':RotationZeroPrototype(opportunity_basis='frozen'),
-    'sampled_hurdle':RotationZeroPrototype(opportunity_basis='sampled')}
+   keys=[player_key(p) for p in pool]
+   models={name:None if options is None else RotationZeroPrototype(**options) for name,options in profile_options.items()}
    values={name:{key:[] for key in keys} for name in models}
    target=[p for p in pool if eligible(p)]
    original=json.dumps(pool,sort_keys=True)
@@ -127,7 +135,8 @@ with _connect(db,True) as conn:
       qb_receiver_correlation=corr(v[player_key(qb[0])],receiving) if len(qb)==1 and receivers else None,
       rotation_pair_correlation=statistics.mean(pairs) if pairs else None,
       kicker_mean=statistics.mean(v[player_key(kicker)]) if kicker else None,
-      kicker_zero=sum(x==0 for x in v[player_key(kicker)])/6000 if kicker else None)
+      kicker_zero=sum(x==0 for x in v[player_key(kicker)])/6000 if kicker else None,
+      rotations_all_zero=sum(all(v[player_key(p)][i]==0 for p in rotations) for i in range(6000))/6000 if rotations else None)
     teams.append(dict(team=team,profiles=profiles))
    report['games'].append(dict(date=row['date'],game=row['game'],source_hash=row['result_hash'],salary_hash=row['salary_hash'],
     snapshot=receipt,rows=rows,teams=teams,eligible=len(target),observed=len(rows),scenarios=6000,
@@ -139,11 +148,18 @@ with _connect(db,True) as conn:
 for source in verified.values():ai._verify(source,lambda:False)
 audit.revalidate();assert version==model_version(),'Scoring source changed'
 report['summary']={}
-for profile in ('baseline','frozen_hurdle','sampled_hurdle'):
+for profile in profile_options:
  game_metrics=[{k:statistics.mean(r['profiles'][profile][k] for r in g['rows']) for k in ('bias','crps','interval_score','inside','predicted_zero','zero_brier')} for g in report['games'] if g['rows']]
- team_metrics=[{k:statistics.mean(t['profiles'][profile][k] for t in g['teams'] if t['profiles'][profile][k] is not None) for k in ('offense_mean','offense_sd','offense_p90','qb_receiver_correlation','rotation_pair_correlation','kicker_mean','kicker_zero')} for g in report['games']]
+ team_metrics=[{k:statistics.mean(t['profiles'][profile][k] for t in g['teams'] if t['profiles'][profile][k] is not None) for k in ('offense_mean','offense_sd','offense_p90','qb_receiver_correlation','rotation_pair_correlation','kicker_mean','kicker_zero','rotations_all_zero')} for g in report['games']]
  report['summary'][profile]=dict(games=len(game_metrics),observations=sum(len(g['rows']) for g in report['games']),
   **{k:statistics.mean(g[k] for g in game_metrics) for k in game_metrics[0]},
   interactions={k:statistics.mean(g[k] for g in team_metrics) for k in team_metrics[0]})
+ if args.interaction_study:
+  report['summary'][profile]['subgroups']={}
+  for label,is_zero in [('actual_zero',True),('actual_positive',False)]:
+   groups=[[r['profiles'][profile]['crps'] for r in g['rows'] if (r['actual']==0)==is_zero] for g in report['games']]
+   present=[statistics.mean(v) for v in groups if v]
+   report['summary'][profile]['subgroups'][label]=dict(games=len(present),observations=sum(map(len,groups)),
+    crps=statistics.mean(present) if present else None)
 report['status']='complete';save()
 print(json.dumps(report['summary'],indent=2),flush=True)
