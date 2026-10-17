@@ -511,7 +511,8 @@ class CoverageWorkerGuiTests(unittest.TestCase):
         self.assertIn('Reconciliation committed', self.dialog.coverage.status.text())
 
     def test_existing_dialog_tab_runs_real_reconciliation(self):
-        self.assertEqual(self.dialog.results_tabs.tabText(1),'Historical Coverage')
+        self.assertEqual(self.dialog.history_workspace.tabText(2),'Learning coverage')
+        self.assertEqual(self.dialog.results_tabs.tabText(0),'Evidence coverage')
         self.dialog.coverage.reconcile_button.click()
         self.assertFalse(self.dialog.import_new_button.isEnabled())
         self.drain()

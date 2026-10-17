@@ -2117,3 +2117,14 @@ start an exhaustive overnight library build, change the time budget, enable hist
 or experimental models, relax rules, or replace a missing historical-field profile.
 Those choices remain explicit in Advanced. Cancellation between preparation stages
 stops before search; the current operation must retire safely before another build.
+
+
+### History workspace
+
+Results and Learning opens one History workspace with three views:
+
+- **Overview** shows recorded imports/report totals, automatic refresh status, and saved coverage counts. Import, refresh, and salary-match review remain available. Expand Sources and account settings to change folders or your own username; More reports and analysis tools keeps the existing performance reports, stats refresh, SIM review, and exports.
+- **Explore users** searches exact usernames across indexed mapped contests, or the whole observed field when blank. Choose Showdown/Classic and a strict before-date cutoff. Searches run in the existing cancellable history job, revalidate sources, and show entries, contest counts, construction distributions, Captain pools, salary usage, observed success coverage, and exclusions. Double-click a listed username to select it, then Explore history. The table shows up to 1,000 users; exact searches include users beyond that display limit. Search identity is separate from your saved personal username.
+- **Learning coverage** keeps evidence review, reconciliation, salary/snapshot resolution, Portfolio Risk, and Hindsight together. Saved evidence states can be stale and do not establish field-model qualification. Explore users → Advanced history / field qualification retains the existing pregame-field experiments, qualification reasons, and explicit profile preview/save tools.
+
+Opening or switching views does not index sources or enable a historical/experimental model. The existing initial results report still verifies saved evidence in the background. Automatic folder imports feed the same database; refresh history to index newly mapped contests before exploring. Cancelled or failed searches retain the previous displayed analysis with a status message. Unknown scores/success coverage remain unknown, and observed success does not establish skill or profit. Shared history work waits until searches and advanced dialogs retire.

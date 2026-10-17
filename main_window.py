@@ -4273,6 +4273,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.history_refresh.changed.connect(self.update_history_status)
         self.history_refresh.completed.connect(self._history_refresh_completed)
         self.update_history_status()
+        from history_workspace_ui import install_history_workspace
+        install_history_workspace(self, layout)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -4290,6 +4292,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if self._close_after_history_refresh:
             QtCore.QTimer.singleShot(0, self.reject)
         else:
+            self.coverage.reload()
+            if hasattr(self, 'refresh_history_overview'):
+                self.refresh_history_overview()
             self.refresh_report()
 
     def refresh_username_history(self):
@@ -4311,8 +4316,14 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
     def open_opponent_portfolios(self):
         from opponent_analysis_ui import OpponentAnalysisDialog
-        dialog = OpponentAnalysisDialog(self.username_edit.text().strip(), self.results_folder.text(), self, db_path=self.db_path)
-        dialog.exec_()
+        if self._import_thread is not None or self.history_refresh.busy:
+            return
+        self.history_refresh.report_started()
+        try:
+            dialog = OpponentAnalysisDialog(self.username_edit.text().strip(), self.results_folder.text(), self, db_path=self.db_path)
+            dialog.exec_()
+        finally:
+            self.history_refresh.report_finished()
 
     def start_performance_review(self, stats=False):
         if self._import_thread is not None:
@@ -4639,6 +4650,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_thread.start()
 
     def _set_import_controls(self, enabled):
+        if hasattr(self, 'history_explore'):
+            self.history_explore.setEnabled(enabled)
         self.coverage.setEnabled(enabled)
         self.risk.setEnabled(enabled)
         self.hindsight.setEnabled(enabled)
@@ -4882,6 +4895,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             handler(payload)
         if self._report_pending and not self._close_after_import and self._import_thread is None:
             self.refresh_report()
+        if hasattr(self, 'refresh_history_overview'):
+            self.refresh_history_overview()
 
 
 
