@@ -6245,9 +6245,10 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         intro = QtWidgets.QLabel(
 
-            "Recent lineup builds are saved locally so timing and settings can be compared between app releases. "
-
-            "Reports can include player names, lineup details and strategy inputs; they exclude file paths and API keys."
+            "Review one recorded build across all tabs, or select two result receipts to compare. "
+            "Copy/export use the Full report or the selected two-build comparison. "
+            "Reports include player/strategy details; session-only failed-attempt errors may include traceback paths. "
+            "Current portfolio tools are separate from the selected historical receipt."
 
         )
 
@@ -6277,7 +6278,9 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         self.report.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
 
-        splitter.setSizes([390, 590])
+        from build_review_ui import install_review
+        install_review(self, splitter)
+        splitter.setSizes([330, 850])
 
         layout.addWidget(splitter, 1)
 
@@ -6298,6 +6301,10 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         self.copy_button = buttons.addButton("Copy Selected Report", QtWidgets.QDialogButtonBox.ActionRole)
 
         self.copy_button.setObjectName("copySelectedBuildReport")
+        from build_review_ui import export_review
+        self.export_button = buttons.addButton('Export report…', QtWidgets.QDialogButtonBox.ActionRole)
+        self.export_button.setObjectName('exportBuildReview')
+        self.export_button.clicked.connect(lambda:export_review(self))
 
         self.copy_button.clicked.connect(self.copy_selected_report)
 
@@ -6308,6 +6315,11 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         self.compare_button.setToolTip("Select exactly two build-history rows, then compare their timing, settings, and SIM portfolio metrics.")
 
         self.compare_button.clicked.connect(self.compare_selected)
+        self.current_tools_button = buttons.addButton('Current portfolio tools…', QtWidgets.QDialogButtonBox.ActionRole)
+        self.current_tools_button.setEnabled(hasattr(self.parent(), 'on_portfolio_summary'))
+        self.current_tools_button.setToolTip('Open existing Insights/repair tools for the current saved or generated portfolio, separate from the selected historical receipt.')
+        self.current_tools_button.clicked.connect(lambda:self.parent().on_portfolio_summary())
+
 
         self.clear_button = buttons.addButton("Clear History", QtWidgets.QDialogButtonBox.DestructiveRole)
 
@@ -6334,10 +6346,17 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         self.history_list.clear()
 
         records = load_build_history()
+        has_saved_records = bool(records)
+        latest = getattr(self.parent(), 'last_build_diagnostic', None)
+        if latest and not any(row == latest for row in records):
+            records = [deepcopy(latest)] + records
+        failure = getattr(self.parent(), '_last_build_failure', None)
+        if failure:
+            records = [deepcopy(failure)] + records
 
         for record in records:
 
-            item = QtWidgets.QListWidgetItem(build_history_label(record))
+            item = QtWidgets.QListWidgetItem('Latest failed attempt (this session)' if record.get('record_type') == 'failed_attempt' else build_history_label(record))
 
             item.setData(QtCore.Qt.UserRole, record)
 
@@ -6347,7 +6366,7 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         self.copy_button.setEnabled(has_records)
 
-        self.clear_button.setEnabled(has_records)
+        self.clear_button.setEnabled(has_saved_records)
 
         self.compare_button.setEnabled(False)
 
@@ -6362,6 +6381,8 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
             self.report.setPlainText("No completed lineup builds have been recorded yet.")
 
             self.note.setText("Generate lineups to create the first local build report.")
+            from build_review_ui import refresh_review
+            refresh_review(self, {})
 
 
 
@@ -6383,7 +6404,9 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         record = self.selected_record()
 
-        self.report.setPlainText(format_build_report(record) if record else "Select a build to view its report.")
+        from build_review_ui import report_text, refresh_review
+        self.report.setPlainText(report_text(record))
+        refresh_review(self, record)
 
         self.copy_button.setEnabled(bool(record))
 
@@ -6391,7 +6414,9 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
     def _update_compare_button(self) -> None:
 
-        self.compare_button.setEnabled(len(self.history_list.selectedItems()) == 2)
+        selected = self.history_list.selectedItems()
+        self.compare_button.setEnabled(len(selected) == 2 and all(
+            item.data(QtCore.Qt.UserRole).get('record_type') != 'failed_attempt' for item in selected))
 
 
 
@@ -6399,7 +6424,7 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         items = self.history_list.selectedItems()
 
-        if len(items) != 2:
+        if len(items) != 2 or any(item.data(QtCore.Qt.UserRole).get('record_type') == 'failed_attempt' for item in items):
 
             self.note.setText("Select exactly two build rows to compare.")
 
@@ -6414,6 +6439,8 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
             return
 
         self.report.setPlainText(format_build_comparison(records[0], records[1]))
+        self.review_panels['comparisons'].setPlainText(self.report.toPlainText())
+        self.review_tabs.setCurrentWidget(self.review_panels['comparisons'])
 
         self.copy_button.setEnabled(True)
 
@@ -15218,6 +15245,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             if receipt is not self._build_receipt or not self._accept_build_results:
                 return
         self._finish_lineup_build_ui()
+        if receipt is None or not receipt.cancelled:
+            context = deepcopy(receipt.context if receipt is not None else self._active_build_context or {})
+            self._last_build_failure = dict(record_type='failed_attempt', status='failed',
+                failure_message=str(msg), input_id=context.get('input_id',''),
+                created_at=QtCore.QDateTime.currentDateTimeUtc().toString(QtCore.Qt.ISODate),
+                sport=context.get('sport','unknown'), contest_type=context.get('kind','unknown'),
+                requested_count=context.get('requested_count','not recorded'))
 
         self._active_build_context = {}
 
@@ -15792,6 +15826,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             )
         if make_current:
             self.last_build_diagnostic = diagnostic
+            if not payload.get('cancelled'):
+                self._last_build_failure = None
         if make_current and hasattr(self, "action_copy_build_report"):
             self.action_copy_build_report.setEnabled(True)
 
