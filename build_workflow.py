@@ -15,7 +15,7 @@ class BuildPreparation:
         self.check_cancelled()
         self.rows.append(dict(stage=key, state='Running', detail=detail))
         self.started = time.monotonic()
-        self.worker.progress.emit(0, 0, f'Preparing {len(self.rows)}/4 — {detail}')
+        self.worker.progress.emit(0, self.worker.num_lineups, f'Preparing {len(self.rows)}/4 — {detail}')
 
     def complete(self, detail):
         row = self.rows[-1]

@@ -2889,7 +2889,19 @@ class LineupBuildWorker(QtCore.QObject):
 
         except InterruptedError:
             if self._cancel_event.is_set():
-                self._finish_cancelled_repair()
+                if (self.retained_lineups and self.sport == 'NFL' and self.kind == 'showdown'
+                        and self.sim_enabled and self.compute_mode.casefold().startswith('deep')
+                        and self.repair_source != 'saved' and not self.field_calibration.get('showdown_field_profile')):
+                    # Preserve the established retained-portfolio cancellation
+                    # receipt. The stopped Deep path validates retained rows and
+                    # reports incomplete validation without searching or SIM.
+                    from showdown_simulation import run_deep_showdown
+                    result = run_deep_showdown(self, _deep_shortlist)
+                    result['contest_objective'] = self.contest_objective
+                    result.setdefault('sim_report', {})['contest_objective'] = self.contest_objective
+                    self._emit_finished(result)
+                else:
+                    self._finish_cancelled_repair()
             else:
                 self.error.emit(traceback.format_exc())
 
