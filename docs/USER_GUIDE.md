@@ -34,6 +34,18 @@ The app is currently unsigned. Windows may identify it as coming from an unknown
 
 
 
+## Task dashboard and automatic build preparation
+
+The **Tasks…** button stays on the main workspace beside a compact count of work underway and tasks needing attention. Open it to see builds, history refresh, results/learning operations, ownership estimation, and overnight preparation. Each task shows its current phase or outcome, elapsed time, and time since its last progress update. Select a task to inspect recent messages. **Cancel / pause selected task** uses that operation's existing safe cancellation or checkpoint mechanism; a stop request remains active until the worker retires. Tasks without cancellation support have no enabled stop button.
+
+A quiet task shows **no recent update** after 60 seconds; that describes missing progress messages, not a diagnosis that the task has failed. Failures, partial preparation, cancellations, and incomplete portfolios remain visible in recent task history for this app session. Overnight dialogs also have a **Tasks…** button.
+
+For a live NFL Deep build with SIM enabled, **Generate** now checks remembered library paths and the standard history `candidates` folder automatically. Successfully loaded libraries and libraries started in overnight preparation are remembered, including external-drive paths. Discovery is bounded and does not recursively search drives. It checks inexpensive metadata first, then uses the existing loader to validate actual contents, current rules, Captain coverage, and screening evidence. Final validation SIM remains fresh.
+
+An explicitly loaded library takes priority and retains its existing validation errors and explicit partial-coverage choice. Automatic discovery never opts into partial coverage. If an automatically discovered library is rejected, the Tasks details explain the reason; the build proceeds with the existing fresh-candidate search if no compatible library is accepted. Rules and exposure limits are not relaxed by this fallback. Fast builds, snapshot replay, and saved-portfolio repair do not automatically discover libraries.
+
+Turn off **Settings > Automatically reuse compatible libraries** to use fresh generation. **Clear Candidate Library** also turns automatic reuse off; re-enable it explicitly when desired. Compute profiles, forecast models, historical-field settings, and strategic rules retain their existing behavior.
+
 ## 2. Five-minute workflow
 
 

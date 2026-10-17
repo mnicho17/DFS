@@ -89,6 +89,9 @@ class HistoryRefreshController(QtCore.QObject):
         worker.error.connect(worker.deleteLater)
         thread.finished.connect(self.retire)
         self.changed.emit()
+        from task_dashboard import watch_task
+        watch_task(self, 'Results and salary history refresh', worker, thread, self.cancel,
+                   lambda *args: refresh_summary(args[0]) if len(args) == 1 else str(args[-1]))
         thread.start()
         return True
 

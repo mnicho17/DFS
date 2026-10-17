@@ -73,6 +73,8 @@ class PreparationDialog(QtWidgets.QDialog):
         self.thread=self.worker=None;self.stop=None;self.pending=None;self.closing=False
         self.setWindowTitle('Prepare Showdown Roster Library')
         layout=QtWidgets.QVBoxLayout(self)
+        from task_dashboard import add_task_button
+        add_task_button(self, layout)
         note=QtWidgets.QLabel('Prepare reusable rosters while the PC is awake. With Captain locks, preparation covers those Captains; otherwise it covers all Captains. All FLEX combinations are considered, with current exclusions and rules applied later. Optional screening can score a bounded sample or every currently legal roster using captured inputs. Limits can leave partial coverage.')
         note.setWordWrap(True);layout.addWidget(note)
         self.path=QtWidgets.QLineEdit();self.path.setReadOnly(True);layout.addWidget(self.path)
@@ -180,7 +182,23 @@ class PreparationDialog(QtWidgets.QDialog):
         self.thread.finished.connect(self.retire)
         for control in self.controls:control.setEnabled(False)
         self.pause.setEnabled(True);self.message.setText('Preparing and saving rosters…')
+        from build_preparation import remember_library
+        if self.parent() is not None and hasattr(self.parent(), 'app_settings'):
+            remember_library(self.parent().app_settings, self.path.text())
+        from task_dashboard import watch_task
+        watch_task(self, 'Showdown roster preparation / screening', self.worker, self.thread,
+                   self.cancel, self.task_text)
         self.thread.start()
+
+    def task_text(self, result):
+        # Use the same description as the preparation window, including pause reasons.
+        previous = self.message.text()
+        if result.get('error'):
+            return str(result['error'])
+        self.describe(result)
+        text = self.message.text()
+        self.message.setText(previous)
+        return text
 
     def receive_progress(self,result):
         if self.stop is not None and not self.stop.is_set():self.describe(result)

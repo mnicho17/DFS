@@ -44,6 +44,8 @@ class LongSearchDialog(QtWidgets.QDialog):
         super().__init__(parent);self.setWindowTitle('Overnight Preparation / Long Search');self.resize(620,440)
         self.snapshot=None;self.thread=None
         layout=QtWidgets.QVBoxLayout(self)
+        from task_dashboard import add_task_button
+        add_task_button(self, layout)
         intro=QtWidgets.QLabel('Build a reusable candidate library for this NFL slate. All five styles run in small batches. '
             'Progress is saved after each batch and saved combinations are excluded from later searches. '
             'Stops at the candidate target or time limit, whichever comes first. Leave the app open and the PC awake; pause before closing. '
@@ -108,7 +110,13 @@ class LongSearchDialog(QtWidgets.QDialog):
         self.worker.moveToThread(self.thread);self.thread.started.connect(self.worker.run)
         self.worker.progress.connect(self.status.setText);self.worker.finished.connect(self.status.setText)
         self.worker.finished.connect(self.thread.quit);self.worker.finished.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.done_search);self.thread.start()
+        self.thread.finished.connect(self.done_search)
+        from build_preparation import remember_library
+        if self.parent() is not None and hasattr(self.parent(), 'app_settings'):
+            remember_library(self.parent().app_settings, self.path.text())
+        from task_dashboard import watch_task
+        watch_task(self, 'Overnight candidate search / scenarios', self.worker, self.thread, self.cancel)
+        self.thread.start()
         for c in self.controls:c.setEnabled(False)
         self.pause.setEnabled(True)
     def cancel(self):
