@@ -11,11 +11,11 @@ class TaskHub(QtCore.QObject):
         self.clock, self.rows, self.bindings = clock, {}, []
         self.serial = 0
 
-    def start(self, title, cancel=None):
+    def start(self, title, cancel=None, *, state='Running', background=False):
         self.serial += 1
         key = self.serial
         now = self.clock()
-        self.rows[key] = dict(title=title, state='Running', detail='Starting…',
+        self.rows[key] = dict(title=title, state=state, background=background, detail='Starting…',
                               started=now, updated=now, ended=None, cancel=cancel, log=[])
         # Retain all active tasks and the most recent 30 retired tasks.
         retired = [k for k, r in self.rows.items() if r['ended'] is not None]
@@ -153,9 +153,10 @@ def install_dashboard(window, layout):
     dock.hide()
     button.clicked.connect(lambda: dock.setVisible(not dock.isVisible()))
     def summary_refresh():
-        active = sum(r['ended'] is None for r in hub.rows.values())
+        active = sum(r['ended'] is None and r['state']!='Queued' for r in hub.rows.values())
+        queued = sum(r['ended'] is None and r['state']=='Queued' for r in hub.rows.values())
         attention = sum(r['state'] in ('Failed', 'Needs review', 'Incomplete', 'Paused / partial') for r in hub.rows.values())
-        summary.setText(f'Tasks: {active} underway · {attention} need attention' if hub.rows else 'Tasks: idle')
+        summary.setText(f'Tasks: {active} underway · {queued} queued · {attention} need attention' if hub.rows else 'Tasks: idle')
     hub.changed.connect(summary_refresh)
     window.task_dashboard = dock
     return hub

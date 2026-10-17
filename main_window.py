@@ -4311,7 +4311,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.history_status.setPlainText(text + '\n' + self.history_refresh.watch.message)
         busy = self.history_refresh.busy
         self.history_refresh_button.setEnabled(not busy and self._import_thread is None)
-        self.history_cancel_button.setEnabled((busy and not self.history_refresh.stop.is_set()) or self.history_refresh.watch.pending)
+        self.history_cancel_button.setEnabled((busy and not self.history_refresh.stop.is_set()) or self.history_refresh.queued)
         self._set_import_controls(not busy and self._import_thread is None)
 
     def open_opponent_portfolios(self):
@@ -7208,6 +7208,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.history_refresh.changed.connect(lambda: self.status.showMessage(self.history_refresh.status_line()))
         self.history_refresh.completed.connect(self._history_refresh_retired)
         QtCore.QTimer.singleShot(0, self.history_refresh.startup)
+        from background_queue import BackgroundQueue
+        self.background_queue = BackgroundQueue(self)
+        from idle_preparation_ui import IdlePreparationController
+        self.idle_preparation = IdlePreparationController(self)
         from idle_backup_ui import IdleBackupController
         from pathlib import Path
         self.idle_backup = IdleBackupController(self, self.app_settings, Path(history_db_path()).parent)
@@ -15139,6 +15143,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self._record_repair_attempt(receipt, payload)
 
     def closeEvent(self, event):
+        if getattr(self, 'background_queue', None):self.background_queue.shutdown()
+        if getattr(self, 'idle_preparation', None) and self.idle_preparation.shutdown():
+            event.ignore()
+            return
         if getattr(self, 'idle_backup', None) and self.idle_backup.shutdown():
             self._close_after_backup = True
             event.ignore()
