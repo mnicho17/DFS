@@ -10,6 +10,7 @@ parser.add_argument('--output-prefix',required=True)
 parser.add_argument('--completed-before',required=True)
 parser.add_argument('--interaction-study',action='store_true',help='Predeclared shared-gate and weaker-hurdle comparisons; no fitting')
 parser.add_argument('--joint-study',action='store_true',help='Predeclared finite-count and occupancy comparisons')
+parser.add_argument('--event-study',action='store_true',help='Predeclared direct linked-event scoring; changes modeled QB/starter draws only in diagnostics')
 parser.add_argument('--evaluation-after',help='Exclusive game-date boundary fixed before reading holdout scores')
 args=parser.parse_args()
 if args.evaluation_after:
@@ -57,9 +58,14 @@ if args.interaction_study:
 if args.joint_study:
  profile_options={'baseline':None,'sampled_hurdle':dict(opportunity_basis='sampled'),
   'joint_counts':dict(joint_scoring='counts'),'joint_occupancy':dict(joint_scoring='occupancy')}
+if args.event_study:
+ profile_options={'baseline':None,'sampled_hurdle':dict(opportunity_basis='sampled'),'linked_events':dict(linked_events=True),'linked_completion':dict(linked_events=True,completion_environment=.2)}
 report['evaluation']=dict(kind='temporal_holdout' if args.evaluation_after else 'development_retrospective',after=args.evaluation_after)
 report['prototype']['profiles']=profile_options
 report['prototype']['modes']=list(profile_options)
+if args.event_study:
+ report['prototype']['event_model']='linked-event-prototype-v1'
+ report['prototype']['limitations']='Raw QB/receiver production is linked; per-player forecast-normalized points are not exact DK event totals. Frozen workload means replace sampled share and baseline score noise. Reserve production, bonuses, fumbles and opponent DST linkage remain unmodeled.'
 report['limitations']=[v for v in report['limitations'] if not v.startswith('Kicker primary summaries')]
 def corr(a,b):
  return statistics.correlation(a,b) if statistics.pstdev(a)>0 and statistics.pstdev(b)>0 else 0.
@@ -107,7 +113,8 @@ with _connect(db,True) as conn:
    from rotation_zero_prototype import RotationZeroPrototype,eligible
    keys=[player_key(p) for p in pool]
    from joint_opportunity_prototype import JointOpportunityPrototype
-   models={name:None if options is None else JointOpportunityPrototype(scoring=options['joint_scoring']) if 'joint_scoring' in options else RotationZeroPrototype(**options) for name,options in profile_options.items()}
+   from linked_event_prototype import LinkedEventPrototype
+   models={name:None if options is None else LinkedEventPrototype(pool,completion_environment=options.get('completion_environment',0.)) if options.get('linked_events') else JointOpportunityPrototype(scoring=options['joint_scoring']) if 'joint_scoring' in options else RotationZeroPrototype(**options) for name,options in profile_options.items()}
    values={name:{key:[] for key in keys} for name in models}
    target=[p for p in pool if eligible(p)]
    original=json.dumps(pool,sort_keys=True)
@@ -119,7 +126,8 @@ with _connect(db,True) as conn:
      for p in pool:
       key=player_key(p)
       if not eligible(p) and p['Position']!='K':
-       assert all(v[key]==outputs['baseline'][key] for v in outputs.values()),'Protected player draw changed'
+       for name,v in outputs.items():
+        if key not in getattr(models[name],'affected_keys',()):assert v[key]==outputs['baseline'][key],'Protected player draw changed'
      for name,v in outputs.items():
       for key in keys:values[name][key].append(v[key])
    assert json.dumps(pool,sort_keys=True)==original,'Frozen player inputs changed'
@@ -128,12 +136,26 @@ with _connect(db,True) as conn:
     actual=base.get((ai._name(p['Name']),p['Team'],p['Position'],manifest['games'][0]))
     if actual is not None:rows.append(dict(name=p['Name'],position=p['Position'],actual=float(actual),
      profiles={name:metrics(v[player_key(p)],float(actual)) for name,v in values.items()}))
+   forecast_checks=[]
+   for name,model in models.items():
+    if not hasattr(model,'forecasts'):continue
+    for key,forecast in model.forecasts.items():
+     draws=values[name][key];mean=statistics.mean(draws);se=statistics.pstdev(draws)/math.sqrt(len(draws))
+     forecast_checks.append(dict(profile=name,key=key,forecast=forecast,sim_mean=mean,standard_error=se,
+      raw_expected=model.expected[key],normalizer=model.normalizers[key],within_5se=abs(mean-forecast)<=5*se+1e-9))
+   modeled_offense=[]
+   affected=set().union(*(getattr(m,'affected_keys',()) for m in models.values()))
+   for p in pool:
+    if player_key(p) not in affected:continue
+    actual=base.get((ai._name(p['Name']),p['Team'],p['Position'],manifest['games'][0]))
+    if actual is not None:modeled_offense.append(dict(name=p['Name'],position=p['Position'],actual=float(actual),profiles={name:metrics(v[player_key(p)],float(actual)) for name,v in values.items()}))
    teams=[]
    for team in sorted({p['Team'] for p in pool}):
     offense=[p for p in pool if p['Team']==team and p['Position'] in ('QB','RB','WR','TE')]
     receivers=[p for p in offense if p['Position'] in ('WR','TE')]
     qb=[p for p in offense if p['Position']=='QB']
     rotations=[p for p in target if p['Team']==team]
+    opposing_dst=[p for p in pool if p['Team']!=team and p['Position']=='DST']
     kickers=[p for p in pool if p['Team']==team and p['Position']=='K']
     from nfl_specialists import team_kicker
     kicker=team_kicker(kickers)
@@ -142,7 +164,8 @@ with _connect(db,True) as conn:
      total=[sum(v[player_key(p)][i] for p in offense) for i in range(6000)]
      receiving=[sum(v[player_key(p)][i] for p in receivers) for i in range(6000)]
      pairs=[corr(v[player_key(a)],v[player_key(b)]) for i,a in enumerate(rotations) for b in rotations[i+1:]]
-     profiles[name]=dict(offense_mean=statistics.mean(total),offense_sd=statistics.pstdev(total),offense_p90=sorted(total)[int(5999*.9)],
+     opposing=[sum(v[player_key(p)][i] for p in opposing_dst) for i in range(6000)]
+     profiles[name]=dict(qb_opposing_dst_correlation=corr(v[player_key(qb[0])],opposing) if len(qb)==1 and opposing_dst else None,offense_mean=statistics.mean(total),offense_sd=statistics.pstdev(total),offense_p90=sorted(total)[int(5999*.9)],
       qb_receiver_correlation=corr(v[player_key(qb[0])],receiving) if len(qb)==1 and receivers else None,
       rotation_pair_correlation=statistics.mean(pairs) if pairs else None,
       kicker_mean=statistics.mean(v[player_key(kicker)]) if kicker else None,
@@ -150,7 +173,7 @@ with _connect(db,True) as conn:
       rotations_all_zero=sum(all(v[player_key(p)][i]==0 for p in rotations) for i in range(6000))/6000 if rotations else None)
     teams.append(dict(team=team,profiles=profiles))
    report['games'].append(dict(date=row['date'],game=row['game'],source_hash=row['result_hash'],salary_hash=row['salary_hash'],
-    snapshot=receipt,rows=rows,teams=teams,eligible=len(target),observed=len(rows),scenarios=6000,
+    snapshot=receipt,rows=rows,modeled_offense=modeled_offense,forecast_checks=forecast_checks,teams=teams,eligible=len(target),observed=len(rows),scenarios=6000,
     model_counts={name:dict(model.counts) for name,model in models.items() if model}))
    print('MATCHED',len(rows),'rotation outcomes',flush=True)
   except Exception as exc:
@@ -161,16 +184,24 @@ audit.revalidate();assert version==model_version(),'Scoring source changed'
 report['summary']={}
 for profile in profile_options if report['games'] else ():
  game_metrics=[{k:statistics.mean(r['profiles'][profile][k] for r in g['rows']) for k in ('bias','crps','interval_score','inside','predicted_zero','zero_brier')} for g in report['games'] if g['rows']]
- team_metrics=[{k:statistics.mean(t['profiles'][profile][k] for t in g['teams'] if t['profiles'][profile][k] is not None) for k in ('offense_mean','offense_sd','offense_p90','qb_receiver_correlation','rotation_pair_correlation','kicker_mean','kicker_zero','rotations_all_zero')} for g in report['games']]
+ team_metrics=[{k:statistics.mean(t['profiles'][profile][k] for t in g['teams'] if t['profiles'][profile][k] is not None) for k in ('qb_opposing_dst_correlation','offense_mean','offense_sd','offense_p90','qb_receiver_correlation','rotation_pair_correlation','kicker_mean','kicker_zero','rotations_all_zero')} for g in report['games']]
  report['summary'][profile]=dict(games=len(game_metrics),observations=sum(len(g['rows']) for g in report['games']),
   **{k:statistics.mean(g[k] for g in game_metrics) for k in game_metrics[0]},
   interactions={k:statistics.mean(g[k] for g in team_metrics) for k in team_metrics[0]})
- if args.interaction_study or args.joint_study:
+ if args.interaction_study or args.joint_study or args.event_study:
   report['summary'][profile]['subgroups']={}
   for label,is_zero in [('actual_zero',True),('actual_positive',False)]:
    groups=[[r['profiles'][profile]['crps'] for r in g['rows'] if (r['actual']==0)==is_zero] for g in report['games']]
    present=[statistics.mean(v) for v in groups if v]
    report['summary'][profile]['subgroups'][label]=dict(games=len(present),observations=sum(map(len,groups)),
     crps=statistics.mean(present) if present else None)
+ if args.event_study:
+  offense={}
+  for position in ('all','QB','RB','WR','TE'):
+   cohorts=[[r for r in g['modeled_offense'] if position=='all' or r['position']==position] for g in report['games']]
+   present=[rows for rows in cohorts if rows]
+   offense[position]=dict(games=len(present),observations=sum(map(len,cohorts)),
+    **{k:statistics.mean(statistics.mean(r['profiles'][profile][k] for r in rows) for rows in present) if present else None for k in ('crps','bias','inside')})
+  report['summary'][profile]['modeled_offense']=offense
 report['status']='complete' if report['games'] else 'no_qualified_games';save()
 print(json.dumps(report['summary'],indent=2),flush=True)

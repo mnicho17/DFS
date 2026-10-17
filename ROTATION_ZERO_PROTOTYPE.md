@@ -226,3 +226,42 @@ No profile is activated. The next model step requires opportunity-linked score
 generation that replaces redundant score noise, reconciles receiver/QB events,
 and is validated on independent games. This diagnostic implementation preserves
 existing forecasts and protected draws rather than attempting that default change.
+
+
+## Direct linked-event scoring follow-up (diagnostic only)
+
+`--event-study` compares baseline, the original sampled hurdle, and two
+predeclared event variants (fixed completion priors, and a shared team completion
+environment of plus/minus 20%). The latter amplitude is reduced if necessary so
+all completion probabilities remain valid without asymmetric clipping. The two
+states are equally likely, preserving each frozen completion mean. No outcome
+scores select the amplitude or fit the event priors.
+
+The model uses frozen workloads, not the existing sampled-share or independent
+score draws. Carries/targets/catches use the conserved allocation. Each realized
+carry or catch draws nonnegative gamma yardage with shape 4 and its frozen mean,
+and a touchdown Bernoulli from its frozen workload rate. Receiver yards and TDs
+are mirrored exactly on the verified frozen eligible QB. Interceptions can occur
+only on allocated incomplete passes. Unused reserve targets remain unresolved;
+they are not converted to completed passes, zero-score players or evidence.
+There are no yardage bonuses, fumbles or opponent defensive event effects.
+
+Analytic expected raw points come from those frozen event priors. Each modeled
+automatic forecast is preserved by multiplying raw points by forecast divided
+by expected raw points. The audit records every factor, expected raw mean,
+forecast, simulated mean, standard error and a five-standard-error check. This
+normalization is a diagnostic compromise: raw production reconciles, but the
+normalized fantasy points are not exact DK totals from the raw stat ledger.
+Independently anchored forecasts need not be physically consistent; a coherent
+production model cannot hide that conflict. Factor sizes are reported, not fit
+or silently clipped. QB/start-role draws intentionally change inside these
+experimental profiles; manual/historical forecasts, DST, parent RNG and inputs
+stay protected. Kicker feedback follows the new offense. No app default enables
+any prototype. Strict model identity includes the event-model source.
+
+The audit separately records all modeled offense and QB/receiver/opposing-DST
+relationships alongside the existing rotation-only comparison. Frozen forecasts
+are the mean target, not the old simulator's sometimes shifted finite-sample
+mean. Normalizer compatibility and lost opponent linkage remain activation
+risks even if marginal outcome scores improve. The same development and temporal
+boundaries, exact-score observations and read-only source safeguards still apply.
