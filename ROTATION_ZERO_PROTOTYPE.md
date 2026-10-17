@@ -43,6 +43,11 @@ Equal-game averages:
 | Rotation-pair correlation | 0.2346 | 0.1370 | 0.1375 |
 | Kicker mean (available teams) | 8.7996 | 8.8000 | 8.8020 |
 
+For sampled opportunities, mean within-game CRPS change was -0.4164 on actual
+zero outcomes but +0.0381 on positive outcomes (a small regression). Paired team
+mean shifts ranged from -0.0948 to +0.1435 points; team SD increased by
+0.1924 to 1.4346 points, and p90 shifted by -0.1426 to +1.4363 points.
+
 Both hurdle modes improved CRPS in seven of eight games. Actual zero frequency
 was 30.5% with equal-game weighting. The largest absolute paired team kicker
 mean shift was 0.0252 points for sampled opportunities (0.0218 frozen).
