@@ -90,7 +90,7 @@ The pictured examples use representative NFL data. Player names, projections, ow
 
 
 
-The detailed Build, Portfolio Rules, and Data and Learning controls are folded away at startup so the player pool and generated lineups get most of the window. The quiet recipe summary beside the sport shows the active build style, salary approach, and, when applicable, SIM depth and contest preset. Choose **Settings > Show Build Controls** to change the detailed recipe. Choose **Settings > Show Saved Portfolio** to hide or restore the saved-lineup panel.
+The main Build panel keeps lineup count, NFL time budget, Advanced, and Generate visible. Its summary shows the current recipe beneath those controls. The detailed Build, Portfolio Rules, and Data and Learning controls are folded away at startup so the player pool and generated lineups get most of the window. Choose **Advanced** or **Settings > Advanced Build Controls** to change the detailed recipe. Choose **Settings > Show Saved Portfolio** to hide or restore the saved-lineup panel.
 
 
 
@@ -432,7 +432,7 @@ Large candidate pools, NFL simulation, and restrictive portfolio rules take more
 
 
 
-Choose a **Compute profile** in **Build**, then **Search & output** for search scope, selection mode and optional resource details. Fast remains the startup default; named Deep profiles apply their listed counts together. You can choose 1–60 minutes, up to 20,000 candidate lineups, a 2,000-lineup validation shortlist, 10,000 sampled validation opponents, 4–32 search seeds, and 250–1,000 screening scenarios. The Custom profile allows up to 10,000 validation scenarios; Deep uses at least 2,500. Screening uses the smaller of its configured count and the validation scenario setting, with a minimum of 250. Its opponent field stays smaller than the validation field.
+Choose **Time budget** on the main panel. For detailed settings, open **Advanced > Build**, choose a **Compute profile**, then **Search & output** for search scope, selection mode and optional resource details. Fast remains the startup default; named Deep profiles apply their listed counts together. You can choose 1–60 minutes, up to 20,000 candidate lineups, a 2,000-lineup validation shortlist, 10,000 sampled validation opponents, 4–32 search seeds, and 250–1,000 screening scenarios. The Custom profile allows up to 10,000 validation scenarios; Deep uses at least 2,500. Screening uses the smaller of its configured count and the validation scenario setting, with a minimum of 250. Its opponent field stays smaller than the validation field.
 
 
 
@@ -1358,7 +1358,7 @@ On one frozen Rams–49ers input, 681 diagnostic candidates and 2,000 shared sce
 
 ## Simplified build controls
 
-Choose **Settings > Show Build Controls** if the controls are folded away. The **Build** tab has one **Compute profile** selector: Fast, Baseline, Balanced, Thorough, Extended, Maximum and Custom. Choosing a Deep profile enables SIM and applies its counts together while preserving search scope, output selection and portfolio rules. Custom opens the resource editor with current values. Fast retains the existing Fast settings; NFL Classic can still enable its optional SIM and change its scenario count.
+Choose **Settings > Advanced Build Controls** if the controls are folded away. The **Build** tab has one **Compute profile** selector: Fast, Baseline, Balanced, Thorough, Extended, Maximum and Custom. Choosing a Deep profile enables SIM and applies its counts together while preserving search scope, output selection and portfolio rules. Custom opens the resource editor with current values. Fast retains the existing Fast settings; NFL Classic can still enable its optional SIM and change its scenario count.
 
 **Search & output** groups all-style search and Individual ranking/Portfolio selection. Preset resource counts are collapsed and read-only; use Show resource details to inspect them, or Custom to edit them. The main summary shows the active scope, selection method, time ceiling and validation count. When all five styles are searched, the single Build style selector is disabled and labeled accordingly. Named time profiles do not choose a build style or a portfolio strategy for you.
 
