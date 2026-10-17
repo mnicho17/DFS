@@ -185,3 +185,44 @@ source games do not automatically constitute an independent blind holdout:
 previously inspected outcomes must be disclosed. If no games meet the existing
 source, pregame evidence and outcome scan safeguards, the report records
 `no_qualified_games` with no summary. No scan bounds are relaxed to fill it.
+
+
+### Finite-opportunity results, October 17, 2026
+
+Development audit: eight games / 102 rotation outcomes / 6,000 scenarios per
+profile per game, with all original source/evidence revalidation and protected
+player/RNG assertions passing. Neither finite-count variant resolves the issue.
+
+| Profile | CRPS | Positive CRPS | Zero CRPS | Predicted zeros | Rotation correlation |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 2.6490 | 3.2020 | 1.2886 | 0.0% | 0.2346 |
+| Original hurdle | 2.5449 | 3.2401 | 0.8722 | 24.4% | 0.1375 |
+| Finite counts | 2.5319 | 3.2697 | 0.7795 | 23.2% | 0.0878 |
+| Finite occupancy | 2.5484 | 3.2333 | 0.8957 | 23.2% | 0.1401 |
+
+| Profile | Team SD | Team p90 | QB/receiver correlation | Mean player p95 |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 30.1282 | 120.4328 | 0.5422 | 10.9451 |
+| Original hurdle | 30.8489 | 121.1491 | 0.5216 | 12.3141 |
+| Finite counts | 31.7305 | 122.1648 | 0.5032 | 13.6249 |
+| Finite occupancy | 30.7626 | 121.0696 | 0.5250 | 12.2041 |
+
+Counts improve overall CRPS slightly versus the original hurdle, driven by zero
+outcomes, but positive-outcome CRPS worsens and upper tails/variance grow. Rotation
+correlation moves farther from baseline. Occupancy stays close to the original
+hurdle without a clear improvement. Mean preservation and opportunity conservation
+are insufficient when existing score noise is multiplied by new count noise.
+Baseline correlations are reference values, not verified real-world targets.
+
+Candidate temporal validation: zero qualified games. October 12 BUF-LAR and
+October 15 SEA-DEN both exceeded the existing two-million-row outcome bound;
+no partial outcomes were used and the scan bound was not changed. The JSON
+status is `no_qualified_games`, with empty games and summary. SEA-DEN had also
+been inspected in earlier app calibration work, so it must not be represented
+as a completely blind sample. Development improvements cannot establish fresh
+game performance. New qualified, previously unexamined games remain necessary.
+
+No profile is activated. The next model step requires opportunity-linked score
+generation that replaces redundant score noise, reconciles receiver/QB events,
+and is validated on independent games. This diagnostic implementation preserves
+existing forecasts and protected draws rather than attempting that default change.
