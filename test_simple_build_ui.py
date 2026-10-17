@@ -143,3 +143,16 @@ class SimpleBuildTests(unittest.TestCase):
         self.assertTrue(scroll.widgetResizable())
         label = w.lbl_compute_summary
         self.assertGreaterEqual(label.height(),label.heightForWidth(label.width()))
+    def test_plan_describes_automatic_selected_and_replay_routes_without_mutation(self):
+        from build_workflow import preparation_plan
+        from test_showdown_library import players
+        w=self.window(); w.players=copy.deepcopy(players())
+        w.combo_compute_profile.activated[str].emit('Baseline — 5 min cap')
+        before=copy.deepcopy(w._current_build_recipe())
+        with patch('build_preparation.discover_libraries', side_effect=AssertionError('No scan')):
+            self.assertIn('find a compatible library', preparation_plan(w))
+            w._candidate_library='explicit.sdlib'
+            self.assertIn('validate selected library', preparation_plan(w))
+            w._candidate_library=''; w._snapshot_replay=True
+            self.assertIn('search fresh candidates', preparation_plan(w))
+        self.assertEqual(w._current_build_recipe(),before)

@@ -17,6 +17,14 @@ from build_diagnostics import (
 
 
 class BuildDiagnosticsTests(unittest.TestCase):
+    def test_preparation_receipt_survives_history_and_copied_report(self):
+        rows=[dict(stage='library',state='Completed',detail='Validated selected library.',seconds=.2)]
+        record=create_build_diagnostic(context={'kind':'showdown'},timing_report={'build_preparation':rows})
+        self.assertEqual(record['build_preparation'],rows)
+        self.assertIn('library: Completed — Validated selected library.',format_build_report(record))
+        save_build_diagnostic(record)
+        self.assertEqual(load_build_history()[-1]['build_preparation'],rows)
+
     def test_specialist_model_description_preserves_historical_event_reports(self):
         record = self._diagnostic()
         record['sim']['specialist_model'] = 'kicker-events-projection-defense-v2'

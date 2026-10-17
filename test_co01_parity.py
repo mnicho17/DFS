@@ -110,6 +110,14 @@ class ObjectiveParityTests(unittest.TestCase):
     @staticmethod
     def compatible_evidence(value):
         value = copy.deepcopy(value)
+        # Preparation receipts add observability only. Preserve the exact frozen
+        # candidates, metrics, selections, exports and all other report content.
+        preparation = value['diagnostic'].pop('build_preparation', None)
+        if preparation:
+            block = '\n\nBuild preparation\n' + '\n'.join(
+                f"- {r.get('stage', 'Check')}: {r.get('state', 'Unknown')} — {r.get('detail', '')}"
+                for r in preparation)
+            value['build_report'] = value['build_report'].replace(block, '')
         report = value['portfolio_report']
         # Only additive safety reporting is excluded from the older fixture.
         report.pop('showdown_policy', None)

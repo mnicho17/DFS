@@ -2100,3 +2100,20 @@ An incompatible result means both sets of targets cannot be met simultaneously. 
 NFL **Recalc Own% (Sim)** now estimates ownership from legal opponents using the same salary-band spending prior as detailed SIM. It draws from projections without fitting to existing ownership forecasts. Only completed samples of six distinct athletes, both teams and legal slot salaries contribute; canceled or incomplete samples do not replace ownership. Model and sample size are recorded with the resulting automatic ownership.
 
 The legacy Field Templates switch applies to other Showdown sports and is hidden for NFL. Classic estimation remains unchanged. Existing supplied/manual ownership continues to be used by detailed SIM; estimates are replaced when you explicitly recalculate ownership. Saved historical forecasts and evidence are not rewritten. Recalculating ownership changes current model inputs, so prepared screening based on previous ownership must be refreshed. Shared spending assumptions do not guarantee exact ownership matching or historical accuracy.
+
+
+### One Generate preparation sequence
+
+Generate now coordinates Captain/exposure checks, requested historical-field evidence,
+candidate-library validation, and eligibility before entering the existing search,
+screening, simulation, and selection pipeline. The Build setup panel shows the current
+operation, and Preparation describes the route before you start. Tasks retains the
+progress messages; completed build reports record the preparation stages.
+
+With automatic library reuse enabled, compatible saved inputs are tried first. If none
+passes the existing loaders, the build prepares fresh candidates and required screening.
+An explicitly selected library still stops on validation failure. Generate does not
+start an exhaustive overnight library build, change the time budget, enable historical
+or experimental models, relax rules, or replace a missing historical-field profile.
+Those choices remain explicit in Advanced. Cancellation between preparation stages
+stops before search; the current operation must retire safely before another build.
