@@ -820,6 +820,7 @@ def _scenario_outcomes(
     *,
     script_counter: Optional[Counter[str]] = None,
     specialist_model: str = 'events',
+    rotation_zero_prototype=None,
 ) -> Dict[str, float]:
     # Sorted inputs make seeded builds reproducible across separate app runs;
     # set iteration order varies with Python's per-process hash seed.
@@ -961,6 +962,9 @@ def _scenario_outcomes(
                 score *= 1.35 + 0.55 * rng.random()
             score = min(score, mean * 6.0 + 20.0)
         outcomes[player_key(player)] = score
+    if rotation_zero_prototype is not None:
+        # Explicit diagnostic call only; normal builds leave this disabled.
+        outcomes = rotation_zero_prototype.apply(players, sampled_workloads, outcomes, rng)
     if specialist_model == 'events':
         from nfl_specialists import specialist_outcomes
         outcomes.update(specialist_outcomes(rng, players, outcomes, game_factor, team_environment))
