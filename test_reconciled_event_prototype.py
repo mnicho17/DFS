@@ -97,8 +97,12 @@ class ReconciledEventTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'two unambiguous'):ReconciledEventPrototype(rows,link_dst=True)
         rows=players();p=next(p for p in rows if p['Position']=='QB');p['ProjectionSource']='Manual override'
         with self.assertRaisesRegex(ValueError,'modeled opposing'):ReconciledEventPrototype(rows,link_dst=True)
-        rows=players();p=copy.deepcopy(next(p for p in rows if p['Position']=='DST'));p['FlexID']='other';p['Name']='other';rows.append(p)
-        with self.assertRaisesRegex(ValueError,'Ambiguous defensive'):ReconciledEventPrototype(rows,link_dst=True)
+        for source in ('Historical average estimate','Manual override'):
+            rows=players();p=copy.deepcopy(next(p for p in rows if p['Position']=='DST'));p['FlexID']='other';p['Name']='other';p['ProjectionSource']=source;rows.append(p)
+            with self.assertRaisesRegex(ValueError,'Ambiguous defensive'):ReconciledEventPrototype(rows,link_dst=True)
+        for field in ('ManualProjection','ImportedProjection'):
+            rows=players();p=next(p for p in rows if p['Position']=='WR');p[field]=0.
+            with self.assertRaisesRegex(ValueError,'Conflicting automatic'):ReconciledEventPrototype(rows)
 
     def test_reconciliation_and_event_draws_are_order_independent(self):
         rows=players();a=ReconciledEventPrototype(rows,link_dst=True);b=ReconciledEventPrototype(list(reversed(rows)),link_dst=True)

@@ -20,6 +20,8 @@ SCALES=dict(carries=1.,targets=1.,catches=1.,rush_yards=10.,receive_yards=10.,ru
 
 def reconcile(players):
     from nfl_simulation import player_key
+    if any(p.get('ProjectionSource')=='Automatic workload estimate' and (p.get('ManualProjection') is not None or p.get('ImportedProjection') is not None) for p in players):
+        raise ValueError('Conflicting automatic versus supplied forecast provenance')
     original=LinkedEventPrototype(players)
     # A conservative passing-point lower bound can explain conflicts before solving.
     # WR/TE receiving points beyond receptions imply at least .4 QB points per
@@ -132,8 +134,10 @@ class ReconciledEventPrototype(LinkedEventPrototype):
         self.dst_links={}
         if link_dst:
             if len(self.qbs)!=2:raise ValueError('DST linkage requires exactly two verified teams')
-            for p in self.players:
-                if p.get('Position')!='DST':continue
+            defenses=[p for p in self.players if p.get('Position')=='DST']
+            defense_teams=[str(p.get('Team') or '').strip().upper() for p in defenses]
+            if len(defenses)!=2 or set(defense_teams)!=set(self.qbs):raise ValueError('DST linkage requires two unambiguous defenses; Ambiguous defensive identity')
+            for p in defenses:
                 if (p.get('ProjectionSource')!='Historical average estimate' or unavailable(p)
                     or p.get('ManualProjection') is not None or p.get('ImportedProjection') is not None):continue
                 team=str(p.get('Team') or '').strip().upper();opponents=[t for t in self.qbs if t!=team]
