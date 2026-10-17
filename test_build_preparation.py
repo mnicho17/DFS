@@ -108,3 +108,70 @@ class BuildPreparationTests(unittest.TestCase):
                  patch('optimizers.ShowdownOptimizer.build_lineups',return_value=[]):
                 worker.run()
             discovery.assert_not_called()
+
+
+class UnifiedPreparationTests(unittest.TestCase):
+    def worker(self, **options):
+        from main_window import LineupBuildWorker
+        return LineupBuildWorker(copy.deepcopy(players()), kind='showdown', num_lineups=1,
+            salary_cap=50000, sim_enabled=True, compute_mode='Deep', **options)
+
+    def test_preparation_order_and_receipt_before_existing_deep_solver(self):
+        worker = self.worker()
+        results, progress = [], []
+        worker.finished.connect(results.append)
+        worker.progress.connect(lambda a,b,text: progress.append(text))
+        def solve(*args):
+            self.assertEqual([r['stage'] for r in worker.preparation.rows],
+                             ['captain','history','library','eligibility'])
+            self.assertTrue(all(r['state']=='Completed' for r in worker.preparation.rows))
+            return dict(kind='showdown',lineups=[])
+        with patch('showdown_simulation.run_deep_showdown', side_effect=solve) as solver:
+            worker.run()
+        solver.assert_called_once()
+        self.assertEqual(len(results),1)
+        self.assertEqual(len(results[0]['sim_report']['build_preparation']),4)
+        self.assertEqual(len([t for t in progress if t.startswith('Preparing ') and '/4' in t]),4)
+
+    def test_cancel_before_start_never_enters_search_or_discovery(self):
+        worker = self.worker(automatic_libraries=('saved.sdlib',))
+        results = []
+        worker.finished.connect(results.append)
+        worker.request_cancel()
+        with patch('showdown_simulation.run_deep_showdown') as solver, \
+             patch('build_preparation.discover_libraries') as discovery:
+            worker.run()
+        solver.assert_not_called(); discovery.assert_not_called()
+        self.assertEqual(len(results),1)
+        self.assertTrue(results[0]['cancelled'])
+        self.assertEqual(results[0]['lineups'],[])
+
+    def test_cancel_after_library_validation_stops_before_eligibility_and_solver(self):
+        worker = self.worker(candidate_library='selected.sdlib')
+        results=[]
+        worker.finished.connect(results.append)
+        def load(profile):
+            worker.request_cancel()
+            return True
+        with patch.object(worker,'_load_candidate_library',side_effect=load), \
+             patch('showdown_simulation.run_deep_showdown') as solver, \
+             patch('nfl_eligibility.eligible_players') as eligibility:
+            worker.run()
+        solver.assert_not_called(); eligibility.assert_not_called()
+        self.assertEqual(len(results),1)
+        self.assertTrue(results[0]['cancelled'])
+        self.assertEqual([r['stage'] for r in results[0]['sim_report']['build_preparation']],
+                         ['captain','history','library'])
+
+    def test_history_failure_stops_before_library_work(self):
+        worker = self.worker(field_calibration={'showdown_field_profile':{'requested':True}},
+                             automatic_libraries=('saved.sdlib',))
+        errors=[]
+        worker.error.connect(errors.append)
+        with patch('showdown_history_field.revalidate_profile',side_effect=ValueError('changed evidence')), \
+             patch('build_preparation.discover_libraries') as discovery, \
+             patch('showdown_simulation.run_deep_showdown') as solver:
+            worker.run()
+        discovery.assert_not_called(); solver.assert_not_called()
+        self.assertEqual(len(errors),1)
+        self.assertIn('changed evidence', errors[0])

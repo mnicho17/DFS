@@ -46,6 +46,11 @@ def setup_simple_build_panel(w, layout, count_labels, cap_labels):
     w.lbl_simple_build_summary.setWordWrap(True)
     w.lbl_simple_build_summary.setTextFormat(QtCore.Qt.PlainText)
     grid.addWidget(w.lbl_simple_build_summary, 1, 0, 1, 7)
+    w.lbl_build_flow = QtWidgets.QLabel(panel)
+    w.lbl_build_flow.setObjectName('buildFlowStatus')
+    w.lbl_build_flow.setWordWrap(True)
+    w.lbl_build_flow.setTextFormat(QtCore.Qt.PlainText)
+    grid.addWidget(w.lbl_build_flow, 2, 0, 1, 7)
     # Keep unusual caps editable in Advanced while removing repeated result-toolbar inputs.
     advanced_grid = w.lbl_compute_summary.parentWidget().layout()
     w.lbl_advanced_cap = QtWidgets.QLabel('Salary cap')
@@ -81,6 +86,7 @@ def setup_simple_build_panel(w, layout, count_labels, cap_labels):
         combo.currentTextChanged.connect(lambda *_: sync_simple_build_panel(w))
     w.spin_build_own_weight.valueChanged.connect(lambda *_: sync_simple_build_panel(w))
     w.action_show_build_controls.toggled.connect(lambda *_: sync_simple_build_panel(w))
+    w.action_auto_library.toggled.connect(lambda *_: sync_simple_build_panel(w))
     sync_simple_build_panel(w)
 
 
@@ -135,6 +141,9 @@ def sync_simple_build_panel(w):
             if w._active_recipe_name:
                 parts.insert(0, 'Recipe: ' + w._active_recipe_name)
             summary = ' · '.join(parts)
+        if not getattr(w, '_build_flow_active', False):
+            from build_workflow import preparation_plan
+            w.lbl_build_flow.setText(preparation_plan(w) if lineup else '')
         w.lbl_simple_build_summary.setText(summary)
         w.lbl_simple_build_summary.setToolTip(
             w.lbl_compute_summary.text() + '\nOwnership: ' + w.combo_build_own_mode.currentText()

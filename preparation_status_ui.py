@@ -12,6 +12,10 @@ def preparation_rows(w):
     rows = []
     def add(key, stage, state, detail, action):
         rows.append(dict(key=key, stage=stage, state=state, detail=detail, action=action))
+    from build_workflow import preparation_plan
+    active = bool(getattr(w, '_build_flow_active', False))
+    add('workflow', 'Generate workflow', 'Underway' if active else 'Next Generate',
+        w.lbl_build_flow.text() if active else preparation_plan(w), 'Tasks dashboard')
     add('inputs', 'Inputs', 'Snapshot replay' if replay else 'Live inputs',
         freshness_text(w.last_live_check_summary, replay)
         + '\nRecorded timestamps describe source checks; they do not prove every source succeeded.', 'Data freshness')

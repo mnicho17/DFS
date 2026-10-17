@@ -1183,56 +1183,9 @@ class LineupBuildWorker(QtCore.QObject):
     def run(self) -> None:
 
         try:
-            if self.kind == 'showdown':
-                from captain_pool import prepare_captain_pool, adjustment_text
-                self.players, self.portfolio_rules, self.captain_adjustments = prepare_captain_pool(
-                    self.players, self.portfolio_rules, self.num_lineups, self.retained_lineups)
-                if self.captain_adjustments:
-                    self.progress.emit(0, self.num_lineups, adjustment_text(self.captain_adjustments))
-
-            profile = self.field_calibration.get('showdown_field_profile')
-            if profile:
-                if self.kind != 'showdown' or self.sport != 'NFL' or not self.sim_enabled or not self.compute_mode.casefold().startswith('deep'):
-                    raise ValueError('Historical Showdown fields require NFL Deep with SIM enabled.')
-                from learning_db import history_db_path
-                from showdown_history_field import revalidate_profile
-                revalidate_profile(profile, history_db_path(), self.players, self.field_preset, self._cancel_event.is_set,
-                    lambda text: self.progress.emit(0, self.num_lineups, text))
-
-            if self.candidate_library:
-                if not self._load_candidate_library(profile):
-                    return
-            elif (self.automatic_libraries or self.library_folder) and self.sport == 'NFL' and self.sim_enabled and self.compute_mode.casefold().startswith('deep') and not self.retained_lineups and not self.repair_source:
-                import sqlite3
-                from build_preparation import discover_libraries
-                self.progress.emit(0, 0, 'Preparing build: looking for compatible saved libraries…')
-                attempts = 0
-                for path in discover_libraries(self.automatic_libraries, self.library_folder, self.players,
-                        self.kind, self.salary_cap, cancelled=self._cancel_event.is_set,
-                        progress=lambda text: self.progress.emit(0, 0, text)):
-                    attempts += 1
-                    if attempts > 3:
-                        break
-                    self.candidate_library = path
-                    try:
-                        if not self._load_candidate_library(profile):
-                            return
-                        if not self.library_candidates:
-                            raise ValueError('No candidates satisfy current rules.')
-                        self.library_report['automatic_discovery'] = True
-                        self.library_report['library_path'] = path
-                        self.progress.emit(0, 0, 'Reusing compatible library: ' + path)
-                        break
-                    except (ValueError, OSError, sqlite3.Error) as exc:
-                        self.progress.emit(0, 0, 'Library unavailable under current inputs: ' + str(exc))
-                        self.candidate_library = ''
-                        self.library_candidates, self.library_report = [], {}
-                if not self.candidate_library:
-                    self.progress.emit(0, 0, 'No compatible saved library accepted; using the existing fresh candidate search.')
-            if self.sport == "NFL":
-                from nfl_eligibility import eligible_players, apply_qb_eligibility
-                self.players = apply_qb_eligibility([dict(p) for p in self.players])
-                eligible_players(self.players)
+            from build_workflow import prepare_build
+            if not prepare_build(self):
+                return
             feasible_fallback = []
             build_started = time.perf_counter()
 
@@ -2934,6 +2887,12 @@ class LineupBuildWorker(QtCore.QObject):
 
             })
 
+        except InterruptedError:
+            if self._cancel_event.is_set():
+                self._finish_cancelled_repair()
+            else:
+                self.error.emit(traceback.format_exc())
+
         except PortfolioSelectionShortage as exc:
             if self.repair_source == "saved" and self._cancel_event.is_set():
                 self._finish_cancelled_repair()
@@ -2980,6 +2939,9 @@ class LineupBuildWorker(QtCore.QObject):
             report = payload.setdefault('portfolio_report', {})
             report['captain_pool_adjustments'] = self.captain_adjustments
             report['text'] = format_portfolio_report_text(report)
+        if hasattr(self, 'preparation'):
+            payload.setdefault('sim_report', {})['build_preparation'] = self.preparation.report(
+                cancelled=bool(payload.get('cancelled') or self._cancel_event.is_set()))
         finish_worker(payload)
         self.finished.emit(payload)
 
@@ -13955,6 +13917,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         from task_dashboard import watch_task
         watch_task(self, 'Build preparation / ' + kind + ' lineups', self._build_worker,
                    self._build_thread, self._cancel_lineup_build)
+        self._build_flow_active = True
+        if hasattr(self, 'lbl_build_flow'):
+            self.lbl_build_flow.setText('Preparing build — current inputs, requested evidence, candidate inputs, and eligibility…')
         self._build_thread.start()
 
     def _on_lineup_thread_finished(self, *, receipt=None) -> None:
@@ -13988,9 +13953,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
+        if hasattr(self, 'lbl_build_flow'):
+            self.lbl_build_flow.setText(str(text or 'Building…'))
+
         phase_text = str(text or "").lower()
 
-        if "phase 4" in phase_text or "selecting" in phase_text or "refining" in phase_text:
+        if phase_text.startswith('preparing'):
+            self._lineup_space_phase = 'Preparing'
+
+        elif "phase 4" in phase_text or "selecting" in phase_text or "refining" in phase_text:
 
             self._lineup_space_phase = "Selecting"
 
@@ -14023,12 +13994,17 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._build_cancel.setEnabled(False)
 
         self._build_eta.setText("Cancelling after the current candidate…")
+        if hasattr(self, 'lbl_build_flow'):
+            self.lbl_build_flow.setText('Stopping safely; waiting for the current preparation or build operation.')
 
         self.status.showMessage("Cancelling lineup build…")
 
 
 
     def _finish_lineup_build_ui(self) -> None:
+        self._build_flow_active = False
+        from simple_build_ui import sync_simple_build_panel
+        sync_simple_build_panel(self)
 
         self._build_progress.setVisible(False)
 

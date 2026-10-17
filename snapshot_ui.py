@@ -114,6 +114,9 @@ class SnapshotActions:
                 QtWidgets.QMessageBox.information(self,'Classic Candidate Coverage',coverage_text(report))
         except Exception as exc:
             QtWidgets.QMessageBox.warning(self,'Library Not Loaded',str(exc))
+        finally:
+            from simple_build_ui import sync_simple_build_panel
+            sync_simple_build_panel(self)
 
     def on_clear_candidate_library(self):
         self._candidate_library=''
@@ -121,6 +124,8 @@ class SnapshotActions:
             self.action_auto_library.setChecked(False)
         self._candidate_library_allow_partial=False
         self._refresh_snapshot_label()
+        from simple_build_ui import sync_simple_build_panel
+        sync_simple_build_panel(self)
         self.status.showMessage('Candidate library cleared. Automatic library reuse is off. Next build generates fresh candidates.',6000)
 
     def on_prepare_showdown_library(self):

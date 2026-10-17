@@ -323,6 +323,7 @@ def create_build_diagnostic(
         "contest_objective": normalize_objective(settings.get("contest_objective", context.get("contest_objective"))),
         "input_id": str(context.get('input_id') or ''),
         "candidate_library": dict(sim.get("candidate_library") or {}),
+        "build_preparation": [dict(row) for row in sim.get("build_preparation", [])],
         "salary_filter": dict(sim.get("salary_filter") or {}),
         "portfolio_feasibility": dict((sim.get('deep_build') or timing).get('portfolio_feasibility') or {}),
         "feasible_shortlist_fallback_used": bool(portfolio.get('feasible_shortlist_fallback_used')),
@@ -629,6 +630,10 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Balance ownership/dup risk: {'On' if rules.get('balance_ownership') else 'Off'}",
         f"- Player groups: {_integer(rules.get('group_count'))} | Player limits: {_integer(rules.get('constrained_player_count'))}",
     ])
+    if record.get('build_preparation'):
+        lines.extend(['', 'Build preparation'])
+        for row in record['build_preparation']:
+            lines.append(f"- {row.get('stage', 'Check')}: {row.get('state', 'Unknown')} — {row.get('detail', '')}")
     if deep_mode:
         options = sim.get("deep_options") or {}
         if sim.get("generation_allocation_seconds"):
