@@ -52,7 +52,7 @@ class ReconciledEventTests(unittest.TestCase):
             self.assertGreaterEqual(min(values[key]),-4.)
 
     def test_link_toggle_preserves_offensive_draws_parent_rng_and_manual_score(self):
-        rows=players();manual=next(p for p in rows if p['Position']=='WR');manual['ProjectionSource']='Manual'
+        rows=players();manual=next(p for p in rows if p['Position']=='WR');manual['ProjectionSource']='Manual override'
         before=copy.deepcopy(rows);off=ReconciledEventPrototype(rows);on=ReconciledEventPrototype(rows,link_dst=True)
         a=random.Random(17);b=random.Random(17);state=a.getstate();base=dict.fromkeys(on.keys,123.)
         x=off.apply(rows,{},base,a);y=on.apply(rows,{},base,b)
@@ -89,9 +89,13 @@ class ReconciledEventTests(unittest.TestCase):
     def test_dst_missing_ambiguous_manual_or_unmodeled_opponent_fails_closed(self):
         rows=players();rows=[p for p in rows if not (p['Team']=='ARI' and p['Position']=='DST')]
         with self.assertRaisesRegex(ValueError,'two unambiguous'):ReconciledEventPrototype(rows,link_dst=True)
-        rows=players();p=next(p for p in rows if p['Position']=='DST');p['ProjectionSource']='Manual'
-        with self.assertRaisesRegex(ValueError,'two unambiguous'):ReconciledEventPrototype(rows,link_dst=True)
-        rows=players();p=next(p for p in rows if p['Position']=='QB');p['ProjectionSource']='Manual'
+        for source in ('Manual','Manual override','Imported forecast','Legacy / unknown source',None):
+            rows=players();p=next(p for p in rows if p['Position']=='DST');p['ProjectionSource']=source
+            with self.assertRaisesRegex(ValueError,'two unambiguous'):ReconciledEventPrototype(rows,link_dst=True)
+        for field in ('ManualProjection','ImportedProjection'):
+            rows=players();p=next(p for p in rows if p['Position']=='DST');p[field]=7.
+            with self.assertRaisesRegex(ValueError,'two unambiguous'):ReconciledEventPrototype(rows,link_dst=True)
+        rows=players();p=next(p for p in rows if p['Position']=='QB');p['ProjectionSource']='Manual override'
         with self.assertRaisesRegex(ValueError,'modeled opposing'):ReconciledEventPrototype(rows,link_dst=True)
         rows=players();p=copy.deepcopy(next(p for p in rows if p['Position']=='DST'));p['FlexID']='other';p['Name']='other';rows.append(p)
         with self.assertRaisesRegex(ValueError,'Ambiguous defensive'):ReconciledEventPrototype(rows,link_dst=True)

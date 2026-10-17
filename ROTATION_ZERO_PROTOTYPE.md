@@ -360,8 +360,10 @@ analytic maximum opposing score so the lower bound remains -4. No clipping is
 used. The new noise stream does not change offensive events or the parent RNG.
 This construction preserves the DST forecast mean and gives negative covariance
 with modeled opposing QB production. It does not claim integer DK scoring,
-sack/return/fumble modeling or calibrated DST variance. Missing/ambiguous/manual
-DST or an unmodeled opposing QB fails closed when linkage is requested.
+sack/return/fumble modeling or calibrated DST variance. Only the explicit Historical average estimate DST source is supported. Manual
+override, Imported forecast, unknown provenance, recorded manual/imported values,
+unavailable or ambiguous/missing defenses, or an unmodeled opposing QB fail closed
+when linkage is requested.
 
 A prior-only check found seven of eight previously qualified games feasible.
 BAL-ATL is rejected: its BAL QB forecast 7.9012 is below a conservative 8.9570

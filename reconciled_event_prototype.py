@@ -10,6 +10,7 @@ from collections import defaultdict
 import pulp
 from linked_event_prototype import LinkedEventPrototype
 from rotation_zero_prototype import _number
+from nfl_eligibility import unavailable
 
 VERSION='reconciled-event-prototype-v1'
 TOLERANCE=2e-5
@@ -132,7 +133,9 @@ class ReconciledEventPrototype(LinkedEventPrototype):
         if link_dst:
             if len(self.qbs)!=2:raise ValueError('DST linkage requires exactly two verified teams')
             for p in self.players:
-                if p.get('Position')!='DST' or p.get('ProjectionSource')=='Manual':continue
+                if p.get('Position')!='DST':continue
+                if (p.get('ProjectionSource')!='Historical average estimate' or unavailable(p)
+                    or p.get('ManualProjection') is not None or p.get('ImportedProjection') is not None):continue
                 team=str(p.get('Team') or '').strip().upper();opponents=[t for t in self.qbs if t!=team]
                 if len(self.qbs)!=2 or team not in self.qbs or len(opponents)!=1:raise ValueError('DST linkage requires exactly two verified teams')
                 opponent=opponents[0];qb=self.qbs[opponent]['key'];maximum=self.qb_upper_bound(opponent)
@@ -143,7 +146,7 @@ class ReconciledEventPrototype(LinkedEventPrototype):
                 if any(v['team']==team for v in self.dst_links.values()):raise ValueError('Ambiguous defensive identity')
                 self.dst_links[key]=dict(team=team,qb=qb,forecast=forecast,noise=noise,coefficient=coefficient,maximum=maximum,opponent_mean=expected)
                 self.forecasts[key]=forecast;self.expected[key]=forecast;self.normalizers[key]=1.
-            if len(self.dst_links)!=2:raise ValueError('DST linkage requires two unambiguous nonmanual defenses')
+            if len(self.dst_links)!=2:raise ValueError('DST linkage requires two unambiguous supported-source defenses')
         self.affected_keys=frozenset(self.forecasts)
 
     def yardage(self,stream,mean):
