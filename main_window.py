@@ -12928,8 +12928,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
         from task_dashboard import watch_task
-        watch_task(self, 'Ownership estimation', self._own_worker, self._own_thread,
-                   self._own_worker.cancel)
+        # Ownership cancellation does not emit a retirement signal; keep it
+        # observational rather than expose a stop action that strands its thread.
+        watch_task(self, 'Ownership estimation', self._own_worker, self._own_thread)
         self._own_thread.start()
 
 

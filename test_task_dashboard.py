@@ -35,6 +35,7 @@ class TaskDashboardTests(unittest.TestCase):
         self.assertIsNone(self.hub.rows[two]['ended'])
         self.assertEqual(self.hub.rows[one]['detail'], '150 lineups')
         self.assertEqual(len(self.hub.rows), 2)
+        self.assertIsNone(self.hub.rows[two]['cancel'])
 
     def test_finish_waits_for_retirement_and_cancel_is_idempotent(self):
         worker, thread, binding = self.watch()
