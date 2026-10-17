@@ -67,6 +67,9 @@ class LinkedEventPrototype:
         # Validate frozen identities and budgets before any diagnostic scenarios.
         allocate(self.players,{id(p):self.work[player_key(p)] for p in self.players if player_key(p) in self.work},random.Random(0))
 
+    def yardage(self,stream,mean):
+        return stream.gammavariate(YARDAGE_SHAPE,mean/YARDAGE_SHAPE) if mean else 0.
+
     def apply(self,players,sampled_workloads,outcomes,rng):
         from nfl_simulation import player_key
         if sorted(player_key(p) for p in players)!=self.keys:raise ValueError('Frozen event player identities changed')
@@ -86,10 +89,10 @@ class LinkedEventPrototype:
             w=self.work[key]
             ypc=_number(w['efficiency'][0]);ypr=_number(w['efficiency'][2])
             for _ in range(row['carries']):
-                row['rushing_yards']+=stream.gammavariate(YARDAGE_SHAPE,ypc/YARDAGE_SHAPE) if ypc else 0.
+                row['rushing_yards']+=self.yardage(stream,ypc)
                 row['rushing_td']+=int(stream.random()<probability(w['rates']['rushing_td_per_carry']))
             for _ in range(row['catches']):
-                row['receiving_yards']+=stream.gammavariate(YARDAGE_SHAPE,ypr/YARDAGE_SHAPE) if ypr else 0.
+                row['receiving_yards']+=self.yardage(stream,ypr)
                 row['receiving_td']+=int(stream.random()<probability(w['rates']['receiving_td_per_catch']))
         for team,qb in self.qbs.items():
             row=ledger[qb['key']];receivers=[k for k in ledger if self.teams[k]==team and k!=qb['key']]

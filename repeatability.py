@@ -22,7 +22,7 @@ def model_version():
     root = Path(__file__).parent
     names = ('repeatability.py', 'nfl_simulation.py', 'showdown_simulation.py',
              'showdown_field.py', 'showdown_history_field.py', 'historical_field.py', 'historical_ownership.py', 'nfl_specialists.py', 'nfl_workload.py',
-             'nfl_kickers.py', 'rotation_zero_prototype.py', 'joint_opportunity_prototype.py', 'linked_event_prototype.py', 'nfl_eligibility.py', 'optimizers.py', 'lineup_ranking.py', 'ownership_strategy.py', 'projection_sensitivity.py', 'usage_history.py')
+             'nfl_kickers.py', 'rotation_zero_prototype.py', 'joint_opportunity_prototype.py', 'linked_event_prototype.py', 'reconciled_event_prototype.py', 'nfl_eligibility.py', 'optimizers.py', 'lineup_ranking.py', 'ownership_strategy.py', 'projection_sensitivity.py', 'usage_history.py')
     return fingerprint({n: hashlib.sha256((root/n).read_text(encoding='utf-8').encode()).hexdigest() for n in names})
 
 

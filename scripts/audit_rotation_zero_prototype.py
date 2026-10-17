@@ -11,6 +11,7 @@ parser.add_argument('--completed-before',required=True)
 parser.add_argument('--interaction-study',action='store_true',help='Predeclared shared-gate and weaker-hurdle comparisons; no fitting')
 parser.add_argument('--joint-study',action='store_true',help='Predeclared finite-count and occupancy comparisons')
 parser.add_argument('--event-study',action='store_true',help='Predeclared direct linked-event scoring; changes modeled QB/starter draws only in diagnostics')
+parser.add_argument('--reconciled-study',action='store_true',help='Fixed-bound event moment reconciliation and opposing-DST residual comparisons')
 parser.add_argument('--evaluation-after',help='Exclusive game-date boundary fixed before reading holdout scores')
 args=parser.parse_args()
 if args.evaluation_after:
@@ -32,7 +33,7 @@ from distribution_validation import validation_report
 db=args.db
 version=model_version();audit=PregameEvidence(db)
 report=dict(status='running',model_version=version,completed_before=args.completed_before,seeds=[90210,481516,730001],scenarios_per_seed=2000,
- games=[],excluded=[],source_exclusions=[],limitations=[
+ source_qualified_games=0,games=[],excluded=[],source_exclusions=[],limitations=[
  'Current-model retrospective reruns on strictly qualified frozen pregame inputs, separate from distributions recorded by the old executable.',
  'Exact selected-source base-player scores only; other exports detect conflicts and never fill missing outcomes. Captain is not a second observation.',
  'One representative contest per game, selected by known construction coverage before reading outcomes. Games, not players or contests, are evaluation units.',
@@ -60,12 +61,22 @@ if args.joint_study:
   'joint_counts':dict(joint_scoring='counts'),'joint_occupancy':dict(joint_scoring='occupancy')}
 if args.event_study:
  profile_options={'baseline':None,'sampled_hurdle':dict(opportunity_basis='sampled'),'linked_events':dict(linked_events=True),'linked_completion':dict(linked_events=True,completion_environment=.2)}
+if args.reconciled_study:
+ profile_options={'baseline':None,'sampled_hurdle':dict(opportunity_basis='sampled'),
+  'linked_completion':dict(linked_events=True,completion_environment=.2),
+  'reconciled_events':dict(reconciled=True),'reconciled_dst':dict(reconciled=True,link_dst=True)}
 report['evaluation']=dict(kind='temporal_holdout' if args.evaluation_after else 'development_retrospective',after=args.evaluation_after)
 report['prototype']['profiles']=profile_options
 report['prototype']['modes']=list(profile_options)
 if args.event_study:
  report['prototype']['event_model']='linked-event-prototype-v1'
  report['prototype']['limitations']='Raw QB/receiver production is linked; per-player forecast-normalized points are not exact DK event totals. Frozen workload means replace sampled share and baseline score noise. Reserve production, bonuses, fumbles and opponent DST linkage remain unmodeled.'
+if args.reconciled_study:
+ from reconciled_event_prototype import BOUNDS
+ report['prototype']['reconciliation_bounds']=dict(BOUNDS)
+ report['prototype']['cohort_rule']='Paired profiles require feasible fixed-bound plans; rejected source-qualified games remain explicit exclusions.'
+ report['prototype']['event_model']='reconciled-event-prototype-v1'
+ report['prototype']['limitations']='Offensive raw partial-event DK means reconciled to forecasts under fixed bounds; infeasible cases excluded explicitly. Bounded beta yardage. DST is a bounded forecast-centered opposing-QB-event residual, not complete DK defensive scoring. No defaults changed.'
 report['limitations']=[v for v in report['limitations'] if not v.startswith('Kicker primary summaries')]
 def corr(a,b):
  return statistics.correlation(a,b) if statistics.pstdev(a)>0 and statistics.pstdev(b)>0 else 0.
@@ -110,11 +121,13 @@ with _connect(db,True) as conn:
     _,_,comparison=scores(sources[other['result_hash']],manifests[other['salary_hash']],other['salary_hash'])
     if any(observations[k]!=v for k,v in comparison.items() if k in observations):raise ValueError('Cross-export exact player/role score conflict')
     observations.update(comparison)
+   report['source_qualified_games']+=1
    from rotation_zero_prototype import RotationZeroPrototype,eligible
    keys=[player_key(p) for p in pool]
    from joint_opportunity_prototype import JointOpportunityPrototype
    from linked_event_prototype import LinkedEventPrototype
-   models={name:None if options is None else LinkedEventPrototype(pool,completion_environment=options.get('completion_environment',0.)) if options.get('linked_events') else JointOpportunityPrototype(scoring=options['joint_scoring']) if 'joint_scoring' in options else RotationZeroPrototype(**options) for name,options in profile_options.items()}
+   from reconciled_event_prototype import ReconciledEventPrototype
+   models={name:None if options is None else ReconciledEventPrototype(pool,link_dst=options.get('link_dst',False)) if options.get('reconciled') else LinkedEventPrototype(pool,completion_environment=options.get('completion_environment',0.)) if options.get('linked_events') else JointOpportunityPrototype(scoring=options['joint_scoring']) if 'joint_scoring' in options else RotationZeroPrototype(**options) for name,options in profile_options.items()}
    values={name:{key:[] for key in keys} for name in models}
    target=[p for p in pool if eligible(p)]
    original=json.dumps(pool,sort_keys=True)
@@ -122,6 +135,8 @@ with _connect(db,True) as conn:
     rngs={name:random.Random(seed) for name in models}
     for _ in range(report['scenarios_per_seed']):
      outputs={name:_scenario_outcomes(rngs[name],pool,rotation_zero_prototype=model) for name,model in models.items()}
+     if 'reconciled_dst' in outputs:
+      assert all(outputs['reconciled_events'][key]==outputs['reconciled_dst'][key] for key in models['reconciled_events'].affected_keys),'DST link changed offense'
      assert all(rng.getstate()==rngs['baseline'].getstate() for rng in rngs.values()),'Parent RNG drift'
      for p in pool:
       key=player_key(p)
@@ -142,13 +157,19 @@ with _connect(db,True) as conn:
     for key,forecast in model.forecasts.items():
      draws=values[name][key];mean=statistics.mean(draws);se=statistics.pstdev(draws)/math.sqrt(len(draws))
      forecast_checks.append(dict(profile=name,key=key,forecast=forecast,sim_mean=mean,standard_error=se,
-      raw_expected=model.expected[key],normalizer=model.normalizers[key],within_5se=abs(mean-forecast)<=5*se+1e-9))
+      raw_expected=model.expected[key],normalizer=model.normalizers[key],mean_basis='DST residual' if key in getattr(model,'dst_links',{}) else 'offensive event points',within_5se=abs(mean-forecast)<=5*se+1e-9))
    modeled_offense=[]
    affected=set().union(*(getattr(m,'affected_keys',()) for m in models.values()))
    for p in pool:
-    if player_key(p) not in affected:continue
+    if player_key(p) not in affected or p['Position'] not in ('QB','RB','WR','TE'):continue
     actual=base.get((ai._name(p['Name']),p['Team'],p['Position'],manifest['games'][0]))
     if actual is not None:modeled_offense.append(dict(name=p['Name'],position=p['Position'],actual=float(actual),profiles={name:metrics(v[player_key(p)],float(actual)) for name,v in values.items()}))
+   modeled_defense=[]
+   for p in pool:
+    if p['Position']!='DST' or player_key(p) not in affected:continue
+    actual=base.get((ai._name(p['Name']),p['Team'],p['Position'],manifest['games'][0]))
+    if actual is not None:modeled_defense.append(dict(name=p['Name'],actual=float(actual),profiles={name:metrics(v[player_key(p)],float(actual)) for name,v in values.items()}))
+   model_receipts={name:dict(reconciliation=model.reconciliation,dst_links=model.dst_links,completion_amplitudes=model.completion_amplitudes) for name,model in models.items() if hasattr(model,'reconciliation')}
    teams=[]
    for team in sorted({p['Team'] for p in pool}):
     offense=[p for p in pool if p['Team']==team and p['Position'] in ('QB','RB','WR','TE')]
@@ -173,7 +194,7 @@ with _connect(db,True) as conn:
       rotations_all_zero=sum(all(v[player_key(p)][i]==0 for p in rotations) for i in range(6000))/6000 if rotations else None)
     teams.append(dict(team=team,profiles=profiles))
    report['games'].append(dict(date=row['date'],game=row['game'],source_hash=row['result_hash'],salary_hash=row['salary_hash'],
-    snapshot=receipt,rows=rows,modeled_offense=modeled_offense,forecast_checks=forecast_checks,teams=teams,eligible=len(target),observed=len(rows),scenarios=6000,
+    snapshot=receipt,rows=rows,modeled_offense=modeled_offense,modeled_defense=modeled_defense,model_receipts=model_receipts,forecast_checks=forecast_checks,teams=teams,eligible=len(target),observed=len(rows),scenarios=6000,
     model_counts={name:dict(model.counts) for name,model in models.items() if model}))
    print('MATCHED',len(rows),'rotation outcomes',flush=True)
   except Exception as exc:
@@ -188,14 +209,14 @@ for profile in profile_options if report['games'] else ():
  report['summary'][profile]=dict(games=len(game_metrics),observations=sum(len(g['rows']) for g in report['games']),
   **{k:statistics.mean(g[k] for g in game_metrics) for k in game_metrics[0]},
   interactions={k:statistics.mean(g[k] for g in team_metrics) for k in team_metrics[0]})
- if args.interaction_study or args.joint_study or args.event_study:
+ if args.interaction_study or args.joint_study or args.event_study or args.reconciled_study:
   report['summary'][profile]['subgroups']={}
   for label,is_zero in [('actual_zero',True),('actual_positive',False)]:
    groups=[[r['profiles'][profile]['crps'] for r in g['rows'] if (r['actual']==0)==is_zero] for g in report['games']]
    present=[statistics.mean(v) for v in groups if v]
    report['summary'][profile]['subgroups'][label]=dict(games=len(present),observations=sum(map(len,groups)),
     crps=statistics.mean(present) if present else None)
- if args.event_study:
+ if args.event_study or args.reconciled_study:
   offense={}
   for position in ('all','QB','RB','WR','TE'):
    cohorts=[[r for r in g['modeled_offense'] if position=='all' or r['position']==position] for g in report['games']]
@@ -203,5 +224,8 @@ for profile in profile_options if report['games'] else ():
    offense[position]=dict(games=len(present),observations=sum(map(len,cohorts)),
     **{k:statistics.mean(statistics.mean(r['profiles'][profile][k] for r in rows) for rows in present) if present else None for k in ('crps','bias','inside')})
   report['summary'][profile]['modeled_offense']=offense
+ if args.reconciled_study:
+  cohorts=[g['modeled_defense'] for g in report['games'] if g['modeled_defense']]
+  report['summary'][profile]['modeled_defense']=dict(games=len(cohorts),observations=sum(map(len,cohorts)),crps=statistics.mean(statistics.mean(r['profiles'][profile]['crps'] for r in rows) for rows in cohorts) if cohorts else None)
 report['status']='complete' if report['games'] else 'no_qualified_games';save()
 print(json.dumps(report['summary'],indent=2),flush=True)

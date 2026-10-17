@@ -316,3 +316,57 @@ production/DST effects, and obtain independent qualifying validation games.
 Per-player point normalization is explicitly a research compromise, not a
 production solution to those conflicts. Defaults and production forecasts remain
 unchanged.
+
+
+## Forecast/event-prior reconciliation and opposing DST (diagnostic only)
+
+`--reconciled-study` compares baseline, the original hurdle, linked-completion
+events, reconciled events, and those same reconciled events with opposing DST
+linkage. All profiles are paired on the common feasible cohort. Source-qualified
+games rejected by the moment constraints remain explicit exclusions and are
+counted separately; they must not disappear into an accuracy claim.
+
+A small diagnostic LP reconciles copies of expected carries, targets, catches,
+yards and touchdowns to the frozen automatic player forecasts. QB passing yards
+and TDs are sums of receiver production, and interceptions occur only on
+incomplete allocated targets. Per-position shared budgets remain upper bounds
+with unused reserves. Nonautomatic individual carry/target/receiving moments are
+fixed; manual fantasy scores remain protected. No source forecast or saved
+workload is edited and no observed outcome enters the solve.
+
+The declared mean bounds are 15 rushing yards/carry, 30 receiving yards/catch,
+.15 rushing TD/carry, .35 receiving TD/catch, and .25 interceptions/incomplete
+pass with at most three expected interceptions. These are research bounds, not
+claims of universal physical impossibility. Relative-L1 distance from recorded
+prior moments defines the objective with predeclared scale floors. CBC must
+return an optimal solution within ten seconds; no feasible incumbent, forecast
+edit or bound relaxation is substituted. Constraint/raw-mean residuals must be
+within 0.00002 points. Receipts record solver/library identity, executable hash,
+parameters, objective and every before/after moment. Calibrated plans carry a
+diagnostic provenance marker. Raw offensive points have multiplier exactly one.
+
+Yardage uses symmetric beta(1.5, 1.5) on [0, 2 x mean], preserving the prior gamma
+shape-4 mean and variance while providing finite event support. This tail-shape
+change is disclosed. It is not a game-outcome fit. Completion environments keep
+the same symmetric bounds as the earlier event prototype.
+
+The optional DST result is a forecast-centered residual from the opposing QB's
+same raw event score Q, not a full DK defensive stat model:
+
+    DST = forecast + a * (E[Q] - Q) + Uniform(-r, r)
+
+Here r=min(3, (forecast+4)/2), and a is at most .35 and is reduced using the
+analytic maximum opposing score so the lower bound remains -4. No clipping is
+used. The new noise stream does not change offensive events or the parent RNG.
+This construction preserves the DST forecast mean and gives negative covariance
+with modeled opposing QB production. It does not claim integer DK scoring,
+sack/return/fumble modeling or calibrated DST variance. Missing/ambiguous/manual
+DST or an unmodeled opposing QB fails closed when linkage is requested.
+
+A prior-only check found seven of eight previously qualified games feasible.
+BAL-ATL is rejected: its BAL QB forecast 7.9012 is below a conservative 8.9570
+passing-point lower bound implied by the WR/TE forecasts, available targets,
+rushing allowance and interception bound. That is a conflict under this model's
+declared assumptions, not a license to alter forecasts or dismiss the game.
+The historical audit will report its common feasible cohort and this exclusion.
+No normal app defaults enable any of these models.
