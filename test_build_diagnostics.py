@@ -19,8 +19,7 @@ from build_diagnostics import (
 class BuildDiagnosticsTests(unittest.TestCase):
     def test_preparation_receipt_survives_history_and_copied_report(self):
         rows=[dict(stage='library',state='Completed',detail='Validated selected library.',seconds=.2)]
-        record=create_build_diagnostic(context={'kind':'showdown'},timing_report={},
-                                       sim_report={'build_preparation':rows})
+        record=create_build_diagnostic(context={'kind':'showdown'},timing_report={'build_preparation':rows})
         self.assertEqual(record['build_preparation'],rows)
         self.assertIn('library: Completed — Validated selected library.',format_build_report(record))
         save_build_diagnostic(record)

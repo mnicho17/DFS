@@ -130,7 +130,7 @@ class UnifiedPreparationTests(unittest.TestCase):
             worker.run()
         solver.assert_called_once()
         self.assertEqual(len(results),1)
-        self.assertEqual(len(results[0]['sim_report']['build_preparation']),4)
+        self.assertEqual(len(results[0]['timing_report']['build_preparation']),4)
         self.assertEqual(len([t for t in progress if t.startswith('Preparing ') and '/4' in t]),4)
 
     def test_cancel_before_start_never_enters_search_or_discovery(self):
@@ -160,7 +160,7 @@ class UnifiedPreparationTests(unittest.TestCase):
         solver.assert_not_called(); eligibility.assert_not_called()
         self.assertEqual(len(results),1)
         self.assertTrue(results[0]['cancelled'])
-        self.assertEqual([r['stage'] for r in results[0]['sim_report']['build_preparation']],
+        self.assertEqual([r['stage'] for r in results[0]['timing_report']['build_preparation']],
                          ['captain','history','library'])
 
     def test_history_failure_stops_before_library_work(self):
@@ -175,3 +175,14 @@ class UnifiedPreparationTests(unittest.TestCase):
         discovery.assert_not_called(); solver.assert_not_called()
         self.assertEqual(len(errors),1)
         self.assertIn('changed evidence', errors[0])
+
+    def test_fast_without_sim_keeps_preparation_out_of_sim_report(self):
+        from main_window import LineupBuildWorker
+        worker=LineupBuildWorker(copy.deepcopy(players()),kind='showdown',num_lineups=1,
+                                 salary_cap=50000,sim_enabled=False,compute_mode='Fast')
+        results=[];worker.finished.connect(results.append)
+        with patch('optimizers.ShowdownOptimizer.build_lineups',return_value=[]):
+            worker.run()
+        self.assertEqual(len(results),1)
+        self.assertNotIn('build_preparation',results[0].get('sim_report', {}))
+        self.assertEqual(len(results[0]['timing_report']['build_preparation']),4)

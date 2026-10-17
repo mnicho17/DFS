@@ -2940,7 +2940,7 @@ class LineupBuildWorker(QtCore.QObject):
             report['captain_pool_adjustments'] = self.captain_adjustments
             report['text'] = format_portfolio_report_text(report)
         if hasattr(self, 'preparation'):
-            payload.setdefault('sim_report', {})['build_preparation'] = self.preparation.report(
+            payload.setdefault('timing_report', {})['build_preparation'] = self.preparation.report(
                 cancelled=bool(payload.get('cancelled') or self._cancel_event.is_set()))
         finish_worker(payload)
         self.finished.emit(payload)

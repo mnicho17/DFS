@@ -323,7 +323,7 @@ def create_build_diagnostic(
         "contest_objective": normalize_objective(settings.get("contest_objective", context.get("contest_objective"))),
         "input_id": str(context.get('input_id') or ''),
         "candidate_library": dict(sim.get("candidate_library") or {}),
-        "build_preparation": [dict(row) for row in sim.get("build_preparation", [])],
+        "build_preparation": [dict(row) for row in timing.get("build_preparation", [])],
         "salary_filter": dict(sim.get("salary_filter") or {}),
         "portfolio_feasibility": dict((sim.get('deep_build') or timing).get('portfolio_feasibility') or {}),
         "feasible_shortlist_fallback_used": bool(portfolio.get('feasible_shortlist_fallback_used')),
