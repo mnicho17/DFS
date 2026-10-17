@@ -2128,3 +2128,12 @@ Results and Learning opens one History workspace with three views:
 - **Learning coverage** keeps evidence review, reconciliation, salary/snapshot resolution, Portfolio Risk, and Hindsight together. Saved evidence states can be stale and do not establish field-model qualification. Explore users → Advanced history / field qualification retains the existing pregame-field experiments, qualification reasons, and explicit profile preview/save tools.
 
 Opening or switching views does not index sources or enable a historical/experimental model. The existing initial results report still verifies saved evidence in the background. Automatic folder imports feed the same database; refresh history to index newly mapped contests before exploring. Cancelled or failed searches retain the previous displayed analysis with a status message. Unknown scores/success coverage remain unknown, and observed success does not establish skill or profit. Shared history work waits until searches and advanced dialogs retire.
+
+
+### Review build
+
+Choose **Review build** beside Generate to open the selected build receipt in one workspace: Overview, Lineups and exposures, Limits and adjustments, Preparation and SIM, Comparisons, and Full report. The existing Settings → Build History shortcut opens the same window. Select one recorded run, or select exactly two result receipts and Compare Two Builds. Copy/export use the existing full report or the displayed two-build comparison.
+
+Every view uses that selected receipt. Current players, settings, saved portfolios, and unrelated comparison files are not substituted for missing history. Older/Classic receipts may lack per-lineup snapshots; Showdown receipts retain at most 50 detailed lineup rows. Missing evidence is disclosed rather than reconstructed. The Comparisons view shows only field evidence recorded with the build; estimates do not establish actual performance or submission.
+
+The latest failed build attempt is retained separately for the current session, including its original limit/error message. It has no completed lineup or SIM evidence and cannot participate in two-build comparisons. Error details can include traceback paths. A later completed current build clears this session-only failure. Current portfolio tools opens the existing saved/generated Insights and repair workflow, explicitly separate from the selected historical receipt; its existing mutation and cancellation guards still apply. Opening review does not rerun search, SIM, reconciliation, or imports.
