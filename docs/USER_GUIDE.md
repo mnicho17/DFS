@@ -44,6 +44,14 @@ The main workspace now keeps **Lineups**, **Time budget** (NFL), **Advanced**, a
 
 The **Tasks…** dashboard remains available regardless of whether Advanced is expanded. No optimizer, projection, SIM-model, ranking, or experimental-default changes are part of this layout update.
 
+## Unified preparation summary
+
+Choose **Preparation…** beside **Tasks…** to review inputs, readiness blockers and next actions, candidate-library policy or explicit selection, requested historical field, recorded history refresh, and background work in one place. Select a row to read its details; the action button opens the corresponding existing tool.
+
+Opening the summary is report-only: it does not refresh live data, scan library contents or result folders, import records, apply profiles, alter settings, or relax rules. Readiness is computed using the existing local audit. The view updates from current app state while background work runs. Source refreshes and tool actions still require their existing explicit actions.
+
+**Automatic discovery configured** is a policy, not proof a library has been selected or validated. **Selected; rechecked during Generate** preserves the existing library admission checks. Recorded history refresh and previous-build library evidence are labeled as historical; neither proves compatibility or freshness for the current slate. A historical-field profile remains subject to the existing qualification and source revalidation during build.
+
 ## Task dashboard and automatic build preparation
 
 The **Tasks…** button stays on the main workspace beside a compact count of work underway and tasks needing attention. Open it to see builds, history refresh, results/learning operations, ownership estimation, and overnight preparation. Each task shows its current phase or outcome, elapsed time, and time since its last progress update. Select a task to inspect recent messages. **Cancel / pause selected task** uses that operation's existing safe cancellation or checkpoint mechanism; a stop request remains active until the worker retires. Tasks without cancellation support have no enabled stop button.
