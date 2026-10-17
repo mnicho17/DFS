@@ -70,6 +70,9 @@ def preparation_rows(w):
             str(library.get('library_path') or 'See the last Build Report for the selected source.')
             + f"\nAccepted: {library.get('accepted', 'not recorded')}; screening reused: {library.get('screening_reused', 'not recorded')}."
             + '\nThis describes the previous build, not the currently loaded slate.', 'Tasks dashboard')
+    backup = getattr(w, 'idle_backup', None)
+    if backup:
+        add('backup', 'History backups', backup.state, backup.message, 'Backups')
     hub = getattr(w, 'tasks', None)
     active = [row for row in hub.rows.values() if row['ended'] is None] if hub else []
     add('tasks', 'Background work', f'{len(active)} tasks underway',
@@ -164,6 +167,9 @@ class PreparationStatusDialog(QtWidgets.QDialog):
             w.tabs_workspace_controls.setCurrentIndex(0)
         elif key == 'field':
             w.on_prepare_showdown_history()
+        elif key == 'backup':
+            from idle_backup_ui import open_backups
+            open_backups(w)
         elif key == 'history':
             w.on_results_learning()
         else:

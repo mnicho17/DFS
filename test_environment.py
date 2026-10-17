@@ -27,6 +27,7 @@ def install():
     previous_cwd = Path.cwd()
     os.environ["DFS_OPTIMIZER_DATA_DIR"] = str(_root / "data")
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    os.environ.pop("DFS_BACKUP_ROOT", None)  # Never inherit a real backup drive in tests.
     # Relative logs/outputs (including solver scratch files) stay disposable.
     os.chdir(_root)
     from PyQt5 import QtCore

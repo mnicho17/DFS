@@ -48,14 +48,14 @@ if errorlevel 1 goto failed
 
 echo.
 echo Starting DFS Optimizer...
-echo Keep this window open. Backup runs after you close the app.
+echo Keep this window open. Idle backups run in the app; a final change check runs after it closes.
 echo Use only one DFS window at a time so its history can be backed up safely.
 ".venv\Scripts\python.exe" app.py
 set "DFS_APP_EXIT=%ERRORLEVEL%"
 
 echo.
-echo Backing up new or changed history content to USB...
-".venv\Scripts\python.exe" history_backup.py --source "history" --destination "%DFS_BACKUP_ROOT%"
+echo Checking for history changes since the last idle backup...
+".venv\Scripts\python.exe" history_backup.py --source "history" --destination "%DFS_BACKUP_ROOT%" --live --skip-if-current
 if errorlevel 1 goto backup_failed
 if not "%DFS_APP_EXIT%"=="0" (
     echo The app exited with error code %DFS_APP_EXIT%. Its history was backed up.

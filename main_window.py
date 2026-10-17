@@ -7208,6 +7208,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.history_refresh.changed.connect(lambda: self.status.showMessage(self.history_refresh.status_line()))
         self.history_refresh.completed.connect(self._history_refresh_retired)
         QtCore.QTimer.singleShot(0, self.history_refresh.startup)
+        from idle_backup_ui import IdleBackupController
+        from pathlib import Path
+        self.idle_backup = IdleBackupController(self, self.app_settings, Path(history_db_path()).parent)
+        self._close_after_backup = False
 
     def _history_refresh_retired(self):
         if self._close_after_history:
@@ -8159,6 +8163,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         build_history_action.setObjectName("buildHistoryAction")
 
 
+
+        from idle_backup_ui import open_backups
+        settings_menu.addAction('Backups…', lambda:open_backups(self))
 
         settings_menu.addSection("Workspace")
 
@@ -15132,6 +15139,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self._record_repair_attempt(receipt, payload)
 
     def closeEvent(self, event):
+        if getattr(self, 'idle_backup', None) and self.idle_backup.shutdown():
+            self._close_after_backup = True
+            event.ignore()
+            return
         if getattr(self, 'history_refresh', None):
             self.history_refresh.watch.shutdown()
         if getattr(self, 'history_refresh', None) and self.history_refresh.busy:
