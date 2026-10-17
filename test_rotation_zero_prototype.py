@@ -117,3 +117,58 @@ class RotationZeroTests(unittest.TestCase):
             value=model.apply([player],{id(player):w},before,random.Random(1))[player_key(player)]
         self.assertAlmostEqual(value,100.)
         with self.assertRaises(ValueError):RotationZeroPrototype(opportunity_basis='unknown')
+
+
+class RotationDependenceTests(unittest.TestCase):
+    def test_controls_reject_invalid_values(self):
+        from rotation_zero_prototype import RotationZeroPrototype
+        for key in ('zero_strength','team_gate_share'):
+            for value in (-.1,1.1,float('nan'),float('inf'),True):
+                with self.assertRaises(ValueError):RotationZeroPrototype(**{key:value})
+
+    def test_weaker_hurdle_preserves_conditional_mean_and_limits_uplift(self):
+        from rotation_zero_prototype import RotationZeroPrototype,opportunity
+        p=next(p for p in pool() if p['Position']=='TE' and p['NFLDepthOrder']==2)
+        work={id(p):p['NFLWorkload']};before={player_key(p):5.}
+        for strength in (0.,.5,1.):
+            q=strength*min(.95,math.exp(-opportunity(p['NFLWorkload'])))
+            with patch('rotation_zero_prototype._gate_rng') as gate:
+                gate.return_value.random.return_value=1.
+                out=RotationZeroPrototype(zero_strength=strength).apply([p],work,before,random.Random(1))
+            self.assertAlmostEqual((1-q)*out[player_key(p)],5.,places=12)
+            self.assertLessEqual(out[player_key(p)],5./(1-min(.95,math.exp(-opportunity(p['NFLWorkload'])))))
+
+    def test_shared_uniform_preserves_marginals_and_changes_joint_zeros(self):
+        from rotation_zero_prototype import RotationZeroPrototype
+        a=next(p for p in pool() if p['Position']=='TE' and p['NFLDepthOrder']==2)
+        b=copy.deepcopy(a);b['FlexID']='other';b['Name']='other'
+        players=[a,b];work={id(p):dict(p['NFLWorkload'],carries=0.,targets=1.,efficiency=[1.,.7]) for p in players}
+        before={player_key(p):5. for p in players};results={}
+        for share in (0.,.25,1.):
+            model=RotationZeroPrototype(team_gate_share=share);rng=random.Random(742)
+            # Move the parent between independent scenarios without letting gates consume it.
+            values=[]
+            for _ in range(12000):
+                values.append(model.apply(players,work,before,rng));rng.random()
+            zero=[sum(v[player_key(p)]==0 for v in values)/len(values) for p in players]
+            for fraction in zero:self.assertAlmostEqual(fraction,math.exp(-.7),delta=.02)
+            for p in players:self.assertAlmostEqual(statistics.mean(v[player_key(p)] for v in values),5.,delta=.2)
+            results[share]=sum(all(x==0 for x in v.values()) for v in values)/len(values)
+        self.assertLess(results[0.],results[.25]);self.assertLess(results[.25],results[1.])
+        self.assertAlmostEqual(results[1.],math.exp(-.7),delta=.02)
+
+    def test_controls_keep_parent_rng_defaults_and_order_invariant(self):
+        from rotation_zero_prototype import RotationZeroPrototype
+        from nfl_workload import sample_workloads
+        players=pool();original=copy.deepcopy(players);work=sample_workloads(random.Random(3),players)
+        before={player_key(p):5. for p in players}
+        model=RotationZeroPrototype(zero_strength=.5,team_gate_share=.25);rng=random.Random(17);state=rng.getstate()
+        a=model.apply(players,work,before,rng);b=model.apply(list(reversed(players)),work,before,rng)
+        self.assertEqual(a,b);self.assertEqual(state,rng.getstate());self.assertEqual(original,players)
+        x=random.Random(19);y=random.Random(19)
+        baseline=_scenario_outcomes(x,players)
+        trial=_scenario_outcomes(y,players,rotation_zero_prototype=RotationZeroPrototype(zero_strength=0.,team_gate_share=.25))
+        self.assertEqual(baseline,trial);self.assertEqual(x.getstate(),y.getstate())
+        missing=copy.deepcopy(players[2]);missing['Team']=''
+        with self.assertRaisesRegex(ValueError,'explicit team'):
+            model.apply([missing],{id(missing):missing['NFLWorkload']},{player_key(missing):5.},rng)

@@ -46,8 +46,11 @@ def _gate_rng(rng):
 
 
 class RotationZeroPrototype:
-    def __init__(self,*,opportunity_basis='sampled'):
+    def __init__(self,*,opportunity_basis='sampled',zero_strength=1.,team_gate_share=0.):
         if opportunity_basis not in {'sampled','frozen'}:raise ValueError('Unknown opportunity basis')
+        zero_strength=_number(zero_strength);team_gate_share=_number(team_gate_share)
+        if zero_strength>1 or team_gate_share>1:raise ValueError('Prototype controls must be in [0, 1]')
+        self.zero_strength=zero_strength;self.team_gate_share=team_gate_share
         self.opportunity_basis=opportunity_basis
         self.counts=Counter()
 
@@ -56,13 +59,24 @@ class RotationZeroPrototype:
         keys=[player_key(p) for p in players]
         if len(keys)!=len(set(keys)):raise ValueError('Ambiguous prototype player identities')
         result=dict(outcomes);gate_rng=_gate_rng(rng)
+        team_gates={}
+        if self.team_gate_share:
+            # A mixture of independent and common uniforms preserves each marginal
+            # zero rate. It changes joint events, not workload allocation.
+            teams=sorted({str(p.get('Team') or '').strip().upper() for p in players if eligible(p)})
+            if '' in teams:raise ValueError('Team gate requires explicit team identity')
+            for team in teams:
+                shared=gate_rng.random()<self.team_gate_share
+                team_gates[team]=gate_rng.random() if shared else None
         for player in sorted(players,key=player_key):
             if not eligible(player):continue
             key=player_key(player)
             w=player['NFLWorkload'] if self.opportunity_basis=='frozen' else sampled_workloads.get(id(player))
             if w is None:raise ValueError('Eligible player missing shared sampled workload')
-            probability=min(.95,math.exp(-opportunity(w)))
-            score=_number(outcomes[key]);zero=gate_rng.random()<probability
+            probability=self.zero_strength*min(.95,math.exp(-opportunity(w)))
+            uniform=team_gates.get(str(player.get('Team') or '').strip().upper())
+            if uniform is None:uniform=gate_rng.random()
+            score=_number(outcomes[key]);zero=uniform<probability
             result[key]=0. if zero else score/(1-probability)
             self.counts['eligible_draws']+=1;self.counts['zero_gates']+=int(zero)
         return result
