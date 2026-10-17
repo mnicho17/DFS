@@ -265,3 +265,54 @@ are the mean target, not the old simulator's sometimes shifted finite-sample
 mean. Normalizer compatibility and lost opponent linkage remain activation
 risks even if marginal outcome scores improve. The same development and temporal
 boundaries, exact-score observations and read-only source safeguards still apply.
+
+
+### Linked-event results, October 17, 2026
+
+Development: eight qualified games, 102 rotation outcomes and 166 modeled
+QB/RB/WR/TE outcomes; three fixed seeds x 2,000 scenarios/profile/game. All source,
+pregame-evidence, protected-input and scoring-identity revalidation passed.
+Both new variants preserve frozen forecast means analytically; all 332 per-player
+Monte Carlo checks fell within five standard errors. The old simulator means
+are not the mean target and can differ from frozen forecasts.
+
+| Profile | Rotation CRPS | Positive rotation CRPS | All-offense CRPS | Predicted rotation zeros |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 2.6490 | 3.2020 | 3.3987 | 0.0% |
+| Original hurdle | 2.5449 | 3.2401 | 3.3358 | 24.4% |
+| Linked events | 2.5434 | 3.2178 | 3.3323 | 23.1% |
+| Linked + completion environment | 2.5339 | 3.2117 | 3.3247 | 23.7% |
+
+| Profile | QB/receivers | Rotation pairs | QB/opposing DST | Team offense SD | Rotation p95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 0.5422 | 0.2346 | -0.2571 | 30.1282 | 10.9451 |
+| Original hurdle | 0.5216 | 0.1375 | -0.2571 | 30.8489 | 12.3141 |
+| Linked events | 0.7057 | -0.0184 | 0.0066 | 16.7008 | 10.3251 |
+| Linked + completion environment | 0.7836 | 0.0131 | 0.0040 | 21.0475 | 10.4755 |
+
+The completion variant modestly improves marginal CRPS and positive-outcome
+CRPS versus the original hurdle. Positive-outcome CRPS remains slightly worse
+than baseline. Raw QB/receiver linkage is achieved, but rotation pairs lose the
+baseline's shared environment, offense variability shrinks, and the negative
+opposing-DST relationship disappears. Baseline correlations are reference values,
+not established real-world targets. No result supports activation or proves
+fresh-game performance. Temporal validation again has zero qualified games:
+BUF-LAR and SEA-DEN exceed the existing scan allowance; no bounds were relaxed.
+
+A separate read-only consistency check reconstructed the same active pools from
+the audit's SHA256-verified frozen snapshot receipts (with the same cleared
+personal locks). It compared each non-QB forecast against targets x catch rate,
+the minimum expected PPR points before nonnegative yards or TDs. Eleven of 150
+modeled non-QB player-games, across five games, fall below that floor. Both the
+snapshot bytes and scoring identity were rechecked, and no outcome scores were
+used to fit anything. The local sidecar records receipts and the original audit
+hash. Forecast normalizers span 0 to 3.4050. Thus the frozen event priors and some
+forecast means cannot simultaneously produce exact raw DK scoring. Zero factors
+are disclosed, not interpreted as zero raw production.
+
+No prototype is selected. Remaining work must reconcile opportunity/event priors
+with forecast mean constraints, model shared offense variation and opposing
+production/DST effects, and obtain independent qualifying validation games.
+Per-player point normalization is explicitly a research compromise, not a
+production solution to those conflicts. Defaults and production forecasts remain
+unchanged.
