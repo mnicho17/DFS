@@ -59,7 +59,7 @@ def preparation_rows(w):
     busy = bool(controller and controller.busy)
     stopping = bool(busy and controller.stop is not None and controller.stop.is_set())
     watch = getattr(controller, 'watch', None)
-    state = 'Stopping safely' if stopping else 'Refresh underway' if busy else 'Refresh queued' if watch and watch.pending else 'Last recorded refresh' if text else 'No recorded refresh'
+    state = 'Stopping safely' if stopping else 'Refresh underway' if busy else 'Refresh queued' if controller and controller.queued else 'Last recorded refresh' if text else 'No recorded refresh'
     add('history', 'Results / salary history', state,
         (text or 'Choose source folders and refresh in Results and Learning.')
         + ('\n' + watch.message if watch else '')
@@ -73,6 +73,10 @@ def preparation_rows(w):
     backup = getattr(w, 'idle_backup', None)
     if backup:
         add('backup', 'History backups', backup.state, backup.message, 'Backups')
+    queue=getattr(w,'background_queue',None)
+    if queue:add('queue','Background queue','Prioritized',queue.summary(),'Tasks dashboard')
+    idle=getattr(w,'idle_preparation',None)
+    if idle:add('idle-preparation','Idle candidate preparation',idle.state,idle.message,'Tasks dashboard')
     hub = getattr(w, 'tasks', None)
     active = [row for row in hub.rows.values() if row['ended'] is None] if hub else []
     add('tasks', 'Background work', f'{len(active)} tasks underway',

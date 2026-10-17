@@ -92,7 +92,7 @@ class IdleBackupController(QtCore.QObject):
     def busy(self):
         history=self.owner.history_refresh
         if history.busy or history._reports:return True
-        if any(k!=self.key and row['ended'] is None for k,row in self.owner.tasks.rows.items()):return True
+        if any(k!=self.key and row['ended'] is None and row['state']!='Queued' for k,row in self.owner.tasks.rows.items()):return True
         for name in ('_build_thread','_own_thread'):
             thread=getattr(self.owner,name,None)
             try:
@@ -103,7 +103,7 @@ class IdleBackupController(QtCore.QObject):
 
     def other_work_changed(self):
         if self.starting or self.worker is None:return
-        other=any(k!=self.key and row['ended'] is None for k,row in self.owner.tasks.rows.items())
+        other=any(k!=self.key and row['ended'] is None and row['state']!='Queued' for k,row in self.owner.tasks.rows.items())
         if other:
             self.preempted=True;self.worker.request_cancel()
             self.set_status('Yielding','Pausing backup for current app work; waiting for worker retirement.')
@@ -115,16 +115,34 @@ class IdleBackupController(QtCore.QObject):
             self.set_status('Not configured','Choose a backup folder, or use the launcher backup folder.');return
         if self.paused or (not self.enabled() and not self.manual):return
         if not self.manual and (now<self.next_attempt or (not self.dirty and now<self.next_check)):return
-        if self.busy():
+        queue=getattr(self.owner,'background_queue',None)
+        lower=bool(queue and queue.active and queue.active['priority']>20)
+        if self.busy() and not lower:
             if self.manual:self.set_status('Queued','Backup queued until current app work retires.')
-            return
+            if not queue:return
         if not self.manual and (now-self.last_input<IDLE_SECONDS or now-self.last_change<QUIET_SECONDS):return
-        self.start()
+        queue=getattr(self.owner,'background_queue',None)
+        if queue:
+            from background_queue import BACKUP_PRIORITY
+            queue.request('backup','History backup',BACKUP_PRIORITY,self.start,self.yield_work,
+                ready=lambda:not self.closed and bool(self.destination()) and not self.paused and (self.manual or self.enabled()) and (self.manual or (self.clock()-self.last_input>=IDLE_SECONDS and self.clock()-self.last_change>=QUIET_SECONDS)) and (not self.busy() or bool(queue.active and queue.active['priority']>20)),
+                on_cancel=self.cancel,
+                detail='Waiting for idle time and higher-priority history work.')
+            queue.pump()
+            if 'backup' in queue.pending:self.set_status('Queued','Backup queued; waiting for idle time and higher-priority work to retire.')
+        else:self.start()
+
+    def yield_work(self):
+        if self.worker:
+            self.preempted=True;self.worker.request_cancel()
+            self.set_status('Yielding','Pausing backup at a safe boundary for other app work.')
 
     def request(self, verify=False):
         if self.closed:return
         self.paused=False;self.manual=True;self.verify=verify;self.next_attempt=0;self.dirty=True
         self.tick()
+        queue=getattr(self.owner,'background_queue',None)
+        if queue:queue.pump()
 
     def configure(self):
         self.paused=False;self.dirty=True;self.last_change=self.clock();self.next_attempt=0
@@ -147,6 +165,7 @@ class IdleBackupController(QtCore.QObject):
         self.key=binding.key if binding else None;self.starting=False
         self.set_status('Running','Checking history and preparing verified incremental content…')
         self.thread.start()
+        return True
 
     def progress(self,a,b,text):
         if self.worker is not None and not self.worker.stop.is_set():self.set_status('Running',text)
@@ -155,6 +174,8 @@ class IdleBackupController(QtCore.QObject):
 
     def cancel(self):
         self.paused=True;self.manual=False;self.verify=False
+        queue=getattr(self.owner,'background_queue',None)
+        if queue and 'backup' in queue.pending:queue.cancel('backup')
         if self.worker:self.worker.request_cancel()
         self.set_status('Paused','Backup paused for this session. Back up now resumes; previous complete manifests are preserved.')
 
@@ -181,6 +202,8 @@ class IdleBackupController(QtCore.QObject):
                 + f"Last checked {stamp}. {result.get('copied',0)} new objects; {result.get('skipped_unchanged',0)} unchanged files skipped. "
                 f"Manifest: {result['manifest']}. Full object verification remains a separate action; restores always verify content.")
         if self.closed and getattr(self.owner,'_close_after_backup',False):QtCore.QTimer.singleShot(0,self.owner.close)
+        queue=getattr(self.owner,'background_queue',None)
+        if queue:queue.release('backup')
         self.publish()
 
     def shutdown(self):

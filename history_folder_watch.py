@@ -89,8 +89,7 @@ class HistoryFolderWatch(QtCore.QObject):
             from task_dashboard import task_hub
             self.hub = task_hub(self.controller)
             if self.hub:
-                self.task = self.hub.start('History refresh request', self.pause)
-                self.hub.rows[self.task]['state'] = 'Queued'
+                self.task = self.hub.start('History refresh request', self.pause, state='Queued', background=True)
         if self.hub and self.task is not None:
             self.hub.update(self.task, 'Source change noticed; waiting for 30 seconds of quiet before validated import.')
         self.controller.changed.emit()
@@ -103,6 +102,8 @@ class HistoryFolderWatch(QtCore.QObject):
         self.task = None
 
     def cancel_pending(self):
+        queue=getattr(self.controller.parent(),'background_queue',None)
+        if queue and 'history' in queue.pending:queue.cancel('history')
         self.clear_pending('Cancelled', 'Queued history update cancelled.')
         self.controller.changed.emit()
 
@@ -111,6 +112,16 @@ class HistoryFolderWatch(QtCore.QObject):
             return
         if not self.enabled() or self.paused:
             self.cancel_pending()
+            return
+        queue=getattr(self.controller.parent(),'background_queue',None)
+        if queue and self.pending and self.enabled() and not self.paused:
+            self.clear_pending()
+            from background_queue import HISTORY_PRIORITY
+            queue.request('history','Results and salary history refresh',HISTORY_PRIORITY,
+                lambda:self.controller.start(automatic=True),None,on_cancel=self.controller.cancel,
+                ready=lambda:not self.closed and self.enabled() and not self.paused and (not self.controller._reports or bool(queue.active)),
+                detail='History refresh waits for safe retirement of lower-priority work.')
+            queue.pump()
             return
         other_work = self.hub and any(key != self.task and row['ended'] is None for key, row in self.hub.rows.items())
         if self.controller.busy or self.controller._reports or other_work:

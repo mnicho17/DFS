@@ -55,10 +55,15 @@ class HistoryRefreshController(QtCore.QObject):
     def busy(self):
         return self.thread is not None
 
+    @property
+    def queued(self):
+        queue=getattr(self.parent(),'background_queue',None)
+        return self.watch.pending or bool(queue and 'history' in queue.pending)
+
     def status_line(self):
         if self.busy:
             return self.text.split('\n')[0]
-        if self.watch.pending:
+        if self.queued:
             return 'History refresh queued; waiting for quiet sources and current app work.'
         if self.watch.paused:
             return self.watch.message
@@ -83,6 +88,15 @@ class HistoryRefreshController(QtCore.QObject):
 
     def start(self, *, automatic=False):
         if self.watch.closed:
+            return False
+        queue=getattr(self.parent(),'background_queue',None)
+        if queue and (not queue.active or queue.active['key']!='history'):
+            from background_queue import HISTORY_PRIORITY
+            queue.request('history','Results and salary history refresh',HISTORY_PRIORITY,
+                lambda:self.start(automatic=automatic),None,on_cancel=self.cancel,
+                ready=lambda:not self.watch.closed and (not self._reports or bool(queue.active)),
+                detail='History refresh precedes backup and idle preparation.')
+            queue.pump()
             return False
         if self._reports:
             self._deferred_start = True
@@ -151,3 +165,5 @@ class HistoryRefreshController(QtCore.QObject):
         self.watch.accept_result(result)
         self.changed.emit()
         self.completed.emit()
+        queue=getattr(self.parent(),'background_queue',None)
+        if queue:queue.release('history')

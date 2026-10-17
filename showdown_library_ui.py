@@ -110,7 +110,22 @@ class PreparationDialog(QtWidgets.QDialog):
         self.pause.setEnabled(False)
         row=QtWidgets.QHBoxLayout();row.addWidget(self.start);row.addWidget(self.pause);layout.addLayout(row)
         self.start.clicked.connect(self.begin);self.pause.clicked.connect(self.cancel)
-        self.controls=(self.new,self.open,self.hours,self.limit,self.start,self.screen,self.full,self.storage,self.full_screen)
+        self.idle=QtWidgets.QPushButton('Queue for idle time…')
+        self.idle.setToolTip('Session-only job using these captured inputs and limits. Pauses for app input, higher-priority work and shutdown; saved checkpoints remain resumable.')
+        self.idle.clicked.connect(self.queue_idle)
+        self.idle.setVisible(hasattr(parent,'idle_preparation'))
+        layout.addWidget(self.idle)
+        self.controls=(self.new,self.open,self.hours,self.limit,self.start,self.screen,self.full,self.storage,self.full_screen,self.idle)
+
+    def queue_idle(self):
+        if self.thread is not None or not self.path.text():return
+        controller=self.parent().idle_preparation
+        if controller.enqueue(self.path.text(),self.snapshot,self.hours.currentData()*3600,
+                self.limit.currentData(),self.scope,self.storage.currentData(),self.screen.isChecked(),self.full_screen.isChecked()):
+            from build_preparation import remember_library
+            remember_library(self.parent().app_settings,self.path.text())
+            self.accept()
+        else:self.message.setText('An idle preparation job is already queued or running. Cancel it in Tasks before queuing another.')
 
     def change_screen(self,enabled):
         self.full_screen.setEnabled(enabled)
