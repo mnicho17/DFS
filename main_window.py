@@ -8111,6 +8111,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.action_auto_library.setChecked(self.app_settings.value('build/auto_library', True, type=bool))
         self.action_auto_library.toggled.connect(lambda value: self.app_settings.setValue('build/auto_library', value))
         settings_menu.addAction("Showdown Captain Pool...", self.on_captain_pool)
+        settings_menu.addAction("Prepare this slate", self.on_prepare_this_slate)
         settings_menu.addAction("Prepare Showdown Roster Library...", self.on_prepare_showdown_library)
         settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
         settings_menu.addAction("Open Automatic Build Archives...", self.on_open_build_archives)

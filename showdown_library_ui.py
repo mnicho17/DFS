@@ -13,7 +13,7 @@ class PreparationWorker(QtCore.QObject):
     finished=QtCore.pyqtSignal(dict)
     error=QtCore.pyqtSignal(str)
 
-    def __init__(self,path,players,seconds,limit,salary_cap,captain_keys=None,screen_snapshot=None,storage_bytes=8*1024**3,full_screen=False):
+    def __init__(self,path,players,seconds,limit,salary_cap,captain_keys=None,screen_snapshot=None,storage_bytes=8*1024**3,full_screen=False,skip_rosters=False):
         super().__init__()
         self.path,self.players,self.seconds,self.limit,self.salary_cap=path,copy.deepcopy(players),seconds,limit,salary_cap
         self.stop=threading.Event();self.last_update=0
@@ -21,6 +21,7 @@ class PreparationWorker(QtCore.QObject):
         self.screen_snapshot=screen_snapshot
         self.storage_bytes=storage_bytes
         self.full_screen=full_screen
+        self.skip_rosters=skip_rosters
 
     def update(self,value):
         now=time.monotonic()
@@ -31,7 +32,9 @@ class PreparationWorker(QtCore.QObject):
     def run(self):
         try:
             started=time.monotonic()
-            if Path(self.path).suffix=='.sdfull':
+            if self.skip_rosters:
+                result=status(self.path)
+            elif Path(self.path).suffix=='.sdfull':
                 from showdown_full_library import prepare as prepare_full
                 result=prepare_full(self.path,self.players,seconds=self.seconds,max_bytes=self.storage_bytes,
                     salary_cap=self.salary_cap,cancelled=self.stop.is_set,progress=self.update)
@@ -39,12 +42,10 @@ class PreparationWorker(QtCore.QObject):
                 result=prepare(self.path,self.players,seconds=self.seconds,max_candidates=self.limit,
                     salary_cap=self.salary_cap,cancelled=self.stop.is_set,progress=self.update,captain_keys=self.captain_keys)
             if self.screen_snapshot and result['complete'] and not self.stop.is_set():
-                from captain_pool import prepare_captain_pool
-                from compute_settings import deep_candidate_budget
-                from showdown_screening import prepare_screening,settings
+                from slate_preparation import screening_request
+                from showdown_screening import prepare_screening
                 inputs=self.screen_snapshot['inputs'];recipe=inputs['recipe']
-                count=recipe.get('requested_lineups',150);options=recipe.get('deep_compute',{})
-                players,rules,_=prepare_captain_pool(self.players,inputs['rules'],count)
+                players,screen_request=screening_request(self.screen_snapshot)
                 profile=inputs.get('calibration',{}).get('showdown_field_profile')
                 if profile:
                     from learning_db import history_db_path
@@ -55,14 +56,45 @@ class PreparationWorker(QtCore.QObject):
                 if remaining>0:
                     if self.full_screen:
                         from showdown_full_screening import prepare as prepare_screening
-                    result.update(prepare_screening(self.path,players,limit=deep_candidate_budget(count,options,False),
-                        salary_cap=self.salary_cap,salary_strategy=recipe.get('salary_strategy','Near Cap'),rules=rules,
-                        screening=settings(options,recipe.get('nfl_sim_scenarios',1000),profile),seconds=remaining,
+                    result.update(prepare_screening(self.path,players,**screen_request,seconds=remaining,
                         cancelled=self.stop.is_set,progress=self.update))
             result['screening_requested']=bool(self.screen_snapshot)
             self.finished.emit(result)
         except Exception as exc:
             self.error.emit(str(exc))
+
+
+class SlatePreparationWorker(PreparationWorker):
+    planned=QtCore.pyqtSignal(dict)
+
+    def __init__(self,snapshot,known,folder,seconds,storage_bytes):
+        from slate_preparation import ROSTER_LIMIT
+        super().__init__('',snapshot['inputs']['players'],seconds,ROSTER_LIMIT,
+            snapshot['inputs']['recipe'].get('salary_cap',50000),screen_snapshot=copy.deepcopy(snapshot),storage_bytes=storage_bytes)
+        self.known,self.folder=tuple(known),str(folder)
+
+    @QtCore.pyqtSlot()
+    def run(self):
+        from slate_preparation import plan_preparation
+        started=time.monotonic()
+        try:
+            plan=plan_preparation(self.screen_snapshot,self.known,self.folder,cancelled=self.stop.is_set,
+                progress=lambda text:self.progress.emit(dict(preparation_check=text)))
+            if self.stop.is_set():raise InterruptedError('Slate preparation cancelled.')
+            self.path=plan['path'];self.captain_keys=plan['scope'];self.skip_rosters=plan['stage']!='rosters'
+            self.planned.emit(plan)
+            self.progress.emit(dict(preparation_check='Existing coverage and screening are ready.' if plan['stage']=='ready' else
+                'Queued missing '+('roster coverage and bounded screening.' if plan['stage']=='rosters' else 'bounded screening; roster coverage reused.')))
+            if plan['stage']=='ready':
+                self.finished.emit(dict(plan['info'],screening_complete=True,screening_requested=True,
+                    screening_reused=plan['screening_reused'],prepared_path=self.path));return
+            self.seconds-=time.monotonic()-started
+            if self.seconds<=0:raise ValueError('Preparation time allowance exhausted during coverage validation.')
+            Path(self.path).parent.mkdir(parents=True,exist_ok=True)
+            super().run()
+        except InterruptedError:
+            self.finished.emit(dict(cancelled=True,complete=False,screening_complete=False,saved=0,checked=0))
+        except Exception as exc:self.error.emit(str(exc))
 
 
 class PreparationDialog(QtWidgets.QDialog):
