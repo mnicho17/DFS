@@ -2242,3 +2242,10 @@ requests a cooperative stop and waits for retirement. A stop requested after a
 result is queued still prevents that result from being applied. Existing
 estimates remain available after cancellation; stopped jobs do not auto-restart.
 The ownership sampling, calculation, and lineup algorithms are unchanged.
+
+
+Ownership results refresh the player table's ownership cells in place. Sorting,
+selected players, and readiness checks stay current without rebuilding every
+player cell. A full table refresh is used if the displayed rows no longer match
+the loaded player keys. This display optimization does not change ownership
+estimation or lineup rules.

@@ -12842,7 +12842,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self._own_eta.setVisible(False)
 
-        self._refresh_players_table()
+        self._refresh_player_ownership()
 
         if meta:
 
@@ -12888,12 +12888,50 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             table.setUpdatesEnabled(updates)
             del selection_guard, table_guard
 
-    def _populate_players_table(self) -> None:
+    def _refresh_player_ownership(self) -> None:
+        """Refresh ownership cells only when every displayed player matches."""
+        table = self.tbl_players
+        targets = {_pkey(player): player for player in self.players}
+        rows = []
+        seen = set()
+        for row in range(table.rowCount()):
+            name, cell = table.item(row, 0), table.item(row, 15)
+            key = str(name.data(QtCore.Qt.UserRole) or "") if name else ""
+            if key not in targets or key in seen or not isinstance(cell, SortKeyItem):
+                self._refresh_players_table()
+                return
+            seen.add(key)
+            rows.append((cell, float(targets[key].get("ProjOwnPct", 0.0) or 0.0)))
+        if len(targets) != len(self.players) or seen != set(targets):
+            self._refresh_players_table()
+            return
+        sorting, updates = table.isSortingEnabled(), table.updatesEnabled()
+        table_guard = QtCore.QSignalBlocker(table)
+        selection_guard = QtCore.QSignalBlocker(table.selectionModel())
+        try:
+            table.setUpdatesEnabled(False)
+            table.setSortingEnabled(False)
+            for cell, ownership in rows:
+                cell.setText(f"{ownership:.1f}%")
+                cell.setData(QtCore.Qt.UserRole, ownership)
+        finally:
+            table.setSortingEnabled(sorting)
+            table.setUpdatesEnabled(updates)
+            del selection_guard, table_guard
+        self._refresh_ownership_source()
+        self._update_player_inspector()
+        self._apply_readiness_player_filter()
+        self._update_readiness_badge()
+        self._update_lineup_space_dashboard()
 
+    def _refresh_ownership_source(self) -> None:
         ownership = describe_ownership(self.players, self.last_live_check_summary)
         self.lbl_ownership_source.setText("Ownership: " + ownership["sources"] + ("\n" + ownership["notice"] if ownership["notice"] else ""))
         self.lbl_ownership_source.setVisible(bool(self.players))
         self.lbl_ownership_source.setStyleSheet("color: " + ("#FFD180" if ownership["notice"] else "#C7D2E3") + "; background-color: #10151f; padding: 3px 8px;")
+
+    def _populate_players_table(self) -> None:
+        self._refresh_ownership_source()
 
         selected_keys = set()
 
