@@ -10684,6 +10684,36 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
+    def _refresh_player_tags(self, players) -> None:
+        """Update tag text/styles in place; preserve view identity and scroll."""
+        table = self.tbl_players
+        targets = {_pkey(player): player for player in players}
+        sorting = table.isSortingEnabled()
+        updates = table.updatesEnabled()
+        table_guard = QtCore.QSignalBlocker(table)
+        selection_guard = QtCore.QSignalBlocker(table.selectionModel())
+        try:
+            table.setUpdatesEnabled(False)
+            table.setSortingEnabled(False)
+            for row in range(table.rowCount()):
+                name = table.item(row, 0)
+                player = targets.get(str(name.data(QtCore.Qt.UserRole))) if name else None
+                if player is None:
+                    continue
+                tags = table.item(row, 14)
+                if tags is not None:
+                    tags.setText(self._tags_to_text(player))
+                self._set_player_row_style(row, player)
+            table.setSortingEnabled(sorting)
+        finally:
+            table.setSortingEnabled(sorting)
+            table.setUpdatesEnabled(updates)
+            del selection_guard, table_guard
+        self._update_player_inspector()
+        self._apply_readiness_player_filter()
+        self._update_readiness_badge()
+        self._update_lineup_space_dashboard()
+
     def apply_tags(self, mode: str) -> None:
 
         rows = self._get_selected_player_rows()
@@ -10736,7 +10766,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        self._refresh_players_table()
+        self._refresh_player_tags([self.players[r] for r in rows])
 
         self.status.showMessage(f"Applied tags: {mode}", 2000)
 
@@ -10772,7 +10802,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        self._refresh_players_table()
+        self._refresh_player_tags(targets)
 
         self.status.showMessage(msg, 3000)
 
