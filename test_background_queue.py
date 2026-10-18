@@ -171,6 +171,7 @@ class IdlePreparationTests(unittest.TestCase):
         sources=root/'sources';sources.mkdir();w.history_refresh.settings.setValue('learning/results_folder',str(sources))
         with patch('history_backup.backup_history',side_effect=slow):
             c.request();self.wait(entered.is_set)
+            clock[0]=61  # Automatic history now waits for idle app time.
             w.history_refresh.watch.schedule();w.history_refresh.watch.dispatch()
             self.assertTrue(c.worker.stop.is_set());self.assertFalse(w.history_refresh.busy)
             self.wait(lambda:c.thread is None)

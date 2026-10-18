@@ -116,12 +116,7 @@ class HistoryFolderWatch(QtCore.QObject):
         queue=getattr(self.controller.parent(),'background_queue',None)
         if queue and self.pending and self.enabled() and not self.paused:
             self.clear_pending()
-            from background_queue import HISTORY_PRIORITY
-            queue.request('history','Results and salary history refresh',HISTORY_PRIORITY,
-                lambda:self.controller.start(automatic=True),None,on_cancel=self.controller.cancel,
-                ready=lambda:not self.closed and self.enabled() and not self.paused and (not self.controller._reports or bool(queue.active)),
-                detail='History refresh waits for safe retirement of lower-priority work.')
-            queue.pump()
+            self.controller.start(automatic=True)
             return
         other_work = self.hub and any(key != self.task and row['ended'] is None for key, row in self.hub.rows.items())
         if self.controller.busy or self.controller._reports or other_work:
