@@ -241,3 +241,15 @@ class OwnershipLifecycleTests(unittest.TestCase):
         finally:
             w._ownership_run=w._own_thread=w._own_worker=None
             new_thread.deleteLater()
+
+    def test_result_guard_uses_the_existing_effective_salary_cap_defaults(self):
+        for text,requested,effective in [('0',0,50000),('',50000,50000),('49000',49000,49000)]:
+            with self.subTest(text=text):
+                w=self.window();w.edit_sd_cap.setText(text)
+                with patch.object(OwnershipSimWorker,'_simulate',return_value=self.result(w.players)):
+                    w._start_ownership_sim(num_sims=40,mode='showdown',cap=requested)
+                    run=w._ownership_run
+                    self.assertEqual(run.settings['cap'],effective)
+                    self.wait(lambda:w._ownership_run is None)
+                self.assertEqual(w.tasks.rows[run.task]['state'],'Completed')
+                self.assertEqual(w.edit_sd_cap.text(),text)

@@ -21,7 +21,7 @@ def current_settings(owner):
     mode = owner._contest_mode()
     cap = owner.edit_sd_cap if mode == 'showdown' else owner.edit_cl_cap
     return dict(mode=mode, sport=owner._current_sport(),
-                cap=owner._safe_float(cap.text(), 50000.0),
+                cap=float(owner._safe_float(cap.text(), 50000.0) or 50000.0),
                 template=bool(mode=='showdown' and owner.chk_sd_template_sim.isChecked()))
 
 
