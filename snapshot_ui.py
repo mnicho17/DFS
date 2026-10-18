@@ -8,6 +8,26 @@ from learning_db import load_nfl_field_calibration
 
 
 class SnapshotActions:
+    def on_prepare_this_slate(self):
+        if self._snapshot_busy():
+            self.status.showMessage('Wait for the current build to finish before capturing preparation inputs.',5000)
+            return
+        try:
+            if self._current_sport()!='NFL' or self._contest_mode()!='showdown':
+                raise ValueError('Prepare this slate currently supports NFL Showdown. Use Advanced Long Search for Classic.')
+            if not self.players:raise ValueError('Load an NFL Showdown CSV first.')
+            snapshot=self._capture_snapshot()
+            from build_preparation import remembered_libraries
+            from data_paths import data_root
+            known=list(remembered_libraries(self.app_settings))
+            selected=getattr(self,'_candidate_library','')
+            if selected:known.insert(0,selected)
+            if self.idle_preparation.prepare_slate(snapshot,known,data_root()/'history'/'candidates'):
+                self.status.showMessage('Prepare this slate queued: check coverage, reuse valid screening, and prepare missing work while idle. Up to 12 hours / 8 GiB. See Tasks or Preparation.',15000)
+            else:self.status.showMessage('A preparation job is already queued or running. Review it in Tasks before requesting another.',10000)
+        except Exception as exc:
+            QtWidgets.QMessageBox.warning(self,'Preparation unavailable',str(exc))
+
     def on_prepare_showdown_history(self):
         if self._snapshot_busy():
             self.status.showMessage('Wait for the current build to finish.', 5000)

@@ -38,22 +38,39 @@ class IdlePreparationController(QtCore.QObject):
         self.queue()
         return True
 
+    def prepare_slate(self,snapshot,known,folder):
+        if self.closed or self.request_data is not None:return False
+        from slate_preparation import PREPARATION_SECONDS,STORAGE_BYTES,ROSTER_LIMIT
+        self.request_data=copy.deepcopy(dict(path='',snapshot=snapshot,known=tuple(known),folder=str(folder),
+            automatic=True,limit=ROSTER_LIMIT,scope=None,storage_bytes=STORAGE_BYTES,screen=True,full_screen=False))
+        self.remaining=PREPARATION_SECONDS;self.paused=False
+        self.queue()
+        return True
+
     def queue(self):
         if self.closed or self.paused or self.request_data is None:
             return
         self.owner.background_queue.request('preparation','Idle Showdown preparation',PREPARATION_PRIORITY,
             self.start,self.yield_work,ready=self.ready,idle_only=True,
             detail='Captured inputs; waits for 60 seconds without app input, no modal, history refresh and backups. Cancel this queued row to remove the job.')
-        self.publish('Queued', self.request_data['path']+'; captured inputs and limits, session-only. Waiting for idle app time.')
+        detail=(self.request_data['path']+'; captured inputs and limits, session-only. Waiting for idle app time.')
+        if self.request_data.get('automatic'):
+            detail='Prepare this slate: check coverage, then prepare missing rosters / bounded screening; captured inputs, up to 12 hours and 8 GiB. Session-only; waiting for idle app time.'
+        self.publish('Queued',detail)
 
     def start(self):
         from showdown_library_ui import PreparationWorker
         from task_dashboard import watch_task
         data = self.request_data
         snapshot = data['snapshot']
-        self.worker = PreparationWorker(data['path'],snapshot['inputs']['players'],
-            self.remaining,data['limit'],snapshot['inputs']['recipe'].get('salary_cap',50000),
-            data['scope'],snapshot if data['screen'] else None,data['storage_bytes'],data['full_screen'])
+        if data.get('automatic'):
+            from showdown_library_ui import SlatePreparationWorker
+            self.worker=SlatePreparationWorker(snapshot,data['known'],data['folder'],self.remaining,data['storage_bytes'])
+            self.worker.planned.connect(self.planned)
+        else:
+            self.worker = PreparationWorker(data['path'],snapshot['inputs']['players'],
+                self.remaining,data['limit'],snapshot['inputs']['recipe'].get('salary_cap',50000),
+                data['scope'],snapshot if data['screen'] else None,data['storage_bytes'],data['full_screen'])
         self.pending = None
         self.yielded = False
         self.started = time.monotonic()
@@ -70,13 +87,20 @@ class IdlePreparationController(QtCore.QObject):
         self.worker.error.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.retire)
         watch_task(self.owner,'Idle Showdown preparation / screening',self.worker,self.thread,self.cancel,self.describe)
-        self.publish('Running',data['path']+'; working from captured inputs. Current build inputs are unchanged.')
+        self.publish('Running','Checking captured slate coverage and screening…' if data.get('automatic') else data['path']+'; working from captured inputs. Current build inputs are unchanged.')
         self.thread.start()
         return True
+
+    def planned(self,plan):
+        self.request_data.update(path=plan['path'],scope=plan['scope'])
+        from build_preparation import remember_library
+        remember_library(self.owner.app_settings,plan['path'])
 
     @staticmethod
     def describe(result):
         if result.get('error'):return str(result['error'])
+        if 'preparation_check' in result:return result['preparation_check']
+        if result.get('screening_reused'):return f"Prepared coverage and screening reused: {result['screening_reused']:,} candidates."
         if 'history_verification' in result:return result['history_verification']
         if 'screened' in result:
             return f"{result['screened']:,} screened; "+str(result.get('pause_reason') or ('screening complete' if result.get('screening_complete') else result.get('screening_phase','checkpoint saved')))
@@ -121,7 +145,8 @@ class IdlePreparationController(QtCore.QObject):
         resource_stop = any(word in reason for word in ('storage','progress','incomplete','interrupted')) or (not self.request_data['path'].endswith('.sdfull') and not result.get('complete') and result.get('saved',0)>=self.request_data['limit'])
         retry = not resource_stop and self.yielded and not self.paused and not self.closed and not result.get('error') and self.remaining > 0 and not complete
         self.publish('Queued' if retry else 'Needs attention' if result.get('error') else 'Paused' if not complete else 'Completed',
-            self.describe(result)+f'; {self.remaining/60:.1f} minutes remain in the requested time budget. Final SIM and build validation run fresh.')
+            self.describe(result)+f'; {self.remaining/60:.1f} minutes remain in the requested time budget. Final SIM and build validation run fresh.'
+            + (' Library: '+self.request_data['path'] if self.request_data.get('automatic') and self.request_data['path'] else ''))
         if retry:QtCore.QTimer.singleShot(0,self.queue)
         else:self.request_data = None
         if self.closed:QtCore.QTimer.singleShot(0,self.owner.close)
