@@ -125,7 +125,7 @@ class IdleBackupController(QtCore.QObject):
         if queue:
             from background_queue import BACKUP_PRIORITY
             queue.request('backup','History backup',BACKUP_PRIORITY,self.start,self.yield_work,
-                ready=lambda:not self.closed and bool(self.destination()) and not self.paused and (self.manual or self.enabled()) and (self.manual or (self.clock()-self.last_input>=IDLE_SECONDS and self.clock()-self.last_change>=QUIET_SECONDS)) and (not self.busy() or bool(queue.active and queue.active['priority']>20)),
+                ready=lambda:not self.closed and bool(self.destination()) and not self.paused and (self.manual or self.enabled()) and (self.manual or (self.clock()-self.last_input>=IDLE_SECONDS and self.clock()-self.last_change>=QUIET_SECONDS)) and (not self.busy() or bool(queue.active and (queue.active['key']=='backup' or queue.active['priority']>20))),
                 idle_only=not self.manual, on_cancel=self.cancel,
                 detail='Waiting for idle time and higher-priority history work.')
             queue.pump()
@@ -140,6 +140,9 @@ class IdleBackupController(QtCore.QObject):
     def request(self, verify=False):
         if self.closed:return
         self.paused=False;self.manual=True;self.verify=verify;self.next_attempt=0;self.dirty=True
+        queue=getattr(self.owner,'background_queue',None)
+        if queue and 'backup' in queue.pending:
+            queue.pending['backup']['idle_only']=False
         self.tick()
         queue=getattr(self.owner,'background_queue',None)
         if queue:queue.pump()

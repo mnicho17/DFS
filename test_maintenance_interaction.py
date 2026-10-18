@@ -130,3 +130,39 @@ class MaintenanceInteractionTests(unittest.TestCase):
             c.eventFilter(w,QtCore.QEvent(QtCore.QEvent.MouseButtonPress));w.background_queue.pump()
             self.assertFalse(c.worker.stop.is_set());self.assertFalse(w.background_queue.active['idle_only'])
             c.cancel();self.wait(lambda:c.thread is None)
+
+    def test_running_automatic_backup_does_not_treat_its_own_lease_as_contention(self):
+        w,clock,root=self.window();source=root/'history';source.mkdir();dest=root/'backup';dest.mkdir()
+        c=w.idle_backup;c.source=source;c.settings.setValue('backup/destination',str(dest))
+        clock[0]=61;c.last_change=0;entered=threading.Event()
+        from history_backup import BackupCancelled
+        def slow(*args,**kwargs):
+            entered.set()
+            end=time.monotonic()+5
+            while not kwargs['cancelled']() and time.monotonic()<end:time.sleep(.003)
+            raise BackupCancelled()
+        with patch('history_backup.backup_history',side_effect=slow):
+            c.tick();self.wait(entered.is_set)
+            w.background_queue.pump();w.background_queue.pump()
+            self.assertFalse(c.worker.stop.is_set())
+            self.assertTrue(w.background_queue.active['idle_only'])
+            c.cancel();self.wait(lambda:c.thread is None)
+
+    def test_explicit_backup_promotes_queued_auto_request_without_later_idle_yield(self):
+        w,clock,root=self.window();source=root/'history';source.mkdir();dest=root/'backup';dest.mkdir()
+        c=w.idle_backup;c.source=source;c.settings.setValue('backup/destination',str(dest))
+        clock[0]=61;c.last_change=0;entered=threading.Event()
+        from history_backup import BackupCancelled
+        def slow(*args,**kwargs):
+            entered.set()
+            end=time.monotonic()+5
+            while not kwargs['cancelled']() and time.monotonic()<end:time.sleep(.003)
+            raise BackupCancelled()
+        foreground=w.tasks.start('Synthetic foreground')
+        with patch('history_backup.backup_history',side_effect=slow):
+            c.tick();self.assertTrue(w.background_queue.pending['backup']['idle_only'])
+            c.request();self.assertFalse(w.background_queue.pending['backup']['idle_only'])
+            w.tasks.finish(foreground,'Completed');w.background_queue.pump();self.wait(entered.is_set)
+            c.eventFilter(w,QtCore.QEvent(QtCore.QEvent.Wheel));w.background_queue.pump()
+            self.assertFalse(c.worker.stop.is_set())
+            c.cancel();self.wait(lambda:c.thread is None)
