@@ -21,6 +21,7 @@ class MaintenanceInteractionTests(unittest.TestCase):
         root=Path(tmp.name);source=root/'sources';source.mkdir()
         w=MainWindow();self.addCleanup(w.close)
         w.background_queue.timer.stop();w.idle_backup.timer.stop()
+        self.app.processEvents()  # Drain the constructor startup before configuring test sources.
         w.history_refresh.settings.setValue('learning/results_folder',str(source))
         w.history_refresh.db_path=str(root/'history.sqlite')
         clock=[0.0];w.idle_backup.clock=lambda:clock[0];w.idle_backup.last_input=0
