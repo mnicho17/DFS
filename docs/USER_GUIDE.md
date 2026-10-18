@@ -2186,3 +2186,19 @@ The Build panel now shows a compact **Preparation record** for the loaded NFL Sh
 Both queued idle preparation and immediate Advanced roster preparation/screening feed this record. Up to 24 retired records are retained in local app settings, together with active jobs; only fingerprints and bounded progress metadata are stored, not the full snapshots or scoring banks. Records survive app restart, but queued jobs do not restart. Previous-session progress is marked recorded, with the prior pause/error reason retained. The most compatible record for the loaded slate is shown; another game does not inherit its counts.
 
 **Matches captured inputs** is not file/model/source verification or a promise that a portfolio is feasible. Files can move or change after progress was recorded. Prepare this slate and Generate retain the existing identity, source, coverage, score-digest, model, reconciliation, historical-data and final feasibility checks. The existing Slate Readiness audit is separate and unchanged.
+
+
+### Automatic history change checks
+
+After a successful automatic refresh, startup and folder-watch refreshes reuse a
+persistent completion checkpoint when configured folders, CSV metadata, saved
+evidence metadata, username, source catalog, salary mappings, contest index, and
+implementation versions still match. Unrelated build records do not invalidate
+this checkpoint. The dashboard says history is unchanged instead of reporting
+another indexing pass. The first successful check establishes the checkpoint.
+
+Changed inputs trigger the existing full verification; failed or cancelled work
+is never marked complete. **Refresh history now** always runs full verification
+and is also the way to check externally restored files whose content was changed
+while preserving all file metadata. These startup checkpoints do not qualify
+evidence for analysis or bypass downstream historical-data safeguards.

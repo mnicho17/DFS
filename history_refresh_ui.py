@@ -4,6 +4,10 @@ from analysis_imports_ui import CombinedImportWorker
 
 
 def refresh_summary(result):
+    if result.get('unchanged_checkpoint'):
+        return ('History unchanged; completed imports and indexes reused.\n'
+                'Checked file metadata and database revision; no source hashing or indexing needed.\n'
+                f"{result.get('unpaired', 0)} results still need salary matching.")
     history = result.get('username_history', {})
     contests = history.get('contests', [])
     added = [row for row in contests if not row.get('unchanged')]
@@ -114,7 +118,7 @@ class HistoryRefreshController(QtCore.QObject):
         self._pending = None
         self.text = 'Refreshing saved Results and Salary folders…'
         worker = self.worker = CombinedImportWorker(results, salaries,
-            str(self.settings.value('learning/dk_username', '') or ''), db_path=self.db_path, refresh_history=True)
+            str(self.settings.value('learning/dk_username', '') or ''), db_path=self.db_path, refresh_history=True, automatic=automatic)
         self.stop = worker.cancelled
         thread = self.thread = QtCore.QThread(self)
         worker.moveToThread(thread)
