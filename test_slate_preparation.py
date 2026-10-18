@@ -25,7 +25,7 @@ class SlatePreparationTests(unittest.TestCase):
     def setUpClass(cls):cls.app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def setUp(self):
-        temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup);self.root=Path(temp.name)
+        temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup);self.root=Path(temp.name).resolve()
         env=patch.dict(os.environ,{'DFS_OPTIMIZER_DATA_DIR':str(self.root/'data')});env.start();self.addCleanup(env.stop)
         self.folder=self.root/'libraries';self.library=self.root/'existing.sdlib'
         self.players=players()
@@ -173,7 +173,7 @@ class PrepareSlateActionTests(unittest.TestCase):
     def setUpClass(cls):cls.app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
     def setUp(self):
-        temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup);self.root=Path(temp.name)
+        temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup);self.root=Path(temp.name).resolve()
         env=patch.dict(os.environ,{'DFS_OPTIMIZER_DATA_DIR':str(self.root/'data')});env.start();self.addCleanup(env.stop)
         self.w=MainWindow();self.addCleanup(self.w.close)
         self.w.idle_backup.timer.stop();self.w.background_queue.timer.stop()
