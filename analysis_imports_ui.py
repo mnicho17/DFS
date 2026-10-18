@@ -36,11 +36,11 @@ class CombinedImportWorker(QtCore.QObject):
                 self.progress.emit(0, 0, 'Checking history for changes…')
                 try:
                     checkpoint, _ = cache.inputs(self)
-                    source_checkpoint, _ = cache.inputs(self, sources_only=True)
                     cached = cache.read(self, checkpoint)
                     if cached is not None and not self.cancelled.is_set():
                         self.finished.emit(cached)
                         return
+                    source_checkpoint, _ = cache.inputs(self, sources_only=True)
                 except (OSError, ValueError, sqlite3.Error):
                     checkpoint = None
             if self.pair:
