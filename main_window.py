@@ -85,6 +85,7 @@ class OwnershipSimWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal(dict)  # {"total":{k:pct},"cpt":{k:pct},"flex":{k:pct}} (pct=0-100)
 
     error = QtCore.pyqtSignal(str)
+    settled = QtCore.pyqtSignal()
 
 
 
@@ -92,13 +93,13 @@ class OwnershipSimWorker(QtCore.QObject):
 
         super().__init__()
 
-        self.players = players
+        self.players = deepcopy(players)
 
         self.mode = mode  # 'classic' or 'showdown'
 
         if sport == "NFL":
             from nfl_eligibility import eligible_players, apply_qb_eligibility
-            self.players = eligible_players(apply_qb_eligibility([dict(p) for p in players]), reject_locks=False)
+            self.players = eligible_players(apply_qb_eligibility([dict(p) for p in self.players]), reject_locks=False)
         self.num_sims = max(1, int(num_sims))
 
         self.salary_cap = float(salary_cap or 50000.0)
@@ -112,22 +113,19 @@ class OwnershipSimWorker(QtCore.QObject):
 
 
     @QtCore.pyqtSlot()
-
     def run(self) -> None:
-
         try:
-
+            if self._cancel:
+                return
             result = self._simulate()
-
             if not self._cancel:
-
                 self.finished.emit(result)
-
-        except Exception as e:
-
-            self.error.emit(str(e))
-
-
+        except Exception as exc:
+            if not self._cancel:
+                self.error.emit(str(exc))
+        finally:
+            # Every terminal path, including cancellation, retires the thread.
+            self.settled.emit()
 
     def cancel(self) -> None:
 
@@ -9090,6 +9088,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._own_thread = None
 
         self._own_worker = None
+        self._ownership_run = None
+        self._ownership_closing = False
 
 
 
@@ -12766,65 +12766,23 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def _start_ownership_sim(self, *, num_sims: int, mode: str, cap: float, sport: Optional[str] = None) -> None:
-
-        # UI: show progress bar + eta in status bar
-
-        self._own_progress.setValue(0)
-
-        self._own_progress.setMaximum(num_sims)
-
-        self._own_progress.setVisible(True)
-
-        self._own_eta.setText("Starting…")
-
-        self._own_eta.setVisible(True)
-
-        self.status.showMessage(f"Simulating ownership ({mode}, {num_sims:,} lineups)…")
-
-
-
-        # Thread setup
-
-        self._own_thread = QtCore.QThread(self)
-
-        self._own_worker = OwnershipSimWorker(self.players, mode=mode, num_sims=num_sims, salary_cap=cap, template_sim=(mode=="showdown" and getattr(self, "chk_sd_template_sim", None) is not None and self.chk_sd_template_sim.isChecked()), sport=(sport or self._current_sport()))
-
-        self._own_worker.moveToThread(self._own_thread)
-
-
-
-        self._own_thread.started.connect(self._own_worker.run)
-
-        self._own_worker.progress.connect(self._on_own_sim_progress)
-
-        self._own_worker.finished.connect(self._on_own_sim_finished)
-
-        self._own_worker.error.connect(self._on_own_sim_error)
-
-
-
-        # Cleanup
-
-        self._own_worker.finished.connect(self._own_thread.quit)
-
-        self._own_worker.finished.connect(self._own_worker.deleteLater)
-
-        self._own_thread.finished.connect(self._own_thread.deleteLater)
-
-
-
-        self._own_worker.error.connect(self._own_thread.quit)
-
-        self._own_worker.error.connect(self._own_worker.deleteLater)
-
-
-
-        from task_dashboard import watch_task
-        # Ownership cancellation does not emit a retirement signal; keep it
-        # observational rather than expose a stop action that strands its thread.
-        watch_task(self, 'Ownership estimation', self._own_worker, self._own_thread)
-        self._own_thread.start()
-
+        if self._ownership_closing:
+            return
+        if self._ownership_run is not None:
+            self.status.showMessage('Ownership estimation is already running or retiring. Stop it in Tasks or wait before starting another.', 6000)
+            return
+        from ownership_lifecycle import OwnershipRun
+        try:
+            worker = OwnershipSimWorker(self.players, mode=mode, num_sims=num_sims,
+                salary_cap=cap, template_sim=(mode=='showdown' and getattr(self,'chk_sd_template_sim',None) is not None
+                    and self.chk_sd_template_sim.isChecked()), sport=(sport or self._current_sport()))
+            run = OwnershipRun(self, worker)
+        except Exception as exc:
+            self._on_own_sim_error(str(exc))
+            return
+        self._ownership_run = run
+        self._own_thread, self._own_worker = run.thread, worker
+        run.start()
 
 
     def on_recalc_ownership_sim(self) -> None:
@@ -14995,6 +14953,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self._record_repair_attempt(receipt, payload)
 
     def closeEvent(self, event):
+        self._ownership_closing = True
+        run = getattr(self, '_ownership_run', None)
+        if run is not None and run.shutdown():
+            event.ignore()
+            return
         if getattr(self, 'csv_load', None) and self.csv_load.shutdown():
             event.ignore()
             return

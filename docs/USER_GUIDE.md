@@ -2225,3 +2225,20 @@ foreground work, then retry during idle time. Explicit history/backup requests
 retain their manual behavior. Explicit cancellation pauses the job instead of
 automatically retrying it. Saved evidence checks and completed backup manifests
 retain their existing safeguards.
+
+
+### Ownership estimation task safety
+
+Only one ownership estimation job runs at a time. Wait for the current job to
+finish or stop before requesting another; extra clicks do not queue or launch
+overlapping workers. Each job uses a detached copy of its captured players. Its result is applied only
+after worker retirement and only when the slate, player inputs, sport, format,
+salary cap and template setting still match. A changed slate or input leaves the
+current estimates intact and records the old job as **Discarded** in Tasks.
+Recalculate ownership when you want an estimate for the current inputs.
+
+Use **Tasks > Stop** to stop ownership estimation safely. Closing the app also
+requests a cooperative stop and waits for retirement. A stop requested after a
+result is queued still prevents that result from being applied. Existing
+estimates remain available after cancellation; stopped jobs do not auto-restart.
+The ownership sampling, calculation, and lineup algorithms are unchanged.
