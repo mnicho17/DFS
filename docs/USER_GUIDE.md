@@ -2202,3 +2202,26 @@ is never marked complete. **Refresh history now** always runs full verification
 and is also the way to check externally restored files whose content was changed
 while preserving all file metadata. These startup checkpoints do not qualify
 evidence for analysis or bypass downstream historical-data safeguards.
+
+
+### Responsive CSV loading and automatic maintenance
+
+Loading a player CSV prepares its data and existing sport-specific enrichment in
+an isolated worker. The progress window remains responsive, and **Loading player
+CSV** appears in the task dashboard. Existing background maintenance retires at
+a safe checkpoint before preparation begins. A successful result replaces the
+slate only after the load worker retires; cancellation or a preparation failure
+keeps the previous slate. Another load waits for an existing build or ownership
+calculation to finish. Loading does not change forecast or ownership algorithms.
+
+Cancel and closing the app request a cooperative stop. An enrichment step already
+in progress must return before its worker can retire; existing source timeouts
+still apply. The app does not forcibly terminate threads or apply partial loads.
+The diagnostic log records parsing, enrichment, preparation and GUI commit times.
+
+Automatic history refreshes and automatic backups wait for 60 seconds without
+app input. They yield at safe boundaries when you resume interaction or request
+foreground work, then retry during idle time. Explicit history/backup requests
+retain their manual behavior. Explicit cancellation pauses the job instead of
+automatically retrying it. Saved evidence checks and completed backup manifests
+retain their existing safeguards.

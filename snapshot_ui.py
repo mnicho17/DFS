@@ -160,6 +160,8 @@ class SnapshotActions:
             QtWidgets.QMessageBox.warning(self,'Preparation unavailable',str(exc))
 
     def _snapshot_busy(self):
+        if getattr(self, 'csv_load', None) and self.csv_load.busy:
+            return True
         for name in ('_build_thread', '_own_thread'):
             thread = getattr(self, name, None)
             try:

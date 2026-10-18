@@ -41,6 +41,7 @@ class HistoryRefreshController(QtCore.QObject):
         self.text = str(settings.value('learning/last_history_refresh', '') or '')
         self._pending = None
         self._reports = 0
+        self._automatic = self._yielded = False
         self._deferred_start = False
         from history_folder_watch import HistoryFolderWatch
         self.watch = HistoryFolderWatch(self)
@@ -90,16 +91,39 @@ class HistoryRefreshController(QtCore.QObject):
             self.watch.arm()
         self.changed.emit()
 
+    def automatic_ready(self):
+        if self.watch.closed or self.watch.paused or not self.enabled():
+            return False
+        owner = self.parent()
+        backup = getattr(owner, 'idle_backup', None)
+        if backup is not None:
+            from PyQt5 import QtWidgets
+            if backup.clock()-backup.last_input < 60 or QtWidgets.QApplication.activeModalWidget() is not None:
+                return False
+        queue = getattr(owner, 'background_queue', None)
+        return not self._reports or bool(queue and queue.active)
+
+    def yield_work(self):
+        if self.busy and self._automatic and not self._yielded:
+            self._yielded = True
+            self.stop.set()
+            self.text = 'Yielding history refresh for app activity; waiting for safe worker retirement…'
+            self.changed.emit()
+
     def start(self, *, automatic=False):
         if self.watch.closed:
             return False
         queue=getattr(self.parent(),'background_queue',None)
         if queue and (not queue.active or queue.active['key']!='history'):
+            if not automatic and 'history' in queue.pending:
+                old = queue.pending.pop('history')
+                queue.hub.finish(old['task'], 'Superseded', 'Explicit full refresh replaces the queued automatic change check.')
             from background_queue import HISTORY_PRIORITY
             queue.request('history','Results and salary history refresh',HISTORY_PRIORITY,
-                lambda:self.start(automatic=automatic),None,on_cancel=self.cancel,
-                ready=lambda:not self.watch.closed and (not self._reports or bool(queue.active)),
-                detail='History refresh precedes backup and idle preparation.')
+                lambda:self.start(automatic=automatic),self.yield_work if automatic else None,on_cancel=self.cancel,
+                ready=(self.automatic_ready if automatic else lambda:not self.watch.closed and (not self._reports or bool(queue.active))),
+                idle_only=automatic,
+                detail=('Waiting for idle app time and safe worker retirement.' if automatic else 'History refresh precedes backup and idle preparation.'))
             queue.pump()
             return False
         if self._reports:
@@ -115,6 +139,7 @@ class HistoryRefreshController(QtCore.QObject):
             return False
         if not automatic:
             self.watch.resume()
+        self._automatic, self._yielded = automatic, False
         self._pending = None
         self.text = 'Refreshing saved Results and Salary folders…'
         worker = self.worker = CombinedImportWorker(results, salaries,
@@ -150,6 +175,7 @@ class HistoryRefreshController(QtCore.QObject):
         self._pending = dict(errors=[message], failed=True)
 
     def cancel(self):
+        self._yielded = False
         self.watch.pause()
         if self.busy:
             self.stop.set()
@@ -159,15 +185,22 @@ class HistoryRefreshController(QtCore.QObject):
     def retire(self):
         result = dict(self._pending or {})
         result['cancelled'] = bool(result.get('cancelled') or self.stop.is_set())
-        self.text = refresh_summary(result)
+        retry = (self._yielded and not self.watch.closed and not self.watch.paused
+                 and not result.get('failed') and not result.get('errors')
+                 and not result.get('username_history', {}).get('errors'))
+        self.text = ('History refresh yielded safely; completed files remain saved. Waiting for idle app time to retry.'
+                     if retry else refresh_summary(result))
         self.settings.setValue('learning/last_history_refresh', self.text)
         self.settings.sync()
         thread = self.thread
         self.thread = self.worker = None
         thread.deleteLater()
         self._pending = None
-        self.watch.accept_result(result)
+        if not retry:
+            self.watch.accept_result(result)
         self.changed.emit()
         self.completed.emit()
         queue=getattr(self.parent(),'background_queue',None)
         if queue:queue.release('history')
+        if retry:
+            self.start(automatic=True)

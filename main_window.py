@@ -11780,274 +11780,135 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def on_load_csv(self) -> None:
-
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select Player CSV", "", "CSV Files (*.csv)")
-
-        if not path:
-
+        if self._snapshot_busy():
+            self.status.showMessage('Wait for the current load, build or ownership calculation to finish.', 5000)
             return
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select Player CSV", "", "CSV Files (*.csv)")
+        if not path:
+            return
+        from csv_loading import CsvLoadController
+        if not hasattr(self, 'csv_load'):
+            self.csv_load = CsvLoadController(self)
+        self.csv_load.start(path)
+
+    def _apply_csv_payload(self, payload) -> None:
+        path, detected_sport = payload['path'], payload['sport']
+        self.players = payload['players']
+        self._snapshot_replay = False
+
+        self._refresh_snapshot_label()
+
+        self.last_showdown = []
+
+        self.last_classic = []
+
+        self.last_portfolio_report = {}
+
+        self.last_sim_report = {}
+
+        self.last_readiness_report = {}
+
+        self.last_final_lock_report = {}
+
+        self.last_build_timing_report = {}
+
+        self._active_build_context = {}
+
+        self._readiness_filter_names.clear()
+
+        self._lineup_space_phase = ""
+
+        self.last_live_check_summary = {}
+
+        self._last_live_check_epoch = 0.0
+
+        if hasattr(self, "tbl_sd"):
+
+            self.tbl_sd.setRowCount(0)
+
+        if hasattr(self, "tbl_cl"):
+
+            self.tbl_cl.setRowCount(0)
+
+        parsed_opponents = sum(1 for p in self.players if str(p.get("Opponent") or "").strip())
+
+        parsed_games = len({str(p.get("GameKey") or "").strip() for p in self.players if str(p.get("GameKey") or "").strip()})
+
+        logger.info(
+
+            "Parsed DK game context: opponents=%d/%d | games=%d",
+
+            parsed_opponents, len(self.players), parsed_games,
+
+        )
 
 
 
-        progress = QtWidgets.QProgressDialog("Starting CSV load…", None, 0, 100, self)
+        self.combo_sport.setCurrentText(detected_sport)
+        if payload.get('live_summary') is not None:
+            self._record_live_check(payload['live_summary'])
 
-        progress.setWindowTitle("Loading Player CSV")
+        detected_mode = payload["mode"]
 
-        progress.setWindowModality(QtCore.Qt.WindowModal)
+        try:
 
-        progress.setMinimumDuration(0)
+            if hasattr(self, "tabs_lineups"):
 
-        progress.setAutoClose(True)
+                self.tabs_lineups.setCurrentIndex(0 if detected_mode == "showdown" else 1)
 
-        progress.setAutoReset(True)
+        except Exception:
 
-        progress.setValue(0)
+            pass
+
+
+
+        faded = self._auto_fade_out_players()
+
+        self.recalc_ownership_quick()
+
+        try:
+
+            self._refresh_best_stacks_table()
+
+        except Exception:
+
+            pass
+
 
 
 
         try:
 
-            logger.info("Loading CSV: %s", path)
+            if detected_mode == "showdown":
 
-            self._load_step(progress, 5, "Reading DraftKings CSV…")
-
-            self.players = read_players_csv(path)
-
-            self._snapshot_replay = False
-
-            self._refresh_snapshot_label()
-
-            self.last_showdown = []
-
-            self.last_classic = []
-
-            self.last_portfolio_report = {}
-
-            self.last_sim_report = {}
-
-            self.last_readiness_report = {}
-
-            self.last_final_lock_report = {}
-
-            self.last_build_timing_report = {}
-
-            self._active_build_context = {}
-
-            self._readiness_filter_names.clear()
-
-            self._lineup_space_phase = ""
-
-            self.last_live_check_summary = {}
-
-            self._last_live_check_epoch = 0.0
-
-            if hasattr(self, "tbl_sd"):
-
-                self.tbl_sd.setRowCount(0)
-
-            if hasattr(self, "tbl_cl"):
-
-                self.tbl_cl.setRowCount(0)
-
-            parsed_opponents = sum(1 for p in self.players if str(p.get("Opponent") or "").strip())
-
-            parsed_games = len({str(p.get("GameKey") or "").strip() for p in self.players if str(p.get("GameKey") or "").strip()})
-
-            logger.info(
-
-                "Parsed DK game context: opponents=%d/%d | games=%d",
-
-                parsed_opponents, len(self.players), parsed_games,
-
-            )
-
-
-
-            self._load_step(progress, 18, "Initializing player fields…")
-
-            for p in self.players:
-
-                p.setdefault("LockFlex", False)
-
-                p.setdefault("FadeFlex", False)
-
-                p.setdefault("LockCpt", False)
-
-                p.setdefault("FadeCpt", False)
-
-                p.setdefault("MaxCptPct", None)
-
-                p.setdefault("MaxPct", None)
-
-                p.setdefault("MaxFlexPct", None)
-
-                p.setdefault("MinCptPct", None)
-
-                p.setdefault("MinPct", None)
-
-                p.setdefault("CoreClassicMinPct", None)
-
-                p.setdefault("CoreShowdownMinFlexPct", None)
-
-                p.setdefault("CoreShowdownMinCptPct", None)
-
-                p.setdefault("BaseProjection", float(p.get("FlexProjection", 0.0) or 0.0))
-
-                p.setdefault("BattingOrder", 0)
-
-                p.setdefault("Bats", "")
-
-                p.setdefault("ConfirmedLineup", False)
-
-                p.setdefault("LineupStatus", "")
-
-
-
-            self._load_step(progress, 28, "Detecting sport and contest type…")
-
-            detected_sport = self._detect_sport_from_players()
-
-            try:
-
-                if hasattr(self, "combo_sport") and self.combo_sport.currentText().strip().upper() != detected_sport:
-
-                    self.combo_sport.setCurrentText(detected_sport)
-
-                    logger.info("Auto-detected sport: %s", detected_sport)
-
-            except Exception:
-
-                detected_sport = self._current_sport()
-
-
-
-            self._load_step(progress, 40, f"Refreshing {detected_sport} injury/status data…")
-
-            if detected_sport == "NFL":
-
-                self._load_step(progress, 46, "Refreshing NFL role, usage, matchup, and weather context...")
-
-                try:
-
-                    ctx = apply_auto_nfl_context(self.players)
-
-                    self._record_live_check(ctx)
-
-                    logger.info("NFL auto context applied: %s", ctx)
-
-                except Exception:
-
-                    # Loading the CSV remains useful even if an unexpected
-
-                    # external payload bypasses the enrichment fallbacks.
-
-                    logger.exception("NFL auto context failed; using neutral context")
-
-            elif self._should_run_injury_enrichment(detected_sport):
-
-                enrich_players_with_injuries(self.players, sport=detected_sport)
+                cap = self._safe_float(self.edit_sd_cap.text(), 50000.0)
 
             else:
 
-                self._clear_injury_fields()
+                cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
 
-                logger.info("Skipping injury enrichment for unsupported sport: %s", detected_sport)
+        except Exception:
 
-
-
-            if detected_sport == "MLB":
-
-                self._load_step(progress, 58, "Applying MLB ballpark factors and batting orders…")
-
-                try:
-
-                    ctx = apply_auto_mlb_context(self.players)
-
-                    logger.info("MLB auto context applied: %s", ctx)
-
-                except Exception:
-
-                    logger.exception("MLB auto context failed")
+            cap = 50000.0
 
 
 
-            self._load_step(progress, 72, "Preparing tables and ownership…")
-
-            detected_mode = self._detect_contest_mode_from_players()
-
-            try:
-
-                if hasattr(self, "tabs_lineups"):
-
-                    self.tabs_lineups.setCurrentIndex(0 if detected_mode == "showdown" else 1)
-
-            except Exception:
-
-                pass
+        self._start_ownership_sim(num_sims=500, mode=detected_mode, cap=cap)
 
 
 
-            faded = self._auto_fade_out_players()
 
-            self.recalc_ownership_quick()
+        extra = f" | auto-faded {faded}" if faded else ""
 
-            try:
+        self.status.showMessage(
 
-                self._refresh_best_stacks_table()
+            f"Loaded {len(self.players)} players ({detected_mode}, {self._current_sport()}) from {os.path.basename(path)}{extra}",
 
-            except Exception:
+            6000
 
-                pass
+        )
 
-
-
-            self._load_step(progress, 88, "Starting ownership simulation…")
-
-            try:
-
-                if detected_mode == "showdown":
-
-                    cap = self._safe_float(self.edit_sd_cap.text(), 50000.0)
-
-                else:
-
-                    cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
-
-            except Exception:
-
-                cap = 50000.0
-
-
-
-            self._start_ownership_sim(num_sims=500, mode=detected_mode, cap=cap)
-
-
-
-            self._load_step(progress, 100, "CSV load complete.")
-
-            extra = f" | auto-faded {faded}" if faded else ""
-
-            self.status.showMessage(
-
-                f"Loaded {len(self.players)} players ({detected_mode}, {self._current_sport()}) from {os.path.basename(path)}{extra}",
-
-                6000
-
-            )
-
-            self._update_readiness_badge()
-
-        except Exception as e:
-
-            logger.exception("Failed to load CSV")
-
-            traceback.print_exc()
-
-            QtWidgets.QMessageBox.critical(self, "Load Error", str(e))
-
-        finally:
-
-            self._finish_load_progress()
+        self._update_readiness_badge()
 
 
 
@@ -15178,6 +15039,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self._record_repair_attempt(receipt, payload)
 
     def closeEvent(self, event):
+        if getattr(self, 'csv_load', None) and self.csv_load.shutdown():
+            event.ignore()
+            return
         if getattr(self, 'slate_readiness_timer', None):self.slate_readiness_timer.stop()
         if getattr(self, 'background_queue', None):self.background_queue.shutdown()
         if getattr(self, 'idle_preparation', None) and self.idle_preparation.shutdown():
@@ -15575,74 +15439,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def _detect_sport_from_players(self) -> str:
-
-        """Best-effort sport detection from DK position labels.
-
-
-
-        This is intentionally position-based instead of filename-based:
-
-        - MLB has P/SP/RP plus infield/OF positions.
-
-        - NBA/WNBA has PG/SG/SF/PF/C/G/F and no NFL/MLB-only positions.
-
-        - NFL has QB/RB/WR/TE/DST/K.
-
-        WNBA shares NBA position labels, so we default ambiguous basketball files to NBA;
-
-        user can still switch the dropdown to WNBA.
-
-        """
-
-        tokens = set()
-
-        for p in self.players or []:
-
-            raw = str(p.get("Position", "") or "").upper()
-
-            raw = raw.replace("/", ",").replace(";", ",")
-
-            for part in raw.split(","):
-
-                part = part.strip()
-
-                if part:
-
-                    tokens.add(part)
-
-
-
-        mlb_tokens = {"P", "SP", "RP", "C", "1B", "2B", "3B", "SS", "OF", "LF", "CF", "RF"}
-
-        nfl_tokens = {"QB", "RB", "WR", "TE", "DST", "K"}
-
-        nba_tokens = {"PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"}
-
-
-
-        # MLB is easiest to distinguish because of baseball-only positions.
-
-        if tokens & {"1B", "2B", "3B", "SS", "OF", "LF", "CF", "RF", "SP", "RP"}:
-
-            return "MLB"
-
-
-
-        if tokens & {"QB", "RB", "WR", "TE", "DST", "K"}:
-
-            return "NFL"
-
-
-
-        if tokens & {"PG", "SG", "SF", "PF", "G", "F"}:
-
-            return "NBA"
-
-
-
-        return "NFL"
-
-
+        from csv_loading import detect_sport
+        return detect_sport(self.players)
 
     def _current_sport(self) -> str:
 

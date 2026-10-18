@@ -72,7 +72,7 @@ class IdleBackupController(QtCore.QObject):
             self.state,self.message=state,message;self.publish()
 
     def eventFilter(self, obj, event):
-        if event.type() in (QtCore.QEvent.KeyPress,QtCore.QEvent.MouseButtonPress,QtCore.QEvent.Wheel,QtCore.QEvent.TouchBegin):
+        if event.type() in (QtCore.QEvent.KeyPress,QtCore.QEvent.MouseButtonPress,QtCore.QEvent.Wheel,QtCore.QEvent.TouchBegin,QtCore.QEvent.MouseMove,QtCore.QEvent.MouseButtonDblClick):
             self.last_input=self.clock()
         return False
 
@@ -126,7 +126,7 @@ class IdleBackupController(QtCore.QObject):
             from background_queue import BACKUP_PRIORITY
             queue.request('backup','History backup',BACKUP_PRIORITY,self.start,self.yield_work,
                 ready=lambda:not self.closed and bool(self.destination()) and not self.paused and (self.manual or self.enabled()) and (self.manual or (self.clock()-self.last_input>=IDLE_SECONDS and self.clock()-self.last_change>=QUIET_SECONDS)) and (not self.busy() or bool(queue.active and queue.active['priority']>20)),
-                on_cancel=self.cancel,
+                idle_only=not self.manual, on_cancel=self.cancel,
                 detail='Waiting for idle time and higher-priority history work.')
             queue.pump()
             if 'backup' in queue.pending:self.set_status('Queued','Backup queued; waiting for idle time and higher-priority work to retire.')
