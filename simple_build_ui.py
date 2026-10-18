@@ -61,6 +61,10 @@ def setup_simple_build_panel(w, layout, count_labels, cap_labels):
     w.lbl_build_flow.setWordWrap(True)
     w.lbl_build_flow.setTextFormat(QtCore.Qt.PlainText)
     grid.addWidget(w.lbl_build_flow, 2, 0, 1, 9)
+    w.lbl_slate_preparation=QtWidgets.QLabel(panel)
+    w.lbl_slate_preparation.setObjectName('slatePreparationSummary')
+    w.lbl_slate_preparation.setWordWrap(True);w.lbl_slate_preparation.setTextFormat(QtCore.Qt.PlainText)
+    grid.addWidget(w.lbl_slate_preparation,3,0,1,9)
     # Keep unusual caps editable in Advanced while removing repeated result-toolbar inputs.
     advanced_grid = w.lbl_compute_summary.parentWidget().layout()
     w.lbl_advanced_cap = QtWidgets.QLabel('Salary cap')

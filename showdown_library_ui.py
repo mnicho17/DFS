@@ -82,6 +82,7 @@ class SlatePreparationWorker(PreparationWorker):
                 progress=lambda text:self.progress.emit(dict(preparation_check=text)))
             if self.stop.is_set():raise InterruptedError('Slate preparation cancelled.')
             self.path=plan['path'];self.captain_keys=plan['scope'];self.skip_rosters=plan['stage']!='rosters'
+            plan['coverage']=status(self.path) if Path(self.path).exists() else dict(plan['info'],checked=0)
             self.planned.emit(plan)
             self.progress.emit(dict(preparation_check='Existing coverage and screening are ready.' if plan['stage']=='ready' else
                 'Queued missing '+('roster coverage and bounded screening.' if plan['stage']=='rosters' else 'bounded screening; roster coverage reused.')))
@@ -103,6 +104,7 @@ class PreparationDialog(QtWidgets.QDialog):
         self.snapshot=copy.deepcopy(snapshot)
         self.scope=sorted(player_key(p) for p in self.snapshot['inputs']['players'] if p.get('LockCpt')) or None
         self.thread=self.worker=None;self.stop=None;self.pending=None;self.closing=False
+        self.readiness_store=getattr(parent,'slate_readiness',None);self.readiness_key=None
         self.setWindowTitle('Prepare Showdown Roster Library')
         layout=QtWidgets.QVBoxLayout(self)
         from task_dashboard import add_task_button
@@ -218,6 +220,9 @@ class PreparationDialog(QtWidgets.QDialog):
         self.worker=PreparationWorker(self.path.text(),self.snapshot['inputs']['players'],
             self.hours.currentData()*3600,self.limit.currentData(),recipe.get('salary_cap',50000),self.scope,
             self.snapshot if self.screen.isChecked() else None,self.storage.currentData(),self.full_screen.isChecked())
+        if self.readiness_store:
+            self.readiness_key=self.readiness_store.begin(self.snapshot,self.path.text(),self.scope,self.screen.isChecked(),self.full_screen.isChecked())
+            self.readiness_store.state(self.readiness_key,'Running','Foreground preparation started.')
         self.stop=self.worker.stop;self.pending=None
         self.thread=QtCore.QThread(self);self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
@@ -248,7 +253,9 @@ class PreparationDialog(QtWidgets.QDialog):
         return text
 
     def receive_progress(self,result):
-        if self.stop is not None and not self.stop.is_set():self.describe(result)
+        if self.stop is not None and not self.stop.is_set():
+            if self.readiness_store:self.readiness_store.update(self.readiness_key,result)
+            self.describe(result)
 
     def receive(self,result):self.pending=result
     def failure(self,message):self.pending=dict(error=message)
@@ -256,6 +263,7 @@ class PreparationDialog(QtWidgets.QDialog):
     def cancel(self):
         if self.thread is not None:
             self.stop.set();self.pause.setEnabled(False)
+            if self.readiness_store:self.readiness_store.state(self.readiness_key,'Yielding','App closing; waiting for checkpoint and worker retirement.' if self.closing else 'User pause; waiting for checkpoint and worker retirement.')
             self.message.setText('Pausing; waiting for the current checkpoint and worker retirement…')
 
     def retire(self):
@@ -265,6 +273,13 @@ class PreparationDialog(QtWidgets.QDialog):
         self.limit.setEnabled(not self.full.isChecked());self.storage.setEnabled(self.full.isChecked())
         self.full_screen.setEnabled(self.screen.isChecked())
         self.pause.setEnabled(False)
+        if self.readiness_store:
+            result=self.pending or dict(error='No worker result')
+            complete=result.get('screening_complete') if self.screen.isChecked() else result.get('complete')
+            state='Needs attention' if result.get('error') else 'Paused' if self.stop.is_set() or not complete else 'Completed'
+            reason=('App closing; resume explicitly later.' if self.closing else 'Paused by user.' if self.stop.is_set() else
+                str(result.get('error') or result.get('pause_reason') or ('Recorded preparation complete.' if complete else 'Partial checkpoint; explicit resume is required.')))
+            self.readiness_store.finish(self.readiness_key,state,reason,result)
         if self.closing:
             self.accept();return
         if self.pending is None or 'error' in self.pending:

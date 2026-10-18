@@ -14,11 +14,13 @@ class IdlePreparationController(QtCore.QObject):
         self.request_data = self.pending = None
         self.closed = self.paused = self.yielded = False
         self.remaining = 0
+        self.readiness_key=None
         self.state = 'Not requested'
         self.message = 'Queue a captured Showdown preparation job from Prepare Showdown Roster Library. Jobs are session-only.'
 
     def publish(self, state, message):
         self.state, self.message = state, message
+        self.owner.slate_readiness.state(self.readiness_key,state,message)
         self.changed.emit()
 
     def ready(self):
@@ -33,6 +35,7 @@ class IdlePreparationController(QtCore.QObject):
             return False
         self.request_data = copy.deepcopy(dict(path=str(path), snapshot=snapshot, limit=limit,
             scope=scope, storage_bytes=storage_bytes, screen=screen, full_screen=full_screen))
+        self.readiness_key=self.owner.slate_readiness.begin(snapshot,path,scope,screen,full_screen)
         self.remaining = seconds
         self.paused = False
         self.queue()
@@ -43,6 +46,7 @@ class IdlePreparationController(QtCore.QObject):
         from slate_preparation import PREPARATION_SECONDS,STORAGE_BYTES,ROSTER_LIMIT
         self.request_data=copy.deepcopy(dict(path='',snapshot=snapshot,known=tuple(known),folder=str(folder),
             automatic=True,limit=ROSTER_LIMIT,scope=None,storage_bytes=STORAGE_BYTES,screen=True,full_screen=False))
+        self.readiness_key=self.owner.slate_readiness.begin(snapshot)
         self.remaining=PREPARATION_SECONDS;self.paused=False
         self.queue()
         return True
@@ -93,6 +97,7 @@ class IdlePreparationController(QtCore.QObject):
 
     def planned(self,plan):
         self.request_data.update(path=plan['path'],scope=plan['scope'])
+        self.owner.slate_readiness.planned(self.readiness_key,plan)
         from build_preparation import remember_library
         remember_library(self.owner.app_settings,plan['path'])
 
@@ -107,7 +112,9 @@ class IdlePreparationController(QtCore.QObject):
         return f"{result.get('saved',0):,} saved rosters; {result.get('checked',0):,} combinations checked. "+str(result.get('pause_reason') or ('roster coverage complete' if result.get('complete') else 'partial coverage'))
 
     def progress(self, result):
-        if not self.worker.stop.is_set():self.publish('Running',self.describe(result))
+        if not self.worker.stop.is_set():
+            self.owner.slate_readiness.update(self.readiness_key,result)
+            self.publish('Running',self.describe(result))
 
     def receive(self, result):self.pending = result
     def failure(self, message):self.pending = dict(error=message)
@@ -119,6 +126,7 @@ class IdlePreparationController(QtCore.QObject):
             self.worker.stop.set()
             self.publish('Yielding','Waiting for the existing checkpoint and worker retirement before other queued work starts.')
         else:
+            self.owner.slate_readiness.finish(self.readiness_key,'Cancelled','Queued preparation cancelled by user; no worker started.')
             self.request_data = None
             self.publish('Cancelled','Queued preparation cancelled; no worker started.')
 
@@ -127,7 +135,9 @@ class IdlePreparationController(QtCore.QObject):
         queue = self.owner.background_queue
         if 'preparation' in queue.pending:queue.cancel('preparation')
         if self.worker:self.worker.stop.set()
-        else:self.request_data = None
+        else:
+            self.owner.slate_readiness.finish(self.readiness_key,'Paused','App closing; resume explicitly later.' if self.closed else 'Preparation paused by user; no worker is running.')
+            self.request_data = None
         self.publish('Paused','Preparation stopped for this session. Saved checkpoints remain available for explicit resume.')
 
     def retire(self):
@@ -147,6 +157,16 @@ class IdlePreparationController(QtCore.QObject):
         self.publish('Queued' if retry else 'Needs attention' if result.get('error') else 'Paused' if not complete else 'Completed',
             self.describe(result)+f'; {self.remaining/60:.1f} minutes remain in the requested time budget. Final SIM and build validation run fresh.'
             + (' Library: '+self.request_data['path'] if self.request_data.get('automatic') and self.request_data['path'] else ''))
+        status=self.state
+        reason=('App closing; resume explicitly later.' if self.closed else 'Paused by user; saved checkpoints remain available.' if self.paused else
+            str(result.get('error') or result.get('pause_reason') or ('Waiting for idle time or higher-priority work.' if retry else
+                'Preparation time allowance reached.' if self.remaining<=0 and not complete else
+                'Stored roster limit reached.' if resource_stop and not complete else
+                'Partial checkpoint; explicit resume is required.' if not complete else 'No pause; recorded preparation completed.')))
+        if retry:
+            self.owner.slate_readiness.update(self.readiness_key,result)
+            self.owner.slate_readiness.state(self.readiness_key,status,reason)
+        else:self.owner.slate_readiness.finish(self.readiness_key,status,reason,result)
         if retry:QtCore.QTimer.singleShot(0,self.queue)
         else:self.request_data = None
         if self.closed:QtCore.QTimer.singleShot(0,self.owner.close)
