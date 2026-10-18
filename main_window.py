@@ -11555,116 +11555,56 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-    def _set_player_row_style(self, row: int, p: Dict[str, Any]) -> None:
-
-        """
-
-        Visual-only highlighting. Does NOT change any logic.
-
-
-
-        The old fade style painted the whole row very light gray, which made faded
-
-        players hard to distinguish in the dark theme. This version keeps the row
-
-        readable and uses the Tags/Injury cells plus muted text to show state:
-
-          - Overall fade: muted text + red-tinted Tags/Injury cells
-
-          - CPT fade only: red-tinted Tags cell
-
-          - Lock: green/blue-tinted Tags cell
-
-        """
-
-        is_faded = bool(p.get("FadeFlex"))
-
-        is_cpt_fade = bool(p.get("FadeCpt"))
-
-        is_lock_cpt = bool(p.get("LockCpt"))
-
-        is_lock_flex = bool(p.get("LockFlex"))
-
-
-
-        # Column indices from player table headers.
-
-        injury_col = 3
-
-        tags_col = 14
-
-
-
-        for c in range(self.tbl_players.columnCount()):
-
-            item = self.tbl_players.item(row, c)
-
+    def _set_player_row_style(self, row: int, p: Dict[str, Any], *, fresh=False) -> None:
+        """Apply the existing row colors, preserving custom fonts on in-place updates."""
+        table = self.tbl_players
+        brushes = getattr(self, '_player_row_brushes', None)
+        if brushes is None:
+            brushes = self._player_row_brushes = {
+                'empty': QtGui.QBrush(),
+                'normal': QtGui.QBrush(QtGui.QColor(232, 234, 237)),
+                'muted': QtGui.QBrush(QtGui.QColor(160, 160, 160)),
+                'pink': QtGui.QBrush(QtGui.QColor(255, 205, 205)),
+                'fade': QtGui.QBrush(QtGui.QColor(85, 38, 38)),
+                'cpt_fade': QtGui.QBrush(QtGui.QColor(85, 48, 48)),
+                'cpt_lock': QtGui.QBrush(QtGui.QColor(38, 70, 110)),
+                'lock': QtGui.QBrush(QtGui.QColor(35, 85, 55)),
+            }
+        faded = bool(p.get('FadeFlex'))
+        # Newly populated cells all start with the same default font. Reuse two
+        # font values for this row; in-place tag edits retain each cell's font.
+        normal_font = bold_font = None
+        first = table.item(row, 0)
+        if fresh and first is not None:
+            normal_font = first.font()
+            normal_font.setBold(False)
+            normal_font.setStrikeOut(False)
+            bold_font = QtGui.QFont(normal_font)
+            bold_font.setBold(True)
+        for column in range(table.columnCount()):
+            item = table.item(row, column)
             if item is None:
-
                 continue
-
-
-
-            # Reset first so sorting/refreshing does not leave stale styles.
-
-            item.setBackground(QtGui.QBrush())
-
-            item.setForeground(QtGui.QBrush(QtGui.QColor(232, 234, 237)))
-
-            font = item.font()
-
-            font.setStrikeOut(False)
-
-            font.setBold(False)
-
+            background = brushes['empty']
+            foreground = brushes['muted' if faded else 'normal']
+            bold = False
+            if faded and column in (3, 14):
+                background, foreground, bold = brushes['fade'], brushes['pink'], True
+            elif not faded and column == 14:
+                if p.get('LockCpt'):
+                    background, bold = brushes['cpt_lock'], True
+                elif p.get('LockFlex'):
+                    background, bold = brushes['lock'], True
+                elif p.get('FadeCpt'):
+                    background, foreground = brushes['cpt_fade'], brushes['pink']
+            font = (bold_font if bold else normal_font)
+            if font is None:
+                font = item.font()
+                font.setStrikeOut(False)
+                font.setBold(bold)
+            item.setBackground(background)
+            item.setForeground(foreground)
             item.setFont(font)
-
-
-
-            if is_faded:
-
-                # Keep the table dark/readable; do not white-out the whole row.
-
-                item.setForeground(QtGui.QBrush(QtGui.QColor(160, 160, 160)))
-
-                if c in (injury_col, tags_col):
-
-                    item.setBackground(QtGui.QBrush(QtGui.QColor(85, 38, 38)))
-
-                    item.setForeground(QtGui.QBrush(QtGui.QColor(255, 205, 205)))
-
-                    font = item.font()
-
-                    font.setBold(True)
-
-                    item.setFont(font)
-
-            elif is_lock_cpt and c == tags_col:
-
-                item.setBackground(QtGui.QBrush(QtGui.QColor(38, 70, 110)))
-
-                font = item.font()
-
-                font.setBold(True)
-
-                item.setFont(font)
-
-            elif is_lock_flex and c == tags_col:
-
-                item.setBackground(QtGui.QBrush(QtGui.QColor(35, 85, 55)))
-
-                font = item.font()
-
-                font.setBold(True)
-
-                item.setFont(font)
-
-            elif is_cpt_fade and c == tags_col:
-
-                item.setBackground(QtGui.QBrush(QtGui.QColor(85, 48, 48)))
-
-                item.setForeground(QtGui.QBrush(QtGui.QColor(255, 215, 215)))
-
 
 
     # ---------------- Helpers ----------------
@@ -12977,6 +12917,20 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def _refresh_players_table(self) -> None:
+        """Populate one visual batch; restore Qt state even if rendering fails."""
+        table = self.tbl_players
+        updates, sorting = table.updatesEnabled(), table.isSortingEnabled()
+        table_guard = QtCore.QSignalBlocker(table)
+        selection_guard = QtCore.QSignalBlocker(table.selectionModel())
+        try:
+            table.setUpdatesEnabled(False)
+            self._populate_players_table()
+        finally:
+            table.setSortingEnabled(sorting)
+            table.setUpdatesEnabled(updates)
+            del selection_guard, table_guard
+
+    def _populate_players_table(self) -> None:
 
         ownership = describe_ownership(self.players, self.last_live_check_summary)
         self.lbl_ownership_source.setText("Ownership: " + ownership["sources"] + ("\n" + ownership["notice"] if ownership["notice"] else ""))
@@ -13020,6 +12974,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.tbl_players.setRowCount(len(self.players))
 
 
+
+        alignments = [self._player_column_alignment(c) for c in range(self.tbl_players.columnCount())]
 
         for r, p in enumerate(self.players):
 
@@ -13348,7 +13304,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             # Visual-only highlighting
 
-            self._set_player_row_style(r, p)
+            self._set_player_row_style(r, p, fresh=True)
 
 
 
@@ -13358,7 +13314,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 if item is not None:
 
-                    item.setTextAlignment(self._player_column_alignment(column))
+                    item.setTextAlignment(alignments[column])
 
 
 
