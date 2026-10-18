@@ -2172,3 +2172,33 @@ The job inspects the selected/remembered libraries and a bounded listing of the 
 If no compatible library is found, preparation creates a full-slate, partitioned .sdfull library with a stable structural filename under history/candidates. Automatic preparation allows up to **12 hours of active work**, **8 GiB of roster storage**, and the existing **50 million stored rosters per single-library checkpoint** limit. Limits can leave partial coverage, which is reported in Tasks / Preparation and requires review or explicit resume; no limits are silently relaxed. The discovery listing is bounded (25 supplied paths plus 48 directory entries); it does not certify all files on the drive. A partial library built at a different preparation salary cap remains for explicit Advanced resume. A complete library prepared at a higher cap can be reused at the current lower cap.
 
 The automatic screening stage prepares the existing bounded Deep candidate bank with the captured recipe's candidate/scenario/field settings. It can reuse compatible completed full-roster screening, but does not start an exhaustive full-roster screening run automatically; that remains an Advanced choice. Prepared paths are remembered for existing automatic discovery. A future Generate still rechecks current coverage, rules, source evidence and screening compatibility and runs final SIM/validation fresh. Input changes after clicking Prepare this slate do not rewrite the captured job; click again after it finishes (or cancel the old request first) to prepare the new inputs. Requests remain session-only and obey the shared idle queue's pause, checkpoint, cancellation and shutdown rules. Keep the app open and the PC awake.
+
+
+### Per-slate preparation record
+
+The Build panel now shows a compact **Preparation record** for the loaded NFL Showdown slate. Open **Preparation…** for the selected **This slate preparation** item and its full details:
+
+- **Roster coverage:** committed combinations checked against the captured scope's combinatorial total, saved rosters, and completed Captain partitions when available. This counts preparation work, not lineups legal under current build rules. A declared Captain scope alone does not prove saved candidates exist for every Captain.
+- **Screening:** committed candidate counts and the known total. Full-roster screening can have an unknown total while scanning; no percentage is invented. Current-batch scenarios are shown separately and do not count as committed screening progress. Reused Deep-bank scores are not described as exhaustive full-roster screening.
+- **Current inputs:** comparison with captured roster identities, salaries, preparation cap, Captain scope, forecasts, rules and the existing screening settings. Forecast/rule changes can require screening updates while roster inputs still match. Expanding a scoped Captain pool can require coverage work. The comparison uses the existing audited observation-time normalization and portfolio-only zero-QB exception; unknown player fields remain strict. The summary reads widgets and in-memory profiles, without scanning libraries, checking sources, importing, running SIM, or changing build controls.
+- **Paused / waiting:** idle countdown, open dialog, foreground work, higher-priority backup/history work, checkpoint retirement, user pause, time/roster/storage limit, incomplete SIM batch, or an error. The actual worker stop condition is recorded when known. Unknown progress stays unknown.
+
+Both queued idle preparation and immediate Advanced roster preparation/screening feed this record. Up to 24 retired records are retained in local app settings, together with active jobs; only fingerprints and bounded progress metadata are stored, not the full snapshots or scoring banks. Records survive app restart, but queued jobs do not restart. Previous-session progress is marked recorded, with the prior pause/error reason retained. The most compatible record for the loaded slate is shown; another game does not inherit its counts.
+
+**Matches captured inputs** is not file/model/source verification or a promise that a portfolio is feasible. Files can move or change after progress was recorded. Prepare this slate and Generate retain the existing identity, source, coverage, score-digest, model, reconciliation, historical-data and final feasibility checks. The existing Slate Readiness audit is separate and unchanged.
+
+
+### Automatic history change checks
+
+After a successful automatic refresh, startup and folder-watch refreshes reuse a
+persistent completion checkpoint when configured folders, CSV metadata, saved
+evidence metadata, username, source catalog, salary mappings, contest index, and
+implementation versions still match. Unrelated build records do not invalidate
+this checkpoint. The dashboard says history is unchanged instead of reporting
+another indexing pass. The first successful check establishes the checkpoint.
+
+Changed inputs trigger the existing full verification; failed or cancelled work
+is never marked complete. **Refresh history now** always runs full verification
+and is also the way to check externally restored files whose content was changed
+while preserving all file metadata. These startup checkpoints do not qualify
+evidence for analysis or bypass downstream historical-data safeguards.

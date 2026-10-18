@@ -903,3 +903,6 @@ Background maintenance now shares a retirement-aware priority queue: validated h
 
 
 **Prepare this slate** on the simple NFL Showdown Build panel now captures current inputs and queues coverage-aware idle preparation. It checks bounded remembered/standard-folder libraries with the existing structural, Captain-coverage and score-reuse gates, reuses completed work, resumes partial rosters or missing bounded screening, and creates a stable full-slate library only when needed. The automatic allowance is 12 hours / 8 GiB; limits, errors and partial coverage stay visible. Existing Generate validation and final SIM remain authoritative. Classic and exhaustive full-roster screening remain Advanced choices. See the user guide for scope, limits and session-only behavior.
+
+
+The NFL Showdown Build panel and Preparation dialog now show a bounded per-slate preparation record: committed roster coverage, Captain partitions, screening counts / unknown totals, current-input compatibility and pause/wait reasons. Idle and immediate Advanced workers report to the same metadata view. Records survive restart without restarting work; matching inputs never authorize cache reuse or replace the existing Slate Readiness, source, model, reconciliation or final-generation checks. See the user guide for scope and recorded-versus-verified behavior.

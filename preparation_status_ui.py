@@ -12,6 +12,10 @@ def preparation_rows(w):
     rows = []
     def add(key, stage, state, detail, action):
         rows.append(dict(key=key, stage=stage, state=state, detail=detail, action=action))
+    from preparation_readiness import current_view
+    if hasattr(w,'slate_readiness'):
+        view=current_view(w)
+        add('slate-preparation','This slate preparation',view['summary'],view['detail'],'Tasks dashboard')
     from build_workflow import preparation_plan
     active = bool(getattr(w, '_build_flow_active', False))
     add('workflow', 'Generate workflow', 'Underway' if active else 'Next Generate',
@@ -124,13 +128,18 @@ class PreparationStatusDialog(QtWidgets.QDialog):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.refresh)
         self.timer.start(1000)
+        self.finished.connect(self.timer.stop)
+
+    def closeEvent(self,event):
+        self.timer.stop()
+        super().closeEvent(event)
 
     def refresh(self):
         rows = preparation_rows(self.owner)
         if rows == self.rows:
             return
         item = self.table.currentItem()
-        key = item.data(0, QtCore.Qt.UserRole) if item else 'readiness'
+        key = item.data(0, QtCore.Qt.UserRole) if item else 'slate-preparation'
         self.rows = rows
         blocker = QtCore.QSignalBlocker(self.table)
         self.table.clear()

@@ -151,6 +151,9 @@ def prepare_screening(library,players,*,limit=20000,salary_cap=50000,salary_stra
             progress(dict(screened=len(done),screening_total=len(rows),screening_complete=len(done)==len(rows)))
     elapsed=time.monotonic()-started
     return dict(screened=len(done),screening_total=len(rows),screening_complete=len(done)==len(rows),
+        pause_reason=('' if len(done)==len(rows) else 'cancelled at checkpoint' if cancelled() else
+            'time allowance reached' if elapsed>=seconds else
+            'screening storage budget' if path.stat().st_size>=MAX_BYTES else 'scoring batch incomplete; unfinished batch not saved'),
         elapsed_seconds=elapsed,rosters_per_second=(len(pending)-len([i for i in pending if i not in done]))/max(.001,elapsed))
 
 

@@ -1,5 +1,6 @@
 """Background combined import and explicit salary-match review."""
 import threading
+import sqlite3
 import traceback
 from PyQt5 import QtCore, QtWidgets
 
@@ -11,10 +12,11 @@ class CombinedImportWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal(dict)
     error = QtCore.pyqtSignal(str)
 
-    def __init__(self, results_folder='', salary_folder='', username='', pair=None, db_path=None, refresh_history=False):
+    def __init__(self, results_folder='', salary_folder='', username='', pair=None, db_path=None, refresh_history=False, automatic=False):
         super().__init__()
         self.results_folder, self.salary_folder, self.username = results_folder, salary_folder, username
         self.pair = pair
+        self.automatic = automatic
         self.refresh_history = refresh_history
         from learning_db import history_db_path
         self.db_path = str(db_path or history_db_path())
@@ -28,6 +30,19 @@ class CombinedImportWorker(QtCore.QObject):
     @QtCore.pyqtSlot()
     def run(self):
         try:
+            source_checkpoint = checkpoint = None
+            if self.automatic and self.refresh_history and not self.pair:
+                import history_refresh_cache as cache
+                self.progress.emit(0, 0, 'Checking history for changes…')
+                try:
+                    checkpoint, _ = cache.inputs(self)
+                    cached = cache.read(self, checkpoint)
+                    if cached is not None and not self.cancelled.is_set():
+                        self.finished.emit(cached)
+                        return
+                    source_checkpoint, _ = cache.inputs(self, sources_only=True)
+                except (OSError, ValueError, sqlite3.Error):
+                    checkpoint = None
             if self.pair:
                 corrected_import=None
                 if len(self.pair)>3:
@@ -94,6 +109,11 @@ class CombinedImportWorker(QtCore.QObject):
             if result['cancelled']:
                 result.pop('report', None)
             # Duplicate sources do not rerun personal forecast analysis.
+            if checkpoint is not None:
+                try:
+                    cache.save(self, checkpoint, result, source_checkpoint)
+                except (OSError, ValueError, sqlite3.Error):
+                    pass  # A cache failure must not invalidate completed imports.
             self.finished.emit(result)
         except ImportCancelled:
             self.finished.emit(dict(cancelled=True, errors=[]))

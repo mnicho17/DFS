@@ -171,9 +171,14 @@ def prepare(path, players, *, salary_cap=50000, seconds=3600, batch_size=2000,
             pending.clear(); since_commit = 0
             progress(dict(checked=state['checked'], saved=state['saved'], complete=state['complete']))
 
+        stopped_for=''
         while not state['complete']:
-            if cancelled() or time.monotonic() >= deadline or state['saved'] >= max_candidates:
-                break
+            if cancelled():
+                stopped_for='cancelled at checkpoint';break
+            if time.monotonic() >= deadline:
+                stopped_for='time allowance reached';break
+            if state['saved'] >= max_candidates:
+                stopped_for='stored roster limit';break
             position, indices = state['cursor']
             captain=captain_indices[position]
             pool = [i for i in range(n) if i != captain]
@@ -189,11 +194,12 @@ def prepare(path, players, *, salary_cap=50000, seconds=3600, batch_size=2000,
                 commit()
                 size = con.execute('PRAGMA page_count').fetchone()[0] * con.execute('PRAGMA page_size').fetchone()[0]
                 if size >= MAX_BYTES:
-                    break
+                    stopped_for='library storage budget';break
         if since_commit:
             commit()
     result = status(path)
     result['cancelled'] = bool(cancelled())
+    result['pause_reason'] = '' if result['complete'] else stopped_for or ('cancelled at checkpoint' if result['cancelled'] else 'incomplete checkpoint')
     return result
 
 

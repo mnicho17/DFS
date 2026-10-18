@@ -7210,12 +7210,16 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(0, self.history_refresh.startup)
         from background_queue import BackgroundQueue
         self.background_queue = BackgroundQueue(self)
+        from preparation_readiness import ReadinessRecords
+        self.slate_readiness = ReadinessRecords(self.app_settings,self)
         from idle_preparation_ui import IdlePreparationController
         self.idle_preparation = IdlePreparationController(self)
         from idle_backup_ui import IdleBackupController
         from pathlib import Path
         self.idle_backup = IdleBackupController(self, self.app_settings, Path(history_db_path()).parent)
         self._close_after_backup = False
+        from preparation_readiness import install_summary
+        install_summary(self)
 
     def _history_refresh_retired(self):
         if self._close_after_history:
@@ -15144,6 +15148,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self._record_repair_attempt(receipt, payload)
 
     def closeEvent(self, event):
+        if getattr(self, 'slate_readiness_timer', None):self.slate_readiness_timer.stop()
         if getattr(self, 'background_queue', None):self.background_queue.shutdown()
         if getattr(self, 'idle_preparation', None) and self.idle_preparation.shutdown():
             event.ignore()
