@@ -339,7 +339,8 @@ def run_deep_showdown(worker, shortlist_fn):
             salary_cap=worker.salary_cap, own_mode=worker.own_mode, own_weight=worker.own_weight,
             deadline=start + min(30.0, limit * generation_fraction * .10),
             cancelled=worker._cancel_event.is_set,
-            progress=lambda text: worker.progress.emit(len(bank), budget, 'Phase 1 of 4 - ' + text))
+            progress=lambda text: worker.progress.emit(len(bank), budget, 'Phase 1 of 4 - ' + text),
+            minimum_salary=salary_floor(worker.salary_cap, worker.salary_strategy))
         style_counts['Captain coverage'] = seeded
     exclusions = {(sig[0][4:], tuple(sig[1:])) for sig in retained_keys}
     exclusions.update((sig[0][4:], tuple(sig[1:])) for sig in bank)
@@ -349,7 +350,8 @@ def run_deep_showdown(worker, shortlist_fn):
         target = math.ceil((budget - len(bank)) / (len(jobs) - index))
         job_end = time.perf_counter() + max(0, generation_end - time.perf_counter()) / (len(jobs) - index)
         optimizer = ShowdownOptimizer(players, salary_cap=worker.salary_cap, seed=seed,
-            own_mode=worker.own_mode, own_weight=worker.own_weight, build_style=style)
+            own_mode=worker.own_mode, own_weight=worker.own_weight, build_style=style,
+            minimum_salary=salary_floor(worker.salary_cap, worker.salary_strategy))
         rows = optimizer.build_lineups(num_lineups=target,
             excluded_signatures=exclusions,
             cancel_callback=lambda: stop(job_end),
@@ -500,6 +502,8 @@ def run_deep_showdown(worker, shortlist_fn):
     sim_report['ownership_leverage'] = leverage_report(retained+lineups,selected['lineups'],players,
         sim_report.get('field_diagnostic') or {},showdown=True)
     sim_report['salary_filter'] = dict(excluded=salary_excluded, minimum=salary_floor(worker.salary_cap, worker.salary_strategy))
+    if not library_build and sim_report['salary_filter']['minimum'] > 0:
+        sim_report['salary_filter']['generation_minimum'] = salary_floor(worker.salary_cap, worker.salary_strategy)
     sim_report["candidate_library"] = getattr(worker, "library_report", {})
     if profile and not sim_report.get('field_diagnostic'):
         sim_report['history_use_unscored'] = dict(profile_id=profile['profile_id'],

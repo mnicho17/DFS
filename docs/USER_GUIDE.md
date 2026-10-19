@@ -2265,6 +2265,28 @@ production, forecasts, ownership estimates, SIM scoring, and ranking formulas
 are unchanged. It does not guarantee that every request is feasible.
 
 
+### Salary-aware fresh Showdown search
+
+NFL Showdown Deep searches apply the selected salary strategy's existing minimum
+while constructing fresh candidates, including Captain coverage and exposure
+coverage alternatives. With a $50,000 cap, Maximize Salary keeps the existing
+$49,500 floor and Near Cap keeps the existing $47,500 floor. Other Showdown
+salary strategies retain their current minimum. Choices that cannot reach the
+floor with the remaining FLEX slots are skipped; a completed candidate must
+still satisfy the cap, distinct-player, two-team, lock/fade, and existing
+construction rules. Small exact searches enforce the same requested minimum.
+The build report records the minimum enforced during fresh construction.
+
+The final salary filter remains active. The search never lowers the salary
+minimum to fill a candidate target. A bounded search can stop with fewer
+candidates, or none, and does not establish infeasibility. The existing phase
+time and candidate budgets remain in force. The shortlist, scoring, simulations,
+ownership calculations and portfolio rules are unchanged; the searched bank and
+therefore final selections can differ. A larger usable bank can take longer to
+score, so improved search throughput does not guarantee a shorter complete build.
+Saved-library loading and screening retain their existing validation and filters.
+
+
 ### Held-out ranking audit runtime
 
 The automatic ranking audit remains a separate diagnostic: 2,000 fresh scenarios,
