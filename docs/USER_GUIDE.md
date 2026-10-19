@@ -2309,3 +2309,18 @@ budget. Partial samples, identity mismatches and cancelled results never publish
 a completed overlap statistic. Older reports remain readable. Runtime varies
 with candidate count, field size, data and hardware; the optimization does not
 guarantee that every audit will finish within its cap.
+
+
+### Load slate and automatic salary discovery
+
+**Load CSV** opens a searchable slate list from the Salary Files folder configured in Data and Learning. The default view includes today and future game dates parsed from the salary table, rather than the file modification date. **All dates** includes older slates and files with unknown dates. **Browse…** still accepts a salary CSV or an entries CSV containing a salary table from any location. Team/game labels describe the salary slate; they do not invent contest names absent from the file.
+
+The persistent `slate-catalog.sqlite` beside the learning database records file metadata, content digests, and discovery/preparation status. Identical byte copies appear once. Unchanged files skip hashing and parsing across restarts; changed metadata triggers another scan. Files still being written are retried later. This catalog is scheduling metadata, never saved evidence or permission to skip build validation.
+
+While the app remains open, discovery runs through the shared idle queue at startup and approximately every five minutes. **Refresh list** requests discovery without running expensive preparation inside the picker. Work waits for foreground workers and cooperatively yields when the app becomes busy. Tasks shows progress and Stop; closing waits for worker retirement. Stopping a discovery/preparation task pauses automatic discovery for the session; the picker can still refresh manually.
+
+**Prepare upcoming NFL slates automatically while idle** is enabled initially and can be switched off in the picker. Smart preparation considers slates from today through seven days ahead, earliest first. It uses detached inputs, existing enrichment and the existing 500-entry ownership estimator, then prepares a bounded reusable library across the existing five search styles. Classic uses the existing bounded search, not exhaustive enumeration. No locks, fades, custom contest rules, or output lineups from the currently loaded slate are copied into these jobs.
+
+Each library targets 12,000 candidates in roughly one-minute search batches, with a 30-minute cumulative search allowance and a shared 8 GiB candidate-folder budget. A batch may take additional time to finish its current cooperative operation. Ownership and captured inputs are retained in a separate preparation receipt so a resumed candidate search does not repeat enrichment or ownership. Source or app-code changes receive a new preparation identity. Repeated no-progress batches, errors, storage limits, and exhausted allowances require attention instead of retrying indefinitely. Existing artifacts are not deleted to reclaim space.
+
+**Prepared candidates** means the bounded candidate target was reached; it does not certify exhaustive coverage, current forecasts, or reusable screening. Loading the slate still refreshes live inputs and ownership. Deep discovers remembered automatic libraries and subjects them to the existing slate, code, eligibility, salary, and rule checks. Screening/final SIM and validation run under the actual build inputs; Smart preparation does not reuse generic screening as evidence for personal settings. Use the existing Prepare this slate / Advanced controls for additional preparation or to address a paused job.

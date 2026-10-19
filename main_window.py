@@ -7218,6 +7218,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._close_after_backup = False
         from preparation_readiness import install_summary
         install_summary(self)
+        from slate_picker import SlateDiscoveryController
+        self.slate_discovery = SlateDiscoveryController(self, Path(history_db_path()).parent / 'slate-catalog.sqlite')
 
     def _history_refresh_retired(self):
         if self._close_after_history:
@@ -11723,7 +11725,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         if self._snapshot_busy():
             self.status.showMessage('Wait for the current load, build or ownership calculation to finish.', 5000)
             return
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select Player CSV", "", "CSV Files (*.csv)")
+        from slate_picker import SlatePicker
+        picker = SlatePicker(self.slate_discovery, self)
+        accepted = picker.exec_()
+        path = picker.path if accepted else ''
+        picker.deleteLater()
         if not path:
             return
         from csv_loading import CsvLoadController
@@ -14959,6 +14965,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             event.ignore()
             return
         if getattr(self, 'csv_load', None) and self.csv_load.shutdown():
+            event.ignore()
+            return
+        if getattr(self, 'slate_discovery', None) and self.slate_discovery.shutdown():
             event.ignore()
             return
         if getattr(self, 'slate_readiness_timer', None):self.slate_readiness_timer.stop()
