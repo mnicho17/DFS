@@ -2285,3 +2285,27 @@ ownership calculations and portfolio rules are unchanged; the searched bank and
 therefore final selections can differ. A larger usable bank can take longer to
 score, so improved search throughput does not guarantee a shorter complete build.
 Saved-library loading and screening retain their existing validation and filters.
+
+
+### Held-out ranking audit runtime
+
+The automatic ranking audit remains a separate diagnostic: 2,000 fresh scenarios,
+the same frozen shortlist, a fresh opponent field, and a two-minute diagnostic
+time allowance.
+It starts only with at least two minutes available before reserved selection time.
+Its results never drive lineup selection. The primary validation sample is
+separate; an incomplete audit does not erase a completed primary validation.
+
+Showdown audits resolve the frozen rosters' player identities once before scoring,
+preserving Captain multiplication, FLEX order, arithmetic, random draws and
+opponent-field construction. The primary Showdown simulation and Classic scoring
+paths retain their existing implementation. This reduces repeated lookup work
+without extending the audit deadline or shrinking its sample.
+
+For incomplete audits, the report distinguishes the audit's own time cap,
+reserved build deadline, cancellation, mismatched candidates and an incomplete
+sample without an observed timeout. It shows elapsed time and the diagnostic
+budget. Partial samples, identity mismatches and cancelled results never publish
+a completed overlap statistic. Older reports remain readable. Runtime varies
+with candidate count, field size, data and hardware; the optimization does not
+guarantee that every audit will finish within its cap.
