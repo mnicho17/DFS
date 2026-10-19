@@ -88,13 +88,13 @@ class ShowdownSalarySearchTests(unittest.TestCase):
     def test_report_distinguishes_fresh_search_from_legacy_and_library_receipts(self):
         from build_diagnostics import create_build_diagnostic, format_build_report
         context = dict(kind='showdown', sport='NFL', settings={'compute_mode': 'Deep'})
-        for generation_minimum in (None, 49500):
+        for generation_minimum in (None, 0, 49500):
             receipt = dict(excluded=0, minimum=49500)
             if generation_minimum is not None: receipt['generation_minimum'] = generation_minimum
             report = create_build_diagnostic(context=context, timing_report={},
                 portfolio_report={}, sim_report=dict(deep_build=dict(compute_mode='Deep'), salary_filter=receipt))
             text = format_build_report(report)
-            self.assertEqual('Fresh Showdown search enforced' in text, generation_minimum is not None)
+            self.assertEqual('Fresh Showdown search enforced' in text, bool(generation_minimum))
 
     def test_invalid_floor_is_rejected(self):
         for value in (-1, 50001, float('nan'), float('inf')):

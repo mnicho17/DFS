@@ -485,7 +485,7 @@ def run_deep_showdown(worker, shortlist_fn):
     sim_report['ownership_leverage'] = leverage_report(retained+lineups,selected['lineups'],players,
         sim_report.get('field_diagnostic') or {},showdown=True)
     sim_report['salary_filter'] = dict(excluded=salary_excluded, minimum=salary_floor(worker.salary_cap, worker.salary_strategy))
-    if not library_build:
+    if not library_build and sim_report['salary_filter']['minimum'] > 0:
         sim_report['salary_filter']['generation_minimum'] = salary_floor(worker.salary_cap, worker.salary_strategy)
     sim_report["candidate_library"] = getattr(worker, "library_report", {})
     if profile and not sim_report.get('field_diagnostic'):
