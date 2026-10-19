@@ -48,6 +48,7 @@ class SlatePickerTests(unittest.TestCase):
     def test_picker_browse_without_configured_folder(self):
         dialog=SlatePicker(self.controller,self.owner)
         self.addCleanup(dialog.deleteLater)
+        self.assertIn('Browse\u2026',[button.text() for button in dialog.findChildren(QtWidgets.QPushButton)])
         with patch('slate_picker.QtWidgets.QFileDialog.getOpenFileName',return_value=('chosen.csv','')):
             dialog.browse()
         self.assertEqual(dialog.path,'chosen.csv')

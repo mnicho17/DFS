@@ -146,7 +146,7 @@ class SlatePicker(QtWidgets.QDialog):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Open | QtWidgets.QDialogButtonBox.Cancel)
-        browse = buttons.addButton('Browseâ€¦', QtWidgets.QDialogButtonBox.ActionRole)
+        browse = buttons.addButton('Browse…', QtWidgets.QDialogButtonBox.ActionRole)
         refresh = buttons.addButton('Refresh list', QtWidgets.QDialogButtonBox.ActionRole)
         layout.addWidget(buttons)
         buttons.accepted.connect(self.open_selected)
@@ -174,7 +174,7 @@ class SlatePicker(QtWidgets.QDialog):
             self.status.setText('Catalog unavailable: '+str(exc)+'. Browse remains available.')
         self.table.setRowCount(len(data))
         for index, row in enumerate(data):
-            values = [f"{row['label']} â€” {row['sport']} {row['kind'].title()}", row['date'] or 'Unknown', row.get('preparation',{}).get('state','Discovered'), Path(row['path']).name]
+            values = [f"{row['label']} — {row['sport']} {row['kind'].title()}", row['date'] or 'Unknown', row.get('preparation',{}).get('state','Discovered'), Path(row['path']).name]
             for col, value in enumerate(values):
                 item = QtWidgets.QTableWidgetItem(value)
                 item.setToolTip(row['path']+'\n'+row.get('preparation',{}).get('preparation',''))
