@@ -74,7 +74,8 @@ def expand_candidates(rows, players, requested, rules, *, kind, salary_cap, own_
                           build_style=build_style, seed=63001 + len(attempted))
             count = min(allowance - len(extra), max(21, min(150, max(requested, deficit))))
             if kind == 'showdown':
-                optimizer = ShowdownOptimizer(probe, **common)
+                from showdown_simulation import salary_floor
+                optimizer = ShowdownOptimizer(probe, minimum_salary=salary_floor(salary_cap, salary_strategy), **common)
                 generated = optimizer._build_lineups_fast(num_lineups=count, cancel_callback=stop)
                 from showdown_simulation import filter_salary_candidates
                 generated = filter_salary_candidates(generated, salary_cap, salary_strategy)

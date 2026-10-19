@@ -39,7 +39,7 @@ def captain_targets(players):
 
 @source("captain_coverage")
 def seed_captains(players, targets, bank, retained_keys, budget, *, salary_cap, own_mode, own_weight,
-                  deadline, cancelled, progress=lambda text: None):
+                  deadline, cancelled, progress=lambda text: None, minimum_salary=0.0):
     """Spend at most 10% of the candidate budget and the caller's short time slice."""
     from showdown_simulation import showdown_signature
     originals = {player_key(p): p for p in players}
@@ -54,7 +54,7 @@ def seed_captains(players, targets, bank, retained_keys, budget, *, salary_cap, 
         for p in copied:
             p['LockCpt'] = player_key(p) == player_key(target)
         optimizer = ShowdownOptimizer(copied, salary_cap=salary_cap, seed=41000 + index,
-            own_mode=own_mode, own_weight=own_weight, build_style='Strategic')
+            own_mode=own_mode, own_weight=own_weight, build_style='Strategic', minimum_salary=minimum_salary)
         excluded = {(sig[0][4:], tuple(sig[1:])) for sig in set(bank) | set(retained_keys)}
         progress('Captain coverage: ' + str(target.get('Name')))
         rows = optimizer._build_lineups_fast(num_lineups=count, excluded_signatures=excluded,
