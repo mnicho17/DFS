@@ -40,6 +40,16 @@ def showdown_score(lineup, outcomes):
     return 1.5 * outcomes[player_key(lineup["Captain"])] + sum(outcomes[player_key(p)] for p in lineup["Flex"])
 
 
+def _compile_score_roster(lineup):
+    # Preserve FLEX order: changing floating-point summation order can move ties.
+    return player_key(lineup['Captain']), tuple(player_key(p) for p in lineup['Flex'])
+
+
+def _score_compiled_roster(roster, outcomes):
+    captain, flex = roster
+    return 1.5 * outcomes[captain] + sum(outcomes[key] for key in flex)
+
+
 def validate_showdown_lineup(lineup, players, salary_cap):
     roster = [lineup.get("Captain") or {}] + list(lineup.get("Flex") or [])
     keys = {player_key(p) for p in roster}
@@ -143,7 +153,7 @@ def rank_screening_metrics(rows):
 
 @phase("primary_sim", simulation=True)
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
-                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False, diagnostic_field=None, history_profile=None):
+                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False, diagnostic_field=None, history_profile=None, precompiled_rosters=False):
     if diagnostic_field is not None and scenario_cache:
         raise ValueError('Explicit diagnostic fields cannot use the production scenario cache.')
     if not candidates:
@@ -179,6 +189,8 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     bank_rng = random.Random(seed + 37)
     banks = [field] + [[bank_rng.choice(field) for _ in field] for _ in range(2)]
     field_counts = Counter(showdown_signature(lu) for lu in field)
+    compiled_candidates = [_compile_score_roster(lu) for lu in candidates] if precompiled_rosters else None
+    compiled_banks = [[_compile_score_roster(lu) for lu in bank] for bank in banks] if precompiled_rosters else None
     scores = [array("f") for _ in candidates]
     hits = [[set() for _ in candidates] for _ in range(3)]
     sums = [0.0] * len(candidates)
@@ -203,11 +215,16 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
             outcomes = _scenario_outcomes(rng, pool, script_counter=scripts)
             if outcome_transform is not None:
                 outcomes = outcome_transform(outcomes)
-            return outcomes, sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
+            if compiled_banks is not None:
+                ranked = sorted(_score_compiled_roster(roster, outcomes) for roster in compiled_banks[scenario % 3])
+            else:
+                ranked = sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
+            return outcomes, ranked
         outcomes, ranked = replay.frame(scenario, compute_frame, scripts)
         top1, top5, cash, bust = [ranked[int(q * (len(ranked) - 1))] for q in (0.99, 0.95, 0.8, 0.4)]
         for i, lineup in enumerate(candidates):
-            score = showdown_score(lineup, outcomes)
+            score = (_score_compiled_roster(compiled_candidates[i], outcomes)
+                     if compiled_candidates is not None else showdown_score(lineup, outcomes))
             scores[i].append(score)
             pct = bisect.bisect_right(ranked, score) / len(ranked)
             sums[i] += pct
@@ -439,7 +456,7 @@ def run_deep_showdown(worker, shortlist_fn):
                 deep['ranking_audit'] = audit_ranking(short,
                     lambda audit_stop: simulate_showdown(short, players, scenarios=2000,
                         field_lineup_count=options['field'] or 2700, salary_cap=worker.salary_cap, **field_options,
-                        seed=481516, cancel_callback=audit_stop,
+                        seed=481516, cancel_callback=audit_stop, precompiled_rosters=True,
                         progress_callback=lambda a,b,c: worker.progress.emit(a,b,'Phase 3 of 4 - Ranking audit: ' + c)),
                     showdown_signature, deadline=validation_end, cancelled=worker._cancel_event.is_set)
             else:
