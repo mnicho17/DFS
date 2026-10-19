@@ -51,6 +51,16 @@ def validate_proposal(receipt, payload, players):
                 remaining[signature] -= 1
         try:
             _, rules, _ = prepare_captain_pool(players, rules, receipt.requested, retained_rows)
+            # Recompute permission from the captured inputs, never from a report.
+            # Equal shares are an automatic target; all locked Captains must still
+            # appear and no Captain outside the pool may be introduced.
+            from captain_pool import allocation_targets
+            targets = allocation_targets(rules, receipt.requested)
+            counts = Counter(player_key(row.get('Captain') or {}) for row in lineups)
+            if any(counts[key] < 1 for key in targets):
+                return 'validation_failed'
+            for key in targets:
+                rules['player_constraints'][key]['MaxCptPct'] = 100
         except ValueError:
             return 'validation_failed'
     effective = (payload.get("portfolio_report") or {}).get("effective_min_unique")
