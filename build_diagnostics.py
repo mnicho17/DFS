@@ -737,6 +737,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         salary_filter = record.get('salary_filter') or {}
         if salary_filter:
             lines.append(f"- Showdown salary filter: {salary_filter.get('excluded', 0):,} candidates excluded before screening; minimum ${salary_filter.get('minimum', 0):,.0f}.")
+        if _number(salary_filter.get('generation_minimum')) > 0:
+            lines.append(f"- Fresh Showdown search enforced the ${salary_filter['generation_minimum']:,.0f} minimum during construction; final salary filtering remains active.")
         feasibility = record.get('portfolio_feasibility') or {}
         if feasibility:
             method = feasibility.get('method')
