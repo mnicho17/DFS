@@ -24,6 +24,7 @@ def prepare_captain_pool(players, rules, requested, retained=()):
     for _ in range(requested - sum(quotas.values())):
         key = min(quotas, key=lambda k: (quotas[k], k))
         quotas[key] += 1
+    rules['captain_pool_allocation'] = dict(requested=requested, targets=dict(quotas))
     for player in pool:
         if player.get('FadeCpt') or player.get('LockFlex'):
             raise ValueError('Captain pool conflicts with a fade or FLEX lock: '+str(player.get('Name')))
@@ -69,3 +70,23 @@ def adjustment_text(changes):
     return 'Captain pool adjustments (this build):\n'+'\n'.join(
         f"- {c['player']}: {c['field']} {c['before'] if c['before'] is not None else 'default'} → {c['after']}"
         for c in changes)
+
+
+def allocation_targets(rules, requested):
+    """Recognize only unchanged quotas generated for this locked pool/request."""
+    receipt = (rules or {}).get('captain_pool_allocation') or {}
+    if not isinstance(receipt, dict) or receipt.get('requested') != requested:
+        return {}
+    targets = receipt.get('targets') or {}
+    constraints = (rules or {}).get('player_constraints') or {}
+    locked = {key for key, row in constraints.items() if row.get('LockCpt')}
+    if not isinstance(targets, dict) or not targets or set(targets) != locked:
+        return {}
+    if any(type(count) is not int or count < 1 for count in targets.values()) or sum(targets.values()) != requested:
+        return {}
+    for key, count in targets.items():
+        row = constraints[key]
+        pct = 100 * count / requested
+        if row.get('MinCptPct') != pct or row.get('MaxCptPct') != pct:
+            return {}
+    return dict(targets)

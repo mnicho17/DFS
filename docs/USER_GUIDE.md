@@ -2242,3 +2242,24 @@ requests a cooperative stop and waits for retirement. A stop requested after a
 result is queued still prevents that result from being applied. Existing
 estimates remain available after cancellation; stopped jobs do not auto-restart.
 The ownership sampling, calculation, and lineup algorithms are unchanged.
+
+
+### Automatic Captain-pool allocations
+
+Locking several Captains selects the allowed Captain pool. The app first tries
+balanced integer shares (for example, six Captains receive 25 targets each in a
+150-lineup build). These generated shares are automatic allocations, rather than
+manual maximums. If strict selection cannot finish, bounded recovery can
+redistribute those shares within the selected pool. Each selected Captain must
+still appear at least once; saved retained entries, fades, FLEX locks, minimum
+uniqueness, player groups, and unrelated manual exposure limits remain enforced.
+A feasible balanced allocation is retained without redistribution.
+
+The report labels generated Captain caps as automatic, lists attempted recovery
+stages, and shows target-to-selected Captain counts when redistribution succeeds.
+Recovery reserves time for its later allocation stages within the existing shared
+budget. A failed or cancelled recovery releases no partial portfolio and commits
+no trial limits. Manual Captain limits without a matching generated allocation
+receipt remain hard limits. This changes portfolio allocation only; candidate
+production, forecasts, ownership estimates, SIM scoring, and ranking formulas
+are unchanged. It does not guarantee that every request is feasible.

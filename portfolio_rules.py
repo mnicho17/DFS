@@ -83,7 +83,10 @@ def normalize_rules(rules: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             if value not in (None, ""):
                 normalized_constraint[field] = value
         constraints[stable_key] = normalized_constraint
+    from copy import deepcopy
     return {
+        **({'captain_pool_allocation': deepcopy(raw['captain_pool_allocation'])}
+           if isinstance(raw.get('captain_pool_allocation'), dict) else {}),
         **({"max_zero_qb_pct": zero_qb_pct} if zero_qb_pct is not None else {}),
         "min_unique": max(1, min(8, int(raw.get("min_unique", 1) or 1))),
         "max_team_pct": _pct(raw.get("max_team_pct"), 100.0),
@@ -359,6 +362,12 @@ def select_portfolio(
     else:
         auto_total_keys = set()
         auto_cpt_keys = set()
+    from captain_pool import allocation_targets
+    pool_targets = allocation_targets(normalized, requested) if kind == 'showdown' else {}
+    # Only generated, unchanged locked-pool quotas participate in recovery.
+    # Ordinary manual Captain maximums remain hard limits.
+    if automatic_recovery:
+        auto_cpt_keys.update(pool_targets)
     kicker_cpt_limit = None
     if kind == "showdown":
         requested_kicker_limit = max(1, int(math.floor(requested * 0.05 + 1e-9)))
@@ -796,9 +805,16 @@ def select_portfolio(
                 current_uniqueness_conflicts, feasibility_limits,
                 lambda keys: _group_ok(keys, normalized['groups']), score,
                 total_keys=auto_total_keys, captain_keys=auto_cpt_keys, diagnostics=recovery,
-                deadline=end, cancelled=cancelled, conflict_groups=uniqueness_groups.get(current_min_unique))
+                deadline=end, cancelled=cancelled, conflict_groups=uniqueness_groups.get(current_min_unique),
+                captain_targets=pool_targets)
             if repaired is not None:
                 max_total, max_cpt = effective['total'], effective['captain']
+                min_cpt = effective.get('min_captain', min_cpt)
+                feasibility_limits['min_captain'] = min_cpt
+                for key in pool_targets:
+                    normalized['player_constraints'][key].update(
+                        MinCptPct=100 * min_cpt[key] / requested,
+                        MaxCptPct=100 * max_cpt[key] / requested)
                 specialist_cpt_limit = effective['specialist']
                 if recovery['effective_automatic_caps'] != recovery['starting_automatic_caps']:
                     from portfolio_recovery import CONCENTRATION_WARNING
@@ -1175,7 +1191,7 @@ def select_portfolio(
         warnings.append(f"Automatic Showdown exposure guardrails were relaxed {auto_relaxations} times to fill the requested portfolio; displayed starting caps are not final limits.")
     if not refinement_passes:
         refinement_stop_reason = "disabled in individual ranking" if individual_ranking else "disabled"
-    if zero_qb_limit is not None:
+    if automatic_recovery or zero_qb_limit is not None:
         if cancelled():
             raise ValueError('Selection cancelled')
         final_limits = dict(feasibility_limits, total=max_total, captain=max_cpt, specialist=specialist_cpt_limit)
@@ -1188,6 +1204,10 @@ def select_portfolio(
         from specialist_diagnostics import compare
         report['specialist_diagnostics'] = compare(all_lineups, selected)
     recovery['final_selected_count'] = len(selected)
+    if recovery.get('captain_pool_allocation'):
+        final_captains = Counter(candidate_meta[id(row)]['captain_key'] for row in selected)
+        for key, allocation in recovery['captain_pool_allocation'].items():
+            allocation['selected'] = final_captains[key]
     if automatic_recovery:
         report['portfolio_recovery'] = recovery
     report["effective_min_unique"] = current_min_unique
