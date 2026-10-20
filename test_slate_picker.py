@@ -119,6 +119,18 @@ class SlatePickerTests(unittest.TestCase):
         self.assertFalse(dialog.resume_button.isEnabled())
         self.assertIn('Select a slate',dialog.details.toPlainText())
 
+    def test_details_show_checkpoint_reuse_timings_and_refresh_reason(self):
+        from slate_picker import preparation_details
+        row=self.catalog_row()
+        row['preparation'].update(checkpoint_reused=True,
+            phase_timings=dict(ownership=1.5,candidate_search=60),
+            ownership_reuse=dict(status='refreshed',reason='No matching completed estimate.'))
+        text=preparation_details(row,self.controller)
+        self.assertIn('checkpoint reused',text)
+        self.assertIn('Candidate search (accumulated): 60.00 s',text)
+        self.assertIn('Refreshed: No matching completed estimate.',text)
+        self.assertIn('30-minute attempt allowance',text)
+
     def test_changed_source_identity_clears_selection_before_retry(self):
         row=self.catalog_row();dialog=SlatePicker(self.controller,self.owner)
         self.addCleanup(dialog.deleteLater);dialog.table.selectRow(0)

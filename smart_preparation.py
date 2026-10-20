@@ -48,7 +48,8 @@ def source_digest(path, cancelled):
 def summary(state, digest, path):
     """Small persistent UI record; never expose a snapshot/ownership bank to widgets."""
     keys=('state','count','target','seconds','total_seconds','stagnant','attempt',
-          'message','pause_reason','pause_code','updated_at','source_path','captured_at')
+          'message','pause_reason','pause_code','updated_at','source_path','captured_at',
+          'phase_timings','ownership_reuse','checkpoint_reused')
     result={key:state[key] for key in keys if key in state}
     result.update(digest=digest,library=str(path),library_saved=path.is_file(),preparation=state.get('message',''),
                   ownership_complete=bool(state.get('snapshot') and state.get('ownership')))
@@ -127,6 +128,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 retry_consumed=True
             if state.get('seconds',0)>=ATTEMPT_SECONDS:
                 return publish('Needs attention','time_budget','Preparation paused: 30-minute attempt allowance reached. Retry/Resume grants another bounded attempt, retaining compatible saved work.')
+            state['checkpoint_reused']=bool(state.get('snapshot'))
             started=time.monotonic()
             progress('Smart preparation: '+row['label'])
             if not state.get('snapshot'):
@@ -136,6 +138,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 if cancelled():raise InterruptedError('Preparation yielded.')
                 if not payload or payload[0].get('failed'):
                     raise ValueError((payload or [{}])[0].get('error','Salary preparation failed.'))
+                state['phase_timings']=dict(payload[0].get('timings') or {})
                 players=payload[0]['players']
                 for player in players:
                     if not available(player):player.update(FadeFlex=True,FadeCpt=True)
@@ -148,7 +151,10 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 progress('Smart preparation: ownership simulation (500 entries)')
                 ownership=DetachedOwnership(players,mode=row['kind'],num_sims=500,salary_cap=50000,sport='NFL')
                 from ownership_cache import estimate
+                ownership_started=time.monotonic()
                 result,ownership_reuse=estimate(ownership,ownership._simulate)
+                state['phase_timings']['ownership']=time.monotonic()-ownership_started
+                state['ownership_reuse']=ownership_reuse
                 if cancelled():raise InterruptedError('Preparation yielded.')
                 if not result.get('total') or sum(result['total'].values())<=0:
                     raise ValueError('Ownership simulation produced no valid entries.')
@@ -169,8 +175,13 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 if time.monotonic()-last_check[0]>=5:
                     last_check[0]=time.monotonic();over[0]=used()>=BUDGET
                 return over[0]
-            count=run_search(path,state['snapshot'],seconds=min(seconds,remaining),candidate_limit=TARGET,
-                             cancelled=stop,progress=progress,batch_size=100,compatibility=True)
+            search_started=time.monotonic()
+            try:
+                count=run_search(path,state['snapshot'],seconds=min(seconds,remaining),candidate_limit=TARGET,
+                                 cancelled=stop,progress=progress,batch_size=100,compatibility=True)
+            finally:
+                phases=state.setdefault('phase_timings',{})
+                phases['candidate_search']=phases.get('candidate_search',0)+time.monotonic()-search_started
             stagnant=(state.get('stagnant',0)+(0 if cancelled() or over[0] else 1)
                       if count==state.get('count') else 0)
             elapsed=time.monotonic()-started

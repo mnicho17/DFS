@@ -286,7 +286,7 @@ def preparation_details(row, controller):
     status='Retry/Resume queued; close picker and wait for idle time.' if queued else p.get('state','Discovered')
     count=p.get('count')
     progress=f"{count:,} / {p.get('target',12000):,} candidates" if isinstance(count,int) else 'Candidate count not yet recorded'
-    ownership=('Captured for preparation; live ownership is refreshed on load.' if p.get('ownership_complete') else
+    ownership=('Captured for preparation; refreshed live inputs are checked for ownership reuse on load.' if p.get('ownership_complete') else
                'Capture not yet recorded; it will be checked when preparation runs.')
     reason=p.get('pause_reason') or p.get('error') or p.get('preparation') or 'No pause recorded. Preparation waits for idle time.'
     if controller.paused:reason+=' Automatic discovery is paused for this session; Retry/Resume queues this slate.'
@@ -299,9 +299,16 @@ def preparation_details(row, controller):
             'Resolve the storage limit, then Retry/Resume. Saved libraries are retained.' if p.get('pause_code')=='storage' else
             'Refresh the list and select the current source file.' if p.get('pause_code')=='source_changed' else
             'Retry/Resume grants another bounded attempt and retains compatible checkpoints. Storage and input checks still apply.')
+    from preparation_audit import timing_text, ownership_text
+    audit=('Captured checkpoint reused for this search batch.' if p.get('checkpoint_reused') else
+           'Captured checkpoint was not reused in the last recorded batch.' if 'checkpoint_reused' in p else
+           'Checkpoint reuse not recorded for older work.')
+    timings=timing_text(p.get('phase_timings'))
+    reuse=ownership_text(p.get('ownership_reuse'))
     return (f"{row['label']} | {row['sport']} {row['kind'].title()} | {row.get('date') or 'Date unknown'}\n"
             f"Status: {status}\nProgress: {progress} | {time_text}\nOwnership: {ownership}\n"
             f"Last pause / progress: {reason}\nNext: {action}\n"
+            f"Reuse: {audit}\nOwnership decision: {reuse}\nRecorded timings:\n{timings}\n"
             f"Last updated: {p.get('updated_at') or 'Not recorded'}\nSalary file: {row['path']}\n"
             f"Library: {p.get('library') or 'Not recorded; checked during preparation'}\n"
             'Saved work is rechecked for the current app version. Final SIM and validation run when building.')

@@ -22,6 +22,25 @@ class PreparationStatusTests(unittest.TestCase):
     def rows(self,w):
         return {row['key']: row for row in preparation_rows(w)}
 
+    def test_recorded_reuse_and_timing_rows_do_not_refresh_or_certify_current_inputs(self):
+        w=self.window()
+        w.last_csv_load_timing=dict(wait=1.25,parse=.2,preparation=2,gui_commit=.1,total=3.5)
+        w.last_ownership_reuse=dict(status='reused',reason='Completed estimate matches refreshed inputs and settings.',seconds=.03)
+        with patch('ownership_cache.estimate',side_effect=AssertionError('No estimation')):
+            rows=self.rows(w)
+        self.assertIn('Background wait: 1.25 s',rows['csv-timing']['detail'])
+        self.assertIn('CSV load total: 3.50 s',rows['csv-timing']['detail'])
+        self.assertEqual(rows['ownership-reuse']['state'],'Reused')
+        self.assertIn('Ownership: 0.03 s',rows['ownership-reuse']['detail'])
+        self.assertIn('Later player or setting edits',rows['ownership-reuse']['detail'])
+        w.last_ownership_reuse=dict(status='refreshed',reason='Saved ownership unavailable or invalid; recalculated.')
+        self.assertIn('invalid',self.rows(w)['ownership-reuse']['detail'])
+
+    def test_older_and_invalid_timing_metadata_is_not_presented_as_zero_work(self):
+        from preparation_audit import timing_text
+        self.assertIn('not recorded',timing_text(None))
+        self.assertIn('not recorded',timing_text(dict(total=float('nan'),wait=-1,parse=True)))
+
     def test_empty_state_is_not_ready_and_collection_does_no_source_work(self):
         w = self.window()
         before = copy.deepcopy(w._current_build_recipe())

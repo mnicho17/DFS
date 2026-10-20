@@ -90,7 +90,7 @@ def folder():
 
 def estimate(worker, simulate, *, reuse=True, root=None):
     """Keep fresh estimator behavior unchanged if reuse/storage cannot qualify."""
-    report=dict(status='refreshed',reason='No matching completed estimate.')
+    report=dict(status='refreshed',reason='No completed estimate matches these players, ownership settings, model and runtime; a fresh estimate is required.')
     if worker.sport!='NFL' or worker.mode not in ('classic','showdown'):
         return simulate(),dict(status='refreshed',reason='Reuse supports NFL estimates.')
     try:
