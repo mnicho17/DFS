@@ -17,6 +17,8 @@ def connect(path):
     con = sqlite3.connect(str(path), timeout=2)
     con.execute('CREATE TABLE IF NOT EXISTS salary_files (path TEXT PRIMARY KEY, signature TEXT, digest TEXT, metadata TEXT, error TEXT, present INTEGER)')
     con.execute('CREATE TABLE IF NOT EXISTS slate_preparation (digest TEXT PRIMARY KEY, payload TEXT)')
+    con.execute('CREATE TABLE IF NOT EXISTS prepared_library_lookup (slate_id TEXT, digest TEXT PRIMARY KEY, path TEXT, updated TEXT)')
+    con.execute('CREATE INDEX IF NOT EXISTS prepared_library_slate ON prepared_library_lookup(slate_id)')
     try:
         with con:
             yield con
@@ -127,3 +129,6 @@ def record_preparation(database, result):
     if result.get('digest'):
         with connect(database) as con:
             con.execute('INSERT OR REPLACE INTO slate_preparation VALUES (?,?)', (result['digest'],json.dumps(result)))
+            if result.get('state')=='Prepared candidates' and result.get('library_saved') and result.get('slate_id'):
+                con.execute('INSERT OR REPLACE INTO prepared_library_lookup VALUES (?,?,?,?)',
+                    (result['slate_id'],result['digest'],result['library'],result.get('updated_at','')))

@@ -52,19 +52,26 @@ def prepare_build(worker):
 
     flow.complete('Historical field evidence checked.' if profile else 'Historical field not requested.')
     flow.begin('library', 'Choosing and validating candidate inputs')
+    discovery={}
+    def audit(code):
+        discovery[code]=discovery.get(code,0)+1
+    reason='Automatic discovery disabled or no discovery locations configured.'
     if worker.candidate_library:
+        reason='Explicitly selected library passed existing validation.'
         if not worker._load_candidate_library(profile):
             return False
     elif (worker.automatic_libraries or worker.library_folder) and worker.sport == 'NFL' and worker.sim_enabled and worker.compute_mode.casefold().startswith('deep') and not worker.retained_lineups and not worker.repair_source:
         import sqlite3
         from build_preparation import discover_libraries
         worker.progress.emit(0, 0, 'Preparing build: looking for compatible saved libraries…')
+        reason='Automatic discovery found no acceptable library.'
         attempts = 0
         for path in discover_libraries(worker.automatic_libraries, worker.library_folder, worker.players,
                 worker.kind, worker.salary_cap, cancelled=worker._cancel_event.is_set,
-                progress=lambda text: worker.progress.emit(0, 0, text)):
+                progress=lambda text: worker.progress.emit(0, 0, text),audit=audit):
             attempts += 1
             if attempts > 3:
+                audit('load_attempt_limit')
                 break
             worker.candidate_library = path
             try:
@@ -72,17 +79,40 @@ def prepare_build(worker):
                     return False
                 if not worker.library_candidates:
                     raise ValueError('No candidates satisfy current rules.')
+                reason='Automatic library accepted after existing current-input validation.'
+                audit('accepted')
                 worker.library_report['automatic_discovery'] = True
                 worker.library_report['library_path'] = path
                 worker.progress.emit(0, 0, 'Reusing compatible library: ' + path)
                 break
             except (ValueError, OSError, sqlite3.Error) as exc:
+                audit('loader_rejected')
+                text=str(exc).casefold()
+                audit('rejected_model' if 'code' in text or 'version' in text else
+                      'rejected_slate' if 'slate' in text else
+                      'rejected_coverage' if 'coverage' in text or 'partial' in text else
+                      'rejected_rules' if 'rules' in text or 'candidates' in text else 'rejected_validation_or_io')
                 worker.progress.emit(0, 0, 'Library unavailable under current inputs: ' + str(exc))
                 worker.candidate_library = ''
                 worker.library_candidates, worker.library_report = [], {}
         if not worker.candidate_library:
             worker.progress.emit(0, 0, 'No compatible saved library accepted; using the existing fresh candidate search.')
-    flow.complete('Validated selected library.' if worker.candidate_library else 'Fresh candidate search will prepare the build inputs.')
+    elif worker.sport!='NFL' or not worker.sim_enabled or not worker.compute_mode.casefold().startswith('deep'):
+        reason='Automatic discovery requires NFL Deep with SIM enabled.'
+    elif worker.retained_lineups or worker.repair_source:
+        reason='Automatic discovery is bypassed for retained entries or portfolio repair.'
+    flow.rows[-1]['discovery']=dict(discovery)
+    detail=('Validated selected library.' if worker.candidate_library else 'Fresh candidate search will prepare the build inputs.')
+    detail+=' '+reason
+    labels=dict(indexed_lookup='Prepared-slate lookup checked',index_unavailable='Prepared-slate lookup unavailable (older or unreadable catalog)',
+                directory_limit='Folder scan limit reached',probed='Files checked',missing='Missing files',different_kind='Other contest type',
+                different_slate='Other player slate',matched='Discovery matches',incompatible_or_unreadable='Incompatible or unreadable files',
+                time_limit='Discovery time limit reached',cancelled='Discovery cancelled',load_attempt_limit='Validation attempt limit reached',
+                accepted='Libraries accepted',loader_rejected='Libraries rejected by loader',rejected_model='App/model incompatibility',
+                rejected_slate='Slate incompatibility',rejected_coverage='Coverage conflict',rejected_rules='Current rule conflict',
+                rejected_validation_or_io='Other validation or read failure')
+    if discovery:detail+=' Discovery: '+', '.join(f'{labels.get(key,key)}: {value}' for key,value in sorted(discovery.items()))+'.'
+    flow.complete(detail)
     flow.begin('eligibility', 'Checking player eligibility')
     if worker.sport == "NFL":
         from nfl_eligibility import eligible_players, apply_qb_eligibility
