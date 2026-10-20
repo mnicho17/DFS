@@ -2352,3 +2352,10 @@ New automatic candidate libraries carry a separate compatibility stamp in additi
 An audited UI-only update can resume a newly stamped automatic library and load its static roster keys, retaining captured ownership and candidate work. Original build provenance remains recorded, and resumed search batches record their producing build. Changes to model code, captured inputs, or rules still invalidate compatibility. Every loaded roster still passes current slate, identity, availability, salary, position, lock/fade, and rule checks before use.
 
 Existing unstamped libraries keep their previous compatibility policy; an older automatic checkpoint may need a new compatible preparation identity once. This change does not broaden reuse of saved scenario banks, coarse screening, historical evidence, or other scored artifacts: their original strict model/build and evidence checks remain in place. It changes reuse and presentation, not estimator, optimizer, projection, ranking, or portfolio calculations.
+
+
+### Reuse decisions and preparation timings
+
+Open Build preparation to see the last applied ownership decision, its reason and duration, plus the last successful CSV load timings. Background wait, source preparation and display commit are separate; parsing/live-context phases are included in source preparation, so these figures overlap. Ownership runs separately after the CSV is displayed. These are recorded outcomes, not a fresh validation of later edits.
+
+Load CSV's slate picker details also show whether a captured checkpoint was reused, its recorded ownership decision, source/ownership timings and accumulated candidate-search time. Older records show timings as not recorded. The existing pause reason and next action explain work that needs attention; Generate still checks current inputs and evidence before reuse.

@@ -127,6 +127,8 @@ class CsvLoadController(QtCore.QObject):
     def start(self, path):
         if self.busy or self.closed:
             return False
+        self.started = time.perf_counter()
+        self.dispatched = None
         self.path, self.baseline = str(path), self.owner.players
         self.cancelled = False
         self.payload = None
@@ -166,6 +168,7 @@ class CsvLoadController(QtCore.QObject):
                for k, row in self.owner.tasks.rows.items()):
             return
         self.wait_timer.stop()
+        self.dispatched = time.perf_counter()
         self.worker = CsvLoadWorker(self.path)
         self.thread = QtCore.QThread(self)
         self.worker.moveToThread(self.thread)
@@ -227,6 +230,8 @@ class CsvLoadController(QtCore.QObject):
                 try:
                     self.owner._apply_csv_payload(payload)
                     timings = dict(payload['timings'], gui_commit=time.perf_counter()-begin)
+                    timings.update(wait=max(0, (self.dispatched or self.started)-self.started),
+                                   total=time.perf_counter()-self.started)
                     self.owner.last_csv_load_timing = timings
                     logger.info('CSV load phase timings (seconds): %s', timings)
                     state, detail = 'Completed', f"Loaded {len(payload['players'])} players; source preparation ran off the UI thread."

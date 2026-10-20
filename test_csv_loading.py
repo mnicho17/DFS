@@ -70,6 +70,8 @@ class CsvLoadingTests(unittest.TestCase):
         self.assertEqual(w._contest_mode(),'classic');own.assert_called_once()
         self.assertTrue(own.call_args.kwargs['reuse_prepared'])
         self.assertIn('nfl_context',w.last_csv_load_timing)
+        self.assertIn('wait',w.last_csv_load_timing)
+        self.assertGreaterEqual(w.last_csv_load_timing['total'],w.last_csv_load_timing['preparation'])
         self.assertTrue(all(v>=0 for v in w.last_csv_load_timing.values()))
 
     def test_cancel_during_source_wait_retains_slate_reports_and_waits_for_retirement(self):

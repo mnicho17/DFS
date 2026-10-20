@@ -148,6 +148,7 @@ class OwnershipCacheTests(unittest.TestCase):
             w._start_ownership_sim(num_sims=20,mode='showdown',cap=50000,reuse_prepared=True)
             self.wait(lambda:w._ownership_run is None)
         self.assertEqual(w.last_ownership_reuse['status'],'reused')
+        self.assertGreaterEqual(w.last_ownership_reuse['seconds'],0)
         self.assertIn('Reused prepared ownership',w.lbl_ownership_source.text())
         from optimizers import _pkey
         for p in w.players:self.assertEqual(p['ProjOwnPct'],expected['total'].get(_pkey(p),0))

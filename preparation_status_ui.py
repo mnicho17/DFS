@@ -23,6 +23,14 @@ def preparation_rows(w):
     add('inputs', 'Inputs', 'Snapshot replay' if replay else 'Live inputs',
         freshness_text(w.last_live_check_summary, replay)
         + '\nRecorded timestamps describe source checks; they do not prove every source succeeded.', 'Data freshness')
+    from preparation_audit import timing_text, ownership_text
+    timing = getattr(w, 'last_csv_load_timing', None)
+    add('csv-timing', 'Last CSV load timings', 'Recorded' if timing else 'Not recorded',
+        timing_text(timing) + '\nSource phases are included in source preparation; totals overlap. Ownership runs separately.', 'Tasks dashboard')
+    reuse = getattr(w, 'last_ownership_reuse', None)
+    add('ownership-reuse', 'Last applied ownership',
+        str(reuse.get('status', 'Unknown')).title() if reuse else 'Not recorded',
+        ownership_text(reuse) + '\nRecorded for the last applied estimate. Later player or setting edits require a new check; this view does not validate reuse.', 'Tasks dashboard')
     report = getattr(w, 'last_readiness_report', {}) or {}
     details = []
     for check in report.get('checks', []):
