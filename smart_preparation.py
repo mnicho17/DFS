@@ -51,6 +51,10 @@ def summary(state, digest, path):
           'message','pause_reason','pause_code','updated_at','source_path','captured_at',
           'phase_timings','ownership_reuse','checkpoint_reused')
     result={key:state[key] for key in keys if key in state}
+    if state.get('snapshot'):
+        from candidate_library import slate_id
+        inputs=state['snapshot']['inputs']
+        result['slate_id']=slate_id(inputs['players'],inputs['recipe']['contest_kind'])
     result.update(digest=digest,library=str(path),library_saved=path.is_file(),preparation=state.get('message',''),
                   ownership_complete=bool(state.get('snapshot') and state.get('ownership')))
     if state.get('pause_code')=='error':result['error']=state.get('pause_reason',state.get('message',''))
@@ -120,6 +124,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                         info.get('input_id')!=(state.get('snapshot') or {}).get('input_id')):
                     raise ValueError('Prepared library no longer matches its captured inputs, target, or app version.')
                 if target_digest:return publish('Prepared candidates','none','Candidate target already reached; current-input validation still runs when building.')
+                record_preparation(catalog,summary(state,row['digest'],path))
                 continue
             if used()>=BUDGET:
                 return publish('Storage limit','storage','Shared 8 GiB candidate-folder budget reached. Free space in that folder, then Retry/Resume. No saved files were deleted.')

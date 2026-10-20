@@ -41,6 +41,37 @@ class BuildPreparationTests(unittest.TestCase):
         self.assertEqual(self.discover(progress=messages.append), [])
         self.assertGreaterEqual(len(messages), 3)
 
+    def test_older_catalog_falls_back_without_creating_lookup_or_mutating_database(self):
+        import sqlite3
+        root=self.root/'candidates';root.mkdir()
+        catalog=self.root/'slate-catalog.sqlite'
+        con=sqlite3.connect(catalog)
+        try:
+            with con:con.execute('CREATE TABLE older (id INTEGER)')
+        finally:con.close()
+        path=root/'complete.sdlib';prepare(path,self.players)
+        before=catalog.read_bytes();events=[]
+        found=list(discover_libraries((),root,self.players,'showdown',50000,audit=events.append))
+        self.assertEqual(found,[str(path.resolve())])
+        self.assertIn('index_unavailable',events)
+        self.assertEqual(catalog.read_bytes(),before)
+
+    def test_index_is_exact_slate_and_cannot_redirect_outside_standard_folder(self):
+        from candidate_library import slate_id
+        from slate_catalog import record_preparation
+        root=self.root/'candidates';root.mkdir()
+        catalog=self.root/'slate-catalog.sqlite'
+        external=self.root/'external.sdlib';prepare(external,self.players)
+        record_preparation(catalog,dict(digest='external',state='Prepared candidates',library_saved=True,
+            slate_id=slate_id(self.players,'showdown'),library=str(external)))
+        inside=root/'other-slate-hint.sdlib';prepare(inside,self.players)
+        record_preparation(catalog,dict(digest='other',state='Prepared candidates',library_saved=True,
+            slate_id='other-slate',library=str(inside)))
+        before=catalog.read_bytes()
+        with patch.object(Path,'iterdir',return_value=iter([])):
+            self.assertEqual(list(discover_libraries((),root,self.players,'showdown',50000)),[])
+        self.assertEqual(catalog.read_bytes(),before)
+
     def test_cancellation_and_time_budget_prevent_probing(self):
         with patch('showdown_library.validate_library') as validate:
             self.assertEqual(self.discover(cancelled=lambda: True), [])
@@ -77,6 +108,12 @@ class BuildPreparationTests(unittest.TestCase):
         self.assertFalse(errors)
         self.assertEqual(worker.candidate_library, '')
         self.assertTrue(any('fresh candidate search' in text for text in progress))
+        detail=worker.preparation.rows[2]['detail']
+        self.assertIn('Libraries rejected by loader: 1',detail)
+        self.assertIn('Coverage conflict: 1',detail)
+        from build_diagnostics import create_build_diagnostic,format_build_report
+        record=create_build_diagnostic(context={},timing_report=dict(build_preparation=worker.preparation.report()))
+        self.assertIn('Coverage conflict: 1',format_build_report(record))
         _, results, errors, _ = run(True)
         self.assertFalse(results)
         self.assertTrue(errors)
@@ -108,6 +145,7 @@ class BuildPreparationTests(unittest.TestCase):
                  patch('optimizers.ShowdownOptimizer.build_lineups',return_value=[]):
                 worker.run()
             discovery.assert_not_called()
+            self.assertIn('Automatic discovery',worker.preparation.rows[2]['detail'])
 
 
 class UnifiedPreparationTests(unittest.TestCase):

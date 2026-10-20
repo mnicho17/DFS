@@ -32,24 +32,41 @@ def remembered_libraries(settings):
 
 
 def discover_libraries(known, folder, players, kind, salary_cap, *, cancelled=lambda: False,
-                       progress=lambda text: None, seconds=10):
+                       progress=lambda text: None, seconds=10, audit=lambda code: None):
     """No recursive disk scan, DB writes, forecasts, or partial-coverage opt-in.
 
-    Remembered paths take priority; the standard folder is bounded to 48 entries.
+    Exact-slate completed hints precede remembered paths; folder scan is bounded to 48 entries.
     Every yielded path still needs full validation/loading under current rules.
     """
     from candidate_library import slate_id
     from build_snapshots import validate_snapshot
     deadline = time.monotonic() + seconds
-    candidates = list(known[:MAX_REMEMBERED])
+    if cancelled() or time.monotonic()>=deadline:
+        audit('cancelled' if cancelled() else 'time_limit')
+        return
+    candidates = []
     root = Path(folder) if folder else None
+    catalog=root.parent/'slate-catalog.sqlite' if root else None
+    if catalog and catalog.is_file():
+        try:
+            with closing(sqlite3.connect(catalog.resolve().as_uri()+'?mode=ro',uri=True,timeout=1)) as con:
+                indexed=con.execute('SELECT path FROM prepared_library_lookup WHERE slate_id=? ORDER BY updated DESC,digest LIMIT ?',
+                                    (slate_id(players,kind),MAX_REMEMBERED)).fetchall()
+            candidates.extend(path for (path,) in indexed if Path(path).resolve().parent==root.resolve())
+            audit('indexed_lookup')
+        except (OSError,sqlite3.Error,ValueError):
+            audit('index_unavailable')
+    candidates.extend(known[:MAX_REMEMBERED])
     if root and root.is_dir():
         # Do not sort/stat an unbounded directory just to find recent candidates.
         from itertools import islice
-        candidates.extend(str(p) for p in islice(root.iterdir(), MAX_DISCOVERED))
+        entries=list(islice(root.iterdir(), MAX_DISCOVERED+1))
+        if len(entries)>MAX_DISCOVERED:audit('directory_limit')
+        candidates.extend(str(p) for p in entries[:MAX_DISCOVERED])
     seen = set()
     for raw in candidates:
         if cancelled() or time.monotonic() >= deadline:
+            audit('cancelled' if cancelled() else 'time_limit')
             return
         path = Path(raw).resolve()
         key = str(path).casefold()
@@ -57,10 +74,13 @@ def discover_libraries(known, folder, players, kind, salary_cap, *, cancelled=la
             continue
         seen.add(key)
         try:
+            audit('probed')
             if not path.is_file():
+                audit('missing')
                 continue
             if path.suffix.lower() in ('.sdlib', '.sdfull'):
                 if kind != 'showdown':
+                    audit('different_kind')
                     continue
                 from showdown_library import _read, _structure
                 def header(part):
@@ -94,8 +114,11 @@ def discover_libraries(known, folder, players, kind, salary_cap, *, cancelled=la
                     meta = dict(con.execute('SELECT key,value FROM library_meta'))
                 snapshot = validate_snapshot(json.loads(meta['snapshot']))
                 if meta.get('slate_id') != slate_id(players, kind) or snapshot['inputs']['recipe']['contest_kind'] != kind:
+                    audit('different_slate')
                     continue
+            audit('matched')
             progress('Checking reusable library: ' + path.name)
             yield str(path)
         except (ValueError, OSError, sqlite3.Error, KeyError, TypeError) as exc:
+            audit('incompatible_or_unreadable')
             progress('Library skipped: ' + path.name + ' — ' + str(exc))

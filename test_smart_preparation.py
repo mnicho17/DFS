@@ -58,11 +58,47 @@ class SmartPreparationTests(unittest.TestCase):
         self.assertGreaterEqual(metadata(second['library'])['count'],count)
         self.assertEqual(len(list((self.output/'discovered').glob('*.json'))),1)
 
+    def test_completed_smart_library_handoff_bypasses_directory_limit_and_still_validates(self):
+        from main_window import LineupBuildWorker
+        from build_workflow import prepare_build
+        from build_preparation import discover_libraries
+        actual=self.root/'slate-catalog.sqlite'
+        self.db.rename(actual);self.db=actual
+        with patch('smart_preparation.TARGET',1):result=self.run_job()
+        self.assertEqual(result['state'],'Prepared candidates')
+        library=Path(result['library'])
+        junk=[self.output/f'old-{i}.txt' for i in range(49)]
+        events=[]
+        before=self.db.read_bytes()
+        with patch.object(Path,'iterdir',return_value=iter(junk)):
+            found=list(discover_libraries((),self.output,self.ps,'showdown',50000,audit=events.append))
+        self.assertEqual(found,[str(library.resolve())])
+        self.assertIn('directory_limit',events)
+        self.assertEqual(self.db.read_bytes(),before)
+        worker=LineupBuildWorker(copy.deepcopy(self.ps),kind='showdown',num_lineups=1,
+            salary_cap=50000,sim_enabled=True,compute_mode='Deep',library_folder=str(self.output))
+        with patch.object(Path,'iterdir',return_value=iter(junk)):
+            self.assertTrue(prepare_build(worker))
+        self.assertTrue(worker.library_candidates)
+        self.assertTrue(worker.library_report['automatic_discovery'])
+        self.assertEqual(worker.preparation.rows[2]['discovery']['accepted'],1)
+        # A discovery hint never bypasses the model gate in the real loader.
+        with patch('candidate_library.preparation_model_id',return_value='changed-model'):
+            worker=LineupBuildWorker(copy.deepcopy(self.ps),kind='showdown',num_lineups=1,
+                salary_cap=50000,sim_enabled=True,compute_mode='Deep',library_folder=str(self.output))
+            self.assertTrue(prepare_build(worker))
+        self.assertFalse(worker.candidate_library)
+        self.assertIn('App/model incompatibility',worker.preparation.rows[2]['detail'])
+
     def test_completed_target_is_skipped_on_restart(self):
         with patch('smart_preparation.TARGET',1):
             result=self.run_job()
             self.assertEqual(result['state'],'Prepared candidates')
+            from slate_catalog import connect
+            with connect(self.db) as con:con.execute('DELETE FROM prepared_library_lookup')
             second=self.run_job()
+            with connect(self.db) as con:
+                self.assertEqual(con.execute('SELECT COUNT(*) FROM prepared_library_lookup').fetchone()[0],1)
         self.assertNotIn('library',second)
         self.assertEqual(self.estimate.call_count,1)
 

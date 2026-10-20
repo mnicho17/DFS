@@ -2362,3 +2362,10 @@ Load CSV's slate picker details also show whether a captured checkpoint was reus
 
 
 Copy Last Build Report includes preparation reuse decisions and timings captured when that build started. The last successful CSV load and last applied ownership decision are labelled as prior recorded work; the build's own preparation checks remain separate. Loading another slate or refreshing ownership does not change a saved report. Older reports show that these details were not recorded. Snapshot replay does not borrow current-session CSV or ownership timings.
+
+
+### Automatic candidate-library handoff
+
+Completed Smart preparation records an exact-player-slate library hint in the discovery catalog. Generate checks these hints before the bounded folder scan, so older files cannot hide completed preparation for the current slate. Hints are read-only during Generate and never bypass the existing model, salary, eligibility, rule or coverage validators. Earlier catalogs keep folder discovery until idle preparation or Retry/Resume rechecks a compatible completed target and records its hint.
+
+Copy Last Build Report now records why automatic library discovery used fresh search: disabled/unconfigured, unsupported build mode, portfolio repair, no accepted library, scan/time/validation limits, or validation rejection categories. Counts describe the bounded search only; they are not proof that no compatible library exists elsewhere. Explicit library selection retains its existing fail-on-validation behavior.
