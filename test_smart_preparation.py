@@ -90,6 +90,53 @@ class SmartPreparationTests(unittest.TestCase):
         self.assertFalse(worker.candidate_library)
         self.assertIn('App/model incompatibility',worker.preparation.rows[2]['detail'])
 
+    def test_idle_warming_follows_completed_candidates_and_skips_recorded_artifact_on_restart(self):
+        from smart_scenario_preparation import request_id
+        cache=self.root/'scenario-cache';cache.mkdir()
+        key='a'*64;(cache/(key+'.sqlite')).write_bytes(b'scheduling hint only; production still validates')
+        outcome=dict(state='Completed',message='Completed cache recorded.',cache=dict(status='saved',
+            cache_id=key,requested_scenarios=5000,reused_scenarios=0))
+        with patch('smart_preparation.TARGET',1),patch('scenario_cache.cache_folder',return_value=cache), \
+             patch('scenario_preparation.scenario_preparation_result',return_value=outcome) as warming:
+            first=self.run_job(warm_scenarios=True)
+            warming.assert_not_called()
+            second=self.run_job(warm_scenarios=True)
+            self.assertEqual(second['state'],'Prepared candidates')
+            self.assertEqual(second['scenario_preparation']['state'],'Completed')
+            self.assertEqual(second['scenario_preparation']['scope'],'Saved Smart setup')
+            self.assertNotIn('library',self.run_job(warm_scenarios=True))
+            self.assertEqual(warming.call_count,1)
+            (cache/(key+'.sqlite')).unlink()
+            self.run_job(warm_scenarios=True)
+            self.assertEqual(warming.call_count,2)
+        self.assertEqual(self.estimate.call_count,1)
+
+    def test_restart_retains_last_captured_warming_setup_without_default_rewarming(self):
+        from build_snapshots import create_snapshot
+        current=create_snapshot(self.ps,dict(sport='NFL',contest_kind='showdown',nfl_sim_scenarios=10000),{})
+        cache=self.root/'scenario-cache';cache.mkdir();key='b'*64
+        (cache/(key+'.sqlite')).write_bytes(b'local scheduling receipt only')
+        outcome=dict(state='Completed',message='Completed cache recorded.',cache=dict(status='saved',cache_id=key,requested_scenarios=10000))
+        with patch('smart_preparation.TARGET',1),patch('scenario_cache.cache_folder',return_value=cache), \
+             patch('scenario_preparation.scenario_preparation_result',return_value=outcome) as work:
+            self.run_job(warm_scenarios=True)
+            self.run_job(warm_scenarios=True,scenario_snapshot=current)
+            self.assertNotIn('library',self.run_job(warm_scenarios=True))
+            self.assertEqual(work.call_count,1)
+            (cache/(key+'.sqlite')).unlink()
+            result=self.run_job(warm_scenarios=True)
+            self.assertEqual(result['scenario_preparation']['scope'],'Last captured setup')
+            self.assertEqual(work.call_args.args[1]['inputs']['recipe']['nfl_sim_scenarios'],10000)
+
+    def test_candidate_work_for_other_slates_precedes_scenario_warming(self):
+        other=self.folder/'other.csv';other.write_text(self.path.read_text()+'\n')
+        scan(self.db,self.folder)
+        with patch('smart_preparation.TARGET',1), \
+             patch('scenario_preparation.scenario_preparation_result') as warming:
+            self.run_job(warm_scenarios=True)
+            self.run_job(warm_scenarios=True)
+        warming.assert_not_called()
+
     def test_completed_target_is_skipped_on_restart(self):
         with patch('smart_preparation.TARGET',1):
             result=self.run_job()
