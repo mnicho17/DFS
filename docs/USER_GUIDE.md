@@ -2369,3 +2369,12 @@ Copy Last Build Report includes preparation reuse decisions and timings captured
 Completed Smart preparation records an exact-player-slate library hint in the discovery catalog. Generate checks these hints before the bounded folder scan, so older files cannot hide completed preparation for the current slate. Hints are read-only during Generate and never bypass the existing model, salary, eligibility, rule or coverage validators. Earlier catalogs keep folder discovery until idle preparation or Retry/Resume rechecks a compatible completed target and records its hint.
 
 Copy Last Build Report now records why automatic library discovery used fresh search: disabled/unconfigured, unsupported build mode, portfolio repair, no accepted library, scan/time/validation limits, or validation rejection categories. Counts describe the bounded search only; they are not proof that no compatible library exists elsewhere. Explicit library selection retains its existing fail-on-validation behavior.
+
+
+### Scenario replay storage and diagnostics
+
+Scenario replay uses losslessly compressed opponent-score doubles. No rounding, scenario reduction or score changes are applied. New-format caches require their versioned codec, exact player/field/context/seed/count/build/runtime identity, complete frame sequence and checksum. Existing size limits remain 512 MiB per file and 2 GiB for the cache folder. Older cache files are not promoted or deleted. A complete cold run can save a cache; corrupt, partial, over-budget or incompatible caches fall back to ordinary calculation.
+
+Copy Last Build Report shows the scenario cache outcome reason, lookup/verification time, frame I/O/finalization time and completed artifact size. These overhead measurements are included in SIM time; they are not extra phases to add to the total. Raw legacy cache error paths are withheld. Current candidate scoring and rules still run; independent ranking audits remain fresh.
+
+Smart slate preparation currently prepares candidates and ownership; it does not automatically warm scenarios. The existing optional Overnight scenario-preparation action warms the ordinary Deep pipeline using its captured settings. Those settings and exact live inputs must match for replay; refreshing timestamps or changing the app build can invalidate it. Completed scenarios do not imply completed library screening, a prepared portfolio or predictive accuracy.

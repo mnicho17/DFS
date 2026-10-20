@@ -721,6 +721,13 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         cache = sim.get('scenario_cache') or {}
         if cache and cache.get('status') != 'disabled':
             lines.append(f"- Reusable scenarios: {cache.get('status')}; {_integer(cache.get('reused_scenarios')):,}/{_integer(cache.get('requested_scenarios')):,} reused. Current lineup scoring and rules still apply; independent audits remain fresh.")
+            if cache.get('reason'):
+                reason=str(cache['reason'])
+                if len(reason)>500 or any(token in reason for token in ('\\','/','\n','\r')):
+                    reason='Legacy cache error details withheld; rerun to record a categorized reason.'
+                lines.append('- Scenario cache reason: '+reason)
+            if 'lookup_seconds' in cache:
+                lines.append(f"- Scenario cache overhead: lookup/verification {_number(cache.get('lookup_seconds')):.2f}s; frame I/O/finalization {_number(cache.get('io_seconds')):.2f}s; saved artifact {_integer(cache.get('stored_bytes'))/1024**2:.1f} MiB")
     capture = record.get('distribution_capture') or {}
     from captain_coverage import format_coverage
     lines.extend(format_coverage(record.get('captain_coverage') or {}))

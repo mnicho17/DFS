@@ -60,6 +60,19 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertEqual(clean['ownership'],dict(status='refreshed'))
         self.assertNotIn('private',json.dumps(clean))
 
+    def test_scenario_cache_reason_and_overhead_survive_saved_report(self):
+        record=create_build_diagnostic(context={},timing_report={},sim_report=dict(volatility_model='current',
+            scenario_cache=dict(status='not saved',requested_scenarios=10000,reused_scenarios=0,
+                reason='Cache storage limit reached',lookup_seconds=.2,io_seconds=1.5,stored_bytes=0)))
+        text=format_build_report(record)
+        self.assertIn('Scenario cache reason: Cache storage limit reached',text)
+        self.assertIn('lookup/verification 0.20s',text)
+        self.assertIn('frame I/O/finalization 1.50s',text)
+        record['sim']['scenario_cache']['reason']='C:\\private\\cache.sqlite'
+        text=format_build_report(record)
+        self.assertNotIn('private',text)
+        self.assertIn('details withheld',text)
+
     def test_preparation_receipt_survives_history_and_copied_report(self):
         rows=[dict(stage='library',state='Completed',detail='Validated selected library.',seconds=.2)]
         record=create_build_diagnostic(context={'kind':'showdown'},timing_report={'build_preparation':rows})
