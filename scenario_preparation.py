@@ -36,5 +36,6 @@ def prepare_scenarios(path, snapshot, *, seconds, cancelled=lambda:False, progre
     if cancelled():return 'Scenario preparation paused. Only completed scenario caches are reusable.'
     cache=(results[0].get('sim_report',{}).get('scenario_cache',{}) if results else {})
     status=cache.get('status','unavailable')
-    return (f'Scenario preparation finished; validation cache {status}. Matching completed scenarios can be reused by Deep; '
+    reason=str(cache.get('reason') or 'No cache outcome reason recorded.')
+    return (f'Scenario preparation finished; validation cache {status}. {reason} Matching completed scenarios can be reused by Deep; '
             'no prepared portfolio was submitted or applied to the current output table.')
