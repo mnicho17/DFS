@@ -2359,3 +2359,6 @@ Existing unstamped libraries keep their previous compatibility policy; an older 
 Open Build preparation to see the last applied ownership decision, its reason and duration, plus the last successful CSV load timings. Background wait, source preparation and display commit are separate; parsing/live-context phases are included in source preparation, so these figures overlap. Ownership runs separately after the CSV is displayed. These are recorded outcomes, not a fresh validation of later edits.
 
 Load CSV's slate picker details also show whether a captured checkpoint was reused, its recorded ownership decision, source/ownership timings and accumulated candidate-search time. Older records show timings as not recorded. The existing pause reason and next action explain work that needs attention; Generate still checks current inputs and evidence before reuse.
+
+
+Copy Last Build Report includes preparation reuse decisions and timings captured when that build started. The last successful CSV load and last applied ownership decision are labelled as prior recorded work; the build's own preparation checks remain separate. Loading another slate or refreshing ownership does not change a saved report. Older reports show that these details were not recorded. Snapshot replay does not borrow current-session CSV or ownership timings.

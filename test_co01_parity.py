@@ -165,6 +165,13 @@ class ObjectiveParityTests(unittest.TestCase):
                 warning = f"{defenses['review_players']} defenses use historical-average estimates. See Defense forecast review; no projections were changed."
                 warnings = value['diagnostic']['portfolio'].get('warnings') or []
                 value['diagnostic']['portfolio']['warnings'] = [w for w in warnings if w != warning]
+        # Builds in this frozen computational fixture have no captured session
+        # preparation metadata. Remove only the exact additive missing-data notice.
+        # All candidate identities, scores, selections and exports stay exact.
+        if not value['diagnostic'].get('preparation_audit'):
+            value['diagnostic'].pop('preparation_audit', None)
+            value['build_report'] = value['build_report'].replace(
+                '\n\nPreparation reuse and timings: not recorded for this build.', '')
         # The field-use receipt is additive reporting. Keep all sampled fields,
         # candidate metrics, selections and exports in the frozen comparison.
         value['build_report'] = '\n'.join(line for line in value['build_report'].split('\n')

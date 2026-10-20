@@ -13602,7 +13602,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 snapshot = None
 
+        from preparation_audit import capture_build_audit
         self._active_build_context = {
+            "preparation_audit": capture_build_audit(self),
 
             "sport": str(sport or "NFL").strip().upper(),
 
