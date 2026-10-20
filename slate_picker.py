@@ -1,6 +1,7 @@
 """Idle catalog discovery and a cached slate picker; no active-slate mutation."""
 from pathlib import Path
 import threading
+import copy
 import time
 from PyQt5 import QtCore, QtWidgets
 from slate_catalog import scan, rows
@@ -10,9 +11,10 @@ class DiscoveryWorker(QtCore.QObject):
     progress = QtCore.pyqtSignal(str)
     finished = QtCore.pyqtSignal(dict)
 
-    def __init__(self, database, folder, smart=False, retry_request=None):
+    def __init__(self, database, folder, smart=False, retry_request=None, scenario_snapshot=None):
         super().__init__()
         self.database, self.folder = database, folder
+        self.scenario_snapshot=copy.deepcopy(scenario_snapshot)
         self.smart = smart
         self.retry_request = dict(retry_request or {})
         self.pause_reason = 'Waiting for idle time or higher-priority work.'
@@ -31,7 +33,8 @@ class DiscoveryWorker(QtCore.QObject):
                 from slate_catalog import record_preparation
                 result.update(prepare_one(self.database,self.folder,Path(self.database).parent/'candidates',
                     self.stop.is_set,notify,target_digest=self.retry_request.get('digest'),
-                    retry=self.retry_request.get('reset',False),pause_reason=lambda:self.pause_reason))
+                    retry=self.retry_request.get('reset',False),scenario_snapshot=self.scenario_snapshot,
+                    warm_scenarios=True,pause_reason=lambda:self.pause_reason))
                 record_preparation(self.database,result)
         except Exception as exc:
             result = dict(error=str(exc))
@@ -82,8 +85,15 @@ class SlateDiscoveryController(QtCore.QObject):
         smart=str(self.owner.app_settings.value('build/smart_preparation','true')).lower() in ('true','1')
         self.running_retry=dict(self.retry_request) if self.retry_request else None
         folder=self.running_retry['folder'] if self.running_retry else self.folder()
+        captured=None
+        if (smart and not self.manual) or self.running_retry:
+            try:
+                if not getattr(self.owner,'_snapshot_replay',False) and self.owner.chk_nfl_contest_sim.isChecked() and self.owner.combo_nfl_compute_mode.currentText().startswith('Deep'):
+                    captured=self.owner._capture_snapshot()
+            except (AttributeError,ValueError,TypeError):
+                pass
         self.worker = DiscoveryWorker(self.database, folder, smart=smart and not self.manual,
-                                      retry_request=self.running_retry)
+                                      retry_request=self.running_retry,scenario_snapshot=captured)
         self.result = {}
         self.thread = QtCore.QThread(self)
         self.worker.moveToThread(self.thread)
@@ -122,6 +132,7 @@ class SlateDiscoveryController(QtCore.QObject):
         self.running_retry=None
         self.retry_request=None
         if retry and not self.paused and not self.closed and (self.result.get('state') in ('Queued','Paused') or
+                (self.result.get('scenario_preparation') or {}).get('state') in ('Queued','Paused') or
                 (self.result.get('cancelled') and not self.result.get('state'))):
             self.retry_request=dict(retry,reset=bool(retry.get('reset') and not self.result.get('retry_consumed')))
         self.owner.background_queue.release('slate-discovery')
@@ -305,10 +316,12 @@ def preparation_details(row, controller):
            'Checkpoint reuse not recorded for older work.')
     timings=timing_text(p.get('phase_timings'))
     reuse=ownership_text(p.get('ownership_reuse'))
+    warming=p.get('scenario_preparation') or {}
+    warming_text=(f"Recorded {warming.get('state','Not recorded')}; {warming.get('scope','setup not recorded')}; attempts {warming.get('attempts',0)}/3; {warming.get('seconds',0)/60:.1f}/30 minutes used. "+str(warming.get('message','')) if warming else 'Queued after candidate preparation when Smart preparation runs; current inputs will still be checked during Generate.')
     return (f"{row['label']} | {row['sport']} {row['kind'].title()} | {row.get('date') or 'Date unknown'}\n"
             f"Status: {status}\nProgress: {progress} | {time_text}\nOwnership: {ownership}\n"
             f"Last pause / progress: {reason}\nNext: {action}\n"
-            f"Reuse: {audit}\nOwnership decision: {reuse}\nRecorded timings:\n{timings}\n"
+            f"Reuse: {audit}\nOwnership decision: {reuse}\nRecorded timings:\n{timings}\nScenario warming: {warming_text}\n"
             f"Last updated: {p.get('updated_at') or 'Not recorded'}\nSalary file: {row['path']}\n"
             f"Library: {p.get('library') or 'Not recorded; checked during preparation'}\n"
             'Saved work is rechecked for the current app version. Final SIM and validation run when building.')

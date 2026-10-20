@@ -161,7 +161,7 @@ class ScenarioReplay:
             self.io_seconds+=time.perf_counter()-started
         report = dict(status=self.status,reused_scenarios=self.hits,requested_scenarios=self.count,reason=self.reason)
         if self.status!='disabled':
-            report.update(codec='zlib-double-v1',stored_bytes=self.stored_bytes,lookup_seconds=self.lookup_seconds,io_seconds=self.io_seconds)
+            report.update(codec='zlib-double-v1',cache_id=getattr(self,'key',None),stored_bytes=self.stored_bytes,lookup_seconds=self.lookup_seconds,io_seconds=self.io_seconds)
         from compute_ledger import safe, cache_observation
         safe(cache_observation, getattr(self, "key", None), report)
         return report

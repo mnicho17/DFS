@@ -49,7 +49,7 @@ def summary(state, digest, path):
     """Small persistent UI record; never expose a snapshot/ownership bank to widgets."""
     keys=('state','count','target','seconds','total_seconds','stagnant','attempt',
           'message','pause_reason','pause_code','updated_at','source_path','captured_at',
-          'phase_timings','ownership_reuse','checkpoint_reused')
+          'phase_timings','ownership_reuse','checkpoint_reused','scenario_preparation')
     result={key:state[key] for key in keys if key in state}
     if state.get('snapshot'):
         from candidate_library import slate_id
@@ -62,7 +62,7 @@ def summary(state, digest, path):
 
 
 def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, seconds=CHUNK_SECONDS,
-                target_digest=None, retry=False, pause_reason=lambda:'Waiting for idle time or higher-priority work.'):
+                target_digest=None, retry=False, scenario_snapshot=None, warm_scenarios=False, pause_reason=lambda:'Waiting for idle time or higher-priority work.'):
     from slate_catalog import rows, record_preparation
     from candidate_library import preparation_model_id, run_search, metadata
     from csv_loading import CsvLoadWorker
@@ -84,6 +84,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
     model=preparation_model_id()
     output.mkdir(parents=True,exist_ok=True)
     receipts=output/'discovered'
+    warming_jobs=[]
     for row in candidates:
         if cancelled():return dict(cancelled=True)
         identity=fingerprint(dict(source=row['digest'],code=model,policy=1))
@@ -123,7 +124,15 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 if (info['count']<TARGET or info.get('generation_model_id')!=model or
                         info.get('input_id')!=(state.get('snapshot') or {}).get('input_id')):
                     raise ValueError('Prepared library no longer matches its captured inputs, target, or app version.')
-                if target_digest:return publish('Prepared candidates','none','Candidate target already reached; current-input validation still runs when building.')
+                if warm_scenarios:
+                    from smart_scenario_preparation import request_snapshot,pending
+                    captured,scope=request_snapshot(state['snapshot'],scenario_snapshot,state.get('scenario_snapshot'))
+                    before_warming=fingerprint(state.get('scenario_preparation') or {})
+                    if pending(state,captured,retry=retry):
+                        warming_jobs.append((receipt,state,row,path,captured,scope))
+                    elif before_warming!=fingerprint(state.get('scenario_preparation') or {}):
+                        save(receipt,state)
+                if target_digest and not warming_jobs:return publish('Prepared candidates','none','Candidate target already reached; current-input validation still runs when building.')
                 record_preparation(catalog,summary(state,row['digest'],path))
                 continue
             if used()>=BUDGET:
@@ -210,6 +219,10 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 elapsed=time.monotonic()-started
                 state.update(seconds=state.get('seconds',0)+elapsed,total_seconds=state['total_seconds']+elapsed)
             return publish('Needs attention','time_budget' if isinstance(exc,TimeoutError) else 'error',str(exc))
+    if warming_jobs:
+        from smart_scenario_preparation import warm
+        receipt,state,row,path,captured,scope=warming_jobs[0]
+        return warm(catalog,receipt,state,row,path,captured,scope,cancelled,progress,retry=retry,pause_reason=pause_reason)
     return dict(preparation='Upcoming discovered slates have no pending automatic work.')
 
 

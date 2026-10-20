@@ -45,6 +45,37 @@ class SlatePickerTests(unittest.TestCase):
             self.app.processEvents();time.sleep(.002)
         self.assertTrue(predicate())
 
+    def test_retry_scenario_yield_keeps_request_without_resetting_consumed_budget(self):
+        self.controller.running_retry=dict(digest='chosen',folder='salary',reset=True)
+        self.controller.result=dict(state='Prepared candidates',cancelled=True,retry_consumed=True,
+            scenario_preparation=dict(state='Paused'),library_saved=False)
+        self.controller.thread=QtCore.QThread()
+        with patch.object(self.controller,'request'):
+            self.controller.retire()
+            self.app.processEvents()
+        self.assertEqual(self.controller.retry_request['digest'],'chosen')
+        self.assertFalse(self.controller.retry_request['reset'])
+
+    def test_discovery_worker_passes_detached_snapshot_and_enables_idle_warming(self):
+        from slate_picker import DiscoveryWorker
+        snapshot=dict(inputs=dict(players=[dict(Name='Captured')]))
+        worker=DiscoveryWorker('catalog','salary',smart=True,scenario_snapshot=snapshot)
+        snapshot['inputs']['players'][0]['Name']='Later edit'
+        with patch('slate_picker.scan',return_value=dict(checked=0,reused=0)), \
+             patch('smart_preparation.prepare_one',return_value={}) as work, \
+             patch('slate_catalog.record_preparation'):
+            worker.run()
+        self.assertTrue(work.call_args.kwargs['warm_scenarios'])
+        self.assertEqual(work.call_args.kwargs['scenario_snapshot']['inputs']['players'][0]['Name'],'Captured')
+
+    def test_manual_discovery_does_not_warm_when_smart_is_off(self):
+        from slate_picker import DiscoveryWorker
+        worker=DiscoveryWorker('catalog','salary',smart=False)
+        with patch('slate_picker.scan',return_value=dict(checked=0,reused=0)), \
+             patch('smart_preparation.prepare_one') as work:
+            worker.run()
+        work.assert_not_called()
+
     def test_picker_browse_without_configured_folder(self):
         dialog=SlatePicker(self.controller,self.owner)
         self.addCleanup(dialog.deleteLater)
@@ -124,10 +155,13 @@ class SlatePickerTests(unittest.TestCase):
         row=self.catalog_row()
         row['preparation'].update(checkpoint_reused=True,
             phase_timings=dict(ownership=1.5,candidate_search=60),
-            ownership_reuse=dict(status='refreshed',reason='No matching completed estimate.'))
+            ownership_reuse=dict(status='refreshed',reason='No matching completed estimate.'),
+            scenario_preparation=dict(state='Paused',scope='Saved Smart setup',attempts=1,seconds=60,message='User paused.'))
         text=preparation_details(row,self.controller)
         self.assertIn('checkpoint reused',text)
         self.assertIn('Candidate search (accumulated): 60.00 s',text)
+        self.assertIn('Scenario warming: Recorded Paused',text)
+        self.assertIn('User paused.',text)
         self.assertIn('Refreshed: No matching completed estimate.',text)
         self.assertIn('30-minute attempt allowance',text)
 
