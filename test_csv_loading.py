@@ -68,6 +68,7 @@ class CsvLoadingTests(unittest.TestCase):
         self.assertEqual(w.players[0]['FlexProjection'],12)
         self.assertEqual(w.last_sim_report,{})
         self.assertEqual(w._contest_mode(),'classic');own.assert_called_once()
+        self.assertTrue(own.call_args.kwargs['reuse_prepared'])
         self.assertIn('nfl_context',w.last_csv_load_timing)
         self.assertTrue(all(v>=0 for v in w.last_csv_load_timing.values()))
 

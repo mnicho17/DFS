@@ -61,7 +61,12 @@ def connect(path):
     finally:
         con.close()
 
-def initialize(path, snapshot):
+def preparation_model_id():
+    from model_compatibility import model_id
+    return model_id('preparation')
+
+
+def initialize(path, snapshot, *, compatibility=False):
     snapshot = validate_snapshot(snapshot)
     if Path(path).exists():
         metadata(path)  # Do not add tables to an unrelated existing database.
@@ -73,7 +78,10 @@ def initialize(path, snapshot):
         if meta:
             saved = metadata(path)
             if (saved['candidate_generation_id'] != candidate_generation_id(snapshot)
-                    or saved.get('code_id') != code_id()
+                    or (saved.get('generation_model_id') is not None and
+                        saved['generation_model_id']!=preparation_model_id())
+                    or (saved.get('code_id') != code_id() and not (compatibility and
+                        saved.get('generation_model_id')==preparation_model_id()))
                     or saved['slate_id'] != slate_id(snapshot['inputs']['players'], snapshot['inputs']['recipe']['contest_kind'])):
                 raise ValueError('This library uses different inputs or app code. Resume using the original version, or start a new library.')
         else:
@@ -81,8 +89,12 @@ def initialize(path, snapshot):
                 candidate_generation_id=candidate_generation_id(snapshot),
                 code_id=code_id(),snapshot=json.dumps(snapshot),
                 slate_id=slate_id(snapshot['inputs']['players'],snapshot['inputs']['recipe']['contest_kind'])).items())
+            if compatibility:
+                con.execute('INSERT INTO library_meta VALUES (?,?)', ('generation_model_id',preparation_model_id()))
             if snapshot['inputs']['recipe']['contest_kind'] == 'classic':
                 con.execute('INSERT INTO library_meta VALUES (?,?)', ('roster_format', CLASSIC_ROSTER_FORMAT))
+        if compatibility:
+            con.execute('CREATE TABLE IF NOT EXISTS batch_builds (id INTEGER PRIMARY KEY, code_id TEXT NOT NULL, generation_model_id TEXT NOT NULL)')
         # Add search provenance only after compatibility has been established.
         con.execute('CREATE TABLE IF NOT EXISTS coverage_batches (batch INTEGER PRIMARY KEY, quarterback TEXT NOT NULL)')
 
@@ -155,14 +167,15 @@ def valid_classic_candidate(row, players, cap, strategy, rules):
 
 @instrument_search
 def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress=lambda text:None, batch_size=200,
-               candidate_limit=MAX_CANDIDATES):
+               candidate_limit=MAX_CANDIDATES, compatibility=False):
     if not math.isfinite(float(seconds)) or not 0 < float(seconds) <= 12*3600:
         raise ValueError('Search time must be greater than zero and at most 12 hours.')
     if isinstance(candidate_limit, bool) or int(candidate_limit) != candidate_limit or not 1 <= candidate_limit <= MAX_CANDIDATES:
         raise ValueError('Candidate target must be between 1 and 100,000.')
     if isinstance(batch_size, bool) or int(batch_size) != batch_size or not 1 <= batch_size <= 1000:
         raise ValueError('Batch size must be between 1 and 1,000.')
-    initialize(path,snapshot)
+    initialize(path,snapshot,compatibility=compatibility)
+    batch_build=code_id() if compatibility else None
     inputs = snapshot['inputs']; recipe=inputs['recipe']; kind=recipe['contest_kind']
     players = eligible_players(apply_qb_eligibility(copy.deepcopy(inputs['players'])))
     cap=float(recipe.get('salary_cap') or 50000)
@@ -208,6 +221,8 @@ def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress
                                 (encoded,encoded,index,style,seed)).rowcount
                     exclusions.add((keys[0],tuple(keys[1:])) if kind=='showdown' else tuple(keys))
                 con.execute('INSERT INTO batches VALUES (?,?,?,?,?)',(index,style,seed,added,time.monotonic()-start))
+                if compatibility:
+                    con.execute('INSERT INTO batch_builds VALUES (?,?,?)',(index,batch_build,preparation_model_id()))
                 if target:
                     con.execute('INSERT INTO coverage_batches VALUES (?,?)',(index,target))
             count=con.execute('SELECT count(*) FROM candidates').fetchone()[0]
@@ -228,7 +243,9 @@ def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Ca
         meta.get('roster_format') == CLASSIC_ROSTER_FORMAT)
     if meta.get('roster_format') and not portable_classic:
         raise ValueError('Unsupported candidate roster format.')
-    if not portable_classic and meta.get('code_id') != current_code:
+    compatible_model=bool(meta.get('generation_model_id') and meta['generation_model_id']==preparation_model_id())
+    if not portable_classic and ((meta.get('generation_model_id') is not None and not compatible_model) or
+            (meta.get('code_id') != current_code and not compatible_model)):
         raise ValueError('This library uses different app code. Use the original version, or start a new library.')
     if slate_id(players,kind) != meta['slate_id']:
         raise ValueError('Candidate library belongs to a different player slate or contest type. Load the matching slate first.')
@@ -267,6 +284,7 @@ def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Ca
         raise ValueError('No saved candidates satisfy the current player status, salary and lineup rules. Clear the library to generate fresh candidates.')
     report=dict(saved=meta['count'],accepted=len(rows),rejected=rejected,input_id=meta['input_id'],
                 code_changed=meta.get('code_id') != current_code)
+    if compatible_model and report['code_changed']:report['compatibility_reused']=True
     if kind == 'classic':
         report['coverage'] = classic_coverage(rows, list(lookup.values()))
     return rows,report

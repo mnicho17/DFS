@@ -33,6 +33,7 @@ class SmartPreparationTests(unittest.TestCase):
         def prepared(worker):worker.finished.emit(dict(players=copy.deepcopy(self.ps),live_summary={}))
         mock=patch.object(CsvLoadWorker,'run',prepared);mock.start();self.addCleanup(mock.stop)
         mock=patch('candidate_library.code_id',return_value='synthetic-code');mock.start();self.addCleanup(mock.stop)
+        mock=patch('candidate_library.preparation_model_id',return_value='synthetic-code');mock.start();self.addCleanup(mock.stop)
         self.own=dict(total={'example':100},cpt={},flex={})
         mock=patch('main_window.OwnershipSimWorker._simulate',return_value=self.own)
         self.estimate=mock.start();self.addCleanup(mock.stop)
@@ -195,7 +196,7 @@ class SmartPreparationTests(unittest.TestCase):
 
     def test_app_version_change_creates_compatible_work_without_overwriting_old_library(self):
         first=self.run_job();before=Path(first['library']).read_bytes()
-        with patch('candidate_library.code_id',return_value='new-code'):
+        with patch('candidate_library.code_id',return_value='new-code'),patch('candidate_library.preparation_model_id',return_value='new-code'):
             second=self.run_job(target_digest=self.digest(),retry=True)
         self.assertNotEqual(first['library'],second['library'])
         self.assertEqual(Path(first['library']).read_bytes(),before)
@@ -211,7 +212,7 @@ class SmartPreparationTests(unittest.TestCase):
             recipe=dict(inputs['recipe'],ownership_weight=.2)
             other=create_snapshot(inputs['players'],recipe,inputs['rules'])
             replacement=self.output/'other-library.dfslib'
-            run_search(replacement,other,seconds=.1,candidate_limit=1)
+            run_search(replacement,other,seconds=.1,candidate_limit=1,compatibility=True)
             copied=replacement.read_bytes();Path(first['library']).write_bytes(copied)
             result=self.run_job(target_digest=self.digest(),retry=True)
         self.assertEqual(result['pause_code'],'error')

@@ -59,7 +59,7 @@ def summary(state, digest, path):
 def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, seconds=CHUNK_SECONDS,
                 target_digest=None, retry=False, pause_reason=lambda:'Waiting for idle time or higher-priority work.'):
     from slate_catalog import rows, record_preparation
-    from candidate_library import code_id, run_search, metadata
+    from candidate_library import preparation_model_id, run_search, metadata
     from csv_loading import CsvLoadWorker
     from main_window import OwnershipSimWorker
     from nfl_pipeline import apply_ownership
@@ -76,7 +76,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
             preparation='Selected salary file is no longer available under that identity.')
         record_preparation(catalog,result)
         return result
-    model=code_id()
+    model=preparation_model_id()
     output.mkdir(parents=True,exist_ok=True)
     receipts=output/'discovered'
     for row in candidates:
@@ -115,7 +115,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 return publish('Needs attention','source_changed','Salary file changed; refresh the list and select its current record. Saved work was retained.')
             if state.get('state')=='Prepared candidates' and path.exists():
                 info=metadata(path)
-                if (info['count']<TARGET or info.get('code_id')!=model or
+                if (info['count']<TARGET or info.get('generation_model_id')!=model or
                         info.get('input_id')!=(state.get('snapshot') or {}).get('input_id')):
                     raise ValueError('Prepared library no longer matches its captured inputs, target, or app version.')
                 if target_digest:return publish('Prepared candidates','none','Candidate target already reached; current-input validation still runs when building.')
@@ -147,7 +147,8 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 publish('Preparing ownership','none','Running the existing 500-entry ownership estimator.')
                 progress('Smart preparation: ownership simulation (500 entries)')
                 ownership=DetachedOwnership(players,mode=row['kind'],num_sims=500,salary_cap=50000,sport='NFL')
-                result=ownership._simulate()
+                from ownership_cache import estimate
+                result,ownership_reuse=estimate(ownership,ownership._simulate)
                 if cancelled():raise InterruptedError('Preparation yielded.')
                 if not result.get('total') or sum(result['total'].values())<=0:
                     raise ValueError('Ownership simulation produced no valid entries.')
@@ -169,7 +170,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                     last_check[0]=time.monotonic();over[0]=used()>=BUDGET
                 return over[0]
             count=run_search(path,state['snapshot'],seconds=min(seconds,remaining),candidate_limit=TARGET,
-                             cancelled=stop,progress=progress,batch_size=100)
+                             cancelled=stop,progress=progress,batch_size=100,compatibility=True)
             stagnant=(state.get('stagnant',0)+(0 if cancelled() or over[0] else 1)
                       if count==state.get('count') else 0)
             elapsed=time.monotonic()-started

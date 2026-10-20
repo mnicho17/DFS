@@ -109,6 +109,7 @@ class OwnershipSimWorker(QtCore.QObject):
         self.sport = (sport or "NFL").strip().upper()
 
         self._cancel = False
+        self.cache_report = None
 
 
 
@@ -117,7 +118,11 @@ class OwnershipSimWorker(QtCore.QObject):
         try:
             if self._cancel:
                 return
-            result = self._simulate()
+            if getattr(self,'reuse_prepared',False):
+                from ownership_cache import estimate
+                result,self.cache_report=estimate(self,self._simulate)
+            else:
+                result = self._simulate()
             if not self._cancel:
                 self.finished.emit(result)
         except Exception as exc:
@@ -11739,6 +11744,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
     def _apply_csv_payload(self, payload) -> None:
         path, detected_sport = payload['path'], payload['sport']
+        self.last_live_check_summary.pop('ownership_reuse',None)
+        self.last_ownership_reuse=None
         self.players = payload['players']
         self._snapshot_replay = False
 
@@ -11839,7 +11846,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        self._start_ownership_sim(num_sims=500, mode=detected_mode, cap=cap)
+        self._start_ownership_sim(num_sims=500, mode=detected_mode, cap=cap, reuse_prepared=True)
 
 
 
@@ -12771,7 +12778,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-    def _start_ownership_sim(self, *, num_sims: int, mode: str, cap: float, sport: Optional[str] = None) -> None:
+    def _start_ownership_sim(self, *, num_sims: int, mode: str, cap: float, sport: Optional[str] = None, reuse_prepared: bool = False) -> None:
         if self._ownership_closing:
             return
         if self._ownership_run is not None:
@@ -12782,6 +12789,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             worker = OwnershipSimWorker(self.players, mode=mode, num_sims=num_sims,
                 salary_cap=cap, template_sim=(mode=='showdown' and getattr(self,'chk_sd_template_sim',None) is not None
                     and self.chk_sd_template_sim.isChecked()), sport=(sport or self._current_sport()))
+            worker.reuse_prepared=reuse_prepared
             run = OwnershipRun(self, worker)
         except Exception as exc:
             self._on_own_sim_error(str(exc))

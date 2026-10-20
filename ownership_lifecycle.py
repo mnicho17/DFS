@@ -106,8 +106,18 @@ class OwnershipRun(QtCore.QObject):
                     state, detail = 'Failed', 'Ownership worker exited without a result; existing estimates retained.'
                     owner.status.showMessage(detail, 6000)
                 else:
+                    cache=getattr(self.worker,'cache_report',None)
+                    if cache:owner.last_live_check_summary['ownership_reuse']=dict(cache)
+                    else:
+                        owner.last_live_check_summary.pop('ownership_reuse',None)
+                        owner.last_ownership_reuse=None
                     owner._on_own_sim_finished(self.result)
                     state, detail = 'Completed', 'Ownership estimation applied to its unchanged captured slate after worker retirement.'
+                    cache=getattr(self.worker,'cache_report',None)
+                    if cache:
+                        owner.last_ownership_reuse=dict(cache)
+                        detail=('Reused prepared ownership.' if cache.get('status')=='reused' else 'Ownership refreshed. ')+cache.get('reason','')
+                        owner.status.showMessage(detail,8000)
         except Exception as exc:
             logger.exception('Ownership completion display failed')
             state, detail = 'Failed', str(exc)
