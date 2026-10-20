@@ -41,6 +41,24 @@ class PreparationStatusTests(unittest.TestCase):
         self.assertIn('not recorded',timing_text(None))
         self.assertIn('not recorded',timing_text(dict(total=float('nan'),wait=-1,parse=True)))
 
+    def test_copy_last_build_report_uses_saved_audit_after_another_slate_is_loaded(self):
+        from build_diagnostics import create_build_diagnostic, format_build_report
+        from preparation_audit import capture_build_audit
+        w=self.window()
+        w.last_csv_load_timing=dict(total=1.25)
+        w.last_ownership_reuse=dict(status='reused',reason='Matching completed estimate.',seconds=.02)
+        context=dict(preparation_audit=capture_build_audit(w))
+        w.last_build_diagnostic=create_build_diagnostic(context=context,timing_report={})
+        expected=format_build_report(w.last_build_diagnostic)
+        w.players=[dict(Name='Different slate')]
+        w.last_csv_load_timing=dict(total=999)
+        w.last_ownership_reuse=dict(status='refreshed',reason='Different slate.')
+        with patch('ownership_cache.estimate',side_effect=AssertionError('No source work')):
+            w.copy_last_build_report()
+        self.assertEqual(self.app.clipboard().text(),expected)
+        self.assertIn('CSV load total: 1.25 s',expected)
+        self.assertNotIn('Different slate',expected)
+
     def test_empty_state_is_not_ready_and_collection_does_no_source_work(self):
         w = self.window()
         before = copy.deepcopy(w._current_build_recipe())
