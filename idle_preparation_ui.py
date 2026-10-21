@@ -15,8 +15,42 @@ class IdlePreparationController(QtCore.QObject):
         self.closed = self.paused = self.yielded = False
         self.remaining = 0
         self.readiness_key=None
+        self.auto_players=None
+        self.auto_timer=QtCore.QTimer(self)
+        self.auto_timer.setInterval(1000)
+        self.auto_timer.timeout.connect(self.capture_loaded_slate)
         self.state = 'Not requested'
         self.message = 'Queue a captured Showdown preparation job from Prepare Showdown Roster Library. Jobs are session-only.'
+
+    def loaded_slate(self):
+        """One automatic request per successful CSV load; capture after ownership retires."""
+        if self.closed:return
+        self.auto_players=self.owner.players
+        self.auto_timer.start()
+
+    def capture_loaded_slate(self):
+        from datetime import date
+        from slate_catalog import describe
+        if self.closed or self.auto_players is not self.owner.players or getattr(self.owner,'_snapshot_replay',False):
+            self.auto_players=None;self.auto_timer.stop();return
+        enabled=str(self.owner.app_settings.value('build/smart_preparation','true')).lower() in ('true','1')
+        if not enabled or self.paused:
+            self.auto_players=None;self.auto_timer.stop();return
+        if self.owner._snapshot_busy() or self.request_data is not None:return
+        self.auto_players=None;self.auto_timer.stop()
+        meta=describe(self.owner.players)
+        if meta['sport']!='NFL' or meta['kind']!='showdown' or not meta['date'] or meta['date']<date.today().isoformat():return
+        try:
+            snapshot=self.owner._capture_snapshot()
+            from build_preparation import remembered_libraries
+            from data_paths import data_root
+            known=list(remembered_libraries(self.owner.app_settings))
+            selected=getattr(self.owner,'_candidate_library','')
+            if selected:known.insert(0,selected)
+            self.prepare_slate(snapshot,known,data_root()/'history'/'candidates')
+        except Exception as exc:
+            task=self.owner.tasks.start('Automatic slate preparation')
+            self.owner.tasks.finish(task,'Needs review','Could not capture preparation inputs: '+str(exc))
 
     def publish(self, state, message):
         self.state, self.message = state, message
@@ -129,6 +163,8 @@ class IdlePreparationController(QtCore.QObject):
             self.publish('Cancelled','Queued preparation cancelled; no worker started.')
 
     def cancel(self):
+        self.auto_players=None
+        self.auto_timer.stop()
         self.paused = True
         queue = self.owner.background_queue
         if 'preparation' in queue.pending:queue.cancel('preparation')
@@ -170,6 +206,8 @@ class IdlePreparationController(QtCore.QObject):
         if self.closed:QtCore.QTimer.singleShot(0,self.owner.close)
 
     def shutdown(self):
+        self.auto_timer.stop()
+        self.auto_players=None
         self.closed = True
         self.cancel()
         return self.thread is not None

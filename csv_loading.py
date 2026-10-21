@@ -245,6 +245,8 @@ class CsvLoadController(QtCore.QObject):
             self.dialog.deleteLater()
             self.dialog = None
         self.owner._finish_load_progress()
+        if state == 'Completed':
+            self.owner.idle_preparation.loaded_slate()
         if state != 'Completed':
             self.owner.status.showMessage(detail, 7000)
         if error and not self.closed:
