@@ -8114,15 +8114,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         settings_menu.addAction("Ownership & Leverage...", self.on_ownership_leverage)
         settings_menu.addAction("Ownership Sensitivity...", self.on_ownership_sensitivity)
         settings_menu.addAction("Projection Sensitivity...", self.on_projection_sensitivity)
-        settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
-        self.action_auto_library = settings_menu.addAction("Automatically reuse compatible libraries")
-        self.action_auto_library.setCheckable(True)
-        self.action_auto_library.setChecked(self.app_settings.value('build/auto_library', True, type=bool))
-        self.action_auto_library.toggled.connect(lambda value: self.app_settings.setValue('build/auto_library', value))
         settings_menu.addAction("Showdown Captain Pool...", self.on_captain_pool)
         settings_menu.addAction("Prepare this slate", self.on_prepare_this_slate)
         settings_menu.addAction("Prepare Showdown Roster Library...", self.on_prepare_showdown_library)
-        settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
         settings_menu.addAction("Open Automatic Build Archives...", self.on_open_build_archives)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)
 
@@ -11748,6 +11742,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.last_ownership_reuse=None
         self.players = payload['players']
         self._snapshot_replay = False
+        self._candidate_library = ''
+        self._candidate_library_allow_partial = False
 
         self._refresh_snapshot_label()
 
@@ -13726,7 +13722,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._build_receipt = receipt
         self._build_thread = QtCore.QThread(self)
 
-        from build_preparation import remembered_libraries
+        from build_preparation import automatic_library_inputs
         self._build_worker = LineupBuildWorker(
             worker_players,
             kind=kind,
@@ -13770,10 +13766,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             retained_lineups=retained,
 
             candidate_library=getattr(self, "_candidate_library", ""),
-            automatic_libraries=(remembered_libraries(self.app_settings)
-                if self.action_auto_library.isChecked() and not getattr(self, '_snapshot_replay', False) else ()),
-            library_folder=(os.path.join(os.path.dirname(build_history_path()), 'candidates')
-                if self.action_auto_library.isChecked() and not getattr(self, '_snapshot_replay', False) else ''),
+            **automatic_library_inputs(self),
             allow_partial_library=getattr(self,"_candidate_library_allow_partial",False),
             scenario_cache=True,
             repair_source=repair_source,

@@ -132,10 +132,10 @@ def preparation_plan(w):
     deep = nfl and w.chk_nfl_contest_sim.isChecked() and w.combo_nfl_compute_mode.currentText().startswith('Deep')
     selected = bool(getattr(w, '_candidate_library', ''))
     if selected and not deep:
-        return 'Selected library requires NFL Deep + SIM. Choose a timed budget or clear the library in Advanced.'
+        return 'Selected library requires NFL Deep + SIM. Choose a timed budget, or load a CSV to return to automatic routing.'
     if selected:
         route = 'validate selected library; reuse compatible screening or prepare fresh screening'
-    elif deep and w.action_auto_library.isChecked() and not getattr(w, '_snapshot_replay', False):
+    elif deep and not getattr(w, '_snapshot_replay', False):
         route = 'find a compatible library or search fresh candidates; prepare required screening'
     elif deep:
         route = 'search fresh candidates and prepare required screening'

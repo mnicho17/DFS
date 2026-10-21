@@ -41,12 +41,19 @@ class ScenarioReplay:
         self.connection = None; self.temporary = None; self.reader = None
         self.count = count; self.next_index = 0; self.hits = 0; self.written = 0
         self.status = 'disabled'; self.reason = ''; self.keys = set()
+        self.comparison={}
         self.cancelled = cancelled or (lambda: False)
         if not enabled:return
         try:
             from candidate_library import code_id
-            self.key = fingerprint(dict(schema=2, scores_codec="zlib-double-v1", players=players, fields=fields, kind=kind,
-                seed=seed, count=count, model=code_id(), byteorder=sys.byteorder, python=sys.version, context=context))
+            identity=dict(schema=2, scores_codec="zlib-double-v1", players=players, fields=fields, kind=kind,
+                seed=seed, count=count, model=code_id(), byteorder=sys.byteorder, python=sys.version, context=context)
+            self.key = fingerprint(identity)
+            self.diagnostic_parts=self.diagnostic_scope=None
+            try:
+                from scenario_cache_diagnostics import components,scope
+                self.diagnostic_parts=components(identity);self.diagnostic_scope=scope(identity)
+            except (ValueError,TypeError,KeyError):pass
             from nfl_simulation import player_key
             self.keys = {player_key(p) for p in players}
             self.field_sizes = {len(field) for field in fields}
@@ -54,6 +61,9 @@ class ScenarioReplay:
             self.root.mkdir(parents=True, exist_ok=True)
             self.target = self.root / (self.key + '.sqlite')
             self.reason='No complete cache matches the exact players, opponent field, seed, scenario count, context and build.'
+            if not self.target.exists() and self.diagnostic_scope:
+                from scenario_cache_diagnostics import compare
+                self.comparison=compare(self.root,self.diagnostic_scope,self.diagnostic_parts,self.cancelled)
             if self.target.exists():
                 try:
                     if self.target.stat().st_size > FILE_LIMIT:raise ValueError('Cache exceeds size limit')
@@ -161,7 +171,13 @@ class ScenarioReplay:
             self.io_seconds+=time.perf_counter()-started
         report = dict(status=self.status,reused_scenarios=self.hits,requested_scenarios=self.count,reason=self.reason)
         if self.status!='disabled':
-            report.update(codec='zlib-double-v1',cache_id=getattr(self,'key',None),stored_bytes=self.stored_bytes,lookup_seconds=self.lookup_seconds,io_seconds=self.io_seconds)
+            report.update(codec='zlib-double-v1',cache_id=getattr(self,'key',None),stored_bytes=self.stored_bytes,lookup_seconds=self.lookup_seconds,io_seconds=self.io_seconds,comparison=self.comparison)
+            if self.status in ('saved','reused') and getattr(self,'diagnostic_scope',None):
+                from scenario_cache_diagnostics import record
+                receipt_started=time.perf_counter()
+                record(self.root,self.diagnostic_scope,self.key,self.diagnostic_parts)
+                self.io_seconds+=time.perf_counter()-receipt_started
+                report['io_seconds']=self.io_seconds
         from compute_ledger import safe, cache_observation
         safe(cache_observation, getattr(self, "key", None), report)
         return report

@@ -22,6 +22,15 @@ class BuildPreparationTests(unittest.TestCase):
     def discover(self, known=(), **kwargs):
         return list(discover_libraries(known, self.root, self.players, 'showdown', 50000, **kwargs))
 
+    def test_sqlite_named_rosters_are_discovered_read_only_without_accepting_partial_or_unrelated_databases(self):
+        import sqlite3
+        complete=self.root/'prepared.sqlite';partial=self.root/'partial.sqlite';other=self.root/'history.sqlite'
+        prepare(complete,self.players);prepare(partial,self.players,max_candidates=2)
+        con=sqlite3.connect(other);con.execute('CREATE TABLE history (id INTEGER)');con.commit();con.close()
+        before={path:path.read_bytes() for path in (complete,partial,other)}
+        self.assertEqual(self.discover(),[str(complete.resolve())])
+        self.assertTrue(all(path.read_bytes()==data for path,data in before.items()))
+
     def test_complete_library_is_discovered_read_only_and_deduplicated(self):
         path = self.root/'complete.sdlib'
         prepare(path, self.players)
@@ -87,6 +96,21 @@ class BuildPreparationTests(unittest.TestCase):
         self.assertEqual(len(rows), 24)
         self.assertTrue(rows[0].endswith('29.sdlib'))
         self.assertEqual(len(set(rows)), 24)
+
+    def test_real_completed_library_is_loaded_automatically_without_attachment(self):
+        from main_window import LineupBuildWorker
+        path=self.root/'complete.sdlib';prepare(path,self.players)
+        worker=LineupBuildWorker(copy.deepcopy(self.players),kind='showdown',num_lineups=2,
+            salary_cap=50000,salary_strategy='Flexible',sim_enabled=True,compute_mode='Deep',library_folder=str(self.root))
+        errors=[];worker.error.connect(errors.append)
+        def solve(*args):
+            self.assertTrue(worker.library_candidates)
+            self.assertEqual(worker.candidate_library,str(path.resolve()))
+            return dict(kind='showdown',lineups=[])
+        with patch('showdown_simulation.run_deep_showdown',side_effect=solve) as solver:
+            worker.run()
+        self.assertFalse(errors);solver.assert_called_once()
+        self.assertTrue(worker.library_report['automatic_discovery'])
 
     def test_automatic_load_failure_falls_back_but_explicit_selection_fails(self):
         from main_window import LineupBuildWorker

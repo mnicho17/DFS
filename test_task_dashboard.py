@@ -161,7 +161,7 @@ class TaskDashboardTests(unittest.TestCase):
         window.tasks.finish(key, 'Completed', 'Screening saved')
         self.assertIn('0 underway', summary.text())
         window.on_clear_candidate_library()
-        self.assertFalse(window.action_auto_library.isChecked())
+        self.assertFalse(hasattr(window,'action_auto_library'))
 
     def test_real_worker_delivers_updates_on_gui_thread_and_retires(self):
         from PyQt5.QtTest import QTest

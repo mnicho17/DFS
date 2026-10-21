@@ -38,9 +38,10 @@ the caller explicitly permits partial coverage.
 In the app, choose NFL Showdown and set the desired Captain locks. Open
 **Settings > Prepare Showdown Roster Library**, choose a new `.sdlib` file,
 set the limits, then start. Pause/resume checkpoints are retained; closing waits
-for safe worker retirement. Later use **Settings > Load Candidate Library**,
-select that file, choose Deep with SIM enabled, and build. Loading incomplete
-preparation requires an explicit choice with No as the default.
+for safe worker retirement. Later load the matching CSV, choose Deep with SIM enabled,
+and Generate discovers compatible remembered libraries and the standard candidates
+folder automatically. Incomplete preparation is never opted into automatically;
+resume it in the preparation tools. Current validation gates still apply.
 
 Extract `input-snapshot.json` from a saved automatic build archive into a working
 directory. Use the app's Python environment:

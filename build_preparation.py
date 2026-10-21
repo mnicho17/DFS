@@ -70,7 +70,7 @@ def discover_libraries(known, folder, players, kind, salary_cap, *, cancelled=la
             return
         path = Path(raw).resolve()
         key = str(path).casefold()
-        if key in seen or path.suffix.lower() not in ('.dfslib', '.sdlib', '.sdfull'):
+        if key in seen or path.suffix.lower() not in ('.dfslib', '.sdlib', '.sdfull', '.sqlite'):
             continue
         seen.add(key)
         try:
@@ -78,7 +78,11 @@ def discover_libraries(known, folder, players, kind, salary_cap, *, cancelled=la
             if not path.is_file():
                 audit('missing')
                 continue
-            if path.suffix.lower() in ('.sdlib', '.sdfull'):
+            prepared=path.suffix.lower() in ('.sdlib', '.sdfull')
+            if path.suffix.lower()=='.sqlite':
+                with closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=1)) as con:
+                    prepared=con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='preparation'").fetchone() is not None
+            if prepared:
                 if kind != 'showdown':
                     audit('different_kind')
                     continue
@@ -122,3 +126,12 @@ def discover_libraries(known, folder, players, kind, salary_cap, *, cancelled=la
         except (ValueError, OSError, sqlite3.Error, KeyError, TypeError) as exc:
             audit('incompatible_or_unreadable')
             progress('Library skipped: ' + path.name + ' — ' + str(exc))
+
+
+def automatic_library_inputs(window):
+    """Live builds always discover; replay keeps its captured routing."""
+    if getattr(window,'_snapshot_replay',False):
+        return dict(automatic_libraries=(),library_folder='')
+    from build_diagnostics import build_history_path
+    return dict(automatic_libraries=remembered_libraries(window.app_settings),
+                library_folder=str(Path(build_history_path()).parent/'candidates'))
