@@ -63,7 +63,7 @@ class BackgroundQueue(QtCore.QObject):
         if self.closed or job is None:
             return False
         job['run_now'] = True
-        self.hub.update(task, 'Run now requested; waiting only for safety checks and higher-priority work to retire.')
+        self.hub.update(task, 'Run now requested; rechecking manual workers, safety checks and higher-priority work.')
         self.wake()
         return True
 
@@ -86,6 +86,18 @@ class BackgroundQueue(QtCore.QObject):
             ready = sorted((j for j in self.pending.values() if self.is_ready(j)),
                            key=lambda j: (j['priority'], j['order']))
             blocked = self.foreground()
+            for waiting in self.pending.values():
+                if blocked:
+                    names=[r['title'] for k,r in self.hub.rows.items() if r['ended'] is None and r['state']!='Queued' and (not self.active or k not in self.active['owned'])]
+                    detail='Waiting for manual worker activity to retire'+(': '+', '.join(names[:3]) if names else '.')
+                elif self.active:
+                    detail='Waiting for '+self.active['title']+' to checkpoint and retire.'
+                elif waiting not in ready:
+                    detail='Waiting for source quietness or task safety checks; no app-inactivity requirement.'
+                else:
+                    detail='Ready; starting through the shared background queue.'
+                if self.hub.rows[waiting['task']]['detail']!=detail:
+                    self.hub.update(waiting['task'],detail)
             if self.active:
                 job = self.active
                 if job['cancel'] and not job['yielding'] and (blocked or
@@ -142,19 +154,11 @@ class BackgroundQueue(QtCore.QObject):
             self.active['cancel']()
 
     def summary(self):
-        running = self.active['title'] if self.active else 'No queued worker running'
+        running = self.active['title'] if self.active else 'Waiting for manual worker activity to retire' if self.foreground() else 'No current work'
         waiting = sorted(self.pending.values(), key=lambda j: (j['priority'], j['order']))
         return running + ('; next: ' + ', '.join(j['title'] for j in waiting) if waiting else '')
 
 
 def idle_ready(owner, key=None):
-    """Explicit dispatch bypasses inactivity only; controller safety gates still apply."""
-    queue = getattr(owner, 'background_queue', None)
-    if queue and queue.idle_override(key):
-        return True
-    if QtWidgets.QApplication.activeModalWidget() is not None:
-        return False
-    if owner.isMinimized():
-        return True
-    backup = owner.idle_backup
-    return backup.clock() - backup.last_input >= 60
+    """Input and passive dialogs do not block detached work; the queue gates workers."""
+    return True

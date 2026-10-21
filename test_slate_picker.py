@@ -45,6 +45,15 @@ class SlatePickerTests(unittest.TestCase):
             self.app.processEvents();time.sleep(.002)
         self.assertTrue(predicate())
 
+    def test_no_work_discovery_reports_next_check_without_cancellation(self):
+        from slate_picker import DiscoveryWorker
+        worker=DiscoveryWorker('unused','unused')
+        result=[];worker.finished.connect(result.append)
+        with patch('slate_picker.scan',return_value=dict(checked=0,reused=4)):
+            worker.run()
+        self.assertTrue(result[0]['no_work']);self.assertNotIn('cancelled',result[0])
+        self.assertIn('5 minutes',result[0]['next_check'])
+
     def test_retry_scenario_yield_keeps_request_without_resetting_consumed_budget(self):
         self.controller.running_retry=dict(digest='chosen',folder='salary',reset=True)
         self.controller.result=dict(state='Prepared candidates',cancelled=True,retry_consumed=True,
@@ -188,7 +197,7 @@ class SlatePickerTests(unittest.TestCase):
         self.owner.background_queue.pump()
         self.assertIsNone(self.controller.thread)
         self.assertFalse(dialog.resume_button.isEnabled())
-        self.assertIn('close picker',dialog.details.toPlainText())
+        self.assertIn('waiting for manual workers',dialog.details.toPlainText())
         self.assertIs(self.owner.players,original)
 
     def test_active_worker_prevents_duplicate_resume_until_retirement(self):

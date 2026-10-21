@@ -17,7 +17,8 @@ class DiscoveryWorker(QtCore.QObject):
         self.scenario_snapshot=copy.deepcopy(scenario_snapshot)
         self.smart = smart
         self.retry_request = dict(retry_request or {})
-        self.pause_reason = 'Waiting for idle time or higher-priority work.'
+        self.pause_reason = 'Waiting for manual workers or higher-priority work.'
+        self.yielded=False
         self.stop = threading.Event()
 
     def run(self):
@@ -38,6 +39,9 @@ class DiscoveryWorker(QtCore.QObject):
                 record_preparation(self.database,result)
         except Exception as exc:
             result = dict(error=str(exc))
+        if result.get('cancelled') and self.yielded:result['background_yield']=True
+        if not result.get('cancelled') and not result.get('error') and not result.get('preparation') and not result.get('checked'):
+            result.update(no_work=True,next_check='Rechecking in 5 minutes.',preparation='No current work; salary catalog unchanged. Rechecking in 5 minutes.')
         self.finished.emit(result)
 
 
@@ -50,9 +54,10 @@ class SlateDiscoveryController(QtCore.QObject):
         self.worker = self.thread = None
         self.closed = self.manual = self.paused = False
         self.retry_request = self.running_retry = None
-        self.message = 'Discovery waits for idle time. Browse remains available.'
+        self.message = 'Discovery waits for manual workers to retire. Browse remains available.'
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(300000)
+        self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.request)
         self.timer.start()
         QtCore.QTimer.singleShot(0, self.request)
@@ -72,7 +77,7 @@ class SlateDiscoveryController(QtCore.QObject):
             return False
         self.retry_request=dict(digest=row['digest'],folder=self.folder(),reset=True)
         self.manual=self.paused=False
-        self.message='Retry/Resume queued. Close this picker; preparation waits for idle time and existing workers to retire.'
+        self.message='Retry/Resume queued. Preparation waits for manual workers and higher-priority tasks to retire.'
         self.request()
         self.changed.emit()
         return True
@@ -117,13 +122,14 @@ class SlateDiscoveryController(QtCore.QObject):
     def receive(self, result):
         self.result = result
         self.message = (str(result['error']) if result.get('error') else
-                        'Discovery paused; resumes during idle time.' if result.get('cancelled') else result['preparation'] if result.get('preparation') else
+                        'Discovery paused for other workers; resumes when they retire.' if result.get('cancelled') else result['preparation'] if result.get('preparation') else
                         f"Discovery complete: {result['checked']} new/changed; {result['reused']} unchanged.")
 
     def retire(self):
         thread = self.thread
         self.thread = self.worker = None
         thread.deleteLater()
+        if not self.closed:self.timer.start()
         self.manual = False
         if self.result.get('library') and self.result.get('library_saved',True):
             from build_preparation import remember_library
@@ -142,7 +148,8 @@ class SlateDiscoveryController(QtCore.QObject):
 
     def yield_work(self):
         if self.worker:
-            self.worker.pause_reason='Waiting for idle time or higher-priority work.'
+            self.worker.yielded=True
+            self.worker.pause_reason='Waiting for manual workers or higher-priority work.'
             self.worker.stop.set()
 
     def cancel(self):
@@ -150,6 +157,7 @@ class SlateDiscoveryController(QtCore.QObject):
         self.manual = False
         self.retry_request=None
         if self.worker:
+            self.worker.yielded=False
             self.worker.pause_reason='App closing; checkpoint retained.' if self.closed else 'Paused by user for this session. Use Retry/Resume to continue.'
             self.worker.stop.set()
         self.message='Preparation paused for this session. Use Retry/Resume for a selected slate.'
@@ -177,7 +185,7 @@ class SlatePicker(QtWidgets.QDialog):
         layout.addWidget(self.search)
         self.all_dates = QtWidgets.QCheckBox('All dates (including unknown dates)')
         layout.addWidget(self.all_dates)
-        self.smart = QtWidgets.QCheckBox('Prepare upcoming NFL slates automatically while idle (shared 8 GiB library budget)')
+        self.smart = QtWidgets.QCheckBox('Prepare upcoming NFL slates automatically in the background (shared 8 GiB library budget)')
         self.smart.setChecked(str(controller.owner.app_settings.value('build/smart_preparation','true')).lower() in ('true','1'))
         self.smart.toggled.connect(self.set_smart)
         layout.addWidget(self.smart)
@@ -202,7 +210,7 @@ class SlatePicker(QtWidgets.QDialog):
         browse = buttons.addButton('Browse…', QtWidgets.QDialogButtonBox.ActionRole)
         refresh = buttons.addButton('Refresh list', QtWidgets.QDialogButtonBox.ActionRole)
         self.resume_button=buttons.addButton('Retry / Resume',QtWidgets.QDialogButtonBox.ActionRole)
-        self.resume_button.setToolTip('Recheck the selected slate and storage; retain compatible work and grant another bounded attempt. Runs when idle after this picker closes.')
+        self.resume_button.setToolTip('Recheck the selected slate and storage; retain compatible work and grant another bounded attempt. Runs after manual workers and higher-priority tasks retire.')
         self.resume_button.clicked.connect(self.resume_selected)
         self.table.itemSelectionChanged.connect(self.update_details)
         layout.addWidget(buttons)
@@ -294,12 +302,12 @@ def preparation_details(row, controller):
     p=row.get('preparation') or {}
     pending=controller.retry_request
     queued=bool(pending and pending['digest']==row['digest'])
-    status='Retry/Resume queued; close picker and wait for idle time.' if queued else p.get('state','Discovered')
+    status='Retry/Resume queued; waiting for manual workers and higher-priority tasks.' if queued else p.get('state','Discovered')
     count=p.get('count')
     progress=f"{count:,} / {p.get('target',12000):,} candidates" if isinstance(count,int) else 'Candidate count not yet recorded'
     ownership=('Captured for preparation; refreshed live inputs are checked for ownership reuse on load.' if p.get('ownership_complete') else
                'Capture not yet recorded; it will be checked when preparation runs.')
-    reason=p.get('pause_reason') or p.get('error') or p.get('preparation') or 'No pause recorded. Preparation waits for idle time.'
+    reason=p.get('pause_reason') or p.get('error') or p.get('preparation') or 'No pause recorded. Preparation runs after manual workers and higher-priority tasks retire.'
     if controller.paused:reason+=' Automatic discovery is paused for this session; Retry/Resume queues this slate.'
     seconds=p.get('seconds')
     time_text=(f"{seconds/60:.1f} of 30 minutes used in this attempt" if isinstance(seconds,(int,float)) else 'Attempt time not yet recorded')

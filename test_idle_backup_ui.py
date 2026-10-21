@@ -42,10 +42,10 @@ class IdleBackupTests(unittest.TestCase):
             c.settings.setValue('backup/destination','explicit-folder')
             self.assertEqual(c.destination(),'explicit-folder')
 
-    def test_automatic_start_waits_for_idle_quiet_and_other_tasks(self):
+    def test_automatic_start_waits_for_source_quiet_and_manual_workers(self):
         w,c,clock,*_=self.setup_controller()
         with patch.object(c,'start') as start:
-            clock[0]=IDLE_SECONDS-1;c.tick();start.assert_not_called()
+            clock[0]=29;c.tick();start.assert_not_called()
             c.last_change=IDLE_SECONDS-10;clock[0]=IDLE_SECONDS;c.tick();start.assert_not_called()
             clock[0]+=30
             key=w.tasks.start('Build');c.tick();start.assert_not_called()
@@ -69,7 +69,7 @@ class IdleBackupTests(unittest.TestCase):
         c.request();self.wait(c)
         self.assertEqual(c.settings.value('backup/last_manifest'),manifest)
         self.assertEqual(len(list((dest/'incremental-v1/manifests').glob('*.json'))),1)
-        self.assertIn('Recorded current',w.backup_summary.text())
+        self.assertIn('No current work',w.backup_summary.text())
         self.assertTrue(any(row['title']=='Incremental history backup' and row['state']=='Completed' for row in w.tasks.rows.values()))
 
     def test_manual_queue_pause_and_explicit_resume(self):

@@ -184,7 +184,7 @@ class ReadinessSummaryUITests(unittest.TestCase):
 
     def test_queue_wait_reasons_cover_idle_foreground_and_backup(self):
         self.w.idle_preparation.enqueue(self.root/'queued.sdlib',self.snapshot,60,1000,None,8*1024**3,False,False)
-        self.assertIn('idle app time',current_view(self.w)['reason'])
+        self.assertIn('scheduler',current_view(self.w)['reason'])
         key=self.w.tasks.start('Generate');self.assertIn('foreground',current_view(self.w)['reason'])
         self.w.tasks.finish(key,'Completed')
         queue=self.w.background_queue;queue.active=dict(key='backup',title='History backup',priority=20,owned=set(),cancel=None,yielding=False)
