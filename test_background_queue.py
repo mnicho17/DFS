@@ -23,7 +23,7 @@ class BackgroundQueueTests(unittest.TestCase):
 
     def queue(self):
         owner=QtCore.QObject();owner.tasks=TaskHub(owner)
-        queue=BackgroundQueue(owner);queue.timer.stop()
+        queue=BackgroundQueue(owner);owner.background_queue=queue;queue.timer.stop()
         self.addCleanup(queue.shutdown)
         self.owner=owner
         return queue
@@ -71,6 +71,50 @@ class BackgroundQueueTests(unittest.TestCase):
         self.assertIsNone(q.active);self.assertEqual(q.hub.rows[1]['state'],'Failed')
         start=Mock();q.request('next','next',20,start,None);q.pump();start.assert_called_once()
 
+    def test_run_now_bypasses_idle_only_and_retains_foreground_and_retirement(self):
+        from background_queue import idle_ready
+        q=self.queue();self.owner.idle_backup=Mock()
+        self.owner.idle_backup.clock.return_value=0
+        self.owner.idle_backup.last_input=0
+        self.owner.isMinimized=lambda:False
+        start=Mock();stop=Mock()
+        q.request('prep','prep',30,start,stop,ready=lambda:idle_ready(self.owner),idle_only=True)
+        q.pump();start.assert_not_called()
+        task=q.pending['prep']['task'];self.assertTrue(q.run_now(task))
+        foreground=q.hub.start('Build');q.pump();start.assert_not_called()
+        q.hub.finish(foreground,'Completed');q.pump();start.assert_called_once()
+        q.pump();stop.assert_not_called()
+        foreground=q.hub.start('Build again');q.pump();stop.assert_called_once()
+        self.assertIsNotNone(q.active)
+        q.release('prep');self.assertIsNone(q.active)
+        self.assertFalse(q.run_now(task))
+
+    def test_run_now_preserves_controller_gate_and_priority(self):
+        q=self.queue();safe=[False];calls=[]
+        q.request('prep','prep',30,lambda:calls.append('prep'),None,ready=lambda:safe[0])
+        q.run_now(q.pending['prep']['task']);q.pump();self.assertFalse(calls)
+        q.request('history','history',10,lambda:calls.append('history'),None)
+        safe[0]=True;q.pump();self.assertEqual(calls,['history'])
+        q.release('history');q.pump();self.assertEqual(calls,['history','prep'])
+
+    def test_run_now_override_is_scoped_to_selected_job(self):
+        q=self.queue()
+        q.request('prep','prep',30,lambda:True,None)
+        q.run_now(q.pending['prep']['task']);q.pump()
+        self.assertTrue(q.idle_override('prep'))
+        self.assertFalse(q.idle_override('backup'))
+
+    def test_minimized_is_idle_but_modal_and_recent_activity_are_not(self):
+        from background_queue import idle_ready
+        q=self.queue();self.owner.idle_backup=Mock()
+        self.owner.idle_backup.clock.return_value=0;self.owner.idle_backup.last_input=0
+        minimized=[False];self.owner.isMinimized=lambda:minimized[0]
+        with patch('background_queue.QtWidgets.QApplication.activeModalWidget',return_value=None):
+            self.assertFalse(idle_ready(self.owner))
+            minimized[0]=True;self.assertTrue(idle_ready(self.owner))
+        with patch('background_queue.QtWidgets.QApplication.activeModalWidget',return_value=object()):
+            self.assertFalse(idle_ready(self.owner))
+
 
 class IdlePreparationTests(unittest.TestCase):
     @classmethod
@@ -103,6 +147,17 @@ class IdlePreparationTests(unittest.TestCase):
         saved=status(root/'idle.sdlib');self.assertTrue(saved['complete']);self.assertEqual(saved['saved'],168)
         self.assertEqual(w.idle_preparation.state,'Completed');self.assertIsNone(w.idle_preparation.request_data)
         self.assertEqual(w.history_refresh._reports,0)
+
+    def test_run_now_prepares_real_library_without_idle_delay(self):
+        w,clock,root,snapshot=self.window();self.enqueue(w,root,snapshot)
+        self.assertEqual(clock[0],0)
+        dialog=QtWidgets.QDialog(w);dialog.setModal(True);dialog.show()
+        try:
+            task=w.background_queue.pending['preparation']['task']
+            self.assertTrue(w.background_queue.run_now(task));w.background_queue.pump()
+            self.wait(lambda:w.idle_preparation.thread is None)
+            self.assertTrue(status(root/'idle.sdlib')['complete'])
+        finally:dialog.close()
 
     def test_user_cancel_before_start_creates_no_library_or_restart(self):
         w,clock,root,snapshot=self.window();self.enqueue(w,root,snapshot)

@@ -180,6 +180,12 @@ def task_panel(hub, parent):
     details.setPlaceholderText('Select a task above to see recent progress messages.')
     details.setObjectName('taskText')
     details.setMinimumHeight(65)
+    run = QtWidgets.QPushButton('Run now')
+    run.setObjectName('taskRunNow')
+    run.setToolTip('Skip the idle countdown for this queued task. Builds, worker retirement, priority and safety checks still apply.')
+    run.setEnabled(False)
+    def get_queue():
+        return getattr(hub.parent(), 'background_queue', None)
     stop = QtWidgets.QPushButton('Cancel / pause selected task')
     stop.setObjectName('taskStop')
     stop.setEnabled(False)
@@ -192,7 +198,10 @@ def task_panel(hub, parent):
     panes.addWidget(labelled_pane('Selected task messages', details, 'taskDetails'))
     panes.setSizes([230, 110])
     box.addWidget(panes)
-    box.addWidget(stop)
+    actions = QtWidgets.QHBoxLayout()
+    actions.addWidget(run)
+    actions.addWidget(stop)
+    box.addLayout(actions)
 
     def selected():
         item = table.item(table.currentRow(), 0)
@@ -200,6 +209,8 @@ def task_panel(hub, parent):
 
     def selection():
         row = hub.rows.get(selected())
+        queue = get_queue()
+        run.setEnabled(bool(queue and any(j['task'] == selected() for j in queue.pending.values())))
         stop.setEnabled(bool(row and row['cancel']))
         text = '\n'.join(row['log']) if row else ''
         if details.toPlainText() != text:
@@ -241,6 +252,7 @@ def task_panel(hub, parent):
     receiver = Receiver(body)
     hub.changed.connect(receiver.update)
     table.itemSelectionChanged.connect(selection)
+    run.clicked.connect(lambda: get_queue().run_now(selected()) if get_queue() else None)
     stop.clicked.connect(lambda: hub.cancel(selected()) if selected() in hub.rows else None)
     timer = QtCore.QTimer(body)
     timer.timeout.connect(refresh)

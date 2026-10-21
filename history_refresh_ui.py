@@ -97,8 +97,8 @@ class HistoryRefreshController(QtCore.QObject):
         owner = self.parent()
         backup = getattr(owner, 'idle_backup', None)
         if backup is not None:
-            from PyQt5 import QtWidgets
-            if backup.clock()-backup.last_input < 60 or QtWidgets.QApplication.activeModalWidget() is not None:
+            from background_queue import idle_ready
+            if not idle_ready(owner,'history'):
                 return False
         queue = getattr(owner, 'background_queue', None)
         return not self._reports or bool(queue and queue.active)

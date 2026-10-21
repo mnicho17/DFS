@@ -23,11 +23,9 @@ class IdlePreparationController(QtCore.QObject):
         self.owner.slate_readiness.state(self.readiness_key,state,message)
         self.changed.emit()
 
-    def ready(self):
-        backup = self.owner.idle_backup
-        modal = QtWidgets.QApplication.activeModalWidget()
-        return (not self.closed and not self.paused and modal is None
-                and backup.clock()-backup.last_input >= 60
+    def ready(self, key='preparation'):
+        from background_queue import idle_ready
+        return (not self.closed and not self.paused and idle_ready(self.owner,key)
                 and (not self.owner.history_refresh._reports or bool(self.owner.background_queue.active)))
 
     def enqueue(self, path, snapshot, seconds, limit, scope, storage_bytes, screen, full_screen):

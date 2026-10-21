@@ -99,7 +99,8 @@ class IdleBackupController(QtCore.QObject):
                 if thread is not None and thread.isRunning():return True
             except RuntimeError:pass
         modal=QtWidgets.QApplication.activeModalWidget()
-        return modal is not None and modal is not self.dialog
+        queue=getattr(self.owner,'background_queue',None)
+        return modal is not None and modal is not self.dialog and not (queue and queue.idle_override('backup'))
 
     def other_work_changed(self):
         if self.starting or self.worker is None:return
@@ -120,12 +121,13 @@ class IdleBackupController(QtCore.QObject):
         if self.busy() and not lower:
             if self.manual:self.set_status('Queued','Backup queued until current app work retires.')
             if not queue:return
-        if not self.manual and (now-self.last_input<IDLE_SECONDS or now-self.last_change<QUIET_SECONDS):return
+        from background_queue import idle_ready
+        if not self.manual and (not idle_ready(self.owner,'backup') or now-self.last_change<QUIET_SECONDS):return
         queue=getattr(self.owner,'background_queue',None)
         if queue:
             from background_queue import BACKUP_PRIORITY
             queue.request('backup','History backup',BACKUP_PRIORITY,self.start,self.yield_work,
-                ready=lambda:not self.closed and bool(self.destination()) and not self.paused and (self.manual or self.enabled()) and (self.manual or (self.clock()-self.last_input>=IDLE_SECONDS and self.clock()-self.last_change>=QUIET_SECONDS)) and (not self.busy() or bool(queue.active and (queue.active['key']=='backup' or queue.active['priority']>20))),
+                ready=lambda:not self.closed and bool(self.destination()) and not self.paused and (self.manual or self.enabled()) and (self.manual or (idle_ready(self.owner,'backup') and self.clock()-self.last_change>=QUIET_SECONDS)) and (not self.busy() or bool(queue.active and (queue.active['key']=='backup' or queue.active['priority']>20))),
                 idle_only=not self.manual, on_cancel=self.cancel,
                 detail='Waiting for idle time and higher-priority history work.')
             queue.pump()

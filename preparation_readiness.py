@@ -199,9 +199,11 @@ def waiting_reason(window,record):
     if record['state']!='Queued':return ''
     if queue.active and queue.active['key']!='preparation':return 'Waiting for '+queue.active['title']+' to retire.'
     if queue.foreground():return 'Waiting for foreground work to retire.'
+    job=queue.pending.get('preparation')
+    if job and job.get('run_now'):return 'Run now requested; waiting for remaining safety checks.'
     if QtWidgets.QApplication.activeModalWidget() is not None:return 'Waiting for the open dialog to close.'
     delay=max(0,60-(window.idle_backup.clock()-window.idle_backup.last_input))
-    if delay:return f'Waiting for idle app time ({math.ceil(delay)} seconds).'
+    if delay and not window.isMinimized():return f'Waiting for idle app time ({math.ceil(delay)} seconds).'
     if window.history_refresh._reports:return 'Waiting for history or report work to retire.'
     return 'Queued; waiting for the background scheduler.'
 
