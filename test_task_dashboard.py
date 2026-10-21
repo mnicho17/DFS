@@ -45,6 +45,29 @@ class TaskDashboardTests(unittest.TestCase):
         finally:
             queue.shutdown();owner.deleteLater();self.app.processEvents()
 
+    def test_no_work_yield_and_user_cancellation_have_distinct_states(self):
+        for result,state in ((dict(no_work=True,next_check='Rechecking in 5 minutes.'),'No current work'),
+                             (dict(cancelled=True,background_yield=True),'Paused for manual work'),
+                             (dict(cancelled=True),'Cancelled'),
+                             (dict(no_work=True,errors=['Evidence needs review']),'Needs review')):
+            worker,thread,binding=self.watch()
+            worker.finished.emit(result);thread.finished.emit()
+            self.assertEqual(self.hub.rows[binding.key]['state'],state)
+        self.assertIn('Rechecking in 5 minutes.',self.hub.rows[1]['detail'])
+
+    def test_sidebar_docks_at_right_and_can_move_to_left_or_float(self):
+        from main_window import MainWindow
+        window=MainWindow();self.addCleanup(window.close)
+        dock=window.task_dashboard
+        self.assertEqual(window.dockWidgetArea(dock),QtCore.Qt.RightDockWidgetArea)
+        self.assertEqual(dock.allowedAreas(),QtCore.Qt.LeftDockWidgetArea|QtCore.Qt.RightDockWidgetArea)
+        table=dock.findChild(QtWidgets.QTableWidget,'taskTable')
+        self.assertFalse(table.isColumnHidden(0));self.assertTrue(table.isColumnHidden(4))
+        window.addDockWidget(QtCore.Qt.LeftDockWidgetArea,dock)
+        self.assertEqual(window.dockWidgetArea(dock),QtCore.Qt.LeftDockWidgetArea)
+        dock.setFloating(True);self.assertTrue(dock.isFloating())
+        self.assertGreater(dock.height(),dock.width())
+
     def watch(self):
         worker, thread = FakeWorker(), QtCore.QThread()
         binding = self.hub.watch('Test work', worker, thread, worker.stop.set)

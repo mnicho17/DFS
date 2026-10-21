@@ -223,7 +223,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
         from smart_scenario_preparation import warm
         receipt,state,row,path,captured,scope=warming_jobs[0]
         return warm(catalog,receipt,state,row,path,captured,scope,cancelled,progress,retry=retry,pause_reason=pause_reason)
-    return dict(preparation='Upcoming discovered slates have no pending automatic work.')
+    return dict(no_work=True,next_check='Rechecking in 5 minutes.',preparation='No current work; upcoming slates have no pending automatic preparation. Rechecking in 5 minutes.')
 
 
 class _EventProxy:

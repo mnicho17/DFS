@@ -79,9 +79,10 @@ class BackgroundQueueTests(unittest.TestCase):
         self.owner.isMinimized=lambda:False
         start=Mock();stop=Mock()
         q.request('prep','prep',30,start,stop,ready=lambda:idle_ready(self.owner),idle_only=True)
+        foreground=q.hub.start('Build')
         q.pump();start.assert_not_called()
         task=q.pending['prep']['task'];self.assertTrue(q.run_now(task))
-        foreground=q.hub.start('Build');q.pump();start.assert_not_called()
+        q.pump();start.assert_not_called()
         q.hub.finish(foreground,'Completed');q.pump();start.assert_called_once()
         q.pump();stop.assert_not_called()
         foreground=q.hub.start('Build again');q.pump();stop.assert_called_once()
@@ -104,16 +105,16 @@ class BackgroundQueueTests(unittest.TestCase):
         self.assertTrue(q.idle_override('prep'))
         self.assertFalse(q.idle_override('backup'))
 
-    def test_minimized_is_idle_but_modal_and_recent_activity_are_not(self):
+    def test_pointer_activity_and_passive_dialogs_do_not_block_background_readiness(self):
         from background_queue import idle_ready
         q=self.queue();self.owner.idle_backup=Mock()
         self.owner.idle_backup.clock.return_value=0;self.owner.idle_backup.last_input=0
         minimized=[False];self.owner.isMinimized=lambda:minimized[0]
         with patch('background_queue.QtWidgets.QApplication.activeModalWidget',return_value=None):
-            self.assertFalse(idle_ready(self.owner))
+            self.assertTrue(idle_ready(self.owner))
             minimized[0]=True;self.assertTrue(idle_ready(self.owner))
         with patch('background_queue.QtWidgets.QApplication.activeModalWidget',return_value=object()):
-            self.assertFalse(idle_ready(self.owner))
+            self.assertTrue(idle_ready(self.owner))
 
 
 class IdlePreparationTests(unittest.TestCase):
@@ -140,7 +141,9 @@ class IdlePreparationTests(unittest.TestCase):
     def test_opt_in_freezes_inputs_waits_for_idle_and_completes_real_library(self):
         w,clock,root,snapshot=self.window();original=copy.deepcopy(snapshot)
         self.assertTrue(self.enqueue(w,root,snapshot));snapshot['inputs']['players'][0]['FlexSalary']=99999
+        manual=w.tasks.start('Manual worker')
         w.background_queue.pump();self.assertFalse((root/'idle.sdlib').exists())
+        w.tasks.finish(manual,'Completed')
         self.assertFalse(self.enqueue(w,root,original))
         clock[0]=61;w.background_queue.pump()
         self.wait(lambda:w.idle_preparation.thread is None)
@@ -185,11 +188,21 @@ class IdlePreparationTests(unittest.TestCase):
             return result
         with patch('showdown_library_ui.prepare',side_effect=checkpoint):
             w.background_queue.pump();self.wait(entered.is_set)
+            # Actual UI events and a passive dialog do not interrupt the worker.
+            from PyQt5 import QtGui
+            QtWidgets.QApplication.sendEvent(w,QtGui.QMouseEvent(QtCore.QEvent.MouseMove,QtCore.QPointF(10,10),QtCore.Qt.NoButton,QtCore.Qt.NoButton,QtCore.Qt.NoModifier))
+            QtWidgets.QApplication.sendEvent(w,QtGui.QKeyEvent(QtCore.QEvent.KeyPress,QtCore.Qt.Key_Shift,QtCore.Qt.ShiftModifier))
+            dialog=QtWidgets.QDialog(w);dialog.setModal(True);dialog.show()
+            self.app.processEvents();w.background_queue.pump()
+            self.assertFalse(w.idle_preparation.worker.stop.is_set());dialog.close()
             w.idle_backup.last_input=clock[0];w.background_queue.pump()
+            self.assertFalse(w.idle_preparation.worker.stop.is_set())
+            manual=w.tasks.start('Manual work');w.background_queue.pump()
             self.wait(lambda:w.idle_preparation.thread is None)
             self.app.processEvents()
         self.assertEqual(status(root/'idle.sdlib')['saved'],5)
         self.assertIn('preparation',w.background_queue.pending)
+        w.tasks.finish(manual,'Completed')
         clock[0]+=61;w.background_queue.pump();self.wait(lambda:w.idle_preparation.thread is None)
         self.assertTrue(status(root/'idle.sdlib')['complete']);self.assertEqual(status(root/'idle.sdlib')['saved'],168)
 
@@ -237,6 +250,8 @@ class IdlePreparationTests(unittest.TestCase):
         w,clock,root,snapshot=self.window();self.enqueue(w,root,snapshot);clock[0]=61
         source=root/'history';dest=root/'backups';source.mkdir();dest.mkdir();(source/'note.txt').write_text('saved')
         c=w.idle_backup;c.source=source;c.settings.setValue('backup/destination',str(dest))
+        blockers=[]
+        c.changed.connect(lambda: blockers.append(w.tasks.start('Manual work after backup')) if c.state in ('Recorded current','No current work') and not blockers else None)
         entered=threading.Event()
         def slow(*args,**kwargs):
             entered.set()
@@ -245,11 +260,11 @@ class IdlePreparationTests(unittest.TestCase):
         with patch('showdown_library_ui.prepare',side_effect=slow):
             w.background_queue.pump();self.wait(entered.is_set)
             c.request();self.assertTrue(w.idle_preparation.worker.stop.is_set());self.assertIsNone(c.thread)
-            # Block candidate resume until the patched slow worker is removed.
-            w.idle_backup.last_input=clock[0]
+            # A manual worker, rather than pointer movement, blocks candidate resume.
             self.wait(lambda:c.settings.value('backup/last_manifest',''))
             self.wait(lambda:c.thread is None)
         self.assertIn('preparation',w.background_queue.pending)
+        w.tasks.finish(blockers[0],'Completed')
         clock[0]+=61;w.background_queue.pump();self.wait(lambda:w.idle_preparation.thread is None)
         self.assertTrue(status(root/'idle.sdlib')['complete'])
 

@@ -88,10 +88,10 @@ class IdlePreparationController(QtCore.QObject):
             return
         self.owner.background_queue.request('preparation','Idle Showdown preparation',PREPARATION_PRIORITY,
             self.start,self.yield_work,ready=self.ready,idle_only=True,
-            detail='Captured inputs; waits for 60 seconds without app input, no modal, history refresh and backups. Cancel this queued row to remove the job.')
-        detail=(self.request_data['path']+'; captured inputs and limits, session-only. Waiting for idle app time.')
+            detail='Captured inputs; waits for manual workers, history refresh and backups to retire. Cancel this queued row to remove the job.')
+        detail=(self.request_data['path']+'; captured inputs and limits, session-only. Waiting for manual workers and higher-priority tasks.')
         if self.request_data.get('automatic'):
-            detail='Prepare this slate: check coverage, then prepare missing rosters / bounded screening; captured inputs, up to 12 hours and 8 GiB. Session-only; waiting for idle app time.'
+            detail='Prepare this slate: check coverage, then prepare missing rosters / bounded screening; captured inputs, up to 12 hours and 8 GiB. Session-only; waiting for manual workers and higher-priority tasks.'
         self.publish('Queued',detail)
 
     def start(self):
@@ -148,7 +148,9 @@ class IdlePreparationController(QtCore.QObject):
             self.owner.slate_readiness.update(self.readiness_key,result)
             self.publish('Running',self.describe(result))
 
-    def receive(self, result):self.pending = result
+    def receive(self, result):
+        if self.yielded and not self.paused:result['background_yield']=True
+        self.pending = result
     def failure(self, message):self.pending = dict(error=message)
 
     def yield_work(self):

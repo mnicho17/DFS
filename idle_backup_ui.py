@@ -51,8 +51,7 @@ class IdleBackupController(QtCore.QObject):
         self.watcher.fileChanged.connect(self.source_changed);self.watcher.directoryChanged.connect(self.source_changed)
         self.timer=QtCore.QTimer(self);self.timer.setInterval(15000);self.timer.timeout.connect(self.tick);self.timer.start()
         self.owner.tasks.changed.connect(self.other_work_changed)
-        app=QtWidgets.QApplication.instance()
-        if app:app.installEventFilter(self)
+        # Background work is gated by workers, never by pointer or keyboard input.
         self.arm();self.publish()
 
     def destination(self):
@@ -70,11 +69,6 @@ class IdleBackupController(QtCore.QObject):
     def set_status(self,state,message):
         if (self.state,self.message)!=(state,message):
             self.state,self.message=state,message;self.publish()
-
-    def eventFilter(self, obj, event):
-        if event.type() in (QtCore.QEvent.KeyPress,QtCore.QEvent.MouseButtonPress,QtCore.QEvent.Wheel,QtCore.QEvent.TouchBegin,QtCore.QEvent.MouseMove,QtCore.QEvent.MouseButtonDblClick):
-            self.last_input=self.clock()
-        return False
 
     def arm(self, paths=()):
         previous=self.watcher.files()+self.watcher.directories()
@@ -98,9 +92,7 @@ class IdleBackupController(QtCore.QObject):
             try:
                 if thread is not None and thread.isRunning():return True
             except RuntimeError:pass
-        modal=QtWidgets.QApplication.activeModalWidget()
-        queue=getattr(self.owner,'background_queue',None)
-        return modal is not None and modal is not self.dialog and not (queue and queue.idle_override('backup'))
+        return False
 
     def other_work_changed(self):
         if self.starting or self.worker is None:return
@@ -175,7 +167,11 @@ class IdleBackupController(QtCore.QObject):
     def progress(self,a,b,text):
         if self.worker is not None and not self.worker.stop.is_set():self.set_status('Running',text)
 
-    def receive(self,result):self.pending=result
+    def receive(self,result):
+        if self.preempted and not self.paused:result['background_yield']=True
+        if result.get('unchanged') and not result.get('cancelled'):
+            result.update(no_work=True,next_check='Rechecking in 15 minutes, or when history changes.')
+        self.pending=result
 
     def cancel(self):
         self.paused=True;self.manual=False;self.verify=False
@@ -202,8 +198,9 @@ class IdleBackupController(QtCore.QObject):
             stamp=QtCore.QDateTime.currentDateTimeUtc().toString(QtCore.Qt.ISODate)
             self.settings.setValue('backup/last_success',stamp)
             self.arm(result.get('watch_paths',()))
-            self.set_status('Paused' if self.paused else 'Changes pending' if self.dirty else 'Recorded current',
+            self.set_status('Paused' if self.paused else 'Changes pending' if self.dirty else 'No current work' if result.get('unchanged') else 'Recorded current',
                 ('A complete manifest was retained before the stop; automatic backups remain paused. ' if self.paused else '')
+                + ('No current work; rechecking in 15 minutes or when history changes. ' if result.get('unchanged') else '')
                 + f"Last checked {stamp}. {result.get('copied',0)} new objects; {result.get('skipped_unchanged',0)} unchanged files skipped. "
                 f"Manifest: {result['manifest']}. Full object verification remains a separate action; restores always verify content.")
         if self.closed and getattr(self.owner,'_close_after_backup',False):QtCore.QTimer.singleShot(0,self.owner.close)
