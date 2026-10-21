@@ -24,6 +24,27 @@ class TaskDashboardTests(unittest.TestCase):
         self.time = [100.0]
         self.hub = TaskHub(clock=lambda: self.time[0])
 
+    def test_run_now_button_resolves_queue_created_after_dashboard(self):
+        from background_queue import BackgroundQueue
+        owner=QtWidgets.QWidget();hub=TaskHub(owner);owner.tasks=hub
+        panel=task_panel(hub,owner)
+        queue=BackgroundQueue(owner);owner.background_queue=queue;queue.timer.stop()
+        try:
+            calls=[];safe=[False]
+            queue.request('prep','Preparation',30,lambda:calls.append('started'),None,ready=lambda:safe[0] or queue.idle_override())
+            self.app.processEvents()
+            table=panel.findChild(QtWidgets.QTableWidget,'taskTable')
+            # The panel refresh is coalesced; let it populate before selecting.
+            from PyQt5.QtTest import QTest
+            QTest.qWait(150)
+            table.setCurrentCell(0,0)
+            button=panel.findChild(QtWidgets.QPushButton,'taskRunNow')
+            self.assertTrue(button.isEnabled());button.click();queue.pump()
+            self.assertEqual(calls,['started'])
+            QTest.qWait(150);self.assertFalse(button.isEnabled())
+        finally:
+            queue.shutdown();owner.deleteLater();self.app.processEvents()
+
     def watch(self):
         worker, thread = FakeWorker(), QtCore.QThread()
         binding = self.hub.watch('Test work', worker, thread, worker.stop.set)

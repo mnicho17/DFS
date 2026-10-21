@@ -26,7 +26,7 @@ class SlatePickerTests(unittest.TestCase):
         self.owner.app_settings=QtCore.QSettings(str(Path(self.tmp.name)/'settings.ini'),QtCore.QSettings.IniFormat)
         self.owner.background_queue=BackgroundQueue(self.owner)
         self.owner.background_queue.timer.stop()
-        self.owner.idle_preparation=SimpleNamespace(ready=lambda:False)
+        self.owner.idle_preparation=SimpleNamespace(ready=lambda key=None:False)
         self.owner.players=[{'Name':'Current slate'}]
         self.controller=SlateDiscoveryController(self.owner,Path(self.tmp.name)/'catalog.sqlite')
         self.controller.timer.stop()
@@ -206,7 +206,7 @@ class SlatePickerTests(unittest.TestCase):
 
     def test_targeted_retry_survives_yield_before_reset_is_consumed(self):
         row=self.catalog_row();self.owner.app_settings.setValue('build/smart_preparation',False)
-        self.owner.idle_preparation.ready=lambda:True
+        self.owner.idle_preparation.ready=lambda key=None:True
         calls=[]
         def prepare(*args,**kwargs):
             calls.append(kwargs)
@@ -222,7 +222,7 @@ class SlatePickerTests(unittest.TestCase):
 
     def test_targeted_retry_consumes_reset_once_and_stop_does_not_requeue(self):
         row=self.catalog_row();self.owner.app_settings.setValue('build/smart_preparation',False)
-        self.owner.idle_preparation.ready=lambda:True
+        self.owner.idle_preparation.ready=lambda key=None:True
         calls=[];entered=threading.Event();release=threading.Event();self.addCleanup(release.set)
         def prepare(*args,**kwargs):
             calls.append(kwargs)

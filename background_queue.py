@@ -1,5 +1,5 @@
 """One cooperative queue for automatic work; leases end only on worker retirement."""
-from PyQt5 import QtCore
+from PyQt5 import QtCore, QtWidgets
 
 HISTORY_PRIORITY = 10
 BACKUP_PRIORITY = 20
@@ -15,6 +15,7 @@ class BackgroundQueue(QtCore.QObject):
         self.pending = {}
         self.active = None
         self.closed = self.dispatching = False
+        self.checking = None
         self.serial = 0
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(1000)
@@ -39,10 +40,30 @@ class BackgroundQueue(QtCore.QObject):
             self.hub.update(task, detail)
             self.pending[key] = dict(key=key, title=title, priority=priority,
                 start=start, cancel=cancel, ready=ready, task=task, order=self.serial,
-                owned=set(), yielding=False, idle_only=idle_only, on_cancel=on_cancel or cancel)
+                owned=set(), yielding=False, run_now=False, idle_only=idle_only, on_cancel=on_cancel or cancel)
         finally:
             self.dispatching = False
         self.changed.emit()
+        self.wake()
+        return True
+
+    def is_ready(self, job):
+        self.checking = job
+        try:
+            return job['ready']()
+        finally:
+            self.checking = None
+
+    def idle_override(self, key=None):
+        job = self.checking or self.active
+        return bool(job and job.get('run_now') and (key is None or job['key'] == key))
+
+    def run_now(self, task):
+        job = next((j for j in self.pending.values() if j['task'] == task), None)
+        if self.closed or job is None:
+            return False
+        job['run_now'] = True
+        self.hub.update(task, 'Run now requested; waiting only for safety checks and higher-priority work to retire.')
         self.wake()
         return True
 
@@ -62,14 +83,14 @@ class BackgroundQueue(QtCore.QObject):
             return
         self.dispatching = True
         try:
-            ready = sorted((j for j in self.pending.values() if j['ready']()),
+            ready = sorted((j for j in self.pending.values() if self.is_ready(j)),
                            key=lambda j: (j['priority'], j['order']))
             blocked = self.foreground()
             if self.active:
                 job = self.active
                 if job['cancel'] and not job['yielding'] and (blocked or
                         (ready and ready[0]['priority'] < job['priority']) or
-                        (job['idle_only'] and not job['ready']())):
+                        (job['idle_only'] and not self.is_ready(job))):
                     job['yielding'] = True
                     job['cancel']()
                     self.changed.emit()
@@ -124,3 +145,16 @@ class BackgroundQueue(QtCore.QObject):
         running = self.active['title'] if self.active else 'No queued worker running'
         waiting = sorted(self.pending.values(), key=lambda j: (j['priority'], j['order']))
         return running + ('; next: ' + ', '.join(j['title'] for j in waiting) if waiting else '')
+
+
+def idle_ready(owner, key=None):
+    """Explicit dispatch bypasses inactivity only; controller safety gates still apply."""
+    queue = getattr(owner, 'background_queue', None)
+    if queue and queue.idle_override(key):
+        return True
+    if QtWidgets.QApplication.activeModalWidget() is not None:
+        return False
+    if owner.isMinimized():
+        return True
+    backup = owner.idle_backup
+    return backup.clock() - backup.last_input >= 60

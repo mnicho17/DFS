@@ -78,7 +78,7 @@ class SlateDiscoveryController(QtCore.QObject):
         return True
 
     def ready(self):
-        return not self.closed and (self.manual or self.owner.idle_preparation.ready())
+        return not self.closed and (self.manual or self.owner.idle_preparation.ready('slate-discovery'))
 
     def start(self):
         from task_dashboard import watch_task
