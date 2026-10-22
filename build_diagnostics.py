@@ -319,6 +319,7 @@ def create_build_diagnostic(
     preset = dict(sim.get("preset_comparison") or {})
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
     from preparation_audit import clean_build_audit
+    from simulation_profiling import clean as clean_simulation_profile
     diagnostic = {
         "schema_version": 4,
         "preparation_audit": clean_build_audit(context.get("preparation_audit")),
@@ -357,6 +358,7 @@ def create_build_diagnostic(
             "exact": bool(space.get("exact")),
             "explanation": str(space.get("explanation") or ""),
         },
+        **({'simulation_profile': clean_simulation_profile(timing.get('simulation_profile'))} if timing.get('simulation_profile') else {}),
         "timing": {
             "generation_seconds": max(0.0, _number(timing.get("generation_seconds"))),
             "simulation_seconds": max(0.0, _number(timing.get("simulation_seconds"))),
@@ -632,6 +634,18 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Balance ownership/dup risk: {'On' if rules.get('balance_ownership') else 'Off'}",
         f"- Player groups: {_integer(rules.get('group_count'))} | Player limits: {_integer(rules.get('constrained_player_count'))}",
     ])
+
+    from simulation_profiling import clean as clean_simulation_profile
+    profiles=clean_simulation_profile(record.get('simulation_profile'))
+    if profiles:
+        lines.append('- SIM profile scope: sums within simulation calls; library discovery/loading and portfolio selection are separate stage timers.')
+        labels=dict(setup_seconds='field/setup',cache_lookup_seconds='cache lookup/verification',
+            outcomes_seconds='outcome draws',opponents_seconds='opponent scoring',scenario_io_seconds='scenario frame I/O',
+            candidates_seconds='candidate scores/metrics',cache_finish_seconds='cache finalization',
+            result_assembly_seconds='result assembly',other_seconds='other/progress',total_seconds='total')
+        for phase,row in profiles.items():
+            lines.append(f"- SIM profile [{phase}]: {row.get('calls',0)} calls; {row.get('completed_scenarios',0):,} completed scenarios; {row.get('reused_scenarios',0):,} reused; {row.get('candidate_evaluations',0):,} candidate evaluations.")
+            lines.append('- SIM profile ['+phase+'] seconds: '+', '.join(labels[key]+f" {_number(value):.3f}" for key,value in row['timings'].items()))
     from preparation_audit import build_audit_lines
     lines.extend([''] + build_audit_lines(record.get('preparation_audit')))
     if record.get('build_preparation'):

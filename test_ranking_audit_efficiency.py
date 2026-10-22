@@ -19,6 +19,11 @@ def values(result):
             for row in result['lineups']]
 
 
+def report_values(result):
+    # Observational timing differs per run; all model/cache evidence remains exact.
+    return {key:value for key,value in result['report'].items() if key!='simulation_profile'}
+
+
 class RankingAuditEfficiencyTests(unittest.TestCase):
     def test_compiled_score_preserves_flex_order_and_exact_arithmetic(self):
         captain = dict(FlexID='c'); flex = [dict(FlexID=str(i)) for i in range(5)]
@@ -37,11 +42,12 @@ class RankingAuditEfficiencyTests(unittest.TestCase):
         with patch('showdown_simulation._scenario_outcomes', wraps=showdown_simulation._scenario_outcomes) as draw:
             ordinary = simulate_showdown(rows, players, **opts)
             self.assertEqual(draw.call_count, 80)
+        ordinary_values=deepcopy(values(ordinary))
         with patch('showdown_simulation._scenario_outcomes', wraps=showdown_simulation._scenario_outcomes) as draw:
             compiled = simulate_showdown(rows, players, precompiled_rosters=True, **opts)
             self.assertEqual(draw.call_count, 80)
-        self.assertEqual(values(compiled), values(ordinary))
-        self.assertEqual(compiled['report'], ordinary['report'])
+        self.assertEqual(values(compiled), ordinary_values)
+        self.assertEqual(report_values(compiled), report_values(ordinary))
         self.assertEqual(players, original)
 
     def test_compiled_partial_simulation_matches_existing_cancelled_sample(self):
@@ -56,9 +62,9 @@ class RankingAuditEfficiencyTests(unittest.TestCase):
             with patch('showdown_simulation._scenario_outcomes', side_effect=draw):
                 result = simulate_showdown(rows, players, scenarios=100, field_lineup_count=30,
                     seed=481516, precompiled_rosters=compiled, cancel_callback=lambda: len(calls) >= 3)
-            self.assertEqual(result['report']['scenarios'], 3); results.append(result)
+            self.assertEqual(result['report']['scenarios'], 3); results.append(deepcopy(result))
         self.assertEqual(values(results[0]), values(results[1]))
-        self.assertEqual(results[0]['report'], results[1]['report'])
+        self.assertEqual(report_values(results[0]), report_values(results[1]))
 
     def test_compiled_scoring_preserves_existing_scenario_cache_qualification(self):
         import os
