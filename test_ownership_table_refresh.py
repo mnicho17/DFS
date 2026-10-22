@@ -49,6 +49,9 @@ class OwnershipTableRefreshTests(unittest.TestCase):
             self.assertEqual(table.item(row, 15).text(), f"{result['total'][key]:.1f}%")
             self.assertEqual(table.item(row, 15).data(QtCore.Qt.UserRole), result['total'][key])
         self.assertIn('Lineup simulation', w.lbl_ownership_source.text())
+        self.assertIn('Lineup simulation', w.ownership_status_label.text())
+        self.assertTrue(w.ownership_retry_button.isEnabled())
+        self.assertTrue(w.ownership_manual_panel.isHidden())
         self.assertEqual(w.lbl_player_inspector_title.text(), '2 players selected')
 
     def test_numeric_ownership_sort_keeps_selected_identity(self):
