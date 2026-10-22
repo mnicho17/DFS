@@ -183,3 +183,100 @@ class PreparationStatusTests(unittest.TestCase):
         page=tabs.widget(index);title=tabs.tabText(index);tabs.removeTab(index);tabs.insertTab(0,page,title)
         show_ownership_controls(w)
         self.assertIs(tabs.currentWidget(),page);self.assertTrue(w.ownership_manual_panel.isHidden())
+
+
+    def test_one_preparation_shortcut_opens_read_only_screen_without_capturing(self):
+        w=self.window()
+        buttons=w.findChildren(QtWidgets.QPushButton,'preparationStatusButton')
+        self.assertEqual(len(buttons),1);self.assertIs(w.btn_prepare_slate,buttons[0])
+        self.assertTrue(w.simple_build_panel.isAncestorOf(buttons[0]))
+        with patch.object(w,'_capture_snapshot',side_effect=AssertionError('Opening must not capture')),patch.object(PreparationStatusDialog,'exec_',return_value=QtWidgets.QDialog.Rejected) as opened:
+            buttons[0].click()
+        opened.assert_called_once();self.assertIsNone(w.idle_preparation.request_data)
+        actions=[a.text() for menu in w.findChildren(QtWidgets.QMenu) for a in menu.actions()]
+        self.assertIn('Preparation...',actions)
+        for old in ('Prepare this slate','Prepare Showdown Roster Library...','Long Search / Resume...'):
+            self.assertNotIn(old,actions)
+    def test_summary_exposes_coverage_screening_match_and_waiting_without_scans(self):
+        w=self.window()
+        with patch('build_preparation.discover_libraries',side_effect=AssertionError('No scan')):
+            d=PreparationStatusDialog(w)
+        self.addCleanup(d.deleteLater);self.addCleanup(d.reject)
+        for label in ('Roster coverage:','Screening:','Inputs:','Paused / waiting:'):self.assertIn(label,d.slate_summary.text())
+        self.assertFalse(d.prepare.isEnabled());self.assertIn('Load an NFL',d.next_step.text())
+    def test_retry_recaptures_current_inputs_through_existing_action_once(self):
+        from preparation_readiness import empty
+        from test_nfl_logic import _fixture_players
+        w=self.window();w.players=_fixture_players();w.idle_preparation.paused=True
+        with patch('preparation_readiness.current_view',return_value=empty('Paused','Saved checkpoint')):
+            d=PreparationStatusDialog(w)
+            self.addCleanup(d.deleteLater);self.addCleanup(d.reject)
+            self.assertEqual(d.prepare.text(),'Retry / Resume')
+            with patch.object(w,'on_prepare_this_slate') as prepare:d.prepare.click()
+            prepare.assert_called_once()
+    def test_inflight_or_busy_work_cannot_start_second_preparation(self):
+        from test_nfl_logic import _fixture_players
+        w=self.window();w.players=_fixture_players();d=PreparationStatusDialog(w)
+        self.addCleanup(d.deleteLater);self.addCleanup(d.reject)
+        with patch.object(w,'_snapshot_busy',return_value=True),patch.object(w,'on_prepare_this_slate') as prepare:
+            d.refresh();self.assertFalse(d.prepare.isEnabled());d.prepare_current();prepare.assert_not_called()
+        w.idle_preparation.request_data={'captured':'other slate'}
+        try:
+            with patch.object(w,'on_prepare_this_slate') as prepare:
+                d.refresh();self.assertFalse(d.prepare.isEnabled());d.prepare_current();prepare.assert_not_called()
+                self.assertIn('captured preparation job',d.next_step.text())
+        finally:w.idle_preparation.request_data=None
+    def test_snapshot_and_classic_never_silently_queue_or_change_recipe(self):
+        from test_nfl_logic import _fixture_players
+        w=self.window();w.players=_fixture_players();d=PreparationStatusDialog(w)
+        self.addCleanup(d.deleteLater);self.addCleanup(d.reject)
+        for replay,index in ((True,0),(False,1)):
+            w._snapshot_replay=replay;w.tabs_lineups.setCurrentIndex(index)
+            before=copy.deepcopy(w._current_build_recipe())
+            with patch.object(w,'on_prepare_this_slate') as prepare:
+                d.refresh();self.assertFalse(d.prepare.isEnabled());d.prepare_current();prepare.assert_not_called()
+            self.assertEqual(w._current_build_recipe(),before)
+    def test_run_now_targets_only_existing_queued_preparation_and_keeps_queue_guards(self):
+        w=self.window();d=PreparationStatusDialog(w)
+        self.addCleanup(d.deleteLater);self.addCleanup(d.reject)
+        queue=w.background_queue
+        with patch.object(queue,'run_now') as run:
+            d.run_queued();run.assert_not_called()
+            queue.request('preparation','Preparation',30,lambda:None,lambda:None,ready=lambda:False)
+            task=queue.pending['preparation']['task']
+            from preparation_readiness import empty
+            view=empty('Queued','Waiting');view.update(record={'id':'captured'},match='Matches captured inputs')
+            w.idle_preparation.readiness_key='captured'
+            try:
+                with patch('preparation_readiness.current_view',return_value=view):
+                    d.refresh();self.assertTrue(d.run_now.isEnabled());d.run_queued();run.assert_called_once_with(task)
+                    run.reset_mock();view['match']='Roster inputs / Captain coverage changed'
+                    d.refresh();self.assertFalse(d.run_now.isEnabled());d.run_queued();run.assert_not_called()
+            finally:queue.cancel('preparation')
+    def test_specialist_tools_remain_explicit_and_route_to_existing_handlers(self):
+        w=self.window()
+        for name in ('on_prepare_showdown_library','on_long_search'):
+            d=PreparationStatusDialog(w);self.addCleanup(d.deleteLater)
+            before=copy.deepcopy(w._current_build_recipe())
+            with patch.object(w,name) as handler:d.specialist(name)
+            handler.assert_called_once();self.assertEqual(w._current_build_recipe(),before)
+
+    def test_ui_prepare_queues_one_frozen_request_and_updates_without_extra_work(self):
+        from test_nfl_logic import _fixture_players
+        from build_snapshots import create_snapshot
+        w=self.window();w.players=_fixture_players()
+        snapshot=create_snapshot(w.players,w._current_build_recipe(),w._portfolio_rules())
+        before=copy.deepcopy(snapshot)
+        d=PreparationStatusDialog(w);self.addCleanup(d.deleteLater);self.addCleanup(d.reject)
+        with patch.object(w,'_capture_snapshot',return_value=snapshot) as capture,patch('slate_preparation.plan_preparation',side_effect=AssertionError('No GUI scan')):
+            d.prepare.click();first=w.idle_preparation.request_data;d.prepare.click()
+            self.assertIs(w.idle_preparation.request_data,first);capture.assert_called_once()
+        self.assertIsNotNone(first);self.assertFalse(d.prepare.isEnabled())
+        snapshot['inputs']['players'][0]['Name']='Later edit'
+        self.assertEqual(first['snapshot'],before)
+
+    def test_tasks_navigation_closes_modal_preparation_and_stops_refresh_timer(self):
+        w=self.window();d=PreparationStatusDialog(w);self.addCleanup(d.deleteLater)
+        with patch.object(w.task_dashboard,'show') as show:d.tasks.click()
+        show.assert_called_once();self.assertEqual(d.result(),QtWidgets.QDialog.Accepted)
+        self.assertFalse(d.timer.isActive())

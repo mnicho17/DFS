@@ -1,9 +1,9 @@
-"""Read-only preparation status from existing UI state; no scans or source validation."""
+"""Unified preparation status and explicit actions; opening never starts work."""
 from PyQt5 import QtCore, QtWidgets
 from build_snapshots import freshness_text
 
 
-def preparation_rows(w):
+def preparation_rows(w,view=None):
     """Keep configured, recorded, and verified states distinct."""
     replay = bool(getattr(w, '_snapshot_replay', False))
     players = bool(w.players)
@@ -14,7 +14,7 @@ def preparation_rows(w):
         rows.append(dict(key=key, stage=stage, state=state, detail=detail, action=action))
     from preparation_readiness import current_view
     if hasattr(w,'slate_readiness'):
-        view=current_view(w)
+        view=current_view(w) if view is None else view
         add('slate-preparation','This slate preparation',view['summary'],view['detail'],'Tasks dashboard')
     from build_workflow import preparation_plan
     active = bool(getattr(w, '_build_flow_active', False))
@@ -96,16 +96,64 @@ def preparation_rows(w):
     return rows
 
 
+def preparation_action(w,view):
+    """UI guidance only; the existing capture/worker guards remain authoritative."""
+    if not w.players:return False,'Prepare this slate','Load an NFL Showdown CSV first.'
+    if w._current_sport()!='NFL' or w._contest_mode()!='showdown':
+        return False,'Prepare this slate','Automatic slate preparation supports NFL Showdown. Classic search is available in Advanced tools.'
+    if getattr(w,'_snapshot_replay',False):
+        return False,'Snapshot replay','Replay inputs stay fixed. Use Advanced tools for an explicit preparation request.'
+    if w._snapshot_busy():return False,'Waiting for current work','CSV loading, ownership or a manual build is underway; wait for worker retirement.'
+    controller=w.idle_preparation
+    if controller.closed:return False,'Preparation unavailable','The preparation controller is closing.'
+    if controller.request_data is not None:
+        return False,'Preparation underway','A captured preparation job is queued or running. Review its inputs in Tasks before starting another.'
+    if controller.paused or view['state'] in ('Paused','Needs attention','Needs update','Recorded'):
+        return True,'Retry / Resume','Recheck current inputs and saved coverage, then queue only missing work using the existing preparation limits.'
+    if view.get('record'):return True,'Check coverage / reuse','Revalidate recorded coverage and screening before reusing it; prepare only missing work.'
+    return True,'Prepare this slate','Check saved coverage and screening, then queue missing preparation under the existing time and storage limits.'
+
+
+def queued_current_job(w,view):
+    """Never promote a different captured slate from this slate's controls."""
+    queue=w.background_queue
+    record=view.get('record',{})
+    if queue.closed or view['match']!='Matches captured inputs' or record.get('id')!=w.idle_preparation.readiness_key:return None
+    return queue.pending.get('preparation')
+
+
 class PreparationStatusDialog(QtWidgets.QDialog):
     def __init__(self, window):
         super().__init__(window)
         self.setWindowTitle('Build preparation')
-        self.resize(950, 580)
+        self.resize(1000, 740)
         self.owner, self.rows = window, []
         box = QtWidgets.QVBoxLayout(self)
         note = QtWidgets.QLabel('Current setup and recorded evidence. Generate performs the existing live, identity, coverage, and source checks.')
         note.setWordWrap(True)
         box.addWidget(note)
+        self.slate_summary=QtWidgets.QLabel()
+        self.slate_summary.setObjectName('preparationSlateSummary')
+        self.slate_summary.setWordWrap(True);self.slate_summary.setTextFormat(QtCore.Qt.PlainText)
+        box.addWidget(self.slate_summary)
+        controls=QtWidgets.QHBoxLayout()
+        self.prepare=QtWidgets.QPushButton('Prepare this slate')
+        self.prepare.setObjectName('preparationPrepareResume');self.prepare.clicked.connect(self.prepare_current)
+        self.run_now=QtWidgets.QPushButton('Run queued work now')
+        self.run_now.setObjectName('preparationRunNow');self.run_now.clicked.connect(self.run_queued)
+        self.run_now.setToolTip('Request dispatch of this matching captured job. Manual workers, priority and safety checks still apply. Other jobs are available in Tasks.')
+        self.tasks=QtWidgets.QPushButton('Tasks')
+        self.tasks.clicked.connect(self.show_tasks)
+        self.advanced=QtWidgets.QToolButton();self.advanced.setText('Advanced tools')
+        self.advanced.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        menu=QtWidgets.QMenu(self.advanced)
+        menu.addAction('Showdown library / screening…',lambda:self.specialist('on_prepare_showdown_library'))
+        menu.addAction('Classic candidate search / resume…',lambda:self.specialist('on_long_search'))
+        self.advanced.setMenu(menu)
+        for button in (self.prepare,self.run_now,self.tasks,self.advanced):controls.addWidget(button)
+        box.addLayout(controls)
+        self.next_step=QtWidgets.QLabel();self.next_step.setWordWrap(True);self.next_step.setTextFormat(QtCore.Qt.PlainText)
+        box.addWidget(self.next_step)
         self.table = QtWidgets.QTreeWidget()
         self.table.setHeaderLabels(['Preparation', 'Status'])
         self.table.setObjectName('preparationTable')
@@ -143,7 +191,14 @@ class PreparationStatusDialog(QtWidgets.QDialog):
         super().closeEvent(event)
 
     def refresh(self):
-        rows = preparation_rows(self.owner)
+        from preparation_readiness import current_view
+        view=current_view(self.owner)
+        self.slate_summary.setText('\n'.join([view['summary'],'Roster coverage: '+view['coverage'],
+            'Screening: '+view['screening'],'Inputs: '+view['match'],'Paused / waiting: '+view['reason']]))
+        enabled,label,reason=preparation_action(self.owner,view)
+        self.prepare.setEnabled(enabled);self.prepare.setText(label);self.prepare.setToolTip(reason);self.next_step.setText(reason)
+        self.run_now.setEnabled(queued_current_job(self.owner,view) is not None)
+        rows = preparation_rows(self.owner,view=view)
         if rows == self.rows:
             return
         item = self.table.currentItem()
@@ -161,6 +216,26 @@ class PreparationStatusDialog(QtWidgets.QDialog):
                 self.table.setCurrentItem(item)
         del blocker
         self.selection()
+
+    def prepare_current(self):
+        from preparation_readiness import current_view
+        enabled,_,_=preparation_action(self.owner,current_view(self.owner))
+        if enabled:self.owner.on_prepare_this_slate()
+        self.refresh()
+
+    def run_queued(self):
+        from preparation_readiness import current_view
+        job=queued_current_job(self.owner,current_view(self.owner))
+        if job is not None:self.owner.background_queue.run_now(job['task'])
+        self.refresh()
+
+    def show_tasks(self):
+        self.accept()
+        self.owner.task_dashboard.show()
+
+    def specialist(self,name):
+        self.accept()
+        getattr(self.owner,name)()
 
     def selection(self, *_):
         item = self.table.currentItem()

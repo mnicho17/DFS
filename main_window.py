@@ -8108,7 +8108,6 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         settings_menu.addSection("Data")
 
-        settings_menu.addAction("Long Search / Resume...", self.on_long_search)
         settings_menu.addAction("Ranking Repeatability...", self.on_ranking_repeatability)
         from core_plays_ui import open_core_plays
         settings_menu.addAction("Core Plays...", lambda: open_core_plays(self))
@@ -8116,8 +8115,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         settings_menu.addAction("Ownership Sensitivity...", self.on_ownership_sensitivity)
         settings_menu.addAction("Projection Sensitivity...", self.on_projection_sensitivity)
         settings_menu.addAction("Showdown Captain Pool...", self.on_captain_pool)
-        settings_menu.addAction("Prepare this slate", self.on_prepare_this_slate)
-        settings_menu.addAction("Prepare Showdown Roster Library...", self.on_prepare_showdown_library)
+        from preparation_status_ui import open_preparation_status
+        settings_menu.addAction("Preparation...", lambda:open_preparation_status(self))
         settings_menu.addAction("Open Automatic Build Archives...", self.on_open_build_archives)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)
 

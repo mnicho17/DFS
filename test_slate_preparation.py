@@ -195,8 +195,8 @@ class PrepareSlateActionTests(unittest.TestCase):
     def test_action_captures_once_and_does_no_scanning_on_gui_thread(self):
         original=copy.deepcopy(self.snapshot);selected=getattr(self.w,'_candidate_library','')
         with patch.object(self.w,'_capture_snapshot',return_value=self.snapshot),patch('slate_preparation.plan_preparation',side_effect=AssertionError('no GUI-thread scan')):
-            self.w.btn_prepare_slate.click();first=self.w.idle_preparation.request_data
-            self.w.btn_prepare_slate.click();self.assertIs(self.w.idle_preparation.request_data,first)
+            self.w.on_prepare_this_slate();first=self.w.idle_preparation.request_data
+            self.w.on_prepare_this_slate();self.assertIs(self.w.idle_preparation.request_data,first)
         self.snapshot['inputs']['players'][0]['FlexSalary']=9999
         self.assertEqual(first['snapshot'],original);self.assertEqual(getattr(self.w,'_candidate_library',''),selected)
         self.assertIsNone(self.w.idle_preparation.thread)
@@ -215,6 +215,6 @@ class PrepareSlateActionTests(unittest.TestCase):
 
     def test_unsupported_format_is_visible_without_queuing(self):
         self.w.tabs_lineups.setCurrentIndex(1)
-        self.assertTrue(self.w.btn_prepare_slate.isHidden())
+        self.assertFalse(self.w.btn_prepare_slate.isHidden())
         with patch('PyQt5.QtWidgets.QMessageBox.warning') as warning:self.w.on_prepare_this_slate()
         warning.assert_called_once();self.assertIsNone(self.w.idle_preparation.request_data)
