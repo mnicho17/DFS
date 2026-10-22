@@ -14975,6 +14975,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             return
         if getattr(self, 'slate_readiness_timer', None):self.slate_readiness_timer.stop()
         if getattr(self, 'background_queue', None):self.background_queue.shutdown()
+        audit=getattr(self,'_storage_audit_dialog',None)
+        if audit is not None and audit.shutdown():
+            self._close_after_storage_audit=True
+            event.ignore();return
         if getattr(self, 'idle_preparation', None) and self.idle_preparation.shutdown():
             event.ignore()
             return

@@ -2392,3 +2392,14 @@ Each warming attempt has a ten-minute cooperative allowance (and still respects 
 Build reports compare fingerprint components with up to twelve recent recorded cache receipts for the same exact player-ID/game-date slate, choosing the comparison with the fewest changed components. They can identify forecast-related player fields, availability/roles, ownership, other player inputs, opponent fields, seed/count, context/history settings, app/model and runtime/codec differences. These are differences from a recorded comparison, not proof that it was the cache you intended to reuse. Old caches may have no diagnostic receipt yet.
 
 The disposable scenario-cache diagnostics database retains at most 64 receipts containing fingerprints only, not player values or filenames. Missing, malformed, oversized or unavailable receipts do not authorize replay or prevent fresh calculation. Exact cache identity, full frame integrity/coverage, cancellation, storage limits and fresh independent audits remain unchanged. Copy Last Build Report saves the comparison for that specific build.
+
+
+### Storage audit before retention changes
+
+Open **Backups > Storage audit** for an explicit read-only inventory of configured history, Results/Salary sources, remembered candidate libraries and full-library partitions, scenario caches and backups. The scan runs through the task queue off the UI thread, waits for manual work, and supports cancellation and safe window shutdown. It does not run on startup.
+
+The view lists up to 500 largest observed files, their logical sizes, modification dates, preservation guidance and unverified dependency/backup status. Copy local report includes local paths. Overlapping locations are counted once. Scans stop at 20,000 entries or a ten-second cooperative allowance; skipped links, missing paths and scan limits produce a partial inventory. Slow filesystem calls can take longer. This is configured-scope observation, not whole-drive disk accounting or a consistent snapshot.
+
+Historical sources, databases, evidence, backups and expensive prepared libraries remain protected. Current-shaped scenario metadata is only a review hint, never authorization to delete or reuse. Legacy-shaped caches are kept for review; unknown files stay protected. No backup hashes, frame integrity, source qualification or dependency completeness are certified by this inventory. Rebuild costs are qualitative and explicitly unmeasured.
+
+A 30-day modification-age flag is informational. It does not establish last use, contest age, obsolescence, archival safety or permission to remove files. This feature does not delete, move, archive, alter backup policy, or change the existing cache recycler. Review provenance and restore coverage before adding broader retention rules.
