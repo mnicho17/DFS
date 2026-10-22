@@ -33,6 +33,8 @@ class ScenarioReplay:
     def __init__(self, *args, **kwargs):
         self.io_seconds=0.0
         self.stored_bytes=0
+        self.key_lease=self.writer_lease=None
+        self.maintenance={}
         started=time.perf_counter()
         self._open(*args, **kwargs)
         self.lookup_seconds=time.perf_counter()-started
@@ -60,6 +62,12 @@ class ScenarioReplay:
             self.root = (Path(folder) if folder else cache_folder()).resolve()
             self.root.mkdir(parents=True, exist_ok=True)
             self.target = self.root / (self.key + '.sqlite')
+            from scenario_cache_storage import Lease,plain_file
+            self.key_lease=Lease(self.root,self.key+'.lock')
+            if not self.key_lease:
+                self.status='not saved';self.reason='Scenario cache is in use by another job; computation continued.';return
+            if self.target.exists() and not plain_file(self.target,self.root):
+                self.status='not saved';self.reason='Unsafe cache artifact was preserved; computation continued.';self.close();return
             self.reason='No complete cache matches the exact players, opponent field, seed, scenario count, context and build.'
             if not self.target.exists() and self.diagnostic_scope:
                 from scenario_cache_diagnostics import compare
@@ -85,17 +93,27 @@ class ScenarioReplay:
                     self.stored_bytes=self.target.stat().st_size
                     self.reason='Verified completed scenarios match all exact-input cache gates.'
                     self.status = 'reused'
+                    try:os.utime(self.target,None)
+                    except OSError:pass
                     return
                 except Exception as exc:
-                    self.close(); self.reason = 'Existing cache failed integrity or coverage verification; recomputed.'
+                    self._close_storage(); self.reason = 'Existing cache failed integrity or coverage verification; recomputed.'
             if self.cancelled():
-                self.status='not saved'; self.reason='Cancelled during cache lookup'; return
-            self.available = STORE_LIMIT - sum(p.stat().st_size for p in self.root.iterdir() if p.is_file())
-            if self.available < 8*1024*1024:
-                self.status = 'not saved'; self.reason = 'Cache storage limit reached'; return
-            fd, name = tempfile.mkstemp(dir=self.root, suffix='.partial'); os.close(fd)
+                self.status='not saved'; self.reason='Cancelled during cache lookup'; self.close();return
+            self.writer_lease=Lease(self.root,'writer.lock')
+            if not self.writer_lease:
+                self.status='not saved';self.reason='Another job is recording scenarios; computation continued without saving a cache.';self.close();return
+            from scenario_cache_storage import make_room
+            self.available,self.maintenance=make_room(self.root,self.target,STORE_LIMIT,FILE_LIMIT,self.cancelled)
+            if self.cancelled() or self.available < self.maintenance['required_free_bytes']:
+                self.status='not saved'
+                self.reason=('Cancelled during cache maintenance' if self.cancelled() else 'Cache storage limit reached; protected or unrecognized files were preserved.')
+                self.close();return
+            fd, name = tempfile.mkstemp(dir=self.root,prefix='scenario-replay-', suffix='.partial'); os.close(fd)
             self.temporary = Path(name)
             self.connection = sqlite3.connect(name)
+            from scenario_cache_storage import APPLICATION_ID
+            self.connection.execute(f'PRAGMA application_id={APPLICATION_ID}')
             self.connection.execute('CREATE TABLE frames(id INTEGER PRIMARY KEY,payload BLOB,scores BLOB)')
             self.connection.execute('CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT)')
             self.digest = hashlib.sha256(); self.status = 'recording'
@@ -158,7 +176,10 @@ class ScenarioReplay:
                 self.connection.executemany('INSERT INTO meta VALUES (?,?)',
                     [('key',self.key),('count',str(self.count)),('digest',self.digest.hexdigest()),('scores_codec','zlib-double-v1')])
                 self.connection.commit(); self.connection.close(); self.connection = None
-                if self.temporary.stat().st_size > min(FILE_LIMIT,self.available):raise ValueError('Cache storage limit reached')
+                from scenario_cache_storage import inventory
+                if (self.temporary.stat().st_size > min(FILE_LIMIT,self.available)
+                        or sum(size for _,size,_ in inventory(self.root))>STORE_LIMIT):
+                    raise ValueError('Cache storage limit reached')
                 os.replace(self.temporary,self.target); self.temporary = None; self.status = 'saved'
                 self.stored_bytes=self.target.stat().st_size
             elif self.temporary is not None:
@@ -171,7 +192,7 @@ class ScenarioReplay:
             self.io_seconds+=time.perf_counter()-started
         report = dict(status=self.status,reused_scenarios=self.hits,requested_scenarios=self.count,reason=self.reason)
         if self.status!='disabled':
-            report.update(codec='zlib-double-v1',cache_id=getattr(self,'key',None),stored_bytes=self.stored_bytes,lookup_seconds=self.lookup_seconds,io_seconds=self.io_seconds,comparison=self.comparison)
+            report.update(codec='zlib-double-v1',cache_id=getattr(self,'key',None),stored_bytes=self.stored_bytes,lookup_seconds=self.lookup_seconds,io_seconds=self.io_seconds,comparison=self.comparison,maintenance=dict(self.maintenance))
             if self.status in ('saved','reused') and getattr(self,'diagnostic_scope',None):
                 from scenario_cache_diagnostics import record
                 receipt_started=time.perf_counter()
@@ -182,7 +203,7 @@ class ScenarioReplay:
         safe(cache_observation, getattr(self, "key", None), report)
         return report
 
-    def close(self):
+    def _close_storage(self):
         if self.connection is not None:
             try:self.connection.close()
             except sqlite3.Error:pass
@@ -191,6 +212,13 @@ class ScenarioReplay:
             try:self.temporary.unlink(missing_ok=True)
             except OSError:pass
             self.temporary = None
+
+    def close(self):
+        try:self._close_storage()
+        finally:
+            for name in ('writer_lease','key_lease'):
+                lease=getattr(self,name,None)
+                if lease is not None:lease.close();setattr(self,name,None)
 
     def __del__(self):
         try:self.close()
