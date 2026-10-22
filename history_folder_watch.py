@@ -69,7 +69,7 @@ class HistoryFolderWatch(QtCore.QObject):
         incomplete = bool(failed) or len(self.observed) >= MAX_WATCH_PATHS
         self.message = f'Watching {count} source files/folders for changes; updates wait 30 seconds of quiet.'
         if incomplete:
-            self.message += ' Some paths could not be watched or exceed the limit; use Refresh history now for full coverage.'
+            self.message += ' Some paths could not be watched or exceed the limit; use Check now on History Overview for full coverage.'
 
     def configuration_changed(self):
         self.cancel_pending()
@@ -135,7 +135,7 @@ class HistoryFolderWatch(QtCore.QObject):
     def accept_result(self, result):
         if result.get('cancelled') or result.get('failed') or result.get('errors') or result.get('username_history', {}).get('errors'):
             self.paused = True
-            self.message = 'Folder watching paused after cancellation/errors. Refresh history now to retry; existing evidence is preserved.'
+            self.message = 'Folder watching paused after cancellation/errors. Retry / Resume on History Overview to retry; existing evidence is preserved.'
             self.cancel_pending()
         else:
             self.arm(result.get('watch_paths', self.observed))
@@ -143,7 +143,7 @@ class HistoryFolderWatch(QtCore.QObject):
 
     def pause(self):
         self.paused = True
-        self.message = 'Folder watching paused. Refresh history now to resume.'
+        self.message = 'Folder watching paused. Retry / Resume on History Overview to resume.'
         self.cancel_pending()
 
     def shutdown(self):

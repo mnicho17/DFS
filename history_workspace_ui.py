@@ -54,7 +54,7 @@ class ExploreUsersWidget(QtWidgets.QWidget):
         self.search = QtWidgets.QPushButton('Explore history')
         self.search.clicked.connect(self.start); self.username.returnPressed.connect(self.start)
         row.addWidget(self.search); box.addLayout(row)
-        self.status = QtWidgets.QLabel('Refresh history on Overview to index newly mapped contests, then explore. No search has run.')
+        self.status = QtWidgets.QLabel('Configured folders update automatically when monitoring is enabled. Use Check now / Retry on Overview to check new mappings, then explore. No search has run.')
         self.status.setWordWrap(True); box.addWidget(self.status)
         self.table = QtWidgets.QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(['Username', 'Contests', 'Entries', 'Qualified success coverage', 'Top-1% contests', 'Historical cohort'])
@@ -96,7 +96,7 @@ class ExploreUsersWidget(QtWidgets.QWidget):
         if result.get('cancelled'):
             self.status.setText('Search cancelled. Previous completed analysis remains displayed.'); return
         if result.get('error'):
-            self.status.setText('Search unavailable: ' + result['error'] + ' Refresh history or review Learning coverage. Previous analysis remains displayed.'); return
+            self.status.setText('Search unavailable: ' + result['error'] + ' Use Check now / Retry on Overview or review Learning coverage. Previous analysis remains displayed.'); return
         from opponent_history import render_preview
         from opponent_analysis_ui import NumberItem
         profile = result['profile']
@@ -148,6 +148,39 @@ def collapsible(title, items, parent):
     return toggle, body
 
 
+def history_update_view(controller,report_busy=False):
+    """Present existing controller/watcher state without inspecting source files."""
+    watch=controller.watch
+    configured=any(str(controller.settings.value(key,'') or '').strip()
+        for key in ('learning/results_folder','learning/salary_folder'))
+    busy=controller.busy
+    stopping=busy and controller.stop is not None and controller.stop.is_set()
+    queued=controller.queued
+    automatic=controller.enabled()
+    monitoring=watch.enabled()
+    armed=bool(watch.watcher.files() or watch.watcher.directories()) if monitoring and not (busy or queued or watch.paused) else False
+    if watch.closed:state='Closing'
+    elif stopping:state='Stopping safely'
+    elif busy:state='Checking history'
+    elif queued:state='Update queued'
+    elif not configured:state='Choose source folders'
+    elif watch.paused:state='Paused'
+    elif not automatic:state='Automatic updates off'
+    elif not monitoring:state='Startup checks only; folder monitoring off'
+    elif armed:state='Watching for changes'
+    else:state='Monitoring not armed'
+    action='sources' if not configured else 'check'
+    label='Choose source folders…' if not configured else 'Retry / Resume' if watch.paused else 'Check now'
+    detail=(f"History updates: {state}. Automatic updates: {'on' if automatic else 'off'}.\n"
+        +watch.message+'\n'
+        +('Current progress: ' if busy else 'Last recorded check: ')
+        +(controller.text.split('\n')[0] if controller.text else 'No completed check recorded.')
+        +'\nMonitoring and saved import status do not establish current source or field-model qualification; analysis retains its existing validation.')
+    return dict(state=state,label=label,action=action,detail=detail,
+        can_check=not busy and not report_busy and not watch.closed,
+        can_pause=not stopping and (busy or queued) and not watch.closed)
+
+
 def install_history_workspace(w, layout):
     """Move original controls intact; all importer handlers and worker ownership stay in place."""
     items = [layout.takeAt(0) for _ in range(layout.count())]
@@ -159,8 +192,7 @@ def install_history_workspace(w, layout):
             if contains(item, widget): items.remove(item); return item
         raise ValueError('History layout item missing: ' + widget.objectName())
     source_items = [items.pop(0), take(w.username_edit), take(w.results_folder), take(w.salary_folder)]
-    take(w.import_new_button)
-    tools = [take(w.analyze_button), take(w.import_button), take(w.review_report_button)]
+    tools = [take(w.analyze_button), take(w.import_button), take(w.review_report_button),take(w.import_new_button)]
     summary = take(w.summary); evidence = take(w.results_tabs)
     progress = take(w.import_progress); progress_text = take(w.import_status_label)
     refresh = take(w.auto_history); status = take(w.history_status)
@@ -178,13 +210,19 @@ def install_history_workspace(w, layout):
     refresh.layout().removeWidget(w.history_refresh_button)
     tools[1].layout().removeWidget(w.attach_salary_button)
     overview = QtWidgets.QWidget(); overview_box = QtWidgets.QVBoxLayout(overview)
+    w.history_update_summary=QtWidgets.QLabel();w.history_update_summary.setObjectName('historyUpdateSummary')
+    w.history_update_summary.setWordWrap(True);w.history_update_summary.setTextFormat(QtCore.Qt.PlainText)
+    overview_box.addWidget(w.history_update_summary)
     top = QtWidgets.QHBoxLayout()
-    top.addWidget(w.import_new_button); top.addWidget(w.history_refresh_button); top.addWidget(w.attach_salary_button)
+    refresh.layout().removeWidget(w.history_cancel_button)
+    top.addWidget(w.history_refresh_button);top.addWidget(w.history_cancel_button);top.addWidget(w.attach_salary_button)
     review = QtWidgets.QPushButton('Review learning coverage'); top.addWidget(review)
     overview_box.addLayout(top)
     toggle, body = collapsible('Sources and account settings', source_items, overview)
+    w.history_sources_toggle=toggle
+    refresh.layout().removeWidget(w.auto_history);body.layout().addWidget(w.auto_history)
     overview_box.addWidget(toggle); overview_box.addWidget(body)
-    add_item(overview_box, refresh); add_item(overview_box, status)
+    add_item(overview_box, status)
     w.history_attention = QtWidgets.QLabel(); w.history_attention.setWordWrap(True)
     overview_box.addWidget(w.history_attention)
     add_item(overview_box, summary); overview_box.addWidget(w.report, 1)
@@ -215,9 +253,10 @@ def install_history_workspace(w, layout):
         text = (f"Saved coverage: {len(rows)} contests; {counts['ready']} full evidence chains; "
                 f"{counts['needs_review']} need review ({counts['conflict']} conflicts); {counts['missing_evidence']} missing evidence. "
                 'Saved states do not establish current field-model qualification. Review Learning coverage for reasons and actions.'
-                if rows else 'No reconciled coverage is recorded. Refresh history, then review Learning coverage for imported contests and missing evidence.')
+                if rows else 'No reconciled coverage is recorded. Wait for automatic updates or choose Check now, then review Learning coverage for imported contests and missing evidence.')
         if w.history_attention.text() != text: w.history_attention.setText(text)
     w.refresh_history_overview = update_attention
     w.history_workspace.currentChanged.connect(lambda _:update_attention())
     w.history_refresh.changed.connect(update_attention)
     update_attention()
+    w.update_history_status()
