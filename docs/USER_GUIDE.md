@@ -2624,3 +2624,34 @@ action for a repair attempt. Captain locks, exposure limits, uniqueness, histori
 qualification and existing cancellation/worker checks still apply. More SIM
 scenarios alone do not add lineup choices. Reducing the requested count also
 recalculates percentage caps and is not guaranteed to resolve the shortage.
+
+
+### Manually reviewing a rejected salary match
+
+**Results & Learning > Review Salary Matches** now shows how many observed
+player/role identities match each candidate. A known player in an incompatible
+roster slot is identified as a **role conflict**, including the salary file's
+allowed slots, rather than being described only as missing.
+
+When the normal selector has no compatible revision, enable **Choose a salary
+revision manually / inspect conflicts**. Imported rejected revisions become
+selectable, ordered by compatibility and observed identity coverage. Their
+conflicts remain visible. One salary revision can serve any number of contests;
+linking a contest never consumes it.
+
+To remember an intended revision despite unresolved conflicts, enter a reason,
+confirm that qualification remains blocked, and choose **Record as Needs review**.
+This saves a separate review association and preserves earlier review versions.
+It creates no qualified salary pairing and supplies no salary metadata to
+historical, hindsight or field-model consumers. The result remains in the
+needs-review/unpaired count. No observations, original files, forecasts or
+existing qualified pairings are rewritten. Ordinary background imports do not
+retarget or promote this recorded choice automatically.
+
+On reopening review, the recorded revision and its current rejection reason
+remain visible. Import a correct source revision or resolve the source conflict,
+then deliberately choose a fully compatible revision and use normal **Save**.
+Existing missing-date confirmation and supported filename-date correction still
+apply. Recording a review is not a way to override mismatched IDs, roles, dates,
+games or changed source files. Saved qualified pairings retain their existing
+protection against replacement.

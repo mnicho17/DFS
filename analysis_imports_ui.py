@@ -12,10 +12,11 @@ class CombinedImportWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal(dict)
     error = QtCore.pyqtSignal(str)
 
-    def __init__(self, results_folder='', salary_folder='', username='', pair=None, db_path=None, refresh_history=False, automatic=False):
+    def __init__(self, results_folder='', salary_folder='', username='', pair=None, db_path=None, refresh_history=False, automatic=False, salary_review=None):
         super().__init__()
         self.results_folder, self.salary_folder, self.username = results_folder, salary_folder, username
         self.pair = pair
+        self.salary_review = salary_review
         self.automatic = automatic
         self.refresh_history = refresh_history
         from learning_db import history_db_path
@@ -31,7 +32,7 @@ class CombinedImportWorker(QtCore.QObject):
     def run(self):
         try:
             source_checkpoint = checkpoint = None
-            if self.automatic and self.refresh_history and not self.pair:
+            if self.automatic and self.refresh_history and not self.pair and not self.salary_review:
                 import history_refresh_cache as cache
                 self.progress.emit(0, 0, 'Checking history for changes…')
                 try:
@@ -43,7 +44,11 @@ class CombinedImportWorker(QtCore.QObject):
                     source_checkpoint, _ = cache.inputs(self, sources_only=True)
                 except (OSError, ValueError, sqlite3.Error):
                     checkpoint = None
-            if self.pair:
+            if self.salary_review:
+                from analysis_salary_reviews import save as save_review
+                saved = save_review(*self.salary_review, db_path=self.db_path, cancelled=self.cancelled.is_set)
+                result = dict(review_association_saved=int(saved), review_only=True, errors=[])
+            elif self.pair:
                 corrected_import=None
                 if len(self.pair)>3:
                     from analysis_date_corrections import save
@@ -97,7 +102,7 @@ class CombinedImportWorker(QtCore.QObject):
             result['cancelled'] = bool(result.get('cancelled') or self.cancelled.is_set())
             if result['cancelled']:
                 result.pop('report', None)
-            if self.refresh_history and not result['cancelled']:
+            if self.refresh_history and not self.salary_review and not result['cancelled']:
                 from opponent_history import sync_saved
                 try:
                     result['username_history'] = sync_saved(self.db_path, self.cancelled.is_set,
@@ -152,6 +157,7 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.setWindowTitle('Review Salary Matches')
         self.resize(780, 560)
         self.selection = None
+        self.review_selection = None
         self.state = state if state is not None else pairing_state(db_path)
         self.rows = self.state['results']
         layout = QtWidgets.QVBoxLayout(self)
@@ -162,20 +168,26 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         layout.addWidget(label)
         self.summary = QtWidgets.QLabel(
             f"{self.state['saved_pairings']} saved pairings; {self.state['unpaired_results']} unpaired results; "
-            f"{self.state['invalid_saved_pairings']} invalid saved pairings. "
+            f"{self.state['invalid_saved_pairings']} invalid saved pairings; "
+            f"{self.state.get('review_associations',0)} manual choices awaiting qualification. "
             f"Database: {self.state['database_identity']}" +
             ('\n' + '\n'.join(self.state['warnings']) if self.state['warnings'] else ''))
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
         self.results = QtWidgets.QComboBox()
         for row in self.rows:
-            self.results.addItem(row['name'] + ' [' + row['hash'][:12] + '] — ' + row['status'], row)
+            best = max(row['candidates'], key=lambda c:c.get('matched',0), default={})
+            coverage = (f" — best observed coverage {best['matched']}/{best['observed']}" if best.get('observed') and best.get('identity_checked') else '')
+            self.results.addItem(row['name'] + ' [' + row['hash'][:12] + '] — ' + ('Needs review (manual choice recorded)' if row['status']=='NEEDS_REVIEW_ASSOCIATION' else row['status']) + coverage, row)
         layout.addWidget(self.results)
         self.correct_date=QtWidgets.QCheckBox('Review a contest-date correction (preserves the original file)')
         layout.addWidget(self.correct_date)
         self.date_reason=QtWidgets.QLineEdit()
         self.date_reason.setPlaceholderText('Reason for correcting the recorded date (at least 8 characters)')
         layout.addWidget(self.date_reason)
+        self.inspect_rejected = QtWidgets.QCheckBox('Choose a salary revision manually / inspect conflicts')
+        self.inspect_rejected.setToolTip('Shows imported salary revisions, including rejected ones. Full qualification still requires compatible dates, games and player identities.')
+        layout.addWidget(self.inspect_rejected)
         self.salaries = QtWidgets.QComboBox()
         layout.addWidget(self.salaries)
         self.candidate_details = QtWidgets.QLabel()
@@ -195,12 +207,19 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.confirm_date = QtWidgets.QCheckBox('I confirm this salary slate belongs to the selected contest (result date missing).')
         layout.addWidget(self.confirm_date)
         self.buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Close)
+        self.confirm_review = QtWidgets.QCheckBox('I understand this records my choice only; conflicts still prevent full qualification.')
+        layout.addWidget(self.confirm_review)
+        self.record_review = self.buttons.addButton('Record as Needs review', QtWidgets.QDialogButtonBox.ActionRole)
+        self.record_review.clicked.connect(self._record_review)
+        self.confirm_review.toggled.connect(self._review_enabled)
+        self.date_reason.textChanged.connect(self._review_enabled)
         self.buttons.accepted.connect(self._select)
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
         self.results.currentIndexChanged.connect(self._update)
         self.salaries.currentIndexChanged.connect(self._candidate_changed)
         self.correct_date.toggled.connect(self._update)
+        self.inspect_rejected.toggled.connect(self._update)
         self._update()
         if result_hash:
             for index, row in enumerate(self.rows):
@@ -217,9 +236,14 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         if not row:
             self.details.setPlainText('No results cataloged yet. Import Results & Salaries first.')
             self.buttons.button(QtWidgets.QDialogButtonBox.Save).setEnabled(False)
+            self._candidate_changed()
             return
         notes = [f"Status: {row['status']}"]
         notes.append('Recorded dates: '+(', '.join(row.get('dates',[])) or 'unknown'))
+        review = row.get('review_association')
+        if review and not row['saved_pair']:
+            notes.append('Manual salary choice recorded; full qualification still pending. Reason: ' + review['reason'])
+        self.inspect_rejected.setVisible(not row['saved_pair'])
         self.correct_date.setVisible(not row['saved_pair'] and any(c.get('date_correctable') for c in row['candidates']))
         if row['entries'] is not None:
             pct = f"{row['readable_pct']:.1f}%" if row['readable_pct'] is not None else 'n/a'
@@ -227,12 +251,12 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         notes.append(f"Unreadable result rosters: {row['unreadable']:,} (excluded from matching).")
         saved = row['saved_pair']
         rejected = []
-        for candidate in row['candidates']:
+        for candidate in sorted(row['candidates'], key=lambda c:(bool(review and c['hash']==review['salary_hash']),c['compatible'],c.get('date_correctable',False),c.get('matched',0)), reverse=True):
             label = candidate['name'] + ' [' + candidate['hash'][:12] + ']'
             if not candidate['compatible']:
                 rejected.append(label + ': ' + candidate['reason'])
-            if (candidate['compatible'] or (self.correct_date.isChecked() and candidate.get('date_correctable'))) and not saved:
-                self.salaries.addItem(label, candidate)
+            if (bool(review and candidate['hash']==review['salary_hash']) or self.inspect_rejected.isChecked() or candidate['compatible'] or (self.correct_date.isChecked() and candidate.get('date_correctable'))) and not saved:
+                self.salaries.addItem(label + (' — conflict: review required' if not candidate['compatible'] else ''), candidate)
                 notes.append(label + ': ' + candidate['reason'])
         if saved:
             notes[1:1] = [f"Salary file: {saved['name']}", f"Revision: {saved['hash']}",
@@ -257,17 +281,41 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         row = self.results.currentData()
         self.candidate_details.setText('' if not candidate else
             f"{candidate.get('format') or 'Unknown format'} | dates: {', '.join(candidate.get('dates',[])) or 'unknown'} | "
-            f"{candidate.get('player_roles','unknown')} player/role identities\n"
+            f"{candidate.get('player_roles','unknown')} salary player/role identities\n" +
+            ('Observed identities matched: '+str(candidate['matched'])+'/'+str(candidate['observed'])+'\n' if candidate.get('identity_checked') else 'Observed identities: not checked; see the compatibility blocker.\n') +
             f"Games: {', '.join(candidate.get('games',[])) or 'unknown'}\n"
             f"Imported: {candidate.get('imported_at','not recorded')} | revision {candidate['hash'][:12]}\n"
             f"Already linked to {candidate.get('linked_contests',0)} contests; available for additional contests.\n"
             f"{candidate.get('reason','')}")
         correction=bool(candidate and candidate.get('date_correctable') and self.correct_date.isChecked())
-        self.date_reason.setVisible(correction)
+        can_save = bool(row and not row['saved_pair'] and candidate and (candidate.get('compatible') or correction))
+        self.buttons.button(QtWidgets.QDialogButtonBox.Save).setEnabled(can_save)
+        if candidate and not can_save and not row['saved_pair']:
+            self.candidate_details.setText(self.candidate_details.text() + '\nNot qualified: resolve the reported conflicts before saving a full pairing.')
+        draft = bool(row and not row['saved_pair'] and candidate and not candidate.get('compatible') and not correction)
+        self.date_reason.setVisible(correction or draft)
+        self.date_reason.setPlaceholderText('Reason this is the intended salary revision (8–1000 characters)' if draft else 'Reason for correcting the recorded date (at least 8 characters)')
+        self.confirm_review.setVisible(draft)
+        self.confirm_review.setChecked(False)
+        self.record_review.setVisible(draft)
+        self._review_enabled()
         self.confirm_date.setText('I confirm changing this contest date to '+', '.join(candidate.get('dates',[]))+'.' if correction else
             'I confirm this salary slate belongs to the selected contest (result date missing).')
-        self.confirm_date.setVisible(bool(row and not row['saved_pair'] and candidate and (correction or not candidate['automatic'])))
+        self.confirm_date.setVisible(bool(row and not row['saved_pair'] and candidate and (correction or (candidate['compatible'] and not candidate['automatic']))))
         self.confirm_date.setChecked(False)
+
+    def _review_enabled(self):
+        row, candidate = self.results.currentData(), self.salaries.currentData()
+        draft = bool(row and not row['saved_pair'] and candidate and not candidate.get('compatible')
+                     and not (self.correct_date.isChecked() and candidate.get('date_correctable')))
+        self.record_review.setEnabled(draft and self.confirm_review.isChecked() and 8 <= len(self.date_reason.text().strip()) <= 1000)
+
+    def _record_review(self):
+        self._review_enabled()
+        if not self.record_review.isEnabled():return
+        row, candidate = self.results.currentData(), self.salaries.currentData()
+        self.review_selection = (row['hash'], candidate['hash'], self.date_reason.text().strip())
+        self.accept()
 
     def _select(self):
         row, candidate = self.results.currentData(), self.salaries.currentData()
@@ -289,6 +337,8 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
 
 
 def import_summary(result):
+    if result.get('review_only'):
+        return ('Salary association recorded as Needs review.' if result.get('review_association_saved') else 'The same salary review association was already recorded.') + '\nNo qualified pairing was created. Resolve the displayed conflicts before historical qualification; sources and previous pairings remain unchanged.'
     lines = ['Import cancelled; completed files remain saved.' if result.get('cancelled') else 'Import complete.',
              f"New result files: {result.get('results_imported', 0):,}",
              f"New salary files: {result.get('salaries_imported', 0):,}",
