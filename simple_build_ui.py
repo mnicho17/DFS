@@ -171,6 +171,11 @@ def sync_simple_build_panel(w):
                     parts.append(w.combo_mlb_stack_pref.currentText())
             if w._active_recipe_name:
                 parts.insert(0, 'Recipe: ' + w._active_recipe_name)
+            from automatic_compute import plan, summary as compute_summary
+            decision = plan(w, (w.spin_sd if kind == 'showdown' else w.spin_cl).value()) if nfl else None
+            if decision:
+                parts = [p for p in parts if p not in ('SIM off', 'Fast SIM', 'Deep SIM', 'Custom compute settings')]
+                parts.append(compute_summary(decision) + ' Generate will use Deep + SIM.')
             summary = ' · '.join(parts)
         if not getattr(w, '_build_flow_active', False):
             from build_workflow import preparation_plan

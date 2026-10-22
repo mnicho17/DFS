@@ -180,6 +180,9 @@ class SimpleBuildTests(unittest.TestCase):
         with patch('PyQt5.QtWidgets.QInputDialog.getItem',return_value=('15 minutes',True)):
             self.choose(w,'Automatic')
         self.assertEqual(w._automatic_compute_cap,15)
+        self.assertIn('Automatic compute:',w.lbl_simple_build_summary.text())
+        self.assertIn('chosen maximum 15 min',w.lbl_simple_build_summary.text())
+        self.assertNotIn('SIM off',w.lbl_simple_build_summary.text())
         self.assertEqual(w._current_build_recipe(),before)
         from automatic_compute import apply
         decision=apply(w,150)
