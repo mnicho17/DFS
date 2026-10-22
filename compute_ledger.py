@@ -364,6 +364,8 @@ def instrument_worker(fn):
             purpose=getattr(worker, 'build_purpose', 'saved_repair' if worker.repair_source == 'saved' else 'normal'),
             calibration=worker.field_calibration, contest=worker.contest_profile)
             if worker.compute_telemetry else None)
+        from simulation_profiling import begin_session,end_session
+        profile_token=begin_session()
         token = _current.set(ledger)
         try:
             return fn(worker, *args, **kwargs)
@@ -374,10 +376,14 @@ def instrument_worker(fn):
                 cancelled = isinstance(event, threading.Event) and event.is_set()
                 safe(ledger.finish, dict(cancelled=cancelled), status='cancelled' if cancelled else 'failed')
             _current.reset(token)
+            end_session(profile_token)
     return wrapped
 
 
 def finish_worker(payload):
+    from simulation_profiling import snapshot
+    profiles=safe(snapshot)
+    if profiles:payload.setdefault('timing_report',{})['simulation_profile']=profiles
     ledger = _current.get()
     if ledger:
         safe(ledger.finish, payload)
