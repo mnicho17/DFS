@@ -2242,13 +2242,12 @@ estimates remain available after cancellation; stopped jobs do not auto-restart.
 The ownership sampling, calculation, and lineup algorithms are unchanged.
 
 
-<<<<<<< HEAD
 Ownership results refresh the player table's ownership cells in place. Sorting,
 selected players, and readiness checks stay current without rebuilding every
 player cell. A full table refresh is used if the displayed rows no longer match
 the loaded player keys. This display optimization does not change ownership
 estimation or lineup rules.
-=======
+
 ### Automatic Captain-pool allocations
 
 Locking several Captains selects the allowed Captain pool. The app first tries
@@ -2455,4 +2454,3 @@ History Overview now shows whether automatic updates are on, whether folder moni
 Routine downloads continue through the existing folder watcher after 30 seconds of source quietness; unchanged automatic checks retain their metadata/checkpoint fast path. No new polling timer or periodic content scan was added. Watch registration can be partial or unavailable; the displayed watcher message and Check now remain available for missed notifications and drive changes. Monitoring status and the last recorded result are not proof of current source evidence or field-model qualification.
 
 The automatic-updates preference is under **Sources and account settings**. Explicit checking does not enable an off preference. The original **Import new results** tool remains under **More reports and analysis tools** for manual troubleshooting. Salary matching, learning coverage, source revisions, mappings and historical qualification retain their existing validation and review paths. No import, indexing or model change is triggered simply by viewing this status.
->>>>>>> main
