@@ -100,7 +100,6 @@ def setup_simple_build_panel(w, layout, count_labels, cap_labels):
         combo.currentTextChanged.connect(lambda *_: sync_simple_build_panel(w))
     w.spin_build_own_weight.valueChanged.connect(lambda *_: sync_simple_build_panel(w))
     w.action_show_build_controls.toggled.connect(lambda *_: sync_simple_build_panel(w))
-    w.action_auto_library.toggled.connect(lambda *_: sync_simple_build_panel(w))
     sync_simple_build_panel(w)
 
 

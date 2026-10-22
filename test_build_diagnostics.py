@@ -60,6 +60,17 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertEqual(clean['ownership'],dict(status='refreshed'))
         self.assertNotIn('private',json.dumps(clean))
 
+    def test_scenario_component_comparison_is_saved_and_prints_only_known_categories(self):
+        record=create_build_diagnostic(context={},timing_report={},sim_report=dict(volatility_model='current',
+            scenario_cache=dict(status='saved',requested_scenarios=1,reused_scenarios=0,
+                comparison=dict(status='Compared with a recent same-slate receipt',changed_components=['player forecasts','C:/private/file.csv']))))
+        text=format_build_report(record)
+        self.assertIn('player forecasts',text);self.assertNotIn('private',text)
+        self.assertIn('Diagnostic only',text)
+        with tempfile.TemporaryDirectory() as folder:
+            path=os.path.join(folder,'history.json');save_build_diagnostic(record,path=path)
+            self.assertEqual(format_build_report(load_build_history(path=path)[0]),text)
+
     def test_scenario_cache_reason_and_overhead_survive_saved_report(self):
         record=create_build_diagnostic(context={},timing_report={},sim_report=dict(volatility_model='current',
             scenario_cache=dict(status='not saved',requested_scenarios=10000,reused_scenarios=0,

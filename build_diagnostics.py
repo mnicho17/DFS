@@ -726,6 +726,18 @@ def format_build_report(record: Mapping[str, Any]) -> str:
                 if len(reason)>500 or any(token in reason for token in ('\\','/','\n','\r')):
                     reason='Legacy cache error details withheld; rerun to record a categorized reason.'
                 lines.append('- Scenario cache reason: '+reason)
+            comparison=cache.get('comparison') or {}
+            if comparison:
+                from scenario_cache_diagnostics import LABELS
+                changed=[label for label in comparison.get('changed_components',[]) if label in LABELS]
+                if changed:
+                    lines.append('- Scenario cache comparison: differences from a recent recorded same-slate cache: '+', '.join(changed)+'. Diagnostic only; exact-input and integrity checks still decide reuse.')
+                elif comparison.get('status')=='No comparable receipt recorded':
+                    lines.append('- Scenario cache comparison: no comparable completed-cache receipt recorded for this slate yet.')
+                elif comparison.get('status')=='Compared with a recent same-slate receipt':
+                    lines.append('- Scenario cache comparison: recorded input components match, but no exact artifact was found. Additional metadata or an unavailable artifact may prevent reuse; recomputation still required.')
+                else:
+                    lines.append('- Scenario cache comparison unavailable; exact-input validation still applies.')
             if 'lookup_seconds' in cache:
                 lines.append(f"- Scenario cache overhead: lookup/verification {_number(cache.get('lookup_seconds')):.2f}s; frame I/O/finalization {_number(cache.get('io_seconds')):.2f}s; saved artifact {_integer(cache.get('stored_bytes'))/1024**2:.1f} MiB")
     capture = record.get('distribution_capture') or {}

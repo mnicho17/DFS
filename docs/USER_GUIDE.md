@@ -68,11 +68,11 @@ The **Tasks…** button stays on the main workspace beside a compact count of wo
 
 A quiet task shows **no recent update** after 60 seconds; that describes missing progress messages, not a diagnosis that the task has failed. Failures, partial preparation, cancellations, and incomplete portfolios remain visible in recent task history for this app session. Overnight dialogs also have a **Tasks…** button.
 
-For a live NFL Deep build with SIM enabled, **Generate** now checks remembered library paths and the standard history `candidates` folder automatically. Successfully loaded libraries and libraries started in overnight preparation are remembered, including external-drive paths. Discovery is bounded and does not recursively search drives. It checks inexpensive metadata first, then uses the existing loader to validate actual contents, current rules, Captain coverage, and screening evidence. Final validation SIM remains fresh.
+For a live NFL Deep build with SIM enabled, **Generate** now checks remembered library paths and the standard history `candidates` folder automatically. Successfully loaded libraries and libraries started in overnight preparation are remembered, including external-drive paths. Discovery is bounded and does not recursively search drives. It checks inexpensive metadata first, then uses the existing loader to validate actual contents, current rules, Captain coverage, and screening evidence. Current candidate scoring, rules and independent audits still run; completed exact-input scenario frames may be replayed.
 
-An explicitly loaded library takes priority and retains its existing validation errors and explicit partial-coverage choice. Automatic discovery never opts into partial coverage. If an automatically discovered library is rejected, the Tasks details explain the reason; the build proceeds with the existing fresh-candidate search if no compatible library is accepted. Rules and exposure limits are not relaxed by this fallback. Fast builds, snapshot replay, and saved-portfolio repair do not automatically discover libraries.
+Legacy explicit-library requests retain their existing validation errors and partial-coverage safeguards; they are not the normal CSV-to-Generate flow. Automatic discovery never opts into partial coverage. If an automatically discovered library is rejected, the Tasks details explain the reason; the build proceeds with the existing fresh-candidate search if no compatible library is accepted. Rules and exposure limits are not relaxed by this fallback. Fast builds, snapshot replay, and saved-portfolio repair do not automatically discover libraries.
 
-Turn off **Settings > Automatically reuse compatible libraries** to use fresh generation. **Clear Candidate Library** also turns automatic reuse off; re-enable it explicitly when desired. Compute profiles, forecast models, historical-field settings, and strategic rules retain their existing behavior.
+Automatic reuse is always checked for live NFL Deep + SIM builds; there is no attachment step or reuse toggle in Settings. Old saved off preferences no longer disable discovery. A successful new CSV load clears any old explicit attachment; a failed or cancelled load retains the current slate. Fast, snapshot replay and saved-portfolio repair keep their existing routes. Compute profiles, forecast models, historical-field settings, and strategic rules retain their existing behavior. Existing ownership estimates, compatible screening and completed exact-input scenarios are also reused through their current validation gates; no experimental historical-field model is enabled automatically.
 
 ## 2. Five-minute workflow
 
@@ -1233,15 +1233,7 @@ failure loses at most the unfinished batch. **Open existing** resumes using the
 original inputs and the next batch seed. After changing inputs or updating the
 app, start a new library; existing libraries can still be loaded for fresh scoring.
 
-To use the search, load the matching slate, refresh player data and ownership,
-then choose **Load Candidate Library...**. Select **Deep**, enable NFL SIM and
-click Build. Current injuries, QB eligibility, fades, locks, groups and salaries
-are checked again; exposure and uniqueness rules are applied during selection.
-Candidates are screened and the shortlist is simulated again using current
-projections. No old SIM score is reused. The build report shows accepted and
-rejected library counts. **Clear Candidate Library** returns to ordinary generation.
-Clear it before repairing an existing portfolio. Different slate IDs/game dates
-are rejected rather than matched by player name alone.
+To use prepared search work, load the matching slate, select **Deep** with NFL SIM, and click Generate. Compatible libraries are found automatically in remembered paths and the standard candidates folder. Current injuries, QB eligibility, fades, locks, groups, salaries, coverage and evidence are checked again; exposure and uniqueness rules apply during selection. Compatible screening and completed exact-input scenario frames can be reused, while current candidate scoring and independent audits still run. The build report records accepted/rejected candidates and fallback reasons. Different slate IDs/game dates are rejected rather than matched by player name alone. Fast and saved-portfolio repair retain their existing routes.
 
 The long search expands candidate discovery; it does not run an overnight final
 outcome ranking or automatically train the forecast model. Final simulation still
@@ -1971,7 +1963,7 @@ Settings > **Long Search / Resume** opens Overnight Preparation for NFL Classic 
 
 Saved roster identities are excluded from later batches and resumed searches. Captain swaps remain distinct in Showdown. Five consecutive styles adding no new candidates stop the search with an explanation; this does not prove all possible lineups were searched. Time limits and heuristic searches can finish below the target. App-code or input changes still require a new library to continue searching; existing libraries can still be loaded for a matching slate and checked against current player inputs.
 
-After preparation, close the dialog, use **Load Candidate Library**, and run **Deep** with SIM enabled. Both formats reuse the saved combinations and validate current eligibility, salary and lineup rules. This avoids ordinary candidate generation for that build, but still runs current scenario scoring, feasibility checks and selection. Optional reusable scenario preparation is described below. Preparation does not automatically submit/export lineups. Start with 12,000–20,000: very large libraries can increase screening time and memory use. No overnight job starts automatically on app launch.
+After preparation, run **Deep** with SIM enabled; Generate automatically discovers compatible saved work without attaching a library. Both formats reuse the saved combinations and validate current eligibility, salary and lineup rules. This avoids ordinary candidate generation for that build, but still runs current scenario scoring, feasibility checks and selection. Optional reusable scenario preparation is described below. Preparation does not automatically submit/export lineups. Start with 12,000–20,000: very large libraries can increase screening time and memory use. No overnight job starts automatically on app launch.
 
 Command-line preparation also accepts `--candidates 20000` with `--hours 8`; both limits are validated before creating a library. The candidate target is not a contest entry limit.
 
@@ -2393,3 +2385,10 @@ With Smart preparation enabled, completed candidate libraries can warm reusable 
 Warming captures the current NFL Deep + SIM snapshot on the UI thread when it matches the exact discovered player slate. Otherwise it retains the last captured warming setup for that slate, or uses the saved Smart setup when none exists. The last captured setup survives restart so generic defaults do not trigger unnecessary warming. It runs the existing detached scenario-preparation pipeline, never applies a portfolio to the active table, and does not change settings or limits. Live changes, different settings or a new app build can still prevent reuse. Independent audits remain fresh. A warming receipt is scheduling metadata, not current-input validation.
 
 Each warming attempt has a ten-minute cooperative allowance (and still respects the captured Deep time allowance), with three attempts and thirty minutes total before Retry/Resume is required. Errors requiring attention stop automatic retries. After an abrupt termination, the interrupted attempt's reserved allowance is charged conservatively. Cooperative yields retain elapsed usage without consuming a completed-attempt count. Explicit Retry/Resume grants another bounded allowance while retaining candidate work. Matching completed receipts are skipped while their cache artifact remains present; a missing artifact queues warming again. Production cache integrity is always verified when Generate reuses it. Storage stays subject to the existing scenario-cache limits, with no automatic deletion of older caches.
+
+
+### Explaining scenario-cache misses
+
+Build reports compare fingerprint components with up to twelve recent recorded cache receipts for the same exact player-ID/game-date slate, choosing the comparison with the fewest changed components. They can identify forecast-related player fields, availability/roles, ownership, other player inputs, opponent fields, seed/count, context/history settings, app/model and runtime/codec differences. These are differences from a recorded comparison, not proof that it was the cache you intended to reuse. Old caches may have no diagnostic receipt yet.
+
+The disposable scenario-cache diagnostics database retains at most 64 receipts containing fingerprints only, not player values or filenames. Missing, malformed, oversized or unavailable receipts do not authorize replay or prevent fresh calculation. Exact cache identity, full frame integrity/coverage, cancellation, storage limits and fresh independent audits remain unchanged. Copy Last Build Report saves the comparison for that specific build.

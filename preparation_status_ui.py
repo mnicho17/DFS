@@ -42,7 +42,6 @@ def preparation_rows(w):
     add('readiness', 'Readiness', readiness,
         '\n'.join(details) or 'Open Slate Readiness for the report. This summary does not relax rules or certify portfolio feasibility.', 'Review readiness')
     selected = str(getattr(w, '_candidate_library', '') or '')
-    automatic = w.action_auto_library.isChecked()
     if selected:
         state = 'Selected; rechecked during Generate' if deep else 'Selected; NFL Deep + SIM required'
         detail = selected + '\n'
@@ -52,10 +51,8 @@ def preparation_rows(w):
         state, detail = 'Automatic discovery off for replay', 'Saved snapshots retain their existing replay behavior.'
     elif not deep:
         state, detail = 'Fresh candidate search', 'Automatic library discovery applies to NFL Deep builds with SIM enabled.'
-    elif automatic:
-        state, detail = 'Automatic discovery configured', 'Generate checks remembered paths and the standard library folder. No library is verified by this summary. Incompatible automatic candidates are skipped with reasons in Tasks. Saved-portfolio repair does not automatically discover libraries.'
     else:
-        state, detail = 'Automatic discovery off', 'Generate uses fresh candidate search unless a library is explicitly selected.'
+        state, detail = 'Automatic discovery configured', 'Generate checks remembered paths and the standard library folder. No library is verified by this summary. Incompatible automatic candidates are skipped with reasons in Tasks. Saved-portfolio repair does not automatically discover libraries.'
     add('library', 'Candidate library', state, detail, 'Open Advanced')
     if nfl and w._contest_mode() == 'showdown':
         requested = w.chk_showdown_history.isChecked()

@@ -45,6 +45,16 @@ class CsvLoadingTests(unittest.TestCase):
             return {'total':len(ps),'sleeper_state':'ok','usage_state':'ok'}
         return context
 
+    def test_successful_new_csv_clears_old_explicit_library_but_failure_retains_it(self):
+        w=self.window();w._candidate_library='previous-slate.sdlib';w._candidate_library_allow_partial=True
+        with patch.object(w,'_start_ownership_sim'):
+            w._apply_csv_payload(dict(path='new.csv',players=players(),sport='NFL',mode='classic'))
+        self.assertEqual(w._candidate_library,'');self.assertFalse(w._candidate_library_allow_partial)
+        w._candidate_library='current-slate.sdlib';w._candidate_library_allow_partial=True
+        with patch('csv_loading.read_players_csv',side_effect=ValueError('invalid CSV')),patch('csv_loading.QtWidgets.QMessageBox.critical'):
+            w.csv_load.start('invalid.csv');self.wait(lambda:not w.csv_load.busy)
+        self.assertEqual(w._candidate_library,'current-slate.sdlib');self.assertTrue(w._candidate_library_allow_partial)
+
     def test_real_worker_keeps_ui_responsive_and_commits_on_gui_after_retirement(self):
         w=self.window();old=w.players;entered=threading.Event();release=threading.Event();threads=[]
         self.addCleanup(release.set)

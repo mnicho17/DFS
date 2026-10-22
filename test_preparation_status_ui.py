@@ -75,8 +75,8 @@ class PreparationStatusTests(unittest.TestCase):
         row = self.rows(w)['library']
         self.assertEqual(row['state'],'Automatic discovery configured')
         self.assertIn('No library is verified',row['detail'])
-        w.action_auto_library.setChecked(False)
-        self.assertEqual(self.rows(w)['library']['state'],'Automatic discovery off')
+        w.app_settings.setValue('build/auto_library',False)
+        self.assertEqual(self.rows(w)['library']['state'],'Automatic discovery configured')
 
     def test_selected_partial_library_requires_deep_and_stays_explicit(self):
         w = self.window()
