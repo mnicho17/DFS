@@ -12,7 +12,8 @@ def report_text(record):
                 f"Contest: {record.get('sport', 'unknown')} {record.get('contest_type', 'unknown')}\n"
                 f"Requested: {record.get('requested_count', 'not recorded')}\n\n"
                 'This attempt failed. No completed result, lineup, or SIM receipt is associated with it.\n'
-                'Session-only error details; may include traceback paths.\n\n' + record['failure_message'])
+                'Session-only error details; may include traceback paths.\n\n' + record['failure_message'] +
+                ('\n\n' + record['recovery_guidance'] if record.get('recovery_guidance') else ''))
     return format_build_report(record) if record else 'No build receipt selected.'
 
 
@@ -22,7 +23,7 @@ def review_views(record):
         return {key:'No build receipt selected.' for key in ('overview','lineups','limits','compute','comparisons')}
     if record.get('record_type') == 'failed_attempt':
         unavailable='No completed result evidence for this failed attempt. Previous builds remain separate in the list.'
-        return dict(overview=report_text(record),limits=record['failure_message'],
+        return dict(overview=report_text(record),limits=record['failure_message'] + ('\n\n' + record['recovery_guidance'] if record.get('recovery_guidance') else ''),
                     lineups=unavailable,compute=unavailable,comparisons=unavailable)
     from ranked_diagnostics import format_ranked_groups
     from captain_pool import adjustment_text

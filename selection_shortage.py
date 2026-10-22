@@ -24,6 +24,11 @@ def describe(requested, selected, remaining, meta, conflicts, limits, counts,
                 name = players[key].get('Name') or key
                 source = 'automatic' if key in auto_total_keys else 'explicit'
                 blocked[f"{name}: total cap {cap}/{requested} ({source})"] += 1
+        for key in m['keys'] - {m['captain_key']}:
+            cap = limits.get('flex', {}).get(key)
+            if cap is not None and counts.get('flex', {}).get(key, 0) >= cap:
+                name = players[key].get('Name') or key
+                blocked[f"{name}: FLEX cap {cap}/{requested} (explicit)"] += 1
         key = m['captain_key']
         cap = limits['captain'].get(key)
         if key and cap is not None and counts['captain'][key] >= cap:
@@ -51,6 +56,16 @@ def describe(requested, selected, remaining, meta, conflicts, limits, counts,
     lines += [f"- {label}: {count} candidates" for label, count in sorted(blocked.items(), key=lambda item: (-item[1], item[0]))[:8]]
     if not blocked:
         lines.append('- No remaining candidates in this search.')
+    deficits = []
+    for role, field in (('total', 'minimum_total'), ('Captain', 'minimum_captain')):
+        scope = 'total' if role == 'total' else 'captain'
+        for key, minimum in limits.get(field, {}).items():
+            achieved = counts[scope].get(key, 0)
+            if achieved < minimum:
+                name = players[key].get('Name') or key
+                deficits.append(f'- {name}: {role} minimum {achieved}/{minimum} lineups')
+    if deficits:
+        lines += ['', 'Unfilled minimum exposure targets at the greedy stop (not per-candidate blockers):'] + sorted(deficits)[:8]
     lines += ['', 'These counts describe this search, not proof that a full portfolio is impossible.',
         'Next: broaden the candidate pool / Deep shortlist while keeping your limits. More simulation scenarios alone do not add lineup choices.',
         'Alternatively, deliberately change a listed limit. Requesting fewer lineups also recalculates percentage caps and is not guaranteed to solve the shortage.']
