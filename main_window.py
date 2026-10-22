@@ -7328,13 +7328,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        btn_load = QtWidgets.QPushButton("Load Player CSV")
-
-        btn_load.setText("Load CSV")
-
-        btn_load.setToolTip("Load a DraftKings player salary CSV.")
-
-        btn_load.clicked.connect(self.on_load_csv)
+        btn_load = QtWidgets.QPushButton("Load CSV / Entries")
+        btn_load.setObjectName('loadSlateButton')
+        btn_load.setToolTip("Choose a player salary slate or start from your DraftKings entries file.")
+        load_menu = QtWidgets.QMenu(btn_load)
+        load_menu.addAction('Load salary CSV…', self.on_load_csv)
+        from entries_first_ui import open_entries
+        action = load_menu.addAction('Build these entries…', lambda: open_entries(self))
+        action.setObjectName('buildTheseEntriesAction')
+        btn_load.setMenu(load_menu)
 
         row1.addWidget(btn_load)
 
@@ -11797,10 +11799,14 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.csv_load.start(path)
 
     def _apply_csv_payload(self, payload) -> None:
+        if payload.get('entry_setup') is not None:
+            from entries_first_ui import validate_commit
+            validate_commit(self, payload['entry_setup'])
         path, detected_sport = payload['path'], payload['sport']
         self.last_live_check_summary.pop('ownership_reuse',None)
         self.last_ownership_reuse=None
         self.players = payload['players']
+        self._entries_build_setup = None
         self._snapshot_replay = False
         self._candidate_library = ''
         self._candidate_library_allow_partial = False
@@ -11870,6 +11876,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             pass
 
 
+
+        if payload.get('entry_setup') is not None:
+            from entries_first_ui import apply_setup
+            apply_setup(self, payload['entry_setup'])
 
         faded = self._auto_fade_out_players()
 
@@ -15064,6 +15074,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self._record_repair_attempt(receipt, payload)
 
     def closeEvent(self, event):
+        entry_dialog = getattr(self, '_entries_setup_dialog', None)
+        if entry_dialog is not None and not entry_dialog.stop_for_close():
+            event.ignore()
+            return
         self._ownership_closing = True
         run = getattr(self, '_ownership_run', None)
         if run is not None and run.shutdown():

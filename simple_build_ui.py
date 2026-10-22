@@ -140,6 +140,9 @@ def sync_simple_build_panel(w):
             if nfl and hasattr(w, 'chk_auto_entry_target'):
                 label = 'Auto entry target' if w.chk_auto_entry_target.isChecked() else 'Manual entry target'
                 parts.append(label + ': ' + w.combo_field_preset.currentText())
+            from entries_first_ui import setup_summary
+            entries = setup_summary(w)
+            if entries:parts.append(entries)
             parts.extend((w.combo_build_style.currentText(), w.combo_salary_strategy.currentText()))
             cap = w.edit_sd_cap if kind == 'showdown' else w.edit_cl_cap
             parts.append('Cap: ' + cap.text())

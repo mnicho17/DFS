@@ -1,5 +1,6 @@
 """Detached CSV preparation with GUI-thread commit only after worker retirement."""
 import logging
+from copy import deepcopy
 import threading
 import time
 from PyQt5 import QtCore, QtWidgets
@@ -37,9 +38,10 @@ class CsvLoadWorker(QtCore.QObject):
     progress = QtCore.pyqtSignal(int, int, str)
     finished = QtCore.pyqtSignal(dict)
 
-    def __init__(self, path):
+    def __init__(self, path, entry_setup=None):
         super().__init__()
         self.path = str(path)
+        self.entry_setup = deepcopy(entry_setup)
         self.stop = threading.Event()
 
     def cancel(self):
@@ -62,7 +64,12 @@ class CsvLoadWorker(QtCore.QObject):
             return value
         try:
             self.progress.emit(5, 100, 'Reading DraftKings CSV…')
-            players = stage('parse', lambda: read_players_csv(self.path))
+            entry_setup = None
+            if self.entry_setup is not None:
+                from entries_first import load_salary
+                players, entry_setup = stage('entries_validation', lambda: load_salary(self.path, self.entry_setup, self.stop.is_set))
+            else:
+                players = stage('parse', lambda: read_players_csv(self.path))
             self.progress.emit(18, 100, 'Initializing player fields…')
             for p in players:
                 self.check()
@@ -100,10 +107,13 @@ class CsvLoadWorker(QtCore.QObject):
                 except Exception:
                     logger.exception('MLB auto context failed')
             self.check()
+            if entry_setup is not None:
+                from entries_first import verify_sources
+                stage('entry_source_check', lambda: verify_sources(entry_setup, self.stop.is_set))
             timings['preparation'] = time.perf_counter() - started
             self.finished.emit(dict(path=self.path, players=players, sport=sport,
-                mode=detect_mode(players), live_summary=summary, timings=timings))
-        except LoadCancelled:
+                mode=detect_mode(players), live_summary=summary, timings=timings, entry_setup=entry_setup))
+        except (LoadCancelled, InterruptedError):
             self.finished.emit(dict(cancelled=True))
         except Exception as exc:
             logger.exception('CSV preparation failed')
@@ -124,9 +134,10 @@ class CsvLoadController(QtCore.QObject):
     def busy(self):
         return self.task is not None
 
-    def start(self, path):
+    def start(self, path, *, entry_setup=None):
         if self.busy or self.closed:
             return False
+        self.entry_setup = deepcopy(entry_setup)
         self.started = time.perf_counter()
         self.dispatched = None
         self.path, self.baseline = str(path), self.owner.players
@@ -169,7 +180,7 @@ class CsvLoadController(QtCore.QObject):
             return
         self.wait_timer.stop()
         self.dispatched = time.perf_counter()
-        self.worker = CsvLoadWorker(self.path)
+        self.worker = CsvLoadWorker(self.path, self.entry_setup) if self.entry_setup is not None else CsvLoadWorker(self.path)
         self.thread = QtCore.QThread(self)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
