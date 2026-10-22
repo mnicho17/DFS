@@ -1082,7 +1082,7 @@ C:\DFS_Server\.venv\Scripts\python.exe scripts/prepare_nfl_server.py C:\DFS_Serv
 
 
 
-Choose a new output directory for every run. This command uses the desktop CSV parser, enrichment, role-pool builder, and Recalc Own% (Sim) worker. Both formats use the same ownership-field assignment function. For Showdown use `--mode showdown`, adding `--template-sim` only to match that desktop option. Qt is a library dependency, but no window is opened.
+Choose a new output directory for every run. This command uses the desktop CSV parser, enrichment, role-pool builder, and Recalculate / Retry ownership worker. Both formats use the same ownership-field assignment function. For Showdown use `--mode showdown`, adding `--template-sim` only to match that desktop option. Qt is a library dependency, but no window is opened.
 
 
 
@@ -1265,7 +1265,7 @@ New quick ownership estimates reflect roster exposure rather than weights that
 sum to 100 across the entire pool. For a sufficiently populated NFL pool, Classic
 estimates sum to 900%; Showdown sums to 600% (100% Captain and 500% FLEX), with each
 player's combined exposure capped at 100%. These are heuristic estimates, not
-observed field ownership; use Recalc Own% (Sim) for lineup-based estimates.
+observed field ownership; use Recalculate / Retry ownership for lineup-based estimates.
 New exports record ownership source and percentage units. Historical exports
 remain unchanged, and older unlabelled values must not be retrospectively rescaled.
 
@@ -2089,7 +2089,7 @@ An incompatible result means both sets of targets cannot be met simultaneously. 
 
 ### Automatic Showdown ownership and field spending
 
-NFL **Recalc Own% (Sim)** now estimates ownership from legal opponents using the same salary-band spending prior as detailed SIM. It draws from projections without fitting to existing ownership forecasts. Only completed samples of six distinct athletes, both teams and legal slot salaries contribute; canceled or incomplete samples do not replace ownership. Model and sample size are recorded with the resulting automatic ownership.
+NFL **Recalculate / Retry ownership** now estimates ownership from legal opponents using the same salary-band spending prior as detailed SIM. It draws from projections without fitting to existing ownership forecasts. Only completed samples of six distinct athletes, both teams and legal slot salaries contribute; canceled or incomplete samples do not replace ownership. Model and sample size are recorded with the resulting automatic ownership.
 
 The legacy Field Templates switch applies to other Showdown sports and is hidden for NFL. Classic estimation remains unchanged. Existing supplied/manual ownership continues to be used by detailed SIM; estimates are replaced when you explicitly recalculate ownership. Saved historical forecasts and evidence are not rewritten. Recalculating ownership changes current model inputs, so prepared screening based on previous ownership must be refreshed. Shared spending assumptions do not guarantee exact ownership matching or historical accuracy.
 
@@ -2392,3 +2392,12 @@ Each warming attempt has a ten-minute cooperative allowance (and still respects 
 Build reports compare fingerprint components with up to twelve recent recorded cache receipts for the same exact player-ID/game-date slate, choosing the comparison with the fewest changed components. They can identify forecast-related player fields, availability/roles, ownership, other player inputs, opponent fields, seed/count, context/history settings, app/model and runtime/codec differences. These are differences from a recorded comparison, not proof that it was the cache you intended to reuse. Old caches may have no diagnostic receipt yet.
 
 The disposable scenario-cache diagnostics database retains at most 64 receipts containing fingerprints only, not player values or filenames. Missing, malformed, oversized or unavailable receipts do not authorize replay or prevent fresh calculation. Exact cache identity, full frame integrity/coverage, cancellation, storage limits and fresh independent audits remain unchanged. Copy Last Build Report saves the comparison for that specific build.
+
+
+### Ownership status and explicit retry
+
+Normal CSV loading already starts ownership estimation or checks compatible completed ownership. In **Advanced → Data and Learning → Ownership estimates**, the status now shows the displayed source and whether ownership is loading, running, stopping or waiting for manual work. Displayed provenance is not a fresh validation of later input edits, nor proof of current reusable ownership.
+
+Open **Manual recalculation / troubleshooting** to use the original Sampling count, legacy template switch and **Recalculate / Retry ownership** action. Opening this section performs no estimation or cache lookup. The explicit action uses the existing estimator, format, salary cap and sampling settings. It waits for CSV, build and existing ownership workers to retire; cancellation, errors and stale-result checks keep their existing behavior. Snapshot replay starts no new estimate from viewing these controls; an explicit manual recalculation remains available as before.
+
+No ownership formulas, automatic sampling policy, reuse validation or lineup behavior changed. Tasks retains the full worker outcome and cancellation controls. Quick-estimate and mixed-source notices remain visible when live input changes replace simulated ownership. No new periodic source scan or background estimation job was added.

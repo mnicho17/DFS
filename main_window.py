@@ -7363,7 +7363,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         btn_own_sim.setToolTip("Run a lineup simulation to estimate slate ownership (uses projections/value + salary cap constraints).")
 
-        btn_own_sim.clicked.connect(self.on_recalc_ownership_sim)
+        from ownership_ui import retry_ownership
+        btn_own_sim.clicked.connect(lambda:retry_ownership(self))
 
         row1.addWidget(btn_own_sim)
 
@@ -8380,11 +8381,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         data_grid.addWidget(btn_clear_order, 3, 1)
 
-        ownership_group = QtWidgets.QGroupBox("Ownership estimates")
-        ownership_layout = QtWidgets.QFormLayout(ownership_group)
-        ownership_layout.addRow("Sampling count", self.spin_own_sims)
-        ownership_layout.addRow(self.chk_sd_template_sim)
-        ownership_layout.addRow(btn_own_sim)
+        from ownership_ui import setup_ownership_controls
+        ownership_group=setup_ownership_controls(self,btn_own_sim)
         data_grid.addWidget(ownership_group, 0, 2, 4, 1)
         data_grid.setColumnStretch(3, 1)
 
@@ -12900,6 +12898,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
     def _populate_players_table(self) -> None:
 
+        from ownership_ui import update_ownership_controls
+        update_ownership_controls(self)
         ownership = describe_ownership(self.players, self.last_live_check_summary)
         self.lbl_ownership_source.setText("Ownership: " + ownership["sources"] + ("\n" + ownership["notice"] if ownership["notice"] else ""))
         self.lbl_ownership_source.setVisible(bool(self.players))
