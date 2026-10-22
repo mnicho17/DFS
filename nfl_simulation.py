@@ -1270,6 +1270,7 @@ def simulate_nfl_contest(
     ]
 
     config = dict(field_config or {})
+    from contest_strategy import execution_profile, attach_strategy
     raw_contest_profile = config.get("contest_profile")
     contest_profile = (
         normalize_contest_profile(raw_contest_profile)
@@ -1277,6 +1278,7 @@ def simulate_nfl_contest(
         else None
     )
     if contest_profile:
+        contest_profile = execution_profile(contest_profile)
         config["contest_profile"] = contest_profile
     effective_field_size = int(
         contest_profile["field_size"]
@@ -1492,6 +1494,7 @@ def simulate_nfl_contest(
                 "sim_entry_fee": float(contest_profile["entry_fee"]),
                 "sim_contest_field_size": int(contest_profile["field_size"]),
             })
+        attach_strategy(row, contest_profile)
         preliminary.append(row)
 
     top_values = sorted([item["sim_top_one_pct"] for item in preliminary])

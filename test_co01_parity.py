@@ -178,13 +178,13 @@ class ObjectiveParityTests(unittest.TestCase):
             if not line.startswith(('- Historical field use: not enabled','- SIM profile ')))
         return value
 
-    def test_classic_golden_and_all_objectives(self):
+    def test_classic_golden_and_default_objective(self):
         self.check_kind('classic')
 
-    def test_showdown_golden_and_all_objectives(self):
+    def test_showdown_golden_and_default_objective(self):
         self.check_kind('showdown')
 
-    def test_current_specialist_model_keeps_all_objectives_computationally_equal(self):
+    def test_current_specialist_model_keeps_default_objective_computationally_equal(self):
         for kind in ('classic', 'showdown'):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as folder:
                 output = Path(folder) / 'evidence.json'
@@ -217,9 +217,11 @@ class ObjectiveParityTests(unittest.TestCase):
 if __name__ == '__main__':
     kind, destination = sys.argv[1:3]
     historical = len(sys.argv) == 3
+    # Cash intent now requires explicit payouts; test its execution separately.
+    # The frozen default/Tournament evidence remains exact in both model versions.
     def capture():
         return {str(objective): evidence(kind, objective, historical=historical)
-                for objective in (None, 'TOURNAMENT', 'DOUBLE_UP', 'MULTIPLIER')}
+                for objective in (None, 'TOURNAMENT')}
     if historical:
         spec = importlib.util.spec_from_file_location('co01_specialists_v1',
             Path(__file__).parent / 'tests' / 'fixtures' / 'nfl_specialists_v1.py')

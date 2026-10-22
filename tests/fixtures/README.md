@@ -29,8 +29,11 @@ exact. Final selected lineup order, exports, exposures and safety evidence are
 still compared without reordering. The new policy and Core Plan behavior have
 separate integrated portfolio and UI assertions; the original fixture is retained.
 
-Both fixtures compare legacy missing objective, explicit Tournament, Double-Up,
-and Multiplier against that same original main evidence. Each child installs the
+CO-02 retains exact comparisons for legacy missing objective and explicit
+Tournament without a payout profile. Double-Up and Multiplier intentionally
+execute new ranking policies and require exact profiles; their old metadata-only
+parity promise is superseded by behavioral tests in `test_contest_strategy.py`
+and real worker/UI tests. The original fixture is unchanged. Each child installs the
 network-denying disposable test environment and asserts zero network attempts.
 Run with `python scripts/run_isolated_tests.py test_co01_parity`.
 

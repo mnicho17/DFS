@@ -1,5 +1,68 @@
 # Results & Learning: staged implementation
 
+## Current development stage: contest objectives and QB early-exit coverage
+
+Queued by the user on October 4, 2026, after the v1.24.0 release. This is
+an accepted staged plan. The user subsequently prioritized single-entry contest
+intent and authorized CO-02 alongside QB coverage. This branch implements an
+initial review slice: exact-profile objective ranking, hard starting-QB fade
+counts, occurrence/receiver-dependence reporting and paired conditional point
+comparisons. It is a development preview, not a published release.
+
+**Remaining QB stage:** optional backup allocation with fresh replacement-role
+evidence and validated conditional playing-time/opportunity assumptions; RB
+receiving and K/DST effects; supported conditional contest-money comparisons.
+The initial point review has an explicitly defined portfolio point threshold,
+not a paid cutoff. No automatic injury probabilities or allocations are added.
+The requirements below remain the acceptance plan for these later slices.
+RL-07B generation explanation and DC-02B measured overnight improvements remain
+queued; unrelated backlog work is excluded from this branch.
+
+**Goal:** help review a 150-entry portfolio's dependence on each starting QB
+and deliberately build coverage for an early exit. Showdown is the first build
+workflow; Classic initially emphasizes diversification among starting QBs.
+Reuse the existing Portfolio Risk concentration calculations where suitable,
+while keeping its historical read-only evidence contract intact.
+
+- Show exact counts and percentages for both starting QBs, QB A only, QB B
+  only and neither, with separate Captain/FLEX exposure. Include shared
+  dependence on each team's receivers; a QB fade can still depend on his
+  passing offense. Count repeated entries as portfolio occurrences.
+- Compare the normal build with explicit "QB A exits early" and "QB B exits
+  early" assumptions on the same frozen inputs and paired scenario draws.
+  Disclose exit-time/remaining-production assumptions and point changes,
+  including affected receivers. Define any "competitive entries" threshold
+  visibly. These are conditional stress cases, not estimated injury
+  probabilities or guaranteed cash coverage. Money metrics require an explicit
+  supported contest/payout model.
+- Offer opt-in coverage targets for coherent QB A fades, QB B fades and
+  neither-QB constructions. Keep ordinary builds unchanged when disabled.
+  Show requested versus achieved counts and any shortage; do not silently
+  relax roster eligibility, salary, uniqueness, exposures, Core Plans, Captain
+  safeguards, locks/fades, or retained-entry protections.
+- Make a small backup-QB scenario allocation optional and user-controlled,
+  with no default "optimal" percentage. Require a supplied, eligible active
+  backup, explicit replacement identity and fresh role evidence. Normal
+  starter/backup eligibility gates remain intact; permission to use a backup
+  is scoped to the explicitly selected conditional construction.
+- Before ranking backup constructions against starter fades, implement and
+  validate conditional playing-time/opportunity assumptions. A backup does
+  not automatically inherit the starter's projection or all lost fantasy
+  points. Keep conditional values separate from baseline forecasts, preserve
+  receiver/team consistency, and disclose unsupported or missing evidence.
+  Default-build forecasts and historical observations must remain unchanged.
+
+**Acceptance:** synthetic cases cover normal games, either starter leaving at
+different times, missing/stale backup evidence, unavailable backups, separate
+Captain/FLEX scoring, receiver dependence, repeated entries, conflicting user
+rules, unmet coverage targets, retained rows, and cancellation. Verify the
+disabled path against the current baseline, and verify that conditional backup
+eligibility/forecasts cannot leak into ordinary builds or later slates. Run
+focused and full isolated tests, review the UI and documentation, then submit
+the stage for review. Historical validation across independent slates is
+required before claiming improved returns or choosing automatic allocations;
+one injury game and 150 correlated entries do not establish that benefit.
+
 ## Historical evidence foundation
 
 Historical Evidence Identity is implemented against latest main as an additive
@@ -23,7 +86,8 @@ Each new slice starts from current `main`; this supersedes the historical launch
 Each slice gets focused tests, isolated full regression, documentation and its own
 review before integration. Existing history and strategy formulas remain unchanged
 unless a later named change explicitly authorizes them. Remaining sequence after
-RL-07A: RL-07B, CO-02, DC-02B; none is implemented by this slice. RL-07A starts at
+RL-07A was RL-07B, CO-02, DC-02B; the current contest/QB stage above now takes
+priority. RL-07A starts at
 `c457522ae7ed3e97f79bf7714ca102e5e3fa3c53`, tree
 `0bce554ccb663f1d832428d96fd3c9780d3156c8`, with a newly executed clean baseline of
 838 passing tests. See [Hindsight Solver](HINDSIGHT_SOLVER.md).

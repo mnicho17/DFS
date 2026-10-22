@@ -22,7 +22,7 @@ def model_version():
     root = Path(__file__).parent
     names = ('repeatability.py', 'nfl_simulation.py', 'showdown_simulation.py',
              'showdown_field.py', 'showdown_history_field.py', 'historical_field.py', 'historical_ownership.py', 'nfl_specialists.py', 'nfl_workload.py',
-             'nfl_kickers.py', 'rotation_zero_prototype.py', 'joint_opportunity_prototype.py', 'linked_event_prototype.py', 'reconciled_event_prototype.py', 'nfl_eligibility.py', 'optimizers.py', 'lineup_ranking.py', 'ownership_strategy.py', 'projection_sensitivity.py', 'usage_history.py')
+             'nfl_kickers.py', 'rotation_zero_prototype.py', 'joint_opportunity_prototype.py', 'linked_event_prototype.py', 'reconciled_event_prototype.py', 'nfl_eligibility.py', 'optimizers.py', 'lineup_ranking.py', 'contest_strategy.py', 'ownership_strategy.py', 'projection_sensitivity.py', 'usage_history.py')
     return fingerprint({n: hashlib.sha256((root/n).read_text(encoding='utf-8').encode()).hexdigest() for n in names})
 
 
@@ -147,7 +147,9 @@ def run_repeatability(path, *, batches=5, scenarios=5000, cancelled=lambda:False
     return dict(bank_id=bank['bank_id'],input_id=p['input_id'],kind=p['kind'],model_version=p['model_version'],
                 status='completed' if len(completed)==batches else 'incomplete',requested_batches=batches,
                 completed_batches=len(completed),scenarios_per_batch=scenarios,opponents=p['field_count'],
-                seeds=completed,boundary_ties=ties,rows=rows)
+                seeds=completed,boundary_ties=ties,rows=rows,
+                **({'selection_strategy':p['rows'][0]['metrics']['sim_selection_label']}
+                   if p['rows'][0]['metrics'].get('sim_selection_label') else {}))
 
 
 def format_report(report):
@@ -159,6 +161,8 @@ def format_report(report):
            'Diagnostic only: original output order and forecasts are unchanged. This measures sampling sensitivity, not historical accuracy.',
            'Rank ties use the saved candidate order. Top-50/150 groups are capped at the bank size. Partial batches are excluded.']
     if n:
+        if report.get('selection_strategy'):
+            lines.append('Rank order: '+report['selection_strategy']+'. Top-1% statistics below are separate diagnostics.')
         lines+=['','Leaders by average top-1% across completed batches (up to 20):']
         for r in sorted(report['rows'],key=lambda r:(-r['mean_top1'],r['original_rank']))[:20]:
             lines.append(f"Original #{r['original_rank']}: mean top-1% {r['mean_top1']:.2f}% (range {r['min_top1']:.2f}â€“{r['max_top1']:.2f}%); ranks {r['best_rank']}â€“{r['worst_rank']}; top50 {r['top50_batches']}/{n}; top150 {r['top150_batches']}/{n}. {r['lineup']}")
