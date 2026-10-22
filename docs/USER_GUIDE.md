@@ -2242,6 +2242,12 @@ estimates remain available after cancellation; stopped jobs do not auto-restart.
 The ownership sampling, calculation, and lineup algorithms are unchanged.
 
 
+Ownership results refresh the player table's ownership cells in place. Sorting,
+selected players, and readiness checks stay current without rebuilding every
+player cell. A full table refresh is used if the displayed rows no longer match
+the loaded player keys. This display optimization does not change ownership
+estimation or lineup rules.
+
 ### Automatic Captain-pool allocations
 
 Locking several Captains selects the allowed Captain pool. The app first tries
