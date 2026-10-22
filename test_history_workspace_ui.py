@@ -153,10 +153,92 @@ class HistoryWorkspaceTests(unittest.TestCase):
     def test_overview_controls_are_reparented_and_visible_with_settings_collapsed(self):
         d=self.dialog(); d._initial_report_started=True
         d.resize(1120,850); d.show(); self.app.processEvents()
-        for widget in (d.report,d.summary,d.history_status,d.auto_history,
-                       d.history_refresh_button,d.import_new_button,d.attach_salary_button):
+        for widget in (d.report,d.summary,d.history_status,d.history_update_summary,
+                       d.history_refresh_button,d.history_cancel_button,d.attach_salary_button):
             self.assertTrue(widget.isVisible(),widget.objectName())
             self.assertTrue(d.history_workspace.isAncestorOf(widget))
-        self.assertFalse(d.username_edit.isVisible())
+        self.assertFalse(d.username_edit.isVisible());self.assertFalse(d.auto_history.isVisible());self.assertFalse(d.import_new_button.isVisible())
         toggle=next(b for b in d.findChildren(QtWidgets.QToolButton) if b.text()=='Sources and account settings')
-        toggle.click(); self.app.processEvents();self.assertTrue(d.username_edit.isVisible())
+        toggle.click(); self.app.processEvents();self.assertTrue(d.username_edit.isVisible());self.assertTrue(d.auto_history.isVisible())
+        tools=next(b for b in d.findChildren(QtWidgets.QToolButton) if b.text()=='More reports and analysis tools')
+        tools.click();self.app.processEvents();self.assertTrue(d.import_new_button.isVisible())
+
+    def status_dialog(self):
+        import tempfile
+        temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup)
+        d=self.dialog();root=Path(temp.name)
+        settings=QtCore.QSettings(str(root/'settings.ini'),QtCore.QSettings.IniFormat)
+        d.learning_settings=settings;d.history_refresh.settings=settings
+        d.history_refresh.watch.arm();return d,root
+
+    def test_no_folders_action_opens_source_settings_without_importing(self):
+        d,_=self.status_dialog();d.update_history_status()
+        self.assertEqual(d.history_refresh_button.text(),'Choose source folders…')
+        with patch.object(d.history_refresh,'start') as start,patch('analysis_imports.import_folders',side_effect=AssertionError('No implicit import')):
+            d.history_refresh_button.click()
+        start.assert_not_called();self.assertTrue(d.history_sources_toggle.isChecked())
+        self.assertIn('Choose source folders',d.history_update_summary.text())
+
+    def test_monitoring_status_is_read_only_and_never_certifies_qualified_history(self):
+        d,root=self.status_dialog();c=d.history_refresh
+        c.settings.setValue('learning/results_folder',str(root));c.watch.arm()
+        c.text='History refresh complete.\nRecorded counts stay in the detailed log.'
+        with patch.object(c,'start',side_effect=AssertionError('No worker')),patch('analysis_imports.import_folders',side_effect=AssertionError('No import')):
+            d.update_history_status();d.update_history_status()
+        self.assertIn('Watching for changes',d.history_update_summary.text())
+        self.assertIn('Last recorded check',d.history_update_summary.text())
+        self.assertIn('do not establish current source',d.history_update_summary.text())
+        self.assertNotIn('Recorded counts',d.history_update_summary.text())
+        self.assertIn('Recorded counts',d.history_status.toPlainText())
+        self.assertEqual(d.history_refresh_button.text(),'Check now')
+
+    def test_automatic_off_and_watch_off_have_distinct_states_without_changed_preferences(self):
+        from history_workspace_ui import history_update_view
+        d,root=self.status_dialog();c=d.history_refresh;c.settings.setValue('learning/results_folder',str(root))
+        c.settings.setValue('learning/auto_history_refresh',False)
+        self.assertEqual(history_update_view(c)['state'],'Automatic updates off')
+        c.settings.setValue('learning/auto_history_refresh',True);c.settings.setValue('learning/watch_history_changes',False)
+        self.assertEqual(history_update_view(c)['state'],'Startup checks only; folder monitoring off')
+        before={k:c.settings.value(k) for k in c.settings.allKeys()}
+        d.update_history_status();self.assertEqual(before,{k:c.settings.value(k) for k in c.settings.allKeys()})
+
+    def test_retry_and_check_now_use_existing_full_refresh_and_keep_auto_preference(self):
+        d,root=self.status_dialog();c=d.history_refresh;c.settings.setValue('learning/results_folder',str(root))
+        c.settings.setValue('learning/auto_history_refresh',False);c.watch.paused=True
+        d.update_history_status();self.assertEqual(d.history_refresh_button.text(),'Retry / Resume')
+        with patch.object(c,'start') as start:d.history_refresh_button.click()
+        start.assert_called_once_with();self.assertFalse(c.enabled())
+        c.watch.paused=False;d.update_history_status()
+        with patch.object(c,'start') as start:d.history_refresh_button.click()
+        start.assert_called_once_with();self.assertFalse(c.enabled())
+
+    def test_running_stopping_and_report_work_disable_duplicate_checks(self):
+        import threading
+        from history_workspace_ui import history_update_view
+        d,root=self.status_dialog();c=d.history_refresh;c.settings.setValue('learning/results_folder',str(root))
+        c.thread=object();c.stop=threading.Event()
+        try:
+            d.update_history_status();self.assertIn('Checking history',d.history_update_summary.text())
+            self.assertFalse(d.history_refresh_button.isEnabled());self.assertTrue(d.history_cancel_button.isEnabled())
+            with patch.object(c,'start') as start:d.refresh_username_history()
+            start.assert_not_called()
+            c.stop.set();d.update_history_status();self.assertIn('Stopping safely',d.history_update_summary.text())
+            self.assertFalse(d.history_cancel_button.isEnabled())
+        finally:c.thread=None;c.stop=None
+        self.assertFalse(history_update_view(c,report_busy=True)['can_check'])
+
+    def test_unarmed_and_closed_watcher_do_not_claim_active_monitoring(self):
+        from history_workspace_ui import history_update_view
+        d,root=self.status_dialog();c=d.history_refresh;c.settings.setValue('learning/results_folder',str(root/'missing'))
+        c.watch.arm();view=history_update_view(c)
+        self.assertEqual(view['state'],'Monitoring not armed');self.assertIn('Some paths could not',view['detail'])
+        c.watch.shutdown();view=history_update_view(c)
+        self.assertEqual(view['state'],'Closing');self.assertFalse(view['can_check']);self.assertFalse(view['can_pause'])
+
+    def test_queue_status_and_pause_route_preserve_existing_controller(self):
+        from history_workspace_ui import history_update_view
+        d,root=self.status_dialog();c=d.history_refresh;c.settings.setValue('learning/results_folder',str(root));c.watch.pending=True
+        d.update_history_status();self.assertEqual(history_update_view(c)['state'],'Update queued')
+        self.assertTrue(d.history_cancel_button.isEnabled())
+        with patch.object(c.watch,'pause') as pause:d.history_cancel_button.click()
+        pause.assert_called_once();c.watch.pending=False
