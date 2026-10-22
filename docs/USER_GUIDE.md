@@ -2408,3 +2408,25 @@ No ownership formulas, automatic sampling policy, reuse validation or lineup beh
 Preparation now includes **Current ownership** alongside **Last applied ownership**. Current ownership shows the displayed sources and live worker state; the last-applied row remains a separate recorded reuse/timing receipt and may describe older inputs. Neither row independently validates current reuse.
 
 Select **Current ownership → Review ownership** to open the existing Data and Learning ownership diagnostics directly. This closes the preparation dialog, reveals the existing Advanced page and leaves manual recalculation collapsed. It performs no source refresh, cache lookup, snapshot capture or estimation and does not change sampling settings, replay, player inputs or the build recipe. Expand troubleshooting only when you explicitly want to recalculate.
+
+
+### Storage audit before retention changes
+
+Open **Backups > Storage audit** for an explicit read-only inventory of configured history, Results/Salary sources, remembered candidate libraries and full-library partitions, scenario caches and backups. The scan runs through the task queue off the UI thread, waits for manual work, and supports cancellation and safe window shutdown. It does not run on startup.
+
+The view lists up to 500 largest observed files, their logical sizes, modification dates, preservation guidance and unverified dependency/backup status. Copy local report includes local paths. Overlapping locations are counted once. Scans stop at 20,000 entries or a ten-second cooperative allowance; skipped links, missing paths and scan limits produce a partial inventory. Slow filesystem calls can take longer. This is configured-scope observation, not whole-drive disk accounting or a consistent snapshot.
+
+Historical sources, databases, evidence, backups and expensive prepared libraries remain protected. Current-shaped scenario metadata is only a review hint, never authorization to delete or reuse. Legacy-shaped caches are kept for review; unknown files stay protected. No backup hashes, frame integrity, source qualification or dependency completeness are certified by this inventory. Rebuild costs are qualitative and explicitly unmeasured.
+
+A 30-day modification-age flag is informational. It does not establish last use, contest age, obsolescence, archival safety or permission to remove files. This feature does not delete, move, archive, alter backup policy, or change the existing cache recycler. Review provenance and restore coverage before adding broader retention rules.
+
+
+### Archive and free legacy cache space
+
+Backups → Storage audit offers **Archive and free legacy cache space**. Scanning stays read-only. This separate action waits for manual work, appears in the task dashboard and uses the configured backup folder. It validates every original legacy frame, digest and native-byte-order score, publishes a verified byte-for-byte recovery archive, then checks the source and recovery bytes again before removing that working copy. The result shows verified copies, files skipped, validation failures and working bytes freed.
+
+Recovery objects and manifests remain under `legacy-scenario-cache-v1` in your backup folder. Existing objects are verified before reuse. Current scenario caches, unknown databases, history, source files, evidence, backups and expensive prepared libraries are outside this action's retirement policy. Legacy caches remain excluded from ordinary automatic cache recycling and current SIM replay. No age-based deletion or archive pruning is enabled.
+
+Each action has a cooperative two-minute allowance and a 64-file bound. Cancellation stops unfinished retirements. Busy readers, source or archive changes, verification failures, unavailable storage and protected-location overlaps keep the affected working copy. Completed archives remain recoverable even when retirement fails. Retry retains compatible archives and continues with remaining working files; no cleanup runs merely from opening this dialog.
+
+From the source checkout, restore using Python: `from legacy_scenario_archive import restore; restore(r"FULL_MANIFEST_PATH", r"EXISTING_DESTINATION_FOLDER")`. Restoration verifies SHA-256 and creates the original filename without replacing an existing file. It recovers original bytes, without certifying compatibility with current simulations. Keep archive objects and manifests together. The old format did not record byte order separately; validation uses this machine's native byte order and never converts scores.

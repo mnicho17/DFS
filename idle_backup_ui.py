@@ -237,6 +237,9 @@ class BackupsDialog(QtWidgets.QDialog):
         self.cancel=QtWidgets.QPushButton('Pause backup');self.cancel.clicked.connect(controller.cancel)
         for button in (self.now,self.verify,self.cancel):row.addWidget(button)
         box.addLayout(row)
+        from storage_audit_ui import open_storage_audit
+        audit_button=QtWidgets.QPushButton('Storage audit…');audit_button.setObjectName('storageAuditButton')
+        audit_button.clicked.connect(lambda:open_storage_audit(parent));box.addWidget(audit_button)
         from task_dashboard import add_task_button
         add_task_button(self,box)
         close=QtWidgets.QPushButton('Close');close.clicked.connect(self.accept);box.addWidget(close)
