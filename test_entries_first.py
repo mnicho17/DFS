@@ -197,3 +197,13 @@ class EntriesFirstTests(unittest.TestCase):
         selection=choose(plan,'77','150-Max','default',{},path)
         players,loaded=load_salary(path,selection)
         self.assertEqual(len(players),10);self.assertEqual(loaded['observed_slots'],0)
+
+
+    def test_name_id_label_cannot_disagree_with_explicit_numeric_id(self):
+        from entries_first import salary_players
+        path,salary=fixture(self.tmp.name,filled=False)
+        with salary.open(newline='',encoding='utf-8') as f:rows=list(csv.reader(f))
+        rows[1][3]='99999'
+        with salary.open('w',newline='',encoding='utf-8') as f:csv.writer(f).writerows(rows)
+        with self.assertRaisesRegex(ValueError,'Conflicting explicit player IDs'):
+            salary_players(salary)

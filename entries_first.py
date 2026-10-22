@@ -119,6 +119,9 @@ def salary_players(path, cancelled=lambda: False):
             pid = str(row.get('ID') or '').strip()
             if not re.fullmatch(r'[0-9]+', pid):
                 raise ValueError('The salary pool needs explicit numeric player IDs.')
+            tagged = re.search(r'\(([0-9]+)\)$', str(row.get('Name + ID') or '').strip())
+            if tagged and tagged[1] != pid:
+                raise ValueError('Conflicting explicit player IDs within a salary row.')
             role = 'CPT' if str(row.get('Roster Position') or '').strip().upper() == 'CPT' else 'FLEX'
             facts = (name, str(row.get('Team') or ''), str(row.get('Position') or ''),
                      str(row.get('Game Info') or ''), money(row.get('Salary')))
