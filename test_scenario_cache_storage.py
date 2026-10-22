@@ -65,6 +65,20 @@ class CacheRecyclingTests(unittest.TestCase):
             self.room(root,store=used-old.stat().st_size+41000)
             self.assertFalse(old.exists());self.assertTrue(target.exists())
 
+    def test_root_alias_is_resolved_without_allowing_links_inside_cache(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root=Path(raw);nested=root/'nested';nested.mkdir();alias=nested/'..'
+            first=Lease(alias,'writer.lock')
+            try:
+                self.assertTrue(first)
+                competing=Lease(root.resolve(),'writer.lock')
+                self.assertFalse(competing);competing.close()
+            finally:first.close()
+            old=self.artifact(root,'a'*64)
+            _,report=self.room(alias,store=30000,limit=20000)
+            self.assertFalse(old.exists());self.assertEqual(report['retired_files'],1)
+            with self.assertRaises(OSError):self.room(root,target=root.parent/'outside.sqlite',store=30000)
+
     def test_no_pressure_and_impossible_budget_never_remove_files(self):
         with tempfile.TemporaryDirectory() as raw:
             root=Path(raw);old=self.artifact(root,'a'*64)

@@ -1,6 +1,7 @@
 """Bounded retirement of disposable scenario artifacts, coordinated across processes."""
 import os
 import hashlib
+from pathlib import Path
 import re
 import sqlite3
 import stat
@@ -28,6 +29,7 @@ class Lease:
     """Nonblocking OS lock. A crash releases ownership; the tiny lock file can persist."""
     def __init__(self, root, name):
         self.handle=None
+        root=Path(root).resolve()
         directory=root/'.leases'
         directory.mkdir(exist_ok=True)
         if directory.is_symlink() or directory.resolve()!=directory:
@@ -107,6 +109,9 @@ def recognized(path, incomplete=False):
 
 def make_room(root, target, store_limit, file_limit, cancelled):
     """Caller holds the writer lease until publication/abort. Reserve a full file."""
+    root=Path(root).resolve();target=Path(target)
+    if target.parent.resolve()!=root:raise OSError('Cache target is outside the cache directory')
+    target=root/target.name
     required=max(MIN_FREE,file_limit)+MIN_FREE
     report=dict(status='not needed',retired_files=0,reclaimed_bytes=0,skipped_busy=0,
                 store_limit_bytes=store_limit,required_free_bytes=required)
