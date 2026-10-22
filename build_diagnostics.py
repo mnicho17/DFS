@@ -6,6 +6,7 @@ Reports may include compact lineup details to make strategy problems
 reproducible. They never include salary-file paths or API keys.
 """
 
+import copy
 import datetime as _dt
 from contest_objectives import normalize_objective, objective_report_label
 import json
@@ -426,7 +427,7 @@ def create_build_diagnostic(
         "lineup_details": lineup_details,
         "lineup_details_total": len(list(lineups or [])),
         "sim": {
-            "scenario_cache": dict(sim.get("scenario_cache") or {}),
+            "scenario_cache": copy.deepcopy(dict(sim.get("scenario_cache") or {})),
             "preset_fit": _number(preset.get("fit_score")) if preset.get("available") else None,
             "field_lineups": max(0, _integer(sim.get("field_lineups"), _integer(sim.get("field_lineup_count")))),
             "opponent_field_samples": max(
@@ -752,6 +753,11 @@ def format_build_report(record: Mapping[str, Any]) -> str:
                     lines.append('- Scenario cache comparison: recorded input components match, but no exact artifact was found. Additional metadata or an unavailable artifact may prevent reuse; recomputation still required.')
                 else:
                     lines.append('- Scenario cache comparison unavailable; exact-input validation still applies.')
+            maintenance=cache.get('maintenance') or {}
+            if isinstance(maintenance,dict) and maintenance:
+                status=maintenance.get('status')
+                if status not in ('not needed','storage bound','cancelled','maintenance bound','space reclaimed','protected files or storage bound'):status='unavailable'
+                lines.append(f"- Scenario cache maintenance: {status}; {_integer(maintenance.get('retired_files'))} old artifacts retired; {_integer(maintenance.get('reclaimed_bytes'))/1024**2:.1f} MiB reclaimed; {_integer(maintenance.get('skipped_busy'))} busy artifacts preserved; {_integer(maintenance.get('available_bytes'))/1024**2:.1f} MiB available of {_integer(maintenance.get('store_limit_bytes'))/1024**2:.0f} MiB.")
             if 'lookup_seconds' in cache:
                 lines.append(f"- Scenario cache overhead: lookup/verification {_number(cache.get('lookup_seconds')):.2f}s; frame I/O/finalization {_number(cache.get('io_seconds')):.2f}s; saved artifact {_integer(cache.get('stored_bytes'))/1024**2:.1f} MiB")
     capture = record.get('distribution_capture') or {}
