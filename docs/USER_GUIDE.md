@@ -2403,3 +2403,14 @@ The view lists up to 500 largest observed files, their logical sizes, modificati
 Historical sources, databases, evidence, backups and expensive prepared libraries remain protected. Current-shaped scenario metadata is only a review hint, never authorization to delete or reuse. Legacy-shaped caches are kept for review; unknown files stay protected. No backup hashes, frame integrity, source qualification or dependency completeness are certified by this inventory. Rebuild costs are qualitative and explicitly unmeasured.
 
 A 30-day modification-age flag is informational. It does not establish last use, contest age, obsolescence, archival safety or permission to remove files. This feature does not delete, move, archive, alter backup policy, or change the existing cache recycler. Review provenance and restore coverage before adding broader retention rules.
+
+
+### Preserve legacy scenario caches
+
+Backups → Storage audit offers a separate **Validate and archive legacy caches** action. Scanning stays read-only. Archiving waits for manual work, appears in the task dashboard and uses the configured backup folder. It checks all original frames, sequence, coverage, finite outcomes and sorted native-byte-order scores against the original digest, then verifies a byte-for-byte SHA-256 copy before publishing a manifest.
+
+Copies live under `legacy-scenario-cache-v1/objects` and manifests under `legacy-scenario-cache-v1/manifests` in the backup folder. Existing objects are verified before reuse. Working caches stay in place; this action does not authorize automatic recycling or current SIM replay. Historical sources, evidence and prepared libraries remain protected. This preservation step consumes backup space; it does not reclaim space yet. No age-based deletion is enabled.
+
+Each action has a cooperative two-minute allowance and a 64-file bound. Cancellation, unavailable storage, busy files, validation failure or protected-location overlap preserve working files. Completed archives remain available. Retry repeats full verification. The old format did not record byte order separately; validation uses this machine's native byte order and never converts scores.
+
+From the source checkout, restore using Python: `from legacy_scenario_archive import restore; restore(r"FULL_MANIFEST_PATH", r"EXISTING_DESTINATION_FOLDER")`. Restoration verifies SHA-256 and creates the original filename without replacing an existing file. It recovers original bytes, without certifying compatibility with current simulations. Keep archive objects and manifests together. This action never prunes archives.

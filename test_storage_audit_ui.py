@@ -56,3 +56,16 @@ class StorageAuditUiTests(unittest.TestCase):
             self.assertTrue(w.background_queue.closed)
             self.wait(d);self.assertEqual(w.history_refresh._reports,0);self.assertIsNone(w.background_queue.active)
             self.assertTrue(d.report['cancelled']);w._storage_audit_dialog=None;d.deleteLater()
+
+    def test_archive_is_explicit_uses_backup_destination_and_existing_worker_queue(self):
+        from test_legacy_scenario_archive import legacy
+        w,root=self.setup_window();cache=root/'cache';backup=root/'backup';cache.mkdir();backup.mkdir()
+        path=legacy(cache);before=path.read_bytes()
+        roots=[dict(path=cache,role='scenario'),dict(path=root/'result.csv',role='sources'),dict(path=backup,role='backup')]
+        with patch('storage_audit_ui.configured_roots',return_value=roots),patch.object(w.idle_backup,'destination',return_value=str(backup)):
+            d=StorageAuditDialog(w);self.wait(d);self.assertFalse(list(backup.rglob('*.sqlite')))
+            d.archive();self.wait(d)
+            self.assertIn('1 verified copies',d.status.text());self.assertEqual(path.read_bytes(),before)
+            self.assertEqual(len(list(backup.rglob('*.sqlite'))),1)
+            self.assertTrue(any(row['title']=='Legacy cache archive' for row in w.tasks.rows.values()))
+            d.reject();d.deleteLater()
