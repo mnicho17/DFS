@@ -2056,7 +2056,7 @@ Fast Showdown also skips the Classic-only field comparison when finishing its re
 
 ## Full Showdown roster libraries and screening
 
-Open **Settings > Prepare Showdown Roster Library**. For all-Captain coverage,
+Open **Preparation → Advanced tools → Showdown library / screening**. For all-Captain coverage,
 select **Full slate: prepare every Captain in separate partitions**, choose a new
 `.sdfull` file, and set the time and storage budgets. Keep the manifest and its
 adjacent `.sdfull.parts` folder together. Captain locks apply when building; full
@@ -2154,7 +2154,7 @@ Routine checks with nothing pending show **No current work**, with **Rechecking 
 
 The task bar separates running work from queued work. The shared background queue runs validated Results/Salary history refresh first, incremental history backups second, and explicitly queued Showdown roster preparation/screening last. Generate and other foreground tasks take precedence over backups and idle preparation. A replacement background worker waits until the earlier worker has saved its checkpoint and retired; a stop request alone does not free the queue. Tasks and Preparation show waiting requests and outcomes. Cancel a waiting request in Tasks to remove it.
 
-In **Settings → Prepare Showdown Roster Library**, choose the library and existing preparation limits, then select **Queue for idle time…**. This closes the preparation window and queues one session-only job. It uses the snapshot of players, Captain scope, rules, forecasts, optional screening choices, time allowance and storage limits captured when that preparation window opened and the limits you selected before queuing. Later edits in the main window do not change this captured job. Start / Resume retains its immediate behavior. Only Showdown preparation supports this idle queue; Classic Long Search remains explicit.
+In **Preparation → Advanced tools → Showdown library / screening**, choose the library and existing preparation limits, then select **Queue for idle time…**. This closes the preparation window and queues one session-only job. It uses the snapshot of players, Captain scope, rules, forecasts, optional screening choices, time allowance and storage limits captured when that preparation window opened and the limits you selected before queuing. Later edits in the main window do not change this captured job. Start / Resume retains its immediate behavior. Only Showdown preparation supports this idle queue; Classic Long Search remains explicit.
 
 Background preparation waits for manual workers and higher-priority jobs. A foreground task, ready history refresh, or backup request stops it cooperatively at the existing checkpoint; ordinary UI interaction does not. It resumes when eligible, using the remaining active processing time from the original allowance. Time spent waiting does not consume that allowance. A user stop, app shutdown, error, storage/roster limit, exhausted time allowance or screening-stall outcome requires explicit review/resume and never causes an automatic retry loop. Queued requests are not persisted across app restarts; completed checkpoint files remain resumable through Open existing. The app must stay open and the PC awake.
 
@@ -2392,3 +2392,12 @@ Each warming attempt has a ten-minute cooperative allowance (and still respects 
 Build reports compare fingerprint components with up to twelve recent recorded cache receipts for the same exact player-ID/game-date slate, choosing the comparison with the fewest changed components. They can identify forecast-related player fields, availability/roles, ownership, other player inputs, opponent fields, seed/count, context/history settings, app/model and runtime/codec differences. These are differences from a recorded comparison, not proof that it was the cache you intended to reuse. Old caches may have no diagnostic receipt yet.
 
 The disposable scenario-cache diagnostics database retains at most 64 receipts containing fingerprints only, not player values or filenames. Missing, malformed, oversized or unavailable receipts do not authorize replay or prevent fresh calculation. Exact cache identity, full frame integrity/coverage, cancellation, storage limits and fresh independent audits remain unchanged. Copy Last Build Report saves the comparison for that specific build.
+
+
+### One preparation screen
+
+Use **Preparation…** beside Generate, or **Settings → Preparation…**, to review the loaded slate. The screen shows recorded roster coverage, screening progress, whether captured inputs match, and the current waiting or pause reason. The detailed rows retain ownership reuse, CSV timings, historical field status, previous-build evidence and background tasks. Recorded completion is not a fresh validation of files or current inputs.
+
+**Prepare this slate**, **Retry / Resume**, or **Check coverage / reuse** invokes the same current-input capture and background preparation workflow. It checks saved coverage and screening, then queues only missing work under the existing time and storage limits. While a captured job is queued or running, a second preparation request is disabled; Tasks shows the job's captured inputs. **Run queued work now** uses the existing scheduler, including manual-worker and safety gates. Automatic folder watching and preparation continue as before.
+
+Opening this screen does not scan files, refresh sources, capture a snapshot, or start a worker. CSV loading, ownership calculation and manual builds must retire before explicit capture. Replay remains fixed, and automatic slate preparation remains NFL Showdown only. **Advanced tools** retains the explicit Showdown library/screening dialog and Classic candidate search/resume without changing the current format or settings. These replace their separate Settings menu entries. Generate still applies every existing identity, eligibility, historical-evidence, rule, screening and reuse check.
