@@ -2624,4 +2624,3 @@ action for a repair attempt. Captain locks, exposure limits, uniqueness, histori
 qualification and existing cancellation/worker checks still apply. More SIM
 scenarios alone do not add lineup choices. Reducing the requested count also
 recalculates percentage caps and is not guaranteed to resolve the shortage.
-
