@@ -30,7 +30,7 @@ def stamp(path):
 
 
 def guard(cancelled,deadline):
-    if cancelled():raise Stopped('Cancelled; completed archives remain available and working files stay in place.')
+    if cancelled():raise Stopped('Cancelled; completed recovery archives remain available and unfinished retirements are skipped.')
     if time.monotonic()>deadline:raise Stopped('Validation time allowance reached; retry to continue.')
 
 
@@ -175,8 +175,52 @@ def archive_verified(path,proof,destination,cancelled,deadline):
         if temporary is not None and plain_file(temporary,objects):temporary.unlink()
 
 
-def validate_and_archive(folder,destination,*,protected=(),cancelled=lambda:False,progress=lambda text:None,seconds=120):
-    """Explicit operation. Creates verified archives; never deletes working caches or authorizes recycling."""
+def reclaim_verified(path,receipt,*,cancelled,deadline):
+    """Only a fresh archive receipt from this operation can retire its working copy.
+
+    Caller holds the source key lease and destination backup lock. No stored receipt,
+    age, metadata hint or restored file independently grants retirement authority.
+    """
+    path=Path(path);obj=Path(receipt['archive']);manifest=Path(receipt['manifest'])
+    root=Path(receipt['archive_root']);marker=root/'format.json'
+    guard(cancelled,deadline)
+    if (not plain_file(path,path.parent) or receipt['source_stamp']!=stamp(path)
+            or not plain_file(obj,root/'objects') or not plain_file(manifest,root/'manifests')
+            or receipt['archive_stamp']!=stamp(obj) or receipt['manifest_stamp']!=stamp(manifest)
+            or receipt['marker_stamp']!=stamp(marker) or read_json(marker)!=MARKER):
+        raise ValueError('Source or recovery archive changed; working copy preserved')
+    saved=read_json(manifest)
+    for name in ('version','key','count','digest','source_stamp','file_sha256','source_root','byteorder'):
+        if saved.get(name)!=receipt[name]:raise ValueError('Recovery manifest differs; working copy preserved')
+    if (obj.name!=receipt['file_sha256']+'.sqlite' or saved.get('object')!=obj.name
+            or saved.get('format')!='schema-1-zlib-json-raw-double'):
+        raise ValueError('Recovery object identity differs; working copy preserved')
+    if (file_hash(obj,cancelled,deadline)!=receipt['file_sha256']
+            or file_hash(path,cancelled,deadline)!=receipt['file_sha256']):
+        raise ValueError('Recovery or source bytes differ; working copy preserved')
+    con=sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=0)
+    try:
+        con.setlimit(sqlite3.SQLITE_LIMIT_LENGTH,MAX_FRAME)
+        con.set_progress_handler(lambda:int(cancelled() or time.monotonic()>deadline),1000)
+        con.execute('BEGIN EXCLUSIVE')
+        meta=metadata(con,path)
+        if meta['digest']!=receipt['digest'] or int(meta['count'])!=receipt['count']:
+            raise ValueError('Legacy metadata changed; working copy preserved')
+    finally:con.close()
+    # Windows refuses removal with incompatible open handles. Cooperative app readers
+    # remain excluded by the caller's key lease throughout archive and retirement.
+    guard(cancelled,deadline)
+    if (not plain_file(path,path.parent) or receipt['source_stamp']!=stamp(path)
+            or not plain_file(obj,obj.parent) or receipt['archive_stamp']!=stamp(obj)
+            or not plain_file(manifest,manifest.parent) or receipt['manifest_stamp']!=stamp(manifest)
+            or not plain_file(marker,root) or receipt['marker_stamp']!=stamp(marker)):
+        raise ValueError('Source or recovery archive changed before retirement')
+    path.unlink()
+    return receipt['source_stamp']['size']
+
+
+def validate_and_archive(folder,destination,*,protected=(),cancelled=lambda:False,progress=lambda text:None,seconds=120,reclaim=False):
+    """Explicit operation; optional retirement follows fresh verified archival only."""
     from PyQt5.QtCore import QLockFile
     root=Path(folder).resolve();destination=Path(destination).resolve();deadline=time.monotonic()+seconds
     protected=[Path(p).resolve() for p in protected]
@@ -186,7 +230,7 @@ def validate_and_archive(folder,destination,*,protected=(),cancelled=lambda:Fals
     if not destination.is_dir():raise ValueError('Configure an available backup folder first')
     lock=QLockFile(str(destination/'.dfs-history-backup.lock'));lock.setStaleLockTime(0)
     if not lock.tryLock(0):raise ValueError('Another backup or archive operation owns this destination')
-    result=dict(archived=0,preserved=0,errors=0,cancelled=False,complete=True,bytes_archived=0,archive_root=str(archive_root),messages=[])
+    result=dict(archived=0,reclaimed_files=0,reclaimed_bytes=0,preserved=0,errors=0,cancelled=False,complete=True,bytes_archived=0,archive_root=str(archive_root),messages=[])
     try:
         files=sorted(inventory(root),key=lambda item:(item[2],item[0].name));processed=0
         for path,_,_ in files:
@@ -200,11 +244,14 @@ def validate_and_archive(folder,destination,*,protected=(),cancelled=lambda:Fals
             processed+=1;lease=Lease(root,path.stem+'.lock')
             if not lease:result['preserved']+=1;continue
             try:
-                progress(f'Checking legacy artifact {processed}; source files remain in place')
+                progress(f'Checking legacy artifact {processed}; recovery copy must verify before retirement' if reclaim else f'Checking legacy artifact {processed}; source files remain in place')
                 proof=inspect_legacy(path,cancelled=cancelled,deadline=deadline,progress=progress)
-                archive_verified(path,proof,destination,cancelled,deadline)
-                guard(cancelled,deadline)
+                receipt=archive_verified(path,proof,destination,cancelled,deadline)
                 result['archived']+=1;result['bytes_archived']+=proof['source_stamp']['size']
+                guard(cancelled,deadline)
+                if reclaim:
+                    size=reclaim_verified(path,receipt,cancelled=cancelled,deadline=deadline)
+                    result['reclaimed_files']+=1;result['reclaimed_bytes']+=size
             except Stopped as exc:
                 result.update(cancelled=cancelled(),complete=False);result['messages'].append(str(exc));break
             except (OSError,sqlite3.Error,ValueError,TypeError,KeyError,zlib.error,OverflowError) as exc:

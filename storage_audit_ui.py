@@ -4,6 +4,19 @@ from PyQt5 import QtCore,QtWidgets
 from storage_audit import audit,configured_roots,render
 
 
+def archive_summary(a):
+    return (f"Legacy archives: {a['archived']} verified copies; {a['preserved']} preserved/skipped; "
+            f"{a['errors']} validation failures. Freed: {a['reclaimed_files']} working copies "
+            f"({a['reclaimed_bytes']/1024**2:.2f} MiB). Complete: {a['complete']}. Recovery archives retained.")
+
+
+def task_text(*args):
+    if len(args)==3:return str(args[2])
+    result=args[0]
+    if result.get('archive'):return archive_summary(result['archive'])
+    return result.get('error') or result.get('report',{}).get('state','Storage operation retired.')
+
+
 class AuditWorker(QtCore.QObject):
     progress=QtCore.pyqtSignal(int,int,str)
     finished=QtCore.pyqtSignal(dict)
@@ -19,20 +32,20 @@ class AuditWorker(QtCore.QObject):
                 folder=next(r['path'] for r in self.roots if r['role']=='scenario')
                 protected=[r['path'] for r in self.roots if r['role'] not in ('scenario','backup')]
                 archive=validate_and_archive(folder,self.archive_destination,protected=protected,
-                    cancelled=self.stop.is_set,progress=lambda text:self.progress.emit(0,0,text))
+                    cancelled=self.stop.is_set,progress=lambda text:self.progress.emit(0,0,text),reclaim=True)
             report=audit(self.roots,cancelled=self.stop.is_set,progress=lambda text:self.progress.emit(0,0,text))
-            self.finished.emit(dict(report=report,archive=archive,cancelled=report['cancelled'] or bool(archive and archive['cancelled']),complete=report['complete'] and (archive is None or archive['complete'])))
+            self.finished.emit(dict(report=report,archive=archive,errors=archive['errors'] if archive else 0,cancelled=report['cancelled'] or bool(archive and archive['cancelled']),complete=report['complete'] and (archive is None or archive['complete'])))
         except Exception:
-            self.finished.emit(dict(failed=True,error='Operation stopped. Working files were preserved; any completed archive copies remain in the backup folder.'))
+            self.finished.emit(dict(failed=True,error='Operation stopped. Only verified archived legacy copies may have been retired; recovery archives remain in the backup folder.'))
 
 
 class StorageAuditDialog(QtWidgets.QDialog):
     def __init__(self,owner):
         super().__init__(owner);self.owner=owner;self.thread=self.worker=self.pending=None
-        self.archive_destination=None;self.report=None;self.queued=self.closing=self.yielded=False;self.key='storage-audit-'+str(id(self))
+        self.archive_result=None;self.archive_destination=None;self.report=None;self.queued=self.closing=self.yielded=False;self.key='storage-audit-'+str(id(self))
         self.setWindowTitle('Storage audit and legacy archives');self.resize(1050,650)
         box=QtWidgets.QVBoxLayout(self)
-        note=QtWidgets.QLabel('Observe configured history, source, library, cache and backup locations. Scanning is read-only. The separate archive action copies validated legacy caches to your backup folder; working files stay in place. '
+        note=QtWidgets.QLabel('Observe configured history, source, library, cache and backup locations. Scanning is read-only. Archive and free space verifies recoverable legacy-cache copies in your backup folder before removing their working copies. Research and prepared libraries stay protected. '
             'Age does not establish last use. Backup integrity and research dependencies are not verified by this inventory.')
         note.setWordWrap(True);box.addWidget(note)
         self.status=QtWidgets.QLabel('Waiting to scan…');self.status.setWordWrap(True);box.addWidget(self.status)
@@ -43,7 +56,7 @@ class StorageAuditDialog(QtWidgets.QDialog):
         row=QtWidgets.QHBoxLayout();self.refresh=QtWidgets.QPushButton('Scan again');self.refresh.clicked.connect(self.scan)
         self.copy=QtWidgets.QPushButton('Copy local report');self.copy.setEnabled(False);self.copy.setToolTip('Includes local file paths; review before sharing.');self.copy.clicked.connect(self.copy_report)
         self.stop_button=QtWidgets.QPushButton('Stop task');self.stop_button.clicked.connect(self.cancel)
-        self.archive_button=QtWidgets.QPushButton('Validate and archive legacy caches');self.archive_button.clicked.connect(self.archive)
+        self.archive_button=QtWidgets.QPushButton('Archive and free legacy cache space');self.archive_button.clicked.connect(self.archive)
         close=QtWidgets.QPushButton('Close');close.clicked.connect(self.reject)
         for button in (self.refresh,self.copy,self.archive_button,self.stop_button,close):row.addWidget(button)
         box.addLayout(row)
@@ -63,7 +76,7 @@ class StorageAuditDialog(QtWidgets.QDialog):
     def scan(self):
         if self.thread is not None or self.queued or self.closing:return
         self.roots=configured_roots(self.owner);self.queued=True;self.yielded=False
-        self.report=None;self.copy.setEnabled(False);self.table.clear();self.details.clear()
+        self.report=None;self.archive_result=None;self.copy.setEnabled(False);self.table.clear();self.details.clear()
         self.refresh.setEnabled(False);self.archive_button.setEnabled(False);self.stop_button.setEnabled(True)
         self.status.setText('Queued until current manual work and history operations retire.')
         queue=getattr(self.owner,'background_queue',None)
@@ -88,8 +101,8 @@ class StorageAuditDialog(QtWidgets.QDialog):
         history=getattr(self.owner,'history_refresh',None)
         if history:history.report_started()
         from task_dashboard import watch_task
-        watch_task(self.owner,'Legacy cache archive' if self.archive_destination else 'Read-only storage audit',self.worker,self.thread,self.cancel)
-        self.status.setText('Validating and copying legacy caches; working files remain in place.' if self.archive_destination else 'Scanning metadata in a worker; file contents and restore integrity are not being verified.')
+        watch_task(self.owner,'Legacy cache archive' if self.archive_destination else 'Read-only storage audit',self.worker,self.thread,self.cancel,formatter=task_text)
+        self.status.setText('Validating legacy caches and recovery copies before freeing working space.' if self.archive_destination else 'Scanning metadata in a worker; file contents and restore integrity are not being verified.')
         self.thread.start();return True
 
     def progress(self,done,total,text):self.status.setText(text)
@@ -107,7 +120,7 @@ class StorageAuditDialog(QtWidgets.QDialog):
         queue=getattr(self.owner,'background_queue',None)
         if self.queued and queue:queue.cancel(self.key)
         elif self.worker:self.worker.request_cancel()
-        self.status.setText('Stop requested; any observed inventory is partial.')
+        self.status.setText('Stop requested; completed recovery archives remain available and results may be partial.')
 
     def retire(self):
         payload=self.pending or dict(failed=True,error='Audit worker exited without a result.')
@@ -128,7 +141,7 @@ class StorageAuditDialog(QtWidgets.QDialog):
             self.details.setPlainText(render(self.report).split('\n\n',1)[0]+'\n'+'\n'.join(self.report['issues']))
         else:self.status.setText(payload.get('error','Audit unavailable.'))
         if payload.get('archive'):
-            a=payload['archive'];self.status.setText(f"Legacy archives: {a['archived']} verified copies; {a['preserved']} preserved/skipped; {a['errors']} validation failures. Complete: {a['complete']}. Working copies remain in place.")
+            a=self.archive_result=payload['archive'];self.status.setText(archive_summary(a))
             self.details.appendPlainText('Archive folder: '+a['archive_root']+'\n'+'\n'.join(a['messages']))
         if self.closing:super().reject()
         if getattr(self.owner,'_close_after_storage_audit',False):QtCore.QTimer.singleShot(0,self.owner.close)
@@ -140,7 +153,10 @@ class StorageAuditDialog(QtWidgets.QDialog):
                 'Modified over 30 days ago: '+str(row['older_than_30_days'])+' (not last use)',
                 'Last use: '+row['last_use'],'Cache format hint: '+row['cache_format_hint'],row['rebuild'],row['dependencies'],'Backup: '+row['backup']]))
     def copy_report(self):
-        if self.report:QtWidgets.QApplication.clipboard().setText(render(self.report))
+        if self.report:
+            text=render(self.report)
+            if self.archive_result:text+='\n\n'+archive_summary(self.archive_result)+'\nArchive folder: '+self.archive_result['archive_root']+'\n'+'\n'.join(self.archive_result['messages'])
+            QtWidgets.QApplication.clipboard().setText(text)
     def shutdown(self):
         self.closing=True;self.cancel();return self.thread is not None
     def reject(self):

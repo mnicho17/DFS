@@ -133,4 +133,78 @@ class LegacyArchiveTests(unittest.TestCase):
         self.assertTrue(result['cancelled']);self.assertFalse(result['complete'])
         self.assertFalse(list(self.backup.rglob('*.sqlite')))
 
+    def test_reclamation_restores_exact_original_and_keeps_all_recovery_files(self):
+        path=legacy(self.cache);original=path.read_bytes();size=path.stat().st_size
+        result=self.archive(reclaim=True)
+        self.assertEqual(result['archived'],1);self.assertEqual(result['reclaimed_files'],1)
+        self.assertEqual(result['reclaimed_bytes'],size);self.assertFalse(path.exists())
+        manifest=next(self.backup.rglob('manifests/*.json'));obj=next(self.backup.rglob('*.sqlite'))
+        self.assertEqual(obj.read_bytes(),original);self.assertTrue((manifest.parent.parent/'format.json').exists())
+        self.assertEqual(Path(restore(manifest,self.out)).read_bytes(),original)
+    def test_reclamation_requires_unchanged_recovery_object_manifest_and_marker(self):
+        from unittest.mock import patch
+        from legacy_scenario_archive import archive_verified
+        for part in ('archive','manifest','marker'):
+            with self.subTest(part=part):
+                self.backup=self.root/('backup-'+part);self.backup.mkdir()
+                path=legacy(self.cache)
+                def change(*args,**kwargs):
+                    receipt=archive_verified(*args,**kwargs)
+                    target=Path(receipt[part]) if part!='marker' else Path(receipt['archive_root'])/'format.json'
+                    target.write_bytes(b'changed');return receipt
+                with patch('legacy_scenario_archive.archive_verified',side_effect=change):
+                    result=self.archive(reclaim=True)
+                self.assertEqual(result['reclaimed_files'],0);self.assertTrue(path.exists())
+                path.unlink()
+    def test_source_changed_after_archival_is_not_retired(self):
+        from unittest.mock import patch
+        from legacy_scenario_archive import archive_verified
+        path=legacy(self.cache)
+        def change(*args,**kwargs):
+            receipt=archive_verified(*args,**kwargs);path.touch();return receipt
+        with patch('legacy_scenario_archive.archive_verified',side_effect=change):
+            result=self.archive(reclaim=True)
+        self.assertEqual(result['reclaimed_files'],0);self.assertTrue(path.exists())
+    def test_cancel_after_verified_archive_preserves_working_copy(self):
+        from unittest.mock import patch
+        from legacy_scenario_archive import archive_verified
+        path=legacy(self.cache);cancelled=[False]
+        def stop(*args,**kwargs):
+            receipt=archive_verified(*args,**kwargs);cancelled[0]=True;return receipt
+        with patch('legacy_scenario_archive.archive_verified',side_effect=stop):
+            result=self.archive(reclaim=True,cancelled=lambda:cancelled[0])
+        self.assertEqual(result['reclaimed_files'],0);self.assertTrue(result['cancelled']);self.assertTrue(path.exists())
+        self.assertTrue(list(self.backup.rglob('manifests/*.json')))
+    def test_busy_legacy_sqlite_reader_keeps_working_copy(self):
+        path=legacy(self.cache);con=sqlite3.connect(path);con.execute('BEGIN');con.execute('SELECT * FROM frames').fetchall()
+        try:result=self.archive(reclaim=True)
+        finally:con.close()
+        self.assertTrue(path.exists());self.assertEqual(result['reclaimed_files'],0)
+        self.assertEqual(result['archived'],1)
+    def test_unlink_failure_retains_verified_archive_and_working_copy(self):
+        from unittest.mock import patch
+        path=legacy(self.cache);unlink=Path.unlink
+        def fail(target,*args,**kwargs):
+            if target==path:raise PermissionError('busy')
+            return unlink(target,*args,**kwargs)
+        with patch.object(Path,'unlink',fail):result=self.archive(reclaim=True)
+        self.assertEqual(result['reclaimed_files'],0);self.assertEqual(result['archived'],1);self.assertTrue(path.exists())
+        self.assertTrue(list(self.backup.rglob('manifests/*.json')))
+    def test_current_cache_and_unknown_evidence_never_retired_by_archive_action(self):
+        path=legacy(self.cache);con=sqlite3.connect(path)
+        with con:con.execute("INSERT INTO meta VALUES ('scores_codec','zlib-double-v1')")
+        con.close();evidence=self.cache/'evidence.sqlite';evidence.write_bytes(b'keep')
+        result=self.archive(reclaim=True)
+        self.assertEqual(result['reclaimed_files'],0);self.assertTrue(path.exists());self.assertEqual(evidence.read_bytes(),b'keep')
+
+    def test_fresh_byte_check_rejects_changed_object_even_with_updated_receipt_stamp(self):
+        from unittest.mock import patch
+        from legacy_scenario_archive import archive_verified,stamp
+        path=legacy(self.cache)
+        def change(*args,**kwargs):
+            receipt=archive_verified(*args,**kwargs);obj=Path(receipt['archive'])
+            obj.write_bytes(b'bad');receipt['archive_stamp']=stamp(obj);return receipt
+        with patch('legacy_scenario_archive.archive_verified',side_effect=change):result=self.archive(reclaim=True)
+        self.assertEqual(result['reclaimed_files'],0);self.assertTrue(path.exists())
+
 if __name__=='__main__':unittest.main()

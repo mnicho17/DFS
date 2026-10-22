@@ -65,7 +65,10 @@ class StorageAuditUiTests(unittest.TestCase):
         with patch('storage_audit_ui.configured_roots',return_value=roots),patch.object(w.idle_backup,'destination',return_value=str(backup)):
             d=StorageAuditDialog(w);self.wait(d);self.assertFalse(list(backup.rglob('*.sqlite')))
             d.archive();self.wait(d)
-            self.assertIn('1 verified copies',d.status.text());self.assertEqual(path.read_bytes(),before)
+            self.assertIn('1 verified copies',d.status.text());self.assertFalse(path.exists())
+            self.assertIn('Freed: 1 working copies',d.status.text())
+            self.assertEqual(next(backup.rglob('*.sqlite')).read_bytes(),before)
             self.assertEqual(len(list(backup.rglob('*.sqlite'))),1)
-            self.assertTrue(any(row['title']=='Legacy cache archive' for row in w.tasks.rows.values()))
+            self.assertTrue(any(row['title']=='Legacy cache archive' and 'Freed: 1 working copies' in row['detail'] for row in w.tasks.rows.values()))
+            d.copy_report();self.assertIn('Freed: 1 working copies',self.app.clipboard().text())
             d.reject();d.deleteLater()
