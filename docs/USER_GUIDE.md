@@ -2593,3 +2593,34 @@ Applying a saved recipe also leaves Automatic; snapshots retain their captured
 explicit settings, and saved-portfolio repair keeps its current settings.
 Automatic changes compute settings only. Captain pools, exposure limits, uniqueness,
 contest profiles and historical qualification checks retain their existing behavior.
+
+
+### Recovering from a lineup-limit stop
+
+When selection cannot finish a complete portfolio, **Lineup limits** shows
+scrollable details and three review actions:
+
+- **Review search…** opens the current Build controls. For a recorded NFL Deep
+  attempt, the details show candidate and shortlist ceilings that could be
+  widened within supported bounds. The recorded time cap stays visible; any
+  budget increase requires your deliberate choice. Fast attempts point to the
+  existing timed Deep profiles. Other sports retain their existing search controls.
+- **Review limits…** opens current Portfolio Rules so you can inspect the limits.
+- **Copy Error** copies the complete stop details and recovery guidance.
+
+These actions only open controls. They do not edit settings, rerun generation,
+relax constraints or publish a partial portfolio. Current controls may differ
+from the failed attempt; its guidance is captured from that attempt's settings
+and remains available in **Review build**, including its Full report and Limits
+views. Older attempts without captured budgets disclose the missing information.
+
+Stop details now include explicit FLEX caps and a separate list of unfilled
+minimum-exposure targets at the greedy stop. Blocker counts overlap and describe
+that search, not proof that a complete portfolio is impossible. Minimum-target
+shortfalls are separate from per-candidate blocker counts.
+
+After deliberate edits, use **Generate** again, or the saved portfolio's **Repair**
+action for a repair attempt. Captain locks, exposure limits, uniqueness, historical
+qualification and existing cancellation/worker checks still apply. More SIM
+scenarios alone do not add lineup choices. Reducing the requested count also
+recalculates percentage caps and is not guaranteed to resolve the shortage.

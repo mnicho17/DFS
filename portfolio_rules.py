@@ -864,8 +864,8 @@ def select_portfolio(
             from selection_shortage import PortfolioSelectionShortage, describe
             message = describe(requested, selected, remaining, candidate_meta,
                 current_uniqueness_conflicts,
-                dict(total=max_total, captain=max_cpt, team=max_team, game=max_game, specialist=specialist_cpt_limit, kicker_captain=kicker_cpt_limit, zero_qb=zero_qb_limit),
-                dict(total=total_counts, captain=cpt_counts, team=team_counts, game=game_counts, specialist=specialist_cpt_count, kicker_captain=kicker_cpt_count, zero_qb=zero_qb_count),
+                dict(total=max_total, flex=max_flex, captain=max_cpt, minimum_total=min_total, minimum_captain=min_cpt, team=max_team, game=max_game, specialist=specialist_cpt_limit, kicker_captain=kicker_cpt_limit, zero_qb=zero_qb_limit),
+                dict(total=total_counts, flex=flex_counts, captain=cpt_counts, team=team_counts, game=game_counts, specialist=specialist_cpt_count, kicker_captain=kicker_cpt_count, zero_qb=zero_qb_count),
                 player_lookup, current_min_unique, auto_total_keys, auto_cpt_keys,
                 lambda keys: _group_ok(keys, normalized['groups']))
             if recovery['automatic_recovery_ran']:

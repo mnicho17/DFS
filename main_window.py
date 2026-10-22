@@ -13754,6 +13754,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 "contest_objective": self._current_contest_objective(),
 
+                "deep_compute": dict(self.deep_compute_settings) if effective_sim_enabled and compute_mode.casefold().startswith("deep") else {},
+
                 "compute_mode": (
 
                     "Deep" if effective_sim_enabled and compute_mode.casefold().startswith("deep") else "Fast"
@@ -15232,6 +15234,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
                 created_at=QtCore.QDateTime.currentDateTimeUtc().toString(QtCore.Qt.ISODate),
                 sport=context.get('sport','unknown'), contest_type=context.get('kind','unknown'),
                 requested_count=context.get('requested_count','not recorded'))
+            if msg.startswith(SELECTION_SHORTAGE_TITLE + "\n"):
+                from build_recovery_ui import guidance
+                self._last_build_failure['recovery_guidance'] = guidance(context)
 
         self._active_build_context = {}
 
@@ -15239,10 +15244,18 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self._update_lineup_space_dashboard()
 
+        if receipt is not None and receipt.cancelled:
+            return
+
         if msg.startswith(SELECTION_SHORTAGE_TITLE + "\n"):
             self.status.showMessage("Build stopped: current lineup limits could not be met.", 8000)
             logger.warning("Lineup selection stopped:\n%s", msg)
-            show_build_error(self, "Lineup limits", msg, warning=True)
+            recovery = getattr(self, '_last_build_failure', {})
+            detail = recovery.get('recovery_guidance', '') if isinstance(recovery, dict) else ''
+            action = show_build_error(self, "Lineup limits", msg + ('\n\n' + detail if detail else ''), warning=True)
+            if receipt is None or receipt is self._build_receipt:
+                from build_recovery_ui import open_controls
+                open_controls(self, action)
             return
 
         self.status.showMessage("Lineup build failed.", 5000)
