@@ -25,6 +25,7 @@ def setup_simple_build_panel(w, layout, count_labels, cap_labels):
     w.combo_simple_time = QtWidgets.QComboBox(panel)
     w.combo_simple_time.setObjectName('simpleTimeBudget')
     w.combo_simple_time.addItem('Fast', 'Fast')
+    w.combo_simple_time.addItem('Automatic…', 'Automatic')
     for name, profile in DEEP_PROFILES.items():
         w.combo_simple_time.addItem(f"Up to {profile['minutes']} minutes", name)
     w.combo_simple_time.addItem('Custom…', 'Custom')
@@ -82,7 +83,16 @@ def setup_simple_build_panel(w, layout, count_labels, cap_labels):
 
     def choose(index):
         name = w.combo_simple_time.itemData(index)
-        if name == 'Custom':
+        if name == 'Automatic':
+            from automatic_compute import CAPS
+            labels = [f'{minutes} minutes' for minutes in CAPS]
+            current = getattr(w, '_automatic_compute_cap', None) or 15
+            label, accepted = QtWidgets.QInputDialog.getItem(w, 'Automatic compute',
+                'Maximum Deep search budget (not a total wall-clock guarantee):', labels, CAPS.index(current), False)
+            if accepted:
+                w._automatic_compute_cap = CAPS[labels.index(label)]
+        elif name == 'Custom':
+            w._automatic_compute_cap = None
             # Reveal the current values without enabling SIM or rewriting budgets.
             w.action_show_build_controls.setChecked(True)
             w.tabs_workspace_controls.setCurrentIndex(0)
@@ -125,7 +135,10 @@ def sync_simple_build_panel(w):
         blocker = QtCore.QSignalBlocker(w.combo_simple_time)
         custom = w.combo_simple_time.findData('Custom')
         w.combo_simple_time.setItemText(custom, f"Custom — up to {w.deep_compute_settings['minutes']} min" if deep and name == 'Custom' else 'Custom…')
-        w.combo_simple_time.setCurrentIndex(w.combo_simple_time.findData(name))
+        automatic = getattr(w, '_automatic_compute_cap', None) is not None and not getattr(w, '_snapshot_replay', False)
+        w.combo_simple_time.setItemText(w.combo_simple_time.findData('Automatic'),
+            f'Automatic — maximum {w._automatic_compute_cap} min' if automatic else 'Automatic…')
+        w.combo_simple_time.setCurrentIndex(w.combo_simple_time.findData('Automatic' if automatic else name))
         del blocker
         expanded = w.action_show_build_controls.isChecked()
         blocker = QtCore.QSignalBlocker(w.btn_build_advanced)
@@ -158,6 +171,11 @@ def sync_simple_build_panel(w):
                     parts.append(w.combo_mlb_stack_pref.currentText())
             if w._active_recipe_name:
                 parts.insert(0, 'Recipe: ' + w._active_recipe_name)
+            from automatic_compute import plan, summary as compute_summary
+            decision = plan(w, (w.spin_sd if kind == 'showdown' else w.spin_cl).value()) if nfl else None
+            if decision:
+                parts = [p for p in parts if p not in ('SIM off', 'Fast SIM', 'Deep SIM', 'Custom compute settings')]
+                parts.append(compute_summary(decision) + ' Generate will use Deep + SIM.')
             summary = ' · '.join(parts)
         if not getattr(w, '_build_flow_active', False):
             from build_workflow import preparation_plan

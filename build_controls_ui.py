@@ -37,6 +37,8 @@ def setup_build_controls(window, panel, grid):
     w.combo_nfl_compute_mode.setParent(panel);w.lbl_nfl_compute_mode.setParent(panel)
     w.combo_nfl_compute_mode.hide();w.lbl_nfl_compute_mode.hide()
     def apply(name):
+        if not getattr(w, '_applying_automatic_compute', False):
+            w._automatic_compute_cap = None
         if name=='Fast':
             w.combo_nfl_compute_mode.setCurrentText('Fast (default)')
         else:

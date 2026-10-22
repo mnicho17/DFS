@@ -9914,6 +9914,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
 
+            self._automatic_compute_cap = None
             self.deep_compute_settings = normalize_deep_settings(dict({key: spin.value() for key, spin in controls.items()}, all_styles=all_styles.isChecked(), selection_mode=selection.currentText()))
 
             self.spin_nfl_sim_scenarios.setValue(validation.value())
@@ -9940,6 +9941,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
     def _apply_build_recipe(self, name: str, recipe: Dict[str, Any]) -> None:
 
+        self._automatic_compute_cap = None
         value = normalize_recipe(recipe)
 
         self._set_contest_objective(value["contest_objective"])
@@ -13595,6 +13597,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self.status.showMessage("Saved entries changed during preflight; request repair again.", 6000)
             return
 
+        from automatic_compute import apply as apply_automatic_compute
+        automatic_compute_decision = apply_automatic_compute(self, int(num), repair=bool(repair_source or retained_lineups))
+
         own_mode = getattr(self, "combo_build_own_mode", None)
 
         own_weight = getattr(self, "spin_build_own_weight", None)
@@ -13676,6 +13681,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 return
 
+            if num != resolved_num and automatic_compute_decision:
+                automatic_compute_decision = apply_automatic_compute(self, int(resolved_num))
+                sim_enabled = sim_checkbox.isChecked()
+                sim_scenarios = sim_spin.value()
+                compute_mode = compute_mode_widget.currentText()
             num = resolved_num
 
         retained = list(retained_lineups or [])[:max(0, int(num))]
@@ -13710,7 +13720,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         from preparation_audit import capture_build_audit
         self._active_build_context = {
-            "preparation_audit": capture_build_audit(self),
+            "preparation_audit": capture_build_audit(self, automatic_compute_decision),
 
             "sport": str(sport or "NFL").strip().upper(),
 

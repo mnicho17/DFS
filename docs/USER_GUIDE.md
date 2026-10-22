@@ -2570,6 +2570,31 @@ Routine downloads continue through the existing folder watcher after 30 seconds 
 The automatic-updates preference is under **Sources and account settings**. Explicit checking does not enable an off preference. The original **Import new results** tool remains under **More reports and analysis tools** for manual troubleshooting. Salary matching, learning coverage, source revisions, mappings and historical qualification retain their existing validation and review paths. No import, indexing or model change is triggered simply by viewing this status.
 
 
+### Automatic compute within a chosen budget
+
+For NFL, choose **Automatic…** from **Time budget**, then confirm a maximum
+Deep search budget of 5, 15, 20, 30, or 60 minutes. This choice lasts for the
+current session. Generate selects an existing Deep profile and enables SIM.
+The summary previews the planned profile; the build report records the actual
+choice and its reason for that build.
+
+The initial planning rule uses Baseline for up to 20 entries, Balanced for
+21–150, and Thorough above 150, always stepping down to fit your chosen maximum.
+Matching recorded complete roster preparation and screening can select Baseline.
+These are conservative planning rules, not measured quality or runtime guarantees.
+Recorded preparation does not certify reusable files: existing model, source,
+coverage and current-rule checks still run, with the existing fresh-search fallback.
+Classic currently has no matching recorded readiness hint and uses the entry-count rule.
+The budget applies to the existing Deep search; loading, preparation and final work
+can add wall-clock time. Automatic never raises your chosen maximum.
+
+Choose a manual profile or accept custom compute settings to leave Automatic.
+Applying a saved recipe also leaves Automatic; snapshots retain their captured
+explicit settings, and saved-portfolio repair keeps its current settings.
+Automatic changes compute settings only. Captain pools, exposure limits, uniqueness,
+contest profiles and historical qualification checks retain their existing behavior.
+
+
 ### Recovering from a lineup-limit stop
 
 When selection cannot finish a complete portfolio, **Lineup limits** shows
@@ -2599,3 +2624,4 @@ action for a repair attempt. Captain locks, exposure limits, uniqueness, histori
 qualification and existing cancellation/worker checks still apply. More SIM
 scenarios alone do not add lineup choices. Reducing the requested count also
 recalculates percentage caps and is not guaranteed to resolve the shortage.
+
