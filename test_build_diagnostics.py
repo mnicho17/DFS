@@ -17,10 +17,78 @@ from build_diagnostics import (
 
 
 class BuildDiagnosticsTests(unittest.TestCase):
+    def test_preparation_audit_is_captured_then_survives_history_without_session_backfill(self):
+        from types import SimpleNamespace
+        from preparation_audit import capture_build_audit
+        owner=SimpleNamespace(last_csv_load_timing=dict(wait=1.5,preparation=2,total=4),
+            last_ownership_reuse=dict(status='reused',reason='Completed estimate matches refreshed inputs and settings.',seconds=.03))
+        captured=capture_build_audit(owner)
+        owner.last_csv_load_timing['total']=999
+        owner.last_ownership_reuse['status']='refreshed'
+        record=create_build_diagnostic(context=dict(preparation_audit=captured),timing_report={})
+        captured['csv_timings']['total']=777
+        captured['ownership']['reason']='Changed later'
+        text=format_build_report(record)
+        self.assertIn('CSV load total: 4.00 s',text)
+        self.assertIn('Ownership: 0.03 s',text)
+        self.assertIn('Reused: Completed estimate',text)
+        self.assertNotIn('Changed later',text)
+        with tempfile.TemporaryDirectory() as folder:
+            path=os.path.join(folder,'history.json')
+            save_build_diagnostic(record,path=path)
+            restored=load_build_history(path=path)[0]
+        self.assertEqual(format_build_report(restored),text)
+
+    def test_preparation_audit_older_records_and_snapshot_replay_do_not_borrow_live_timings(self):
+        from preparation_audit import capture_build_audit
+        from types import SimpleNamespace
+        old=create_build_diagnostic(context={},timing_report={})
+        self.assertIn('not recorded for this build',format_build_report(old))
+        owner=SimpleNamespace(_snapshot_replay=True,last_csv_load_timing=dict(total=999),
+                              last_ownership_reuse=dict(status='reused',seconds=888))
+        record=create_build_diagnostic(context=dict(preparation_audit=capture_build_audit(owner)),timing_report={})
+        text=format_build_report(record)
+        self.assertIn('Snapshot replay',text)
+        self.assertNotIn('999',text)
+        self.assertNotIn('888',text)
+
+    def test_preparation_audit_rejects_unknown_fields_and_nonfinite_durations(self):
+        from preparation_audit import clean_build_audit
+        clean=clean_build_audit(dict(csv_timings=dict(total=float('nan'),wait=True,parse=-1,secret='API token'),
+            ownership=dict(status='refreshed',reason='C:\\private\\file.csv',seconds=float('inf'),path='private'),path='private'))
+        self.assertEqual(clean['csv_timings'],{})
+        self.assertEqual(clean['ownership'],dict(status='refreshed'))
+        self.assertNotIn('private',json.dumps(clean))
+
+    def test_scenario_component_comparison_is_saved_and_prints_only_known_categories(self):
+        record=create_build_diagnostic(context={},timing_report={},sim_report=dict(volatility_model='current',
+            scenario_cache=dict(status='saved',requested_scenarios=1,reused_scenarios=0,
+                comparison=dict(status='Compared with a recent same-slate receipt',changed_components=['player forecasts','C:/private/file.csv']))))
+        text=format_build_report(record)
+        self.assertIn('player forecasts',text);self.assertNotIn('private',text)
+        self.assertIn('Diagnostic only',text)
+        with tempfile.TemporaryDirectory() as folder:
+            path=os.path.join(folder,'history.json');save_build_diagnostic(record,path=path)
+            self.assertEqual(format_build_report(load_build_history(path=path)[0]),text)
+
+    def test_scenario_cache_reason_and_overhead_survive_saved_report(self):
+        record=create_build_diagnostic(context={},timing_report={},sim_report=dict(volatility_model='current',
+            scenario_cache=dict(status='not saved',requested_scenarios=10000,reused_scenarios=0,
+                reason='Cache storage limit reached',lookup_seconds=.2,io_seconds=1.5,stored_bytes=0)))
+        text=format_build_report(record)
+        self.assertIn('Scenario cache reason: Cache storage limit reached',text)
+        self.assertIn('lookup/verification 0.20s',text)
+        self.assertIn('frame I/O/finalization 1.50s',text)
+        record['sim']['scenario_cache']['reason']='C:\\private\\cache.sqlite'
+        text=format_build_report(record)
+        self.assertNotIn('private',text)
+        self.assertIn('details withheld',text)
+
     def test_preparation_receipt_survives_history_and_copied_report(self):
         rows=[dict(stage='library',state='Completed',detail='Validated selected library.',seconds=.2)]
         record=create_build_diagnostic(context={'kind':'showdown'},timing_report={'build_preparation':rows})
         self.assertEqual(record['build_preparation'],rows)
+        self.assertIn('Validated selected library. (0.20 s)',format_build_report(record))
         self.assertIn('library: Completed — Validated selected library.',format_build_report(record))
         save_build_diagnostic(record)
         self.assertEqual(load_build_history()[-1]['build_preparation'],rows)

@@ -24,6 +24,50 @@ class TaskDashboardTests(unittest.TestCase):
         self.time = [100.0]
         self.hub = TaskHub(clock=lambda: self.time[0])
 
+    def test_run_now_button_resolves_queue_created_after_dashboard(self):
+        from background_queue import BackgroundQueue
+        owner=QtWidgets.QWidget();hub=TaskHub(owner);owner.tasks=hub
+        panel=task_panel(hub,owner)
+        queue=BackgroundQueue(owner);owner.background_queue=queue;queue.timer.stop()
+        try:
+            calls=[];safe=[False]
+            queue.request('prep','Preparation',30,lambda:calls.append('started'),None,ready=lambda:safe[0] or queue.idle_override())
+            self.app.processEvents()
+            table=panel.findChild(QtWidgets.QTableWidget,'taskTable')
+            # The panel refresh is coalesced; let it populate before selecting.
+            from PyQt5.QtTest import QTest
+            QTest.qWait(150)
+            table.setCurrentCell(0,0)
+            button=panel.findChild(QtWidgets.QPushButton,'taskRunNow')
+            self.assertTrue(button.isEnabled());button.click();queue.pump()
+            self.assertEqual(calls,['started'])
+            QTest.qWait(150);self.assertFalse(button.isEnabled())
+        finally:
+            queue.shutdown();owner.deleteLater();self.app.processEvents()
+
+    def test_no_work_yield_and_user_cancellation_have_distinct_states(self):
+        for result,state in ((dict(no_work=True,next_check='Rechecking in 5 minutes.'),'No current work'),
+                             (dict(cancelled=True,background_yield=True),'Paused for manual work'),
+                             (dict(cancelled=True),'Cancelled'),
+                             (dict(no_work=True,errors=['Evidence needs review']),'Needs review')):
+            worker,thread,binding=self.watch()
+            worker.finished.emit(result);thread.finished.emit()
+            self.assertEqual(self.hub.rows[binding.key]['state'],state)
+        self.assertIn('Rechecking in 5 minutes.',self.hub.rows[1]['detail'])
+
+    def test_sidebar_docks_at_right_and_can_move_to_left_or_float(self):
+        from main_window import MainWindow
+        window=MainWindow();self.addCleanup(window.close)
+        dock=window.task_dashboard
+        self.assertEqual(window.dockWidgetArea(dock),QtCore.Qt.RightDockWidgetArea)
+        self.assertEqual(dock.allowedAreas(),QtCore.Qt.LeftDockWidgetArea|QtCore.Qt.RightDockWidgetArea)
+        table=dock.findChild(QtWidgets.QTableWidget,'taskTable')
+        self.assertFalse(table.isColumnHidden(0));self.assertTrue(table.isColumnHidden(4))
+        window.addDockWidget(QtCore.Qt.LeftDockWidgetArea,dock)
+        self.assertEqual(window.dockWidgetArea(dock),QtCore.Qt.LeftDockWidgetArea)
+        dock.setFloating(True);self.assertTrue(dock.isFloating())
+        self.assertGreater(dock.height(),dock.width())
+
     def watch(self):
         worker, thread = FakeWorker(), QtCore.QThread()
         binding = self.hub.watch('Test work', worker, thread, worker.stop.set)
@@ -117,7 +161,7 @@ class TaskDashboardTests(unittest.TestCase):
         window.tasks.finish(key, 'Completed', 'Screening saved')
         self.assertIn('0 underway', summary.text())
         window.on_clear_candidate_library()
-        self.assertFalse(window.action_auto_library.isChecked())
+        self.assertFalse(hasattr(window,'action_auto_library'))
 
     def test_real_worker_delivers_updates_on_gui_thread_and_retires(self):
         from PyQt5.QtTest import QTest

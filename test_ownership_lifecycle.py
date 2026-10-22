@@ -253,3 +253,94 @@ class OwnershipLifecycleTests(unittest.TestCase):
                     self.wait(lambda:w._ownership_run is None)
                 self.assertEqual(w.tasks.rows[run.task]['state'],'Completed')
                 self.assertEqual(w.edit_sd_cap.text(),text)
+
+
+class OwnershipControlsTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):cls.app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def window(self):
+        w=MainWindow();w.background_queue.timer.stop();w.idle_backup.timer.stop()
+        self.addCleanup(w.close);w.players=_showdown_players()
+        from ownership_ui import update_ownership_controls
+        update_ownership_controls(w)
+        return w
+
+    def test_existing_numerical_widgets_are_preserved_and_manual_controls_start_collapsed(self):
+        w=self.window();before=copy.deepcopy(w._current_build_recipe())
+        self.assertTrue(w.ownership_manual_panel.isHidden())
+        self.assertTrue(w.ownership_manual_panel.isAncestorOf(w.spin_own_sims))
+        self.assertTrue(w.ownership_manual_panel.isAncestorOf(w.chk_sd_template_sim))
+        with patch.object(w,'_start_ownership_sim',side_effect=AssertionError('No implicit estimator')),patch('ownership_cache.estimate',side_effect=AssertionError('No cache lookup')):
+            w.ownership_troubleshooting.click()
+        self.assertFalse(w.ownership_manual_panel.isHidden());self.assertEqual(w._current_build_recipe(),before)
+
+    def test_retry_keeps_existing_sampling_format_cap_and_estimator_route(self):
+        w=self.window();w.spin_own_sims.setValue(1200);w.edit_sd_cap.setText('49000')
+        before=copy.deepcopy(w.players)
+        with patch.object(w,'_start_ownership_sim') as start:w.ownership_retry_button.click()
+        start.assert_called_once_with(num_sims=1200,mode='showdown',cap=49000.0,sport='NFL')
+        self.assertEqual(w.players,before)
+
+    def test_reading_sources_and_fallback_status_never_recalculates_or_changes_inputs(self):
+        from ownership_ui import update_ownership_controls
+        w=self.window();w.players[0]['OwnershipSource']='Quick roster-slot estimate'
+        w.last_live_check_summary={'ownership_simulation_replaced':1};before=copy.deepcopy(w.players)
+        with patch.object(w,'on_recalc_ownership_sim',side_effect=AssertionError('No estimate')),patch('ownership_cache.estimate',side_effect=AssertionError('No cache lookup')):
+            update_ownership_controls(w);update_ownership_controls(w)
+        self.assertIn('Quick roster-slot estimate',w.ownership_status_label.text())
+        self.assertIn('replaced simulated ownership',w.ownership_status_label.text())
+        self.assertIn('not current-input validation',w.ownership_status_label.text());self.assertEqual(w.players,before)
+
+    def test_csv_build_and_closing_guards_prevent_retry(self):
+        from ownership_ui import retry_ownership,update_ownership_controls
+        w=self.window()
+        with patch.object(w,'_snapshot_busy',return_value=True),patch.object(w,'on_recalc_ownership_sim') as run:
+            update_ownership_controls(w);self.assertFalse(w.ownership_retry_button.isEnabled());retry_ownership(w);run.assert_not_called()
+        w._ownership_closing=True
+        with patch.object(w,'on_recalc_ownership_sim') as run:retry_ownership(w);run.assert_not_called()
+        w._ownership_closing=False;w._build_flow_active=True
+        with patch.object(w,'on_recalc_ownership_sim') as run:retry_ownership(w);run.assert_not_called()
+        w._build_flow_active=False
+
+    def test_foreign_or_retiring_job_reference_cannot_launch_another_worker(self):
+        from ownership_ui import retry_ownership,update_ownership_controls
+        w=self.window();w._ownership_run=object()
+        try:
+            with patch.object(w,'on_recalc_ownership_sim') as run:
+                update_ownership_controls(w);self.assertIn('underway',w.ownership_status_label.text());retry_ownership(w);run.assert_not_called()
+        finally:w._ownership_run=None
+
+    def test_snapshot_status_does_not_trigger_automatic_work_but_keeps_explicit_action(self):
+        from ownership_ui import update_ownership_controls
+        w=self.window();w._snapshot_replay=True;before=copy.deepcopy(w._current_build_recipe())
+        with patch.object(w,'on_recalc_ownership_sim') as run:
+            update_ownership_controls(w);run.assert_not_called()
+            self.assertIn('Snapshot replay',w.ownership_status_label.text());w.ownership_retry_button.click();run.assert_called_once_with()
+        self.assertEqual(w._current_build_recipe(),before)
+
+    def test_no_players_requires_csv_and_new_slate_does_not_inherit_success_claim(self):
+        from ownership_ui import update_ownership_controls
+        w=self.window();w.players=[];update_ownership_controls(w)
+        self.assertIn('Load a CSV',w.ownership_status_label.text());self.assertFalse(w.ownership_retry_button.isEnabled())
+        w.players=_showdown_players();w.last_ownership_reuse={'status':'reused','reason':'Different slate'}
+        update_ownership_controls(w)
+        self.assertNotIn('Different slate',w.ownership_status_label.text());self.assertNotIn('Ready',w.ownership_status_label.text())
+
+    def test_retry_reenables_after_worker_references_retire_at_end_of_signal_stack(self):
+        from ownership_ui import update_ownership_controls
+        w=self.window();w._build_flow_active=True
+        task=w.tasks.start('Manual build');update_ownership_controls(w)
+        self.assertFalse(w.ownership_retry_button.isEnabled())
+        w.tasks.finish(task,'Completed');w._build_flow_active=False
+        self.app.processEvents();self.assertTrue(w.ownership_retry_button.isEnabled())
+
+    def test_failed_real_worker_retires_before_retry_is_available(self):
+        w=self.window()
+        with patch.object(OwnershipSimWorker,'_simulate',side_effect=ValueError('synthetic failure')),patch('main_window.QtWidgets.QMessageBox.warning') as warning:
+            w._start_ownership_sim(num_sims=40,mode='showdown',cap=50000,sport='NFL')
+            end=time.monotonic()+5
+            while w._ownership_run is not None and time.monotonic()<end:self.app.processEvents();time.sleep(.003)
+            self.assertIsNone(w._ownership_run);self.app.processEvents()
+        warning.assert_called_once();self.assertTrue(w.ownership_retry_button.isEnabled())
+        self.assertEqual(list(w.tasks.rows.values())[-1]['state'],'Failed')

@@ -89,6 +89,101 @@ class ScenarioCacheTests(unittest.TestCase):
             run=simulate_showdown(rows,players,scenario_cache=True,outcome_transform=lambda v:v,**opts)
             self.assertEqual(run['report']['scenario_cache']['status'],'disabled')
 
+    def test_compressed_scores_are_bit_exact_and_fit_below_uncompressed_storage_limit(self):
+        from scenario_cache import ScenarioReplay
+        from nfl_simulation import player_key
+        from array import array
+        players=_showdown_players();keys=[player_key(p) for p in players]
+        ranked=sorted([float(i)/7 for i in range(2000)]*5)
+        outcomes={key:float(i) for i,key in enumerate(keys)}
+        scripts={'neutral':1}
+        with tempfile.TemporaryDirectory() as folder, patch('scenario_cache.FILE_LIMIT',300000):
+            replay=ScenarioReplay(players,[[0]*10000],kind='showdown',seed=12,count=10,enabled=True,folder=folder)
+            for index in range(10):replay.frame(index,lambda:(outcomes,ranked),scripts)
+            report=replay.finish(10)
+            self.assertEqual(report['status'],'saved')
+            self.assertLess(report['stored_bytes'],300000)
+            self.assertGreater(10*10000*8,300000)
+            warm=ScenarioReplay(players,[[0]*10000],kind='showdown',seed=12,count=10,enabled=True,folder=folder)
+            for index in range(10):
+                restored, scores=warm.frame(index,lambda:self.fail('must replay'),scripts)
+                self.assertEqual(restored,outcomes)
+                self.assertEqual(scores.tobytes(),array('d',ranked).tobytes())
+            hit=warm.finish(10)
+            self.assertEqual(hit['reused_scenarios'],10)
+            self.assertGreaterEqual(hit['lookup_seconds'],0)
+            self.assertGreaterEqual(hit['io_seconds'],0)
+
+    def test_bad_compressed_scores_and_legacy_codec_are_recomputed(self):
+        import zlib
+        players=_showdown_players();rows=ShowdownOptimizer(players).build_lineups(2)
+        opts=dict(scenarios=5,field_lineup_count=20,seed=45,scenario_cache=True)
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ,{'DFS_OPTIMIZER_DATA_DIR':folder}):
+            expected=simulate_showdown(rows,players,**opts)
+            path=next((Path(folder)/'scenario-cache').glob('*.sqlite'))
+            for blob in (b'not compressed',zlib.compress(b'x'*100000),zlib.compress(b'12345678')+b'trailing'):
+                con=sqlite3.connect(path)
+                try:
+                    with con:con.execute('UPDATE frames SET scores=? WHERE id=0',(blob,))
+                finally:con.close()
+                actual=simulate_showdown(rows,players,**opts)
+                self.assertEqual(result_values(actual),result_values(expected))
+                self.assertEqual(actual['report']['scenario_cache']['reused_scenarios'],0)
+                self.assertIn('verification',actual['report']['scenario_cache']['reason'])
+            con=sqlite3.connect(path)
+            try:
+                with con:con.execute("UPDATE meta SET value='legacy-raw-double' WHERE key='scores_codec'")
+            finally:con.close()
+            actual=simulate_showdown(rows,players,**opts)
+            self.assertEqual(result_values(actual),result_values(expected))
+            self.assertEqual(actual['report']['scenario_cache']['reused_scenarios'],0)
+
+    def test_file_limit_still_falls_back_and_removes_incomplete_artifact(self):
+        players=_showdown_players();rows=ShowdownOptimizer(players).build_lineups(2)
+        opts=dict(scenarios=5,field_lineup_count=20,seed=53)
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ,{'DFS_OPTIMIZER_DATA_DIR':folder}):
+            expected=simulate_showdown(rows,players,**opts)
+            with patch('scenario_cache.FILE_LIMIT',100):
+                actual=simulate_showdown(rows,players,scenario_cache=True,**opts)
+            self.assertEqual(result_values(actual),result_values(expected))
+            self.assertEqual(actual['report']['scenario_cache']['status'],'not saved')
+            self.assertIn('storage limit',actual['report']['scenario_cache']['reason'])
+            self.assertFalse(list((Path(folder)/'scenario-cache').glob('*.partial')))
+            self.assertFalse(list((Path(folder)/'scenario-cache').glob('*.sqlite')))
+
+    def test_compressed_frame_validation_rejects_nonfinite_unsorted_and_wrong_coverage(self):
+        from scenario_cache import ScenarioReplay
+        from nfl_simulation import player_key
+        from array import array
+        import zlib,json
+        players=_showdown_players();outcomes={player_key(p):1 for p in players}
+        with tempfile.TemporaryDirectory() as folder:
+            replay=ScenarioReplay(players,[[1,2]],kind='showdown',seed=2,count=1,enabled=True,folder=folder)
+            payload=zlib.compress(json.dumps([outcomes,{}]).encode())
+            for scores in ([2.,1.],[float('nan'),2.],[1.,float('inf')],[1.]):
+                with self.assertRaises(ValueError):replay._decode(payload,zlib.compress(array('d',scores).tobytes()))
+            with self.assertRaises(ValueError):
+                replay._decode(zlib.compress(json.dumps([{},{}]).encode()),zlib.compress(array('d',[1.,2.]).tobytes()))
+            replay.close()
+
+    def test_all_exact_context_field_count_and_runtime_gates_remain_strict(self):
+        from scenario_cache import ScenarioReplay
+        from nfl_simulation import player_key
+        players=_showdown_players();outcomes={player_key(p):1 for p in players}
+        options=dict(kind='showdown',seed=9,count=1,enabled=True,context={'checked_at':'first'})
+        with tempfile.TemporaryDirectory() as folder:
+            cache=ScenarioReplay(players,[[1,2]],folder=folder,**options)
+            cache.frame(0,lambda:(outcomes,[1.,2.]),{});cache.finish(1)
+            variants=[dict(context={'checked_at':'later'}),dict(count=2),dict(seed=10),dict(kind='classic')]
+            for change in variants:
+                cache=ScenarioReplay(players,[[1,2]],folder=folder,**dict(options,**change))
+                self.assertEqual(cache.status,'recording');cache.close()
+            cache=ScenarioReplay(players,[[1,3]],folder=folder,**options)
+            self.assertEqual(cache.status,'recording');cache.close()
+            with patch('scenario_cache.sys.byteorder','different'):
+                cache=ScenarioReplay(players,[[1,2]],folder=folder,**options)
+                self.assertEqual(cache.status,'recording');cache.close()
+
     def test_preparation_passes_frozen_settings_and_respects_pause(self):
         from build_snapshots import create_snapshot
         from scenario_preparation import prepare_scenarios

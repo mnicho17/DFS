@@ -10,4 +10,7 @@ def describe(players, refresh=None):
     active = bool(fallback and counts.get('Quick roster-slot estimate'))
     notice = (f'Live refresh replaced simulated ownership for {fallback} players with quick estimates. '
               'Run ownership simulation again to use simulated ownership.' if active else '')
+    reuse=(refresh or {}).get('ownership_reuse') or {}
+    if players and counts.get('Lineup simulation')==len(players) and reuse.get('status') in ('reused','refreshed'):
+        sources+=' | '+('Reused prepared ownership' if reuse['status']=='reused' else 'Ownership refreshed')
     return dict(sources=sources, notice=notice)

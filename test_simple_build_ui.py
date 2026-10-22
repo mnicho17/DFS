@@ -25,6 +25,19 @@ class SimpleBuildTests(unittest.TestCase):
         w.combo_simple_time.setCurrentIndex(index)
         w.combo_simple_time.activated[int].emit(index)
 
+    def test_automatic_library_route_ignores_old_off_preference_and_has_no_attachment_menu(self):
+        from build_preparation import automatic_library_inputs,remember_library
+        w=self.window();w.app_settings.setValue('build/auto_library',False)
+        remember_library(w.app_settings,'known.dfslib')
+        route=automatic_library_inputs(w)
+        self.assertTrue(route['library_folder']);self.assertTrue(route['automatic_libraries'])
+        actions=[action.text() for menu in w.findChildren(QtWidgets.QMenu) for action in menu.actions()]
+        self.assertNotIn('Load Candidate Library...',actions)
+        self.assertNotIn('Clear Candidate Library',actions)
+        self.assertNotIn('Automatically reuse compatible libraries',actions)
+        w._snapshot_replay=True
+        self.assertEqual(automatic_library_inputs(w),dict(automatic_libraries=(),library_folder=''))
+
     def test_default_panel_uses_original_count_and_build_controls(self):
         w = self.window()
         self.assertIs(w.simple_count_stack.currentWidget(), w.spin_sd)

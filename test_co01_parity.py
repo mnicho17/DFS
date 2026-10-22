@@ -37,7 +37,7 @@ def stable(value):
     if isinstance(value, dict):
         return {k: stable(v) for k, v in value.items()
                 if k not in {'created_at', 'started_at', 'finished_at', 'seconds',
-                             'contest_objective', 'objective', 'p25', 'p75'}
+                             'contest_objective', 'objective', 'p25', 'p75', 'simulation_profile'}
                 and not k.endswith('_seconds')}
     if isinstance(value, (list, tuple)):
         return [stable(v) for v in value]
@@ -165,10 +165,17 @@ class ObjectiveParityTests(unittest.TestCase):
                 warning = f"{defenses['review_players']} defenses use historical-average estimates. See Defense forecast review; no projections were changed."
                 warnings = value['diagnostic']['portfolio'].get('warnings') or []
                 value['diagnostic']['portfolio']['warnings'] = [w for w in warnings if w != warning]
+        # Builds in this frozen computational fixture have no captured session
+        # preparation metadata. Remove only the exact additive missing-data notice.
+        # All candidate identities, scores, selections and exports stay exact.
+        if not value['diagnostic'].get('preparation_audit'):
+            value['diagnostic'].pop('preparation_audit', None)
+            value['build_report'] = value['build_report'].replace(
+                '\n\nPreparation reuse and timings: not recorded for this build.', '')
         # The field-use receipt is additive reporting. Keep all sampled fields,
         # candidate metrics, selections and exports in the frozen comparison.
         value['build_report'] = '\n'.join(line for line in value['build_report'].split('\n')
-            if not line.startswith('- Historical field use: not enabled'))
+            if not line.startswith(('- Historical field use: not enabled','- SIM profile ')))
         return value
 
     def test_classic_golden_and_all_objectives(self):

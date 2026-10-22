@@ -15,19 +15,51 @@ class IdlePreparationController(QtCore.QObject):
         self.closed = self.paused = self.yielded = False
         self.remaining = 0
         self.readiness_key=None
+        self.auto_players=None
+        self.auto_timer=QtCore.QTimer(self)
+        self.auto_timer.setInterval(1000)
+        self.auto_timer.timeout.connect(self.capture_loaded_slate)
         self.state = 'Not requested'
         self.message = 'Queue a captured Showdown preparation job from Prepare Showdown Roster Library. Jobs are session-only.'
+
+    def loaded_slate(self):
+        """One automatic request per successful CSV load; capture after ownership retires."""
+        if self.closed:return
+        self.auto_players=self.owner.players
+        self.auto_timer.start()
+
+    def capture_loaded_slate(self):
+        from datetime import date
+        from slate_catalog import describe
+        if self.closed or self.auto_players is not self.owner.players or getattr(self.owner,'_snapshot_replay',False):
+            self.auto_players=None;self.auto_timer.stop();return
+        enabled=str(self.owner.app_settings.value('build/smart_preparation','true')).lower() in ('true','1')
+        if not enabled or self.paused:
+            self.auto_players=None;self.auto_timer.stop();return
+        if self.owner._snapshot_busy() or self.request_data is not None:return
+        self.auto_players=None;self.auto_timer.stop()
+        meta=describe(self.owner.players)
+        if meta['sport']!='NFL' or meta['kind']!='showdown' or not meta['date'] or meta['date']<date.today().isoformat():return
+        try:
+            snapshot=self.owner._capture_snapshot()
+            from build_preparation import remembered_libraries
+            from data_paths import data_root
+            known=list(remembered_libraries(self.owner.app_settings))
+            selected=getattr(self.owner,'_candidate_library','')
+            if selected:known.insert(0,selected)
+            self.prepare_slate(snapshot,known,data_root()/'history'/'candidates')
+        except Exception as exc:
+            task=self.owner.tasks.start('Automatic slate preparation')
+            self.owner.tasks.finish(task,'Needs review','Could not capture preparation inputs: '+str(exc))
 
     def publish(self, state, message):
         self.state, self.message = state, message
         self.owner.slate_readiness.state(self.readiness_key,state,message)
         self.changed.emit()
 
-    def ready(self):
-        backup = self.owner.idle_backup
-        modal = QtWidgets.QApplication.activeModalWidget()
-        return (not self.closed and not self.paused and modal is None
-                and backup.clock()-backup.last_input >= 60
+    def ready(self, key='preparation'):
+        from background_queue import idle_ready
+        return (not self.closed and not self.paused and idle_ready(self.owner,key)
                 and (not self.owner.history_refresh._reports or bool(self.owner.background_queue.active)))
 
     def enqueue(self, path, snapshot, seconds, limit, scope, storage_bytes, screen, full_screen):
@@ -56,10 +88,10 @@ class IdlePreparationController(QtCore.QObject):
             return
         self.owner.background_queue.request('preparation','Idle Showdown preparation',PREPARATION_PRIORITY,
             self.start,self.yield_work,ready=self.ready,idle_only=True,
-            detail='Captured inputs; waits for 60 seconds without app input, no modal, history refresh and backups. Cancel this queued row to remove the job.')
-        detail=(self.request_data['path']+'; captured inputs and limits, session-only. Waiting for idle app time.')
+            detail='Captured inputs; waits for manual workers, history refresh and backups to retire. Cancel this queued row to remove the job.')
+        detail=(self.request_data['path']+'; captured inputs and limits, session-only. Waiting for manual workers and higher-priority tasks.')
         if self.request_data.get('automatic'):
-            detail='Prepare this slate: check coverage, then prepare missing rosters / bounded screening; captured inputs, up to 12 hours and 8 GiB. Session-only; waiting for idle app time.'
+            detail='Prepare this slate: check coverage, then prepare missing rosters / bounded screening; captured inputs, up to 12 hours and 8 GiB. Session-only; waiting for manual workers and higher-priority tasks.'
         self.publish('Queued',detail)
 
     def start(self):
@@ -116,7 +148,9 @@ class IdlePreparationController(QtCore.QObject):
             self.owner.slate_readiness.update(self.readiness_key,result)
             self.publish('Running',self.describe(result))
 
-    def receive(self, result):self.pending = result
+    def receive(self, result):
+        if self.yielded and not self.paused:result['background_yield']=True
+        self.pending = result
     def failure(self, message):self.pending = dict(error=message)
 
     def yield_work(self):
@@ -131,6 +165,8 @@ class IdlePreparationController(QtCore.QObject):
             self.publish('Cancelled','Queued preparation cancelled; no worker started.')
 
     def cancel(self):
+        self.auto_players=None
+        self.auto_timer.stop()
         self.paused = True
         queue = self.owner.background_queue
         if 'preparation' in queue.pending:queue.cancel('preparation')
@@ -172,6 +208,8 @@ class IdlePreparationController(QtCore.QObject):
         if self.closed:QtCore.QTimer.singleShot(0,self.owner.close)
 
     def shutdown(self):
+        self.auto_timer.stop()
+        self.auto_players=None
         self.closed = True
         self.cancel()
         return self.thread is not None

@@ -51,8 +51,7 @@ class IdleBackupController(QtCore.QObject):
         self.watcher.fileChanged.connect(self.source_changed);self.watcher.directoryChanged.connect(self.source_changed)
         self.timer=QtCore.QTimer(self);self.timer.setInterval(15000);self.timer.timeout.connect(self.tick);self.timer.start()
         self.owner.tasks.changed.connect(self.other_work_changed)
-        app=QtWidgets.QApplication.instance()
-        if app:app.installEventFilter(self)
+        # Background work is gated by workers, never by pointer or keyboard input.
         self.arm();self.publish()
 
     def destination(self):
@@ -70,11 +69,6 @@ class IdleBackupController(QtCore.QObject):
     def set_status(self,state,message):
         if (self.state,self.message)!=(state,message):
             self.state,self.message=state,message;self.publish()
-
-    def eventFilter(self, obj, event):
-        if event.type() in (QtCore.QEvent.KeyPress,QtCore.QEvent.MouseButtonPress,QtCore.QEvent.Wheel,QtCore.QEvent.TouchBegin,QtCore.QEvent.MouseMove,QtCore.QEvent.MouseButtonDblClick):
-            self.last_input=self.clock()
-        return False
 
     def arm(self, paths=()):
         previous=self.watcher.files()+self.watcher.directories()
@@ -98,8 +92,7 @@ class IdleBackupController(QtCore.QObject):
             try:
                 if thread is not None and thread.isRunning():return True
             except RuntimeError:pass
-        modal=QtWidgets.QApplication.activeModalWidget()
-        return modal is not None and modal is not self.dialog
+        return False
 
     def other_work_changed(self):
         if self.starting or self.worker is None:return
@@ -120,12 +113,13 @@ class IdleBackupController(QtCore.QObject):
         if self.busy() and not lower:
             if self.manual:self.set_status('Queued','Backup queued until current app work retires.')
             if not queue:return
-        if not self.manual and (now-self.last_input<IDLE_SECONDS or now-self.last_change<QUIET_SECONDS):return
+        from background_queue import idle_ready
+        if not self.manual and (not idle_ready(self.owner,'backup') or now-self.last_change<QUIET_SECONDS):return
         queue=getattr(self.owner,'background_queue',None)
         if queue:
             from background_queue import BACKUP_PRIORITY
             queue.request('backup','History backup',BACKUP_PRIORITY,self.start,self.yield_work,
-                ready=lambda:not self.closed and bool(self.destination()) and not self.paused and (self.manual or self.enabled()) and (self.manual or (self.clock()-self.last_input>=IDLE_SECONDS and self.clock()-self.last_change>=QUIET_SECONDS)) and (not self.busy() or bool(queue.active and (queue.active['key']=='backup' or queue.active['priority']>20))),
+                ready=lambda:not self.closed and bool(self.destination()) and not self.paused and (self.manual or self.enabled()) and (self.manual or (idle_ready(self.owner,'backup') and self.clock()-self.last_change>=QUIET_SECONDS)) and (not self.busy() or bool(queue.active and (queue.active['key']=='backup' or queue.active['priority']>20))),
                 idle_only=not self.manual, on_cancel=self.cancel,
                 detail='Waiting for idle time and higher-priority history work.')
             queue.pump()
@@ -173,7 +167,11 @@ class IdleBackupController(QtCore.QObject):
     def progress(self,a,b,text):
         if self.worker is not None and not self.worker.stop.is_set():self.set_status('Running',text)
 
-    def receive(self,result):self.pending=result
+    def receive(self,result):
+        if self.preempted and not self.paused:result['background_yield']=True
+        if result.get('unchanged') and not result.get('cancelled'):
+            result.update(no_work=True,next_check='Rechecking in 15 minutes, or when history changes.')
+        self.pending=result
 
     def cancel(self):
         self.paused=True;self.manual=False;self.verify=False
@@ -200,8 +198,9 @@ class IdleBackupController(QtCore.QObject):
             stamp=QtCore.QDateTime.currentDateTimeUtc().toString(QtCore.Qt.ISODate)
             self.settings.setValue('backup/last_success',stamp)
             self.arm(result.get('watch_paths',()))
-            self.set_status('Paused' if self.paused else 'Changes pending' if self.dirty else 'Recorded current',
+            self.set_status('Paused' if self.paused else 'Changes pending' if self.dirty else 'No current work' if result.get('unchanged') else 'Recorded current',
                 ('A complete manifest was retained before the stop; automatic backups remain paused. ' if self.paused else '')
+                + ('No current work; rechecking in 15 minutes or when history changes. ' if result.get('unchanged') else '')
                 + f"Last checked {stamp}. {result.get('copied',0)} new objects; {result.get('skipped_unchanged',0)} unchanged files skipped. "
                 f"Manifest: {result['manifest']}. Full object verification remains a separate action; restores always verify content.")
         if self.closed and getattr(self.owner,'_close_after_backup',False):QtCore.QTimer.singleShot(0,self.owner.close)
@@ -238,6 +237,9 @@ class BackupsDialog(QtWidgets.QDialog):
         self.cancel=QtWidgets.QPushButton('Pause backup');self.cancel.clicked.connect(controller.cancel)
         for button in (self.now,self.verify,self.cancel):row.addWidget(button)
         box.addLayout(row)
+        from storage_audit_ui import open_storage_audit
+        audit_button=QtWidgets.QPushButton('Storage audit…');audit_button.setObjectName('storageAuditButton')
+        audit_button.clicked.connect(lambda:open_storage_audit(parent));box.addWidget(audit_button)
         from task_dashboard import add_task_button
         add_task_button(self,box)
         close=QtWidgets.QPushButton('Close');close.clicked.connect(self.accept);box.addWidget(close)

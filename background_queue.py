@@ -1,5 +1,5 @@
 """One cooperative queue for automatic work; leases end only on worker retirement."""
-from PyQt5 import QtCore
+from PyQt5 import QtCore, QtWidgets
 
 HISTORY_PRIORITY = 10
 BACKUP_PRIORITY = 20
@@ -15,6 +15,7 @@ class BackgroundQueue(QtCore.QObject):
         self.pending = {}
         self.active = None
         self.closed = self.dispatching = False
+        self.checking = None
         self.serial = 0
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(1000)
@@ -39,10 +40,30 @@ class BackgroundQueue(QtCore.QObject):
             self.hub.update(task, detail)
             self.pending[key] = dict(key=key, title=title, priority=priority,
                 start=start, cancel=cancel, ready=ready, task=task, order=self.serial,
-                owned=set(), yielding=False, idle_only=idle_only, on_cancel=on_cancel or cancel)
+                owned=set(), yielding=False, run_now=False, idle_only=idle_only, on_cancel=on_cancel or cancel)
         finally:
             self.dispatching = False
         self.changed.emit()
+        self.wake()
+        return True
+
+    def is_ready(self, job):
+        self.checking = job
+        try:
+            return job['ready']()
+        finally:
+            self.checking = None
+
+    def idle_override(self, key=None):
+        job = self.checking or self.active
+        return bool(job and job.get('run_now') and (key is None or job['key'] == key))
+
+    def run_now(self, task):
+        job = next((j for j in self.pending.values() if j['task'] == task), None)
+        if self.closed or job is None:
+            return False
+        job['run_now'] = True
+        self.hub.update(task, 'Run now requested; rechecking manual workers, safety checks and higher-priority work.')
         self.wake()
         return True
 
@@ -62,14 +83,26 @@ class BackgroundQueue(QtCore.QObject):
             return
         self.dispatching = True
         try:
-            ready = sorted((j for j in self.pending.values() if j['ready']()),
+            ready = sorted((j for j in self.pending.values() if self.is_ready(j)),
                            key=lambda j: (j['priority'], j['order']))
             blocked = self.foreground()
+            for waiting in self.pending.values():
+                if blocked:
+                    names=[r['title'] for k,r in self.hub.rows.items() if r['ended'] is None and r['state']!='Queued' and (not self.active or k not in self.active['owned'])]
+                    detail='Waiting for manual worker activity to retire'+(': '+', '.join(names[:3]) if names else '.')
+                elif self.active:
+                    detail='Waiting for '+self.active['title']+' to checkpoint and retire.'
+                elif waiting not in ready:
+                    detail='Waiting for source quietness or task safety checks; no app-inactivity requirement.'
+                else:
+                    detail='Ready; starting through the shared background queue.'
+                if self.hub.rows[waiting['task']]['detail']!=detail:
+                    self.hub.update(waiting['task'],detail)
             if self.active:
                 job = self.active
                 if job['cancel'] and not job['yielding'] and (blocked or
                         (ready and ready[0]['priority'] < job['priority']) or
-                        (job['idle_only'] and not job['ready']())):
+                        (job['idle_only'] and not self.is_ready(job))):
                     job['yielding'] = True
                     job['cancel']()
                     self.changed.emit()
@@ -121,6 +154,11 @@ class BackgroundQueue(QtCore.QObject):
             self.active['cancel']()
 
     def summary(self):
-        running = self.active['title'] if self.active else 'No queued worker running'
+        running = self.active['title'] if self.active else 'Waiting for manual worker activity to retire' if self.foreground() else 'No current work'
         waiting = sorted(self.pending.values(), key=lambda j: (j['priority'], j['order']))
         return running + ('; next: ' + ', '.join(j['title'] for j in waiting) if waiting else '')
+
+
+def idle_ready(owner, key=None):
+    """Input and passive dialogs do not block detached work; the queue gates workers."""
+    return True

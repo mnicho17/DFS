@@ -50,9 +50,9 @@ Build setup, preparation overview/details, and task progress/messages now have l
 
 With **Refresh history automatically (startup and folder changes)** enabled in Results and Learning, the app watches the configured Results/Salary folders and the CSV files/subfolders found during its existing import scan. A change queues a visible history-refresh request in **Tasks** and **Preparation**, waits for 30 seconds of quiet, and runs the existing validated importer after other tracked app work and history operations retire. Bursts of events coalesce into one request. No periodic content hashing or extra directory scan is used to detect changes; actual refresh retains the existing full hashing, source snapshots, reconciliation and mapping safeguards. Changed source revisions still require review and do not retarget prior mappings.
 
-Cancellation or refresh errors pause watching until **Refresh history now** resumes it. Turning automatic history off cancels queued automatic requests and removes watches; it does not cancel an already running import. Closing the app cancels queued work and retains existing safe worker retirement. The app must remain open for file notifications. Notifications are not source validation, and a quiet folder is not proof its history is current.
+Cancellation or refresh errors pause watching until **Retry / Resume** on Overview resumes it. Turning automatic history off cancels queued automatic requests and removes watches; it does not cancel an already running import. Closing the app cancels queued work and retains existing safe worker retirement. The app must remain open for file notifications. Notifications are not source validation, and a quiet folder is not proof its history is current.
 
-Watch registration is bounded to 4,096 paths and may be limited by Windows or an unavailable drive. Results and Learning and Preparation show partial-registration or paused status; use **Refresh history now** for full coverage, after reconnecting drives, or if filesystem notifications were missed. Newly discovered subfolders/files are registered after import; application-owned analysis-source archives are excluded from watching.
+Watch registration is bounded to 4,096 paths and may be limited by Windows or an unavailable drive. Results and Learning and Preparation show partial-registration or paused status; use **Check now** for full coverage, after reconnecting drives, or if filesystem notifications were missed. Newly discovered subfolders/files are registered after import; application-owned analysis-source archives are excluded from watching.
 
 ## Unified preparation summary
 
@@ -68,11 +68,11 @@ The **Tasks…** button stays on the main workspace beside a compact count of wo
 
 A quiet task shows **no recent update** after 60 seconds; that describes missing progress messages, not a diagnosis that the task has failed. Failures, partial preparation, cancellations, and incomplete portfolios remain visible in recent task history for this app session. Overnight dialogs also have a **Tasks…** button.
 
-For a live NFL Deep build with SIM enabled, **Generate** now checks remembered library paths and the standard history `candidates` folder automatically. Successfully loaded libraries and libraries started in overnight preparation are remembered, including external-drive paths. Discovery is bounded and does not recursively search drives. It checks inexpensive metadata first, then uses the existing loader to validate actual contents, current rules, Captain coverage, and screening evidence. Final validation SIM remains fresh.
+For a live NFL Deep build with SIM enabled, **Generate** now checks remembered library paths and the standard history `candidates` folder automatically. Successfully loaded libraries and libraries started in overnight preparation are remembered, including external-drive paths. Discovery is bounded and does not recursively search drives. It checks inexpensive metadata first, then uses the existing loader to validate actual contents, current rules, Captain coverage, and screening evidence. Current candidate scoring, rules and independent audits still run; completed exact-input scenario frames may be replayed.
 
-An explicitly loaded library takes priority and retains its existing validation errors and explicit partial-coverage choice. Automatic discovery never opts into partial coverage. If an automatically discovered library is rejected, the Tasks details explain the reason; the build proceeds with the existing fresh-candidate search if no compatible library is accepted. Rules and exposure limits are not relaxed by this fallback. Fast builds, snapshot replay, and saved-portfolio repair do not automatically discover libraries.
+Legacy explicit-library requests retain their existing validation errors and partial-coverage safeguards; they are not the normal CSV-to-Generate flow. Automatic discovery never opts into partial coverage. If an automatically discovered library is rejected, the Tasks details explain the reason; the build proceeds with the existing fresh-candidate search if no compatible library is accepted. Rules and exposure limits are not relaxed by this fallback. Fast builds, snapshot replay, and saved-portfolio repair do not automatically discover libraries.
 
-Turn off **Settings > Automatically reuse compatible libraries** to use fresh generation. **Clear Candidate Library** also turns automatic reuse off; re-enable it explicitly when desired. Compute profiles, forecast models, historical-field settings, and strategic rules retain their existing behavior.
+Automatic reuse is always checked for live NFL Deep + SIM builds; there is no attachment step or reuse toggle in Settings. Old saved off preferences no longer disable discovery. A successful new CSV load clears any old explicit attachment; a failed or cancelled load retains the current slate. Fast, snapshot replay and saved-portfolio repair keep their existing routes. Compute profiles, forecast models, historical-field settings, and strategic rules retain their existing behavior. Existing ownership estimates, compatible screening and completed exact-input scenarios are also reused through their current validation gates; no experimental historical-field model is enabled automatically.
 
 ## 2. Five-minute workflow
 
@@ -1082,7 +1082,7 @@ C:\DFS_Server\.venv\Scripts\python.exe scripts/prepare_nfl_server.py C:\DFS_Serv
 
 
 
-Choose a new output directory for every run. This command uses the desktop CSV parser, enrichment, role-pool builder, and Recalc Own% (Sim) worker. Both formats use the same ownership-field assignment function. For Showdown use `--mode showdown`, adding `--template-sim` only to match that desktop option. Qt is a library dependency, but no window is opened.
+Choose a new output directory for every run. This command uses the desktop CSV parser, enrichment, role-pool builder, and Recalculate / Retry ownership worker. Both formats use the same ownership-field assignment function. For Showdown use `--mode showdown`, adding `--template-sim` only to match that desktop option. Qt is a library dependency, but no window is opened.
 
 
 
@@ -1213,7 +1213,7 @@ New result files receive the existing descriptive analysis. After pairing older 
 
 ### Longer Acer searches and candidate libraries
 
-In the settings menu, choose **Long Search / Resume...**. Start with a freshly
+Open **Preparation → Advanced tools → Classic candidate search / resume…**. Start with a freshly
 imported NFL slate and updated depth charts/ownership. Choose **New library**,
 then 1, 2, 4, 8 or 12 hours and **Start / Resume**. This works for both NFL Classic
 and Showdown. The time is a search allowance, not a promise that every possible
@@ -1233,15 +1233,7 @@ failure loses at most the unfinished batch. **Open existing** resumes using the
 original inputs and the next batch seed. After changing inputs or updating the
 app, start a new library; existing libraries can still be loaded for fresh scoring.
 
-To use the search, load the matching slate, refresh player data and ownership,
-then choose **Load Candidate Library...**. Select **Deep**, enable NFL SIM and
-click Build. Current injuries, QB eligibility, fades, locks, groups and salaries
-are checked again; exposure and uniqueness rules are applied during selection.
-Candidates are screened and the shortlist is simulated again using current
-projections. No old SIM score is reused. The build report shows accepted and
-rejected library counts. **Clear Candidate Library** returns to ordinary generation.
-Clear it before repairing an existing portfolio. Different slate IDs/game dates
-are rejected rather than matched by player name alone.
+To use prepared search work, load the matching slate, select **Deep** with NFL SIM, and click Generate. Compatible libraries are found automatically in remembered paths and the standard candidates folder. Current injuries, QB eligibility, fades, locks, groups, salaries, coverage and evidence are checked again; exposure and uniqueness rules apply during selection. Compatible screening and completed exact-input scenario frames can be reused, while current candidate scoring and independent audits still run. The build report records accepted/rejected candidates and fallback reasons. Different slate IDs/game dates are rejected rather than matched by player name alone. Fast and saved-portfolio repair retain their existing routes.
 
 The long search expands candidate discovery; it does not run an overnight final
 outcome ranking or automatically train the forecast model. Final simulation still
@@ -1273,7 +1265,7 @@ New quick ownership estimates reflect roster exposure rather than weights that
 sum to 100 across the entire pool. For a sufficiently populated NFL pool, Classic
 estimates sum to 900%; Showdown sums to 600% (100% Captain and 500% FLEX), with each
 player's combined exposure capped at 100%. These are heuristic estimates, not
-observed field ownership; use Recalc Own% (Sim) for lineup-based estimates.
+observed field ownership; use Recalculate / Retry ownership for lineup-based estimates.
 New exports record ownership source and percentage units. Historical exports
 remain unchanged, and older unlabelled values must not be retrospectively rescaled.
 
@@ -1967,11 +1959,11 @@ Restore requires a new destination folder, never the live installation. The back
 
 ### Overnight candidate preparation targets
 
-Settings > **Long Search / Resume** opens Overnight Preparation for NFL Classic or Showdown. Choose **New library**, select a maximum of 1–12 hours, and choose a total saved-candidate target of 12,000, 20,000, 50,000 or 100,000. The default is 20,000. Start / Resume runs all five styles in checkpointed batches; it stops when the target or time limit is reached. Existing candidates count toward the target. Pause and save retains completed batches. Leave the app open and the computer awake; the dialog prevents starting a competing interactive build in this app window. It is not an unattended scheduler and does not change Windows sleep settings.
+**Preparation → Advanced tools → Classic candidate search / resume…** opens Overnight Preparation for NFL Classic or Showdown. Choose **New library**, select a maximum of 1–12 hours, and choose a total saved-candidate target of 12,000, 20,000, 50,000 or 100,000. The default is 20,000. Start / Resume runs all five styles in checkpointed batches; it stops when the target or time limit is reached. Existing candidates count toward the target. Pause and save retains completed batches. Leave the app open and the computer awake; the dialog prevents starting a competing interactive build in this app window. It is not an unattended scheduler and does not change Windows sleep settings.
 
 Saved roster identities are excluded from later batches and resumed searches. Captain swaps remain distinct in Showdown. Five consecutive styles adding no new candidates stop the search with an explanation; this does not prove all possible lineups were searched. Time limits and heuristic searches can finish below the target. App-code or input changes still require a new library to continue searching; existing libraries can still be loaded for a matching slate and checked against current player inputs.
 
-After preparation, close the dialog, use **Load Candidate Library**, and run **Deep** with SIM enabled. Both formats reuse the saved combinations and validate current eligibility, salary and lineup rules. This avoids ordinary candidate generation for that build, but still runs current scenario scoring, feasibility checks and selection. Optional reusable scenario preparation is described below. Preparation does not automatically submit/export lineups. Start with 12,000–20,000: very large libraries can increase screening time and memory use. No overnight job starts automatically on app launch.
+After preparation, run **Deep** with SIM enabled; Generate automatically discovers compatible saved work without attaching a library. Both formats reuse the saved combinations and validate current eligibility, salary and lineup rules. This avoids ordinary candidate generation for that build, but still runs current scenario scoring, feasibility checks and selection. Optional reusable scenario preparation is described below. Preparation does not automatically submit/export lineups. Start with 12,000–20,000: very large libraries can increase screening time and memory use. No overnight job starts automatically on app launch.
 
 Command-line preparation also accepts `--candidates 20000` with `--hours 8`; both limits are validated before creating a library. The candidate target is not a contest entry limit.
 
@@ -2040,7 +2032,7 @@ The comparison is a bounded diagnostic search, not a replay of the full Deep pip
 ### Comparing other users’ constructions
 
 Results & Learning can automatically refresh your configured Results and Salary
-folders at startup. Use **Refresh history now** for new downloads during a session;
+folders at startup. New downloads are detected during a session when folder watching is enabled. Use **Check now** to explicitly verify configured folders;
 the summary shows imported entries and records needing review. The startup option
 can be disabled. Refresh imports evidence and username history without changing SIM.
 
@@ -2064,7 +2056,7 @@ Fast Showdown also skips the Classic-only field comparison when finishing its re
 
 ## Full Showdown roster libraries and screening
 
-Open **Settings > Prepare Showdown Roster Library**. For all-Captain coverage,
+Open **Preparation → Advanced tools → Showdown library / screening**. For all-Captain coverage,
 select **Full slate: prepare every Captain in separate partitions**, choose a new
 `.sdfull` file, and set the time and storage budgets. Keep the manifest and its
 adjacent `.sdfull.parts` folder together. Captain locks apply when building; full
@@ -2097,7 +2089,7 @@ An incompatible result means both sets of targets cannot be met simultaneously. 
 
 ### Automatic Showdown ownership and field spending
 
-NFL **Recalc Own% (Sim)** now estimates ownership from legal opponents using the same salary-band spending prior as detailed SIM. It draws from projections without fitting to existing ownership forecasts. Only completed samples of six distinct athletes, both teams and legal slot salaries contribute; canceled or incomplete samples do not replace ownership. Model and sample size are recorded with the resulting automatic ownership.
+NFL **Recalculate / Retry ownership** now estimates ownership from legal opponents using the same salary-band spending prior as detailed SIM. It draws from projections without fitting to existing ownership forecasts. Only completed samples of six distinct athletes, both teams and legal slot salaries contribute; canceled or incomplete samples do not replace ownership. Model and sample size are recorded with the resulting automatic ownership.
 
 The legacy Field Templates switch applies to other Showdown sports and is hidden for NFL. Classic estimation remains unchanged. Existing supplied/manual ownership continues to be used by detailed SIM; estimates are replaced when you explicitly recalculate ownership. Saved historical forecasts and evidence are not rewritten. Recalculating ownership changes current model inputs, so prepared screening based on previous ownership must be refreshed. Shared spending assumptions do not guarantee exact ownership matching or historical accuracy.
 
@@ -2143,7 +2135,7 @@ The latest failed build attempt is retained separately for the current session, 
 
 **Backups…** beside Tasks (also in Settings) shows the active history source, destination, last recorded outcome, and manual backup/verification controls. The app uses the launcher's existing `DFS_BACKUP_ROOT` when available; choosing a folder in Backups saves an override. The destination must already exist. Automatic backups can be turned off there without changing the launcher fallback.
 
-Automatic work starts after 60 seconds without app input, at least 30 seconds of quiet source notifications, and no active tracked build/import/report/preparation work or unrelated modal dialog. Monitoring uses up to 4,096 history paths from the backup inventory; an idle metadata check every 15 minutes covers missed notifications. It does not continuously hash unchanged files. New foreground tasks pause the backup cooperatively. Tasks and Preparation show its progress and outcome. Manual Back up now queues behind active work; Pause suppresses automatic work for the current session until Back up now or a preference change; restarting the app starts normal idle checks. Unavailable/read-only drives produce Needs attention and a 15-minute automatic retry delay; no alternate folder is silently created.
+Automatic work starts when no manual worker is active, with at least 30 seconds of quiet source notifications for backups. Pointer movement, keyboard input and passive dialogs do not stop detached background work. Monitoring uses up to 4,096 history paths from the backup inventory; an idle metadata check every 15 minutes covers missed notifications. It does not continuously hash unchanged files. New foreground tasks pause the backup cooperatively. Tasks and Preparation show its progress and outcome. Manual Back up now queues behind active work; Pause suppresses automatic work for the current session until Back up now or a preference change; restarting the app starts normal idle checks. Unavailable/read-only drives produce Needs attention and a 15-minute automatic retry delay; no alternate folder is silently created.
 
 The existing incremental-v1 store, dated manifests, and restore format remain. Changed/new SQLite databases are backed up through SQLite's consistent snapshot API, including committed WAL transactions, instead of copying database/WAL files independently. WAL/shared-memory files are not restored beside those snapshots. Uncommitted database changes are not backed up. A destination lock prevents overlap between app instances and the CLI. Cancellation before publication, source changes, or errors do not publish a new manifest; already verified objects can be reused on retry. If a stop arrives after publication, that completed manifest remains recorded and future automatic work stays paused. Earlier complete backups remain intact; no automatic pruning/deletion is enabled.
 
@@ -2154,18 +2146,26 @@ Recorded current means the last metadata/content check completed, not proof agai
 
 ### Background queue and idle Showdown preparation
 
+The **Tasks** pane opens vertically on the right. Drag its title bar to dock it on the left or detach it as a tall floating pane. Each task shows state, elapsed time and recent progress; selecting it shows the full messages. The overview identifies the current worker, queued work, slate recheck countdown and enabled folder/backup monitoring.
+
+In **Tasks**, select a queued task and click **Run now** to recheck it immediately. Manual workers, higher-priority ready jobs, actual worker retirement, source/storage checks, user pauses and preparation limits still apply. Ordinary mouse/keyboard activity, passive dialogs and minimizing the app never require a new inactivity countdown. Keep the app open and the PC awake.
+
+Routine checks with nothing pending show **No current work**, with **Rechecking in 5 minutes** for slate discovery or a 15-minute metadata recheck for unchanged backups. History monitoring watches for file changes rather than claiming a polling interval. Cooperative interruptions show **Paused for manual work**; actual user cancellation remains distinct. No-work status is scheduling information, not proof of validated library coverage or saved evidence.
+
 The task bar separates running work from queued work. The shared background queue runs validated Results/Salary history refresh first, incremental history backups second, and explicitly queued Showdown roster preparation/screening last. Generate and other foreground tasks take precedence over backups and idle preparation. A replacement background worker waits until the earlier worker has saved its checkpoint and retired; a stop request alone does not free the queue. Tasks and Preparation show waiting requests and outcomes. Cancel a waiting request in Tasks to remove it.
 
-In **Settings → Prepare Showdown Roster Library**, choose the library and existing preparation limits, then select **Queue for idle time…**. This closes the preparation window and queues one session-only job. It uses the snapshot of players, Captain scope, rules, forecasts, optional screening choices, time allowance and storage limits captured when that preparation window opened and the limits you selected before queuing. Later edits in the main window do not change this captured job. Start / Resume retains its immediate behavior. Only Showdown preparation supports this idle queue; Classic Long Search remains explicit.
+In **Preparation → Advanced tools → Showdown library / screening**, choose the library and existing preparation limits, then select **Queue for idle time…**. This closes the preparation window and queues one session-only job. It uses the snapshot of players, Captain scope, rules, forecasts, optional screening choices, time allowance and storage limits captured when that preparation window opened and the limits you selected before queuing. Later edits in the main window do not change this captured job. Start / Resume retains its immediate behavior. Only Showdown preparation supports this idle queue; Classic Long Search remains explicit.
 
-Idle preparation waits for 60 seconds without app input, no modal window, and the higher-priority jobs. App input, a foreground task, a ready history refresh, or a backup request stops it cooperatively at the existing checkpoint. It resumes when eligible, using the remaining active processing time from the original allowance. Time spent waiting does not consume that allowance. A user stop, app shutdown, error, storage/roster limit, exhausted time allowance or screening-stall outcome requires explicit review/resume and never causes an automatic retry loop. Queued requests are not persisted across app restarts; completed checkpoint files remain resumable through Open existing. The app must stay open and the PC awake.
+Background preparation waits for manual workers and higher-priority jobs. A foreground task, ready history refresh, or backup request stops it cooperatively at the existing checkpoint; ordinary UI interaction does not. It resumes when eligible, using the remaining active processing time from the original allowance. Time spent waiting does not consume that allowance. A user stop, app shutdown, error, storage/roster limit, exhausted time allowance or screening-stall outcome requires explicit review/resume and never causes an automatic retry loop. Queued requests are not persisted across app restarts; completed checkpoint files remain resumable through Open existing. The app must stay open and the PC awake.
 
 Preparation does not select the library for the current build, release a partial portfolio, change current Captain locks or exposure limits, or replace final SIM and build validation. Use a fresh preparation snapshot when current inputs or screening rules change. Check actual drive availability, recorded backup status and exit time in the running app after updating; automated tests use disposable storage and do not measure your external drive.
 
 
 ### Prepare this slate
 
-After loading an NFL Showdown CSV, select **Prepare this slate** beside Generate (also in Settings). This captures the current players, forecasts, Captain choices, rules, salary cap and screening settings and queues one idle preparation job. Repeated clicks do not create duplicate jobs. It does not run a lineup build or change the selected library, automatic-reuse preference, Captain locks, exposure limits or current compute profile. Classic and other sports continue to use their existing Advanced preparation tools.
+With Smart preparation enabled, a successful CSV load of an upcoming NFL Showdown slate also schedules **Prepare this slate** automatically, without a confirmation prompt. Capture waits for CSV/ownership work to retire, then queues the existing coverage check, missing roster preparation and bounded screening under the same 12-hour / 8 GiB limits. Compatible completed work is reused through the existing validation gates. This runs once per successful load; a new slate replaces an uncaptured request, and existing explicit preparation is retained until retirement. User pauses, Smart-off, historical or unknown game dates, Classic and snapshot replay do not trigger automatic preparation. Capture failures appear as Tasks needing review, without a modal prompt. No exhaustive full-roster screening is enabled automatically.
+
+After loading an NFL Showdown CSV, open **Preparation…** beside Generate (also in Settings), then select **Prepare this slate** or **Retry / Resume**. This captures the current players, forecasts, Captain choices, rules, salary cap and screening settings and queues one idle preparation job. Repeated clicks do not create duplicate jobs. It does not run a lineup build or change the selected library, automatic-reuse preference, Captain locks, exposure limits or current compute profile. Classic and other sports continue to use their existing Advanced preparation tools.
 
 The job inspects the selected/remembered libraries and a bounded listing of the standard history/candidates folder in a worker thread. Existing complete roster coverage is checked for the slate, salaries, explicit identities, current Captain pool and actual saved counts. Complete compatible screening is checked through the same score-digest, model, Python, rules and captured-input gates used during Generate; a historical field profile is revalidated before a ready claim. A valid cache is reused without rescoring. When only screening is missing, roster generation is skipped. Compatible partial roster coverage is resumed before screening; narrower Captain coverage or incompatible sources do not silently become a partial-use opt-in. A damaged automatic library or matching screening cache stops for review without overwriting evidence.
 
@@ -2181,7 +2181,7 @@ The Build panel now shows a compact **Preparation record** for the loaded NFL Sh
 - **Roster coverage:** committed combinations checked against the captured scope's combinatorial total, saved rosters, and completed Captain partitions when available. This counts preparation work, not lineups legal under current build rules. A declared Captain scope alone does not prove saved candidates exist for every Captain.
 - **Screening:** committed candidate counts and the known total. Full-roster screening can have an unknown total while scanning; no percentage is invented. Current-batch scenarios are shown separately and do not count as committed screening progress. Reused Deep-bank scores are not described as exhaustive full-roster screening.
 - **Current inputs:** comparison with captured roster identities, salaries, preparation cap, Captain scope, forecasts, rules and the existing screening settings. Forecast/rule changes can require screening updates while roster inputs still match. Expanding a scoped Captain pool can require coverage work. The comparison uses the existing audited observation-time normalization and portfolio-only zero-QB exception; unknown player fields remain strict. The summary reads widgets and in-memory profiles, without scanning libraries, checking sources, importing, running SIM, or changing build controls.
-- **Paused / waiting:** idle countdown, open dialog, foreground work, higher-priority backup/history work, checkpoint retirement, user pause, time/roster/storage limit, incomplete SIM batch, or an error. The actual worker stop condition is recorded when known. Unknown progress stays unknown.
+- **Paused / waiting:** manual worker activity, higher-priority backup/history work, checkpoint retirement, user pause, time/roster/storage limit, incomplete SIM batch, or an error. The actual worker stop condition is recorded when known. Unknown progress stays unknown.
 
 Both queued idle preparation and immediate Advanced roster preparation/screening feed this record. Up to 24 retired records are retained in local app settings, together with active jobs; only fingerprints and bounded progress metadata are stored, not the full snapshots or scoring banks. Records survive app restart, but queued jobs do not restart. Previous-session progress is marked recorded, with the prior pause/error reason retained. The most compatible record for the loaded slate is shown; another game does not inherit its counts.
 
@@ -2198,7 +2198,7 @@ this checkpoint. The dashboard says history is unchanged instead of reporting
 another indexing pass. The first successful check establishes the checkpoint.
 
 Changed inputs trigger the existing full verification; failed or cancelled work
-is never marked complete. **Refresh history now** always runs full verification
+is never marked complete. **Check now** always runs full verification
 and is also the way to check externally restored files whose content was changed
 while preserving all file metadata. These startup checkpoints do not qualify
 evidence for analysis or bypass downstream historical-data safeguards.
@@ -2219,9 +2219,7 @@ in progress must return before its worker can retire; existing source timeouts
 still apply. The app does not forcibly terminate threads or apply partial loads.
 The diagnostic log records parsing, enrichment, preparation and GUI commit times.
 
-Automatic history refreshes and automatic backups wait for 60 seconds without
-app input. They yield at safe boundaries when you resume interaction or request
-foreground work, then retry during idle time. Explicit history/backup requests
+Automatic history refreshes and automatic backups wait for manual workers to retire. They yield at safe boundaries when you request foreground worker activity, then retry after that worker retires. Explicit history/backup requests
 retain their manual behavior. Explicit cancellation pauses the job instead of
 automatically retrying it. Saved evidence checks and completed backup manifests
 retain their existing safeguards.
@@ -2244,8 +2242,217 @@ estimates remain available after cancellation; stopped jobs do not auto-restart.
 The ownership sampling, calculation, and lineup algorithms are unchanged.
 
 
+<<<<<<< HEAD
 Ownership results refresh the player table's ownership cells in place. Sorting,
 selected players, and readiness checks stay current without rebuilding every
 player cell. A full table refresh is used if the displayed rows no longer match
 the loaded player keys. This display optimization does not change ownership
 estimation or lineup rules.
+=======
+### Automatic Captain-pool allocations
+
+Locking several Captains selects the allowed Captain pool. The app first tries
+balanced integer shares (for example, six Captains receive 25 targets each in a
+150-lineup build). These generated shares are automatic allocations, rather than
+manual maximums. If strict selection cannot finish, bounded recovery can
+redistribute those shares within the selected pool. Each selected Captain must
+still appear at least once; saved retained entries, fades, FLEX locks, minimum
+uniqueness, player groups, and unrelated manual exposure limits remain enforced.
+A feasible balanced allocation is retained without redistribution.
+
+The report labels generated Captain caps as automatic, lists attempted recovery
+stages, and shows target-to-selected Captain counts when redistribution succeeds.
+Recovery reserves time for its later allocation stages within the existing shared
+budget. A failed or cancelled recovery releases no partial portfolio and commits
+no trial limits. Manual Captain limits without a matching generated allocation
+receipt remain hard limits. This changes portfolio allocation only; candidate
+production, forecasts, ownership estimates, SIM scoring, and ranking formulas
+are unchanged. It does not guarantee that every request is feasible.
+
+
+### Salary-aware fresh Showdown search
+
+NFL Showdown Deep searches apply the selected salary strategy's existing minimum
+while constructing fresh candidates, including Captain coverage and exposure
+coverage alternatives. With a $50,000 cap, Maximize Salary keeps the existing
+$49,500 floor and Near Cap keeps the existing $47,500 floor. Other Showdown
+salary strategies retain their current minimum. Choices that cannot reach the
+floor with the remaining FLEX slots are skipped; a completed candidate must
+still satisfy the cap, distinct-player, two-team, lock/fade, and existing
+construction rules. Small exact searches enforce the same requested minimum.
+The build report records the minimum enforced during fresh construction.
+
+The final salary filter remains active. The search never lowers the salary
+minimum to fill a candidate target. A bounded search can stop with fewer
+candidates, or none, and does not establish infeasibility. The existing phase
+time and candidate budgets remain in force. The shortlist, scoring, simulations,
+ownership calculations and portfolio rules are unchanged; the searched bank and
+therefore final selections can differ. A larger usable bank can take longer to
+score, so improved search throughput does not guarantee a shorter complete build.
+Saved-library loading and screening retain their existing validation and filters.
+
+
+### Held-out ranking audit runtime
+
+The automatic ranking audit remains a separate diagnostic: 2,000 fresh scenarios,
+the same frozen shortlist, a fresh opponent field, and a two-minute diagnostic
+time allowance.
+It starts only with at least two minutes available before reserved selection time.
+Its results never drive lineup selection. The primary validation sample is
+separate; an incomplete audit does not erase a completed primary validation.
+
+Showdown audits resolve the frozen rosters' player identities once before scoring,
+preserving Captain multiplication, FLEX order, arithmetic, random draws and
+opponent-field construction. The primary Showdown simulation and Classic scoring
+paths retain their existing implementation. This reduces repeated lookup work
+without extending the audit deadline or shrinking its sample.
+
+For incomplete audits, the report distinguishes the audit's own time cap,
+reserved build deadline, cancellation, mismatched candidates and an incomplete
+sample without an observed timeout. It shows elapsed time and the diagnostic
+budget. Partial samples, identity mismatches and cancelled results never publish
+a completed overlap statistic. Older reports remain readable. Runtime varies
+with candidate count, field size, data and hardware; the optimization does not
+guarantee that every audit will finish within its cap.
+
+
+### Load slate and automatic salary discovery
+
+**Load CSV** opens a searchable slate list from the Salary Files folder configured in Data and Learning. The default view includes today and future game dates parsed from the salary table, rather than the file modification date. **All dates** includes older slates and files with unknown dates. **Browse…** still accepts a salary CSV or an entries CSV containing a salary table from any location. Team/game labels describe the salary slate; they do not invent contest names absent from the file.
+
+The persistent `slate-catalog.sqlite` beside the learning database records file metadata, content digests, and discovery/preparation status. Identical byte copies appear once. Unchanged files skip hashing and parsing across restarts; changed metadata triggers another scan. Files still being written are retried later. This catalog is scheduling metadata, never saved evidence or permission to skip build validation.
+
+While the app remains open, discovery runs through the shared idle queue at startup and approximately every five minutes. **Refresh list** requests discovery without running expensive preparation inside the picker. Work waits for foreground workers and cooperatively yields when the app becomes busy. Tasks shows progress and Stop; closing waits for worker retirement. Stopping a discovery/preparation task pauses automatic discovery for the session; the picker can still refresh manually.
+
+**Prepare upcoming NFL slates automatically while idle** is enabled initially and can be switched off in the picker. Smart preparation considers slates from today through seven days ahead, earliest first. It uses detached inputs, existing enrichment and the existing 500-entry ownership estimator, then prepares a bounded reusable library across the existing five search styles. Classic uses the existing bounded search, not exhaustive enumeration. No locks, fades, custom contest rules, or output lineups from the currently loaded slate are copied into these jobs.
+
+Each library targets 12,000 candidates in roughly one-minute search batches, with a 30-minute attempt allowance (including input preparation) and a shared 8 GiB candidate-folder budget. A batch may take additional time to finish its current cooperative operation. Ownership and captured inputs are retained in a separate preparation receipt so a resumed candidate search does not repeat enrichment or ownership. Source or app-code changes receive a new preparation identity. Repeated no-progress batches, errors, storage limits, and exhausted allowances require attention instead of retrying indefinitely. Existing artifacts are not deleted to reclaim space.
+
+**Prepared candidates** means the bounded candidate target was reached; it does not certify exhaustive coverage, current forecasts, or reusable screening. Loading the slate still refreshes live inputs and ownership. Deep discovers remembered automatic libraries and subjects them to the existing slate, code, eligibility, salary, and rule checks. Screening/final SIM and validation run under the actual build inputs; Smart preparation does not reuse generic screening as evidence for personal settings. Use the existing Prepare this slate / Advanced controls for additional preparation or to address a paused job.
+
+
+### Inspect and resume a discovered slate
+
+In **Load CSV**, select a slate to see its preparation details beneath the list: the last recorded candidate count and target, ownership capture status, time used in the current attempt and across attempts, last pause reason, last update, salary file, and library path. These are recorded preparation details, not certification that the library matches live forecasts or your current build rules. Older records show “not recorded” for details they did not save.
+
+**Retry / Resume** queues only the selected NFL slate. Close the picker and let the app become idle; foreground work and higher-priority tasks keep precedence. The action does not load that slate, change your current players/locks/rules, or switch on preparation for every slate. An explicitly selected older slate can also be resumed through **All dates**. The button waits for any existing discovery/preparation worker to retire before another request can be made.
+
+A retry rechecks the source identity and the shared storage budget. Compatible saved candidates and captured ownership remain in place. After a time-limit, no-progress, or error stop, the explicit action grants another bounded 30-minute attempt and resets that attempt’s no-progress counter once; cooperative yields and later search batches do not keep renewing the allowance. A storage stop requires freeing space before it can run again; no saved files are deleted automatically. **Tasks → Stop** pauses work for the session and records the reason. **Refresh list** still performs discovery only.
+
+If a salary file changed, refresh and select its current record; an old selection is not silently redirected to new inputs. Changing the search or file identity clears a stale selection. Saved libraries remain subject to the existing app-code and input compatibility checks. An app-version change may require a new compatible preparation identity; the old library is retained. Damaged receipts or libraries are reported for attention and retained, rather than overwritten by Retry/Resume; inspect/restore them or create a separate library through Advanced. Final SIM and build validation still run under the actual build inputs.
+
+
+### Verified ownership reuse on Load CSV
+
+Loading a CSV still refreshes live inputs first. The automatic 500-entry ownership job then checks for a complete estimate matching the refreshed player data, relevant settings, sample size, and model compatibility. The ownership banner and Tasks say **Reused prepared ownership** or **Ownership refreshed**. Missing, damaged, partial, oversized, or mismatched caches fall back to the existing estimator. Manual ownership recalculation still runs fresh.
+
+Smart preparation writes qualifying ownership estimates to `history/ownership-cache`. Only complete requested samples with valid player mappings and slot totals can be reused. The cache retains at most 128 derived entries; its contents are not historical contest observations or saved SIM evidence. Reuse keeps the same percentages and metadata as the estimator, including Classic pair counts. Classic incoming ownership priors remain strict inputs: if background and desktop priors differ, the desktop recalculates. Showdown's overwritten ownership outputs and its unused legacy template switch do not force an otherwise unnecessary simulation. Observation timestamps are excluded only at audited metadata paths; unknown fields and player ordering stay strict.
+
+Cached results use the existing detached-worker lifecycle. Cancelling, closing, changing players or settings, or replacing the slate prevents a cached result from being applied to the current window, just as for a fresh result. Cache read/write problems do not replace valid fresh output with an error.
+
+### Preserve automatic preparation through compatible UI updates
+
+New automatic candidate libraries carry a separate compatibility stamp in addition to their original full build identity. The stamp retains producer code, unknown production modules, Python/platform/dependency versions, worker classes, and model helpers. Only audited presentation surfaces (including the MainWindow widget class, styles, and slate picker) are excluded. Packaged apps embed this stamp at build time; unidentified older packages fall back to the full executable identity.
+
+An audited UI-only update can resume a newly stamped automatic library and load its static roster keys, retaining captured ownership and candidate work. Original build provenance remains recorded, and resumed search batches record their producing build. Changes to model code, captured inputs, or rules still invalidate compatibility. Every loaded roster still passes current slate, identity, availability, salary, position, lock/fade, and rule checks before use.
+
+Existing unstamped libraries keep their previous compatibility policy; an older automatic checkpoint may need a new compatible preparation identity once. This change does not broaden reuse of saved scenario banks, coarse screening, historical evidence, or other scored artifacts: their original strict model/build and evidence checks remain in place. It changes reuse and presentation, not estimator, optimizer, projection, ranking, or portfolio calculations.
+
+
+### Reuse decisions and preparation timings
+
+Open Build preparation to see the last applied ownership decision, its reason and duration, plus the last successful CSV load timings. Background wait, source preparation and display commit are separate; parsing/live-context phases are included in source preparation, so these figures overlap. Ownership runs separately after the CSV is displayed. These are recorded outcomes, not a fresh validation of later edits.
+
+Load CSV's slate picker details also show whether a captured checkpoint was reused, its recorded ownership decision, source/ownership timings and accumulated candidate-search time. Older records show timings as not recorded. The existing pause reason and next action explain work that needs attention; Generate still checks current inputs and evidence before reuse.
+
+
+Copy Last Build Report includes preparation reuse decisions and timings captured when that build started. The last successful CSV load and last applied ownership decision are labelled as prior recorded work; the build's own preparation checks remain separate. Loading another slate or refreshing ownership does not change a saved report. Older reports show that these details were not recorded. Snapshot replay does not borrow current-session CSV or ownership timings.
+
+
+### Automatic candidate-library handoff
+
+Completed Smart preparation records an exact-player-slate library hint in the discovery catalog. Generate checks these hints before the bounded folder scan, so older files cannot hide completed preparation for the current slate. Hints are read-only during Generate and never bypass the existing model, salary, eligibility, rule or coverage validators. Earlier catalogs keep folder discovery until idle preparation or Retry/Resume rechecks a compatible completed target and records its hint.
+
+Copy Last Build Report now records why automatic library discovery used fresh search: disabled/unconfigured, unsupported build mode, portfolio repair, no accepted library, scan/time/validation limits, or validation rejection categories. Counts describe the bounded search only; they are not proof that no compatible library exists elsewhere. Explicit library selection retains its existing fail-on-validation behavior.
+
+
+### Scenario replay storage and diagnostics
+
+Scenario replay uses losslessly compressed opponent-score doubles. No rounding, scenario reduction or score changes are applied. New-format caches require their versioned codec, exact player/field/context/seed/count/build/runtime identity, complete frame sequence and checksum. Existing size limits remain 512 MiB per file and 2 GiB for the cache folder. Older cache files are not promoted or deleted. A complete cold run can save a cache; corrupt, partial, over-budget or incompatible caches fall back to ordinary calculation.
+
+Copy Last Build Report shows the scenario cache outcome reason, lookup/verification time, frame I/O/finalization time and completed artifact size. These overhead measurements are included in SIM time; they are not extra phases to add to the total. Raw legacy cache error paths are withheld. Current candidate scoring and rules still run; independent ranking audits remain fresh.
+
+Smart slate preparation currently prepares candidates and ownership; it does not automatically warm scenarios. The existing optional Overnight scenario-preparation action warms the ordinary Deep pipeline using its captured settings. Those settings and exact live inputs must match for replay; refreshing timestamps or changing the app build can invalidate it. Completed scenarios do not imply completed library screening, a prepared portfolio or predictive accuracy.
+
+
+### Automatic idle scenario warming
+
+With Smart preparation enabled, completed candidate libraries can warm reusable scenarios after pending candidate work for upcoming slates finishes. The existing idle queue owns one detached worker; builds, CSV loading and other foreground work request a cooperative yield, and no new worker starts before retirement. The task dashboard shows the active pipeline phase; selected slate details show the recorded warming state, setup scope, elapsed allowance, attempts and outcome.
+
+Warming captures the current NFL Deep + SIM snapshot on the UI thread when it matches the exact discovered player slate. Otherwise it retains the last captured warming setup for that slate, or uses the saved Smart setup when none exists. The last captured setup survives restart so generic defaults do not trigger unnecessary warming. It runs the existing detached scenario-preparation pipeline, never applies a portfolio to the active table, and does not change settings or limits. Live changes, different settings or a new app build can still prevent reuse. Independent audits remain fresh. A warming receipt is scheduling metadata, not current-input validation.
+
+Each warming attempt has a ten-minute cooperative allowance (and still respects the captured Deep time allowance), with three attempts and thirty minutes total before Retry/Resume is required. Errors requiring attention stop automatic retries. After an abrupt termination, the interrupted attempt's reserved allowance is charged conservatively. Cooperative yields retain elapsed usage without consuming a completed-attempt count. Explicit Retry/Resume grants another bounded allowance while retaining candidate work. Matching completed receipts are skipped while their cache artifact remains present; a missing artifact queues warming again. Production cache integrity is always verified when Generate reuses it. Storage stays subject to the existing 512 MiB per-artifact and 2 GiB store limits. When a new recording needs room, bounded maintenance retires eligible old scenario caches, preserving active jobs and unknown files. Verified replay refreshes recency. Candidate libraries, historical results, salary sources, saved evidence and backups are excluded. There is no 30-day age-based deletion policy. Copy Last Build Report shows reclaimed space and any maintenance limit.
+
+
+### Explaining scenario-cache misses
+
+Build reports compare fingerprint components with up to twelve recent recorded cache receipts for the same exact player-ID/game-date slate, choosing the comparison with the fewest changed components. They can identify forecast-related player fields, availability/roles, ownership, other player inputs, opponent fields, seed/count, context/history settings, app/model and runtime/codec differences. These are differences from a recorded comparison, not proof that it was the cache you intended to reuse. Old caches may have no diagnostic receipt yet.
+
+The disposable scenario-cache diagnostics database retains at most 64 receipts containing fingerprints only, not player values or filenames. Missing, malformed, oversized or unavailable receipts do not authorize replay or prevent fresh calculation. Exact cache identity, full frame integrity/coverage, cancellation, storage limits and fresh independent audits remain unchanged. Copy Last Build Report saves the comparison for that specific build.
+
+
+### Ownership status and explicit retry
+
+Normal CSV loading already starts ownership estimation or checks compatible completed ownership. In **Advanced → Data and Learning → Ownership estimates**, the status now shows the displayed source and whether ownership is loading, running, stopping or waiting for manual work. Displayed provenance is not a fresh validation of later input edits, nor proof of current reusable ownership.
+
+Open **Manual recalculation / troubleshooting** to use the original Sampling count, legacy template switch and **Recalculate / Retry ownership** action. Opening this section performs no estimation or cache lookup. The explicit action uses the existing estimator, format, salary cap and sampling settings. It waits for CSV, build and existing ownership workers to retire; cancellation, errors and stale-result checks keep their existing behavior. Snapshot replay starts no new estimate from viewing these controls; an explicit manual recalculation remains available as before.
+
+No ownership formulas, automatic sampling policy, reuse validation or lineup behavior changed. Tasks retains the full worker outcome and cancellation controls. Quick-estimate and mixed-source notices remain visible when live input changes replace simulated ownership. No new periodic source scan or background estimation job was added.
+
+
+### Review ownership from Preparation
+
+Preparation now includes **Current ownership** alongside **Last applied ownership**. Current ownership shows the displayed sources and live worker state; the last-applied row remains a separate recorded reuse/timing receipt and may describe older inputs. Neither row independently validates current reuse.
+
+Select **Current ownership → Review ownership** to open the existing Data and Learning ownership diagnostics directly. This closes the preparation dialog, reveals the existing Advanced page and leaves manual recalculation collapsed. It performs no source refresh, cache lookup, snapshot capture or estimation and does not change sampling settings, replay, player inputs or the build recipe. Expand troubleshooting only when you explicitly want to recalculate.
+
+
+### Storage audit before retention changes
+
+Open **Backups > Storage audit** for an explicit read-only inventory of configured history, Results/Salary sources, remembered candidate libraries and full-library partitions, scenario caches and backups. The scan runs through the task queue off the UI thread, waits for manual work, and supports cancellation and safe window shutdown. It does not run on startup.
+
+The view lists up to 500 largest observed files, their logical sizes, modification dates, preservation guidance and unverified dependency/backup status. Copy local report includes local paths. Overlapping locations are counted once. Scans stop at 20,000 entries or a ten-second cooperative allowance; skipped links, missing paths and scan limits produce a partial inventory. Slow filesystem calls can take longer. This is configured-scope observation, not whole-drive disk accounting or a consistent snapshot.
+
+Historical sources, databases, evidence, backups and expensive prepared libraries remain protected. Current-shaped scenario metadata is only a review hint, never authorization to delete or reuse. Legacy-shaped caches are kept for review; unknown files stay protected. No backup hashes, frame integrity, source qualification or dependency completeness are certified by this inventory. Rebuild costs are qualitative and explicitly unmeasured.
+
+A 30-day modification-age flag is informational. It does not establish last use, contest age, obsolescence, archival safety or permission to remove files. This feature does not delete, move, archive, alter backup policy, or change the existing cache recycler. Review provenance and restore coverage before adding broader retention rules.
+
+
+### Archive and free legacy cache space
+
+Backups → Storage audit offers **Archive and free legacy cache space**. Scanning stays read-only. This separate action waits for manual work, appears in the task dashboard and uses the configured backup folder. It validates every original legacy frame, digest and native-byte-order score, publishes a verified byte-for-byte recovery archive, then checks the source and recovery bytes again before removing that working copy. The result shows verified copies, files skipped, validation failures and working bytes freed.
+
+Recovery objects and manifests remain under `legacy-scenario-cache-v1` in your backup folder. Existing objects are verified before reuse. Current scenario caches, unknown databases, history, source files, evidence, backups and expensive prepared libraries are outside this action's retirement policy. Legacy caches remain excluded from ordinary automatic cache recycling and current SIM replay. No age-based deletion or archive pruning is enabled.
+
+Each action has a cooperative two-minute allowance and a 64-file bound. Cancellation stops unfinished retirements. Busy readers, source or archive changes, verification failures, unavailable storage and protected-location overlaps keep the affected working copy. Completed archives remain recoverable even when retirement fails. Retry retains compatible archives and continues with remaining working files; no cleanup runs merely from opening this dialog.
+
+From the source checkout, restore using Python: `from legacy_scenario_archive import restore; restore(r"FULL_MANIFEST_PATH", r"EXISTING_DESTINATION_FOLDER")`. Restoration verifies SHA-256 and creates the original filename without replacing an existing file. It recovers original bytes, without certifying compatibility with current simulations. Keep archive objects and manifests together. The old format did not record byte order separately; validation uses this machine's native byte order and never converts scores.
+
+
+### One preparation screen
+
+Use **Preparation…** beside Generate, or **Settings → Preparation…**, to review the loaded slate. The screen shows recorded roster coverage, screening progress, whether captured inputs match, and the current waiting or pause reason. The detailed rows retain ownership reuse, CSV timings, historical field status, previous-build evidence and background tasks. Recorded completion is not a fresh validation of files or current inputs.
+
+**Prepare this slate**, **Retry / Resume**, or **Check coverage / reuse** invokes the same current-input capture and background preparation workflow. It checks saved coverage and screening, then queues only missing work under the existing time and storage limits. While a captured job is queued or running, a second preparation request is disabled; Tasks shows the job's captured inputs. **Run queued work now** applies only to a matching captured preparation job and uses the existing scheduler, including manual-worker and safety gates. Other captured jobs remain available in Tasks. Automatic folder watching and preparation continue as before.
+
+Opening this screen does not scan files, refresh sources, capture a snapshot, or start a worker. CSV loading, ownership calculation and manual builds must retire before explicit capture. Replay remains fixed, and automatic slate preparation remains NFL Showdown only. **Advanced tools** retains the explicit Showdown library/screening dialog and Classic candidate search/resume without changing the current format or settings. These replace their separate Settings menu entries. Generate still applies every existing identity, eligibility, historical-evidence, rule, screening and reuse check.
+
+
+### History updates without duplicate manual steps
+
+History Overview now shows whether automatic updates are on, whether folder monitoring is armed, and whether a check is queued, running, stopping or paused. **Check now** uses the existing full importer, indexing and reconciliation; when watching is paused, the same action becomes **Retry / Resume**. With no configured source folders it opens **Sources and account settings** instead of queuing an empty import. Running checks and report/import work retain their existing worker and retirement guards.
+
+Routine downloads continue through the existing folder watcher after 30 seconds of source quietness; unchanged automatic checks retain their metadata/checkpoint fast path. No new polling timer or periodic content scan was added. Watch registration can be partial or unavailable; the displayed watcher message and Check now remain available for missed notifications and drive changes. Monitoring status and the last recorded result are not proof of current source evidence or field-model qualification.
+
+The automatic-updates preference is under **Sources and account settings**. Explicit checking does not enable an off preference. The original **Import new results** tool remains under **More reports and analysis tools** for manual troubleshooting. Salary matching, learning coverage, source revisions, mappings and historical qualification retain their existing validation and review paths. No import, indexing or model change is triggered simply by viewing this status.
+>>>>>>> main

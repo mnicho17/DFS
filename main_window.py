@@ -109,6 +109,7 @@ class OwnershipSimWorker(QtCore.QObject):
         self.sport = (sport or "NFL").strip().upper()
 
         self._cancel = False
+        self.cache_report = None
 
 
 
@@ -117,7 +118,11 @@ class OwnershipSimWorker(QtCore.QObject):
         try:
             if self._cancel:
                 return
-            result = self._simulate()
+            if getattr(self,'reuse_prepared',False):
+                from ownership_cache import estimate
+                result,self.cache_report=estimate(self,self._simulate)
+            else:
+                result = self._simulate()
             if not self._cancel:
                 self.finished.emit(result)
         except Exception as exc:
@@ -4257,10 +4262,10 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.auto_history.setChecked(self.history_refresh.enabled())
         self.auto_history.toggled.connect(self.history_refresh.set_enabled)
         refresh_row.addWidget(self.auto_history)
-        self.history_refresh_button = QtWidgets.QPushButton('Refresh history now')
+        self.history_refresh_button = QtWidgets.QPushButton('Check now')
         self.history_refresh_button.clicked.connect(self.refresh_username_history)
         refresh_row.addWidget(self.history_refresh_button)
-        self.history_cancel_button = QtWidgets.QPushButton('Cancel history refresh')
+        self.history_cancel_button = QtWidgets.QPushButton('Pause current check')
         self.history_cancel_button.clicked.connect(self.history_refresh.cancel)
         refresh_row.addWidget(self.history_cancel_button)
         layout.addLayout(refresh_row)
@@ -4296,6 +4301,13 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.refresh_report()
 
     def refresh_username_history(self):
+        from history_workspace_ui import history_update_view
+        view=history_update_view(self.history_refresh,self._import_thread is not None)
+        if not view['can_check']:return
+        if view['action']=='sources':
+            self.history_sources_toggle.setChecked(True)
+            self.results_folder.setFocus()
+            return
         if self._import_thread is not None:
             return
         self.learning_settings.setValue('learning/dk_username', self.username_edit.text().strip())
@@ -4304,12 +4316,19 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
     def update_history_status(self):
         text = self.history_refresh.text
+        watch_message=self.history_refresh.watch.message
         if self.history_refresh.watch.pending or self.history_refresh.watch.paused:
-            text = self.history_refresh.status_line() + '\n' + text
-        self.history_status.setPlainText(text + '\n' + self.history_refresh.watch.message)
+            state_line=self.history_refresh.status_line()
+            if state_line!=watch_message and not text.startswith(state_line):text=state_line+'\n'+text
+        if watch_message and not text.endswith(watch_message):text+='\n'+watch_message
+        self.history_status.setPlainText(text)
+        from history_workspace_ui import history_update_view
+        view=history_update_view(self.history_refresh,self._import_thread is not None)
+        if hasattr(self,'history_update_summary'):self.history_update_summary.setText(view['detail'])
+        self.history_refresh_button.setText(view['label']);self.history_refresh_button.setEnabled(view['can_check'])
+        self.history_refresh_button.setToolTip('Recheck configured folders with the existing full importer, indexing and reconciliation. Automatic unchanged checks retain their fast path.')
+        self.history_cancel_button.setEnabled(view['can_pause'])
         busy = self.history_refresh.busy
-        self.history_refresh_button.setEnabled(not busy and self._import_thread is None)
-        self.history_cancel_button.setEnabled((busy and not self.history_refresh.stop.is_set()) or self.history_refresh.queued)
         self._set_import_controls(not busy and self._import_thread is None)
 
     def open_opponent_portfolios(self):
@@ -7218,6 +7237,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._close_after_backup = False
         from preparation_readiness import install_summary
         install_summary(self)
+        from slate_picker import SlateDiscoveryController
+        self.slate_discovery = SlateDiscoveryController(self, Path(history_db_path()).parent / 'slate-catalog.sqlite')
 
     def _history_refresh_retired(self):
         if self._close_after_history:
@@ -7356,7 +7377,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         btn_own_sim.setToolTip("Run a lineup simulation to estimate slate ownership (uses projections/value + salary cap constraints).")
 
-        btn_own_sim.clicked.connect(self.on_recalc_ownership_sim)
+        from ownership_ui import retry_ownership
+        btn_own_sim.clicked.connect(lambda:retry_ownership(self))
 
         row1.addWidget(btn_own_sim)
 
@@ -8100,22 +8122,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         settings_menu.addSection("Data")
 
-        settings_menu.addAction("Long Search / Resume...", self.on_long_search)
         settings_menu.addAction("Ranking Repeatability...", self.on_ranking_repeatability)
         from core_plays_ui import open_core_plays
         settings_menu.addAction("Core Plays...", lambda: open_core_plays(self))
         settings_menu.addAction("Ownership & Leverage...", self.on_ownership_leverage)
         settings_menu.addAction("Ownership Sensitivity...", self.on_ownership_sensitivity)
         settings_menu.addAction("Projection Sensitivity...", self.on_projection_sensitivity)
-        settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
-        self.action_auto_library = settings_menu.addAction("Automatically reuse compatible libraries")
-        self.action_auto_library.setCheckable(True)
-        self.action_auto_library.setChecked(self.app_settings.value('build/auto_library', True, type=bool))
-        self.action_auto_library.toggled.connect(lambda value: self.app_settings.setValue('build/auto_library', value))
         settings_menu.addAction("Showdown Captain Pool...", self.on_captain_pool)
-        settings_menu.addAction("Prepare this slate", self.on_prepare_this_slate)
-        settings_menu.addAction("Prepare Showdown Roster Library...", self.on_prepare_showdown_library)
-        settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
+        from preparation_status_ui import open_preparation_status
+        settings_menu.addAction("Preparation...", lambda:open_preparation_status(self))
         settings_menu.addAction("Open Automatic Build Archives...", self.on_open_build_archives)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)
 
@@ -8379,11 +8394,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         data_grid.addWidget(btn_clear_order, 3, 1)
 
-        ownership_group = QtWidgets.QGroupBox("Ownership estimates")
-        ownership_layout = QtWidgets.QFormLayout(ownership_group)
-        ownership_layout.addRow("Sampling count", self.spin_own_sims)
-        ownership_layout.addRow(self.chk_sd_template_sim)
-        ownership_layout.addRow(btn_own_sim)
+        from ownership_ui import setup_ownership_controls
+        ownership_group=setup_ownership_controls(self,btn_own_sim)
         data_grid.addWidget(ownership_group, 0, 2, 4, 1)
         data_grid.setColumnStretch(3, 1)
 
@@ -11723,7 +11735,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         if self._snapshot_busy():
             self.status.showMessage('Wait for the current load, build or ownership calculation to finish.', 5000)
             return
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select Player CSV", "", "CSV Files (*.csv)")
+        from slate_picker import SlatePicker
+        picker = SlatePicker(self.slate_discovery, self)
+        accepted = picker.exec_()
+        path = picker.path if accepted else ''
+        picker.deleteLater()
         if not path:
             return
         from csv_loading import CsvLoadController
@@ -11733,8 +11749,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
     def _apply_csv_payload(self, payload) -> None:
         path, detected_sport = payload['path'], payload['sport']
+        self.last_live_check_summary.pop('ownership_reuse',None)
+        self.last_ownership_reuse=None
         self.players = payload['players']
         self._snapshot_replay = False
+        self._candidate_library = ''
+        self._candidate_library_allow_partial = False
 
         self._refresh_snapshot_label()
 
@@ -11833,7 +11853,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        self._start_ownership_sim(num_sims=500, mode=detected_mode, cap=cap)
+        self._start_ownership_sim(num_sims=500, mode=detected_mode, cap=cap, reuse_prepared=True)
 
 
 
@@ -12765,7 +12785,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-    def _start_ownership_sim(self, *, num_sims: int, mode: str, cap: float, sport: Optional[str] = None) -> None:
+    def _start_ownership_sim(self, *, num_sims: int, mode: str, cap: float, sport: Optional[str] = None, reuse_prepared: bool = False) -> None:
         if self._ownership_closing:
             return
         if self._ownership_run is not None:
@@ -12776,6 +12796,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             worker = OwnershipSimWorker(self.players, mode=mode, num_sims=num_sims,
                 salary_cap=cap, template_sim=(mode=='showdown' and getattr(self,'chk_sd_template_sim',None) is not None
                     and self.chk_sd_template_sim.isChecked()), sport=(sport or self._current_sport()))
+            worker.reuse_prepared=reuse_prepared
             run = OwnershipRun(self, worker)
         except Exception as exc:
             self._on_own_sim_error(str(exc))
@@ -12925,6 +12946,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._update_lineup_space_dashboard()
 
     def _refresh_ownership_source(self) -> None:
+        from ownership_ui import update_ownership_controls
+        update_ownership_controls(self)
         ownership = describe_ownership(self.players, self.last_live_check_summary)
         self.lbl_ownership_source.setText("Ownership: " + ownership["sources"] + ("\n" + ownership["notice"] if ownership["notice"] else ""))
         self.lbl_ownership_source.setVisible(bool(self.players))
@@ -13626,7 +13649,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 snapshot = None
 
+        from preparation_audit import capture_build_audit
         self._active_build_context = {
+            "preparation_audit": capture_build_audit(self),
 
             "sport": str(sport or "NFL").strip().upper(),
 
@@ -13748,7 +13773,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._build_receipt = receipt
         self._build_thread = QtCore.QThread(self)
 
-        from build_preparation import remembered_libraries
+        from build_preparation import automatic_library_inputs
         self._build_worker = LineupBuildWorker(
             worker_players,
             kind=kind,
@@ -13792,10 +13817,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             retained_lineups=retained,
 
             candidate_library=getattr(self, "_candidate_library", ""),
-            automatic_libraries=(remembered_libraries(self.app_settings)
-                if self.action_auto_library.isChecked() and not getattr(self, '_snapshot_replay', False) else ()),
-            library_folder=(os.path.join(os.path.dirname(build_history_path()), 'candidates')
-                if self.action_auto_library.isChecked() and not getattr(self, '_snapshot_replay', False) else ''),
+            **automatic_library_inputs(self),
             allow_partial_library=getattr(self,"_candidate_library_allow_partial",False),
             scenario_cache=True,
             repair_source=repair_source,
@@ -14999,8 +15021,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         if getattr(self, 'csv_load', None) and self.csv_load.shutdown():
             event.ignore()
             return
+        if getattr(self, 'slate_discovery', None) and self.slate_discovery.shutdown():
+            event.ignore()
+            return
         if getattr(self, 'slate_readiness_timer', None):self.slate_readiness_timer.stop()
         if getattr(self, 'background_queue', None):self.background_queue.shutdown()
+        audit=getattr(self,'_storage_audit_dialog',None)
+        if audit is not None and audit.shutdown():
+            self._close_after_storage_audit=True
+            event.ignore();return
         if getattr(self, 'idle_preparation', None) and self.idle_preparation.shutdown():
             event.ignore()
             return

@@ -9,6 +9,7 @@ import sqlite3
 import struct
 import sys
 import tempfile
+import time
 import zlib
 
 from build_snapshots import fingerprint
@@ -29,22 +30,48 @@ def _digest(digest, payload, scores):
 
 
 class ScenarioReplay:
-    def __init__(self, players, fields, *, kind, seed, count, enabled=False, folder=None, cancelled=None, context=None):
+    def __init__(self, *args, **kwargs):
+        self.io_seconds=0.0
+        self.stored_bytes=0
+        self.key_lease=self.writer_lease=None
+        self.maintenance={}
+        started=time.perf_counter()
+        self._open(*args, **kwargs)
+        self.lookup_seconds=time.perf_counter()-started
+
+    def _open(self, players, fields, *, kind, seed, count, enabled=False, folder=None, cancelled=None, context=None):
         self.connection = None; self.temporary = None; self.reader = None
         self.count = count; self.next_index = 0; self.hits = 0; self.written = 0
         self.status = 'disabled'; self.reason = ''; self.keys = set()
+        self.comparison={}
         self.cancelled = cancelled or (lambda: False)
         if not enabled:return
         try:
             from candidate_library import code_id
-            self.key = fingerprint(dict(schema=1, players=players, fields=fields, kind=kind,
-                seed=seed, count=count, model=code_id(), byteorder=sys.byteorder, python=sys.version, context=context))
+            identity=dict(schema=2, scores_codec="zlib-double-v1", players=players, fields=fields, kind=kind,
+                seed=seed, count=count, model=code_id(), byteorder=sys.byteorder, python=sys.version, context=context)
+            self.key = fingerprint(identity)
+            self.diagnostic_parts=self.diagnostic_scope=None
+            try:
+                from scenario_cache_diagnostics import components,scope
+                self.diagnostic_parts=components(identity);self.diagnostic_scope=scope(identity)
+            except (ValueError,TypeError,KeyError):pass
             from nfl_simulation import player_key
             self.keys = {player_key(p) for p in players}
             self.field_sizes = {len(field) for field in fields}
             self.root = (Path(folder) if folder else cache_folder()).resolve()
             self.root.mkdir(parents=True, exist_ok=True)
             self.target = self.root / (self.key + '.sqlite')
+            from scenario_cache_storage import Lease,plain_file
+            self.key_lease=Lease(self.root,self.key+'.lock')
+            if not self.key_lease:
+                self.status='not saved';self.reason='Scenario cache is in use by another job; computation continued.';return
+            if self.target.exists() and not plain_file(self.target,self.root):
+                self.status='not saved';self.reason='Unsafe cache artifact was preserved; computation continued.';self.close();return
+            self.reason='No complete cache matches the exact players, opponent field, seed, scenario count, context and build.'
+            if not self.target.exists() and self.diagnostic_scope:
+                from scenario_cache_diagnostics import compare
+                self.comparison=compare(self.root,self.diagnostic_scope,self.diagnostic_parts,self.cancelled)
             if self.target.exists():
                 try:
                     if self.target.stat().st_size > FILE_LIMIT:raise ValueError('Cache exceeds size limit')
@@ -52,7 +79,7 @@ class ScenarioReplay:
                     self.connection = con
                     con.execute('BEGIN')
                     meta = dict(con.execute('SELECT key,value FROM meta'))
-                    if meta.get('key') != self.key or int(meta.get('count', -1)) != count:
+                    if meta.get('key') != self.key or int(meta.get('count', -1)) != count or meta.get('scores_codec')!='zlib-double-v1':
                         raise ValueError('Cache identity mismatch')
                     digest = hashlib.sha256(); seen = 0
                     for index, payload, scores in con.execute('SELECT id,payload,scores FROM frames ORDER BY id'):
@@ -63,22 +90,35 @@ class ScenarioReplay:
                     if seen != count or digest.hexdigest() != meta.get('digest'):
                         raise ValueError('Cache content verification failed')
                     self.reader = iter(con.execute('SELECT id,payload,scores FROM frames ORDER BY id'))
+                    self.stored_bytes=self.target.stat().st_size
+                    self.reason='Verified completed scenarios match all exact-input cache gates.'
                     self.status = 'reused'
+                    try:os.utime(self.target,None)
+                    except OSError:pass
                     return
                 except Exception as exc:
-                    self.close(); self.reason = str(exc)
-            if self.cancelled():return
-            self.available = STORE_LIMIT - sum(p.stat().st_size for p in self.root.iterdir() if p.is_file())
-            if self.available < 8*1024*1024:
-                self.status = 'not saved'; self.reason = 'Cache storage limit reached'; return
-            fd, name = tempfile.mkstemp(dir=self.root, suffix='.partial'); os.close(fd)
+                    self._close_storage(); self.reason = 'Existing cache failed integrity or coverage verification; recomputed.'
+            if self.cancelled():
+                self.status='not saved'; self.reason='Cancelled during cache lookup'; self.close();return
+            self.writer_lease=Lease(self.root,'writer.lock')
+            if not self.writer_lease:
+                self.status='not saved';self.reason='Another job is recording scenarios; computation continued without saving a cache.';self.close();return
+            from scenario_cache_storage import make_room
+            self.available,self.maintenance=make_room(self.root,self.target,STORE_LIMIT,FILE_LIMIT,self.cancelled)
+            if self.cancelled() or self.available < self.maintenance['required_free_bytes']:
+                self.status='not saved'
+                self.reason=('Cancelled during cache maintenance' if self.cancelled() else 'Cache storage limit reached; protected or unrecognized files were preserved.')
+                self.close();return
+            fd, name = tempfile.mkstemp(dir=self.root,prefix='scenario-replay-', suffix='.partial'); os.close(fd)
             self.temporary = Path(name)
             self.connection = sqlite3.connect(name)
+            from scenario_cache_storage import APPLICATION_ID
+            self.connection.execute(f'PRAGMA application_id={APPLICATION_ID}')
             self.connection.execute('CREATE TABLE frames(id INTEGER PRIMARY KEY,payload BLOB,scores BLOB)')
             self.connection.execute('CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT)')
             self.digest = hashlib.sha256(); self.status = 'recording'
         except Exception as exc:
-            self.status = 'unavailable'; self.reason = str(exc); self.close()
+            self.status = 'unavailable'; self.reason = 'Cache lookup or storage unavailable; computation continued.'; self.close()
 
     def _decode(self, payload, scores):
         # Bounded decompression prevents corrupted local data from allocating arbitrary memory.
@@ -86,7 +126,11 @@ class ScenarioReplay:
         raw = decoder.decompress(payload, 4*1024*1024)
         if not decoder.eof or decoder.unused_data:raise ValueError('Invalid cached scenario payload')
         outcomes, scripts = json.loads(raw)
-        ranked = array('d'); ranked.frombytes(scores)
+        score_decoder=zlib.decompressobj()
+        score_bytes=score_decoder.decompress(scores,8*max(self.field_sizes)+1)
+        if not score_decoder.eof or score_decoder.unused_data or len(score_bytes)>8*max(self.field_sizes):
+            raise ValueError('Invalid compressed opponent scores')
+        ranked = array('d'); ranked.frombytes(score_bytes)
         if set(outcomes) != self.keys or len(ranked) not in self.field_sizes:
             raise ValueError('Cached player or field coverage mismatch')
         if any(not isinstance(v, (int,float)) or not math.isfinite(v) for v in outcomes.values()):
@@ -99,16 +143,19 @@ class ScenarioReplay:
 
     def frame(self, index, compute, scripts):
         if self.reader is not None:
+            started=time.perf_counter()
             saved_index, payload, scores = next(self.reader)
             if saved_index != index:raise ValueError('Scenario replay order changed')
             outcomes, ranked, counts = self._decode(payload,scores)
             scripts.clear(); scripts.update(counts); self.hits += 1
+            self.io_seconds+=time.perf_counter()-started
             return outcomes, ranked
         outcomes, ranked = compute()
         if self.connection is not None:
+            started=time.perf_counter()
             try:
                 payload = zlib.compress(json.dumps([outcomes,dict(scripts)],allow_nan=False,separators=(',',':')).encode())
-                scores = array('d',ranked).tobytes()
+                scores = zlib.compress(array('d',ranked).tobytes(),level=1)
                 self.connection.execute('INSERT INTO frames VALUES (?,?,?)',(index,payload,scores))
                 _digest(self.digest,payload,scores); self.written += 1
                 if index % 100 == 0:
@@ -116,28 +163,47 @@ class ScenarioReplay:
                     if self.temporary.stat().st_size > min(FILE_LIMIT,self.available):
                         raise ValueError('Cache storage limit reached')
             except Exception as exc:
-                self.status = 'not saved'; self.reason = str(exc); self.close()
+                self.status = 'not saved'
+                self.reason = 'Cache storage limit reached' if isinstance(exc,ValueError) and str(exc)=='Cache storage limit reached' else 'Cache frame storage unavailable; computation continued.'
+                self.close()
+            finally:self.io_seconds+=time.perf_counter()-started
         return outcomes, ranked
 
     def finish(self, completed):
+        started=time.perf_counter()
         try:
             if self.temporary is not None and completed == self.count and self.written == self.count:
                 self.connection.executemany('INSERT INTO meta VALUES (?,?)',
-                    [('key',self.key),('count',str(self.count)),('digest',self.digest.hexdigest())])
+                    [('key',self.key),('count',str(self.count)),('digest',self.digest.hexdigest()),('scores_codec','zlib-double-v1')])
                 self.connection.commit(); self.connection.close(); self.connection = None
-                if self.temporary.stat().st_size > min(FILE_LIMIT,self.available):raise ValueError('Cache storage limit reached')
+                from scenario_cache_storage import inventory
+                if (self.temporary.stat().st_size > min(FILE_LIMIT,self.available)
+                        or sum(size for _,size,_ in inventory(self.root))>STORE_LIMIT):
+                    raise ValueError('Cache storage limit reached')
                 os.replace(self.temporary,self.target); self.temporary = None; self.status = 'saved'
+                self.stored_bytes=self.target.stat().st_size
             elif self.temporary is not None:
                 self.status = 'not saved'; self.reason = 'Incomplete simulation'
         except Exception as exc:
-            self.status = 'not saved'; self.reason = str(exc)
-        finally:self.close()
+            self.status = 'not saved'
+            self.reason='Cache storage limit reached' if isinstance(exc,ValueError) and str(exc)=='Cache storage limit reached' else 'Cache publication unavailable; computation continued.'
+        finally:
+            self.close()
+            self.io_seconds+=time.perf_counter()-started
         report = dict(status=self.status,reused_scenarios=self.hits,requested_scenarios=self.count,reason=self.reason)
+        if self.status!='disabled':
+            report.update(codec='zlib-double-v1',cache_id=getattr(self,'key',None),stored_bytes=self.stored_bytes,lookup_seconds=self.lookup_seconds,io_seconds=self.io_seconds,comparison=self.comparison,maintenance=dict(self.maintenance))
+            if self.status in ('saved','reused') and getattr(self,'diagnostic_scope',None):
+                from scenario_cache_diagnostics import record
+                receipt_started=time.perf_counter()
+                record(self.root,self.diagnostic_scope,self.key,self.diagnostic_parts)
+                self.io_seconds+=time.perf_counter()-receipt_started
+                report['io_seconds']=self.io_seconds
         from compute_ledger import safe, cache_observation
         safe(cache_observation, getattr(self, "key", None), report)
         return report
 
-    def close(self):
+    def _close_storage(self):
         if self.connection is not None:
             try:self.connection.close()
             except sqlite3.Error:pass
@@ -146,6 +212,13 @@ class ScenarioReplay:
             try:self.temporary.unlink(missing_ok=True)
             except OSError:pass
             self.temporary = None
+
+    def close(self):
+        try:self._close_storage()
+        finally:
+            for name in ('writer_lease','key_lease'):
+                lease=getattr(self,name,None)
+                if lease is not None:lease.close();setattr(self,name,None)
 
     def __del__(self):
         try:self.close()

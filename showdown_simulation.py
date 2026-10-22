@@ -1,5 +1,6 @@
 """NFL Showdown Deep exploration and shared-outcome contest simulation."""
 from compute_ledger import phase
+from simulation_profiling import observe_simulation,current as simulation_clock
 
 import bisect
 import math
@@ -38,6 +39,16 @@ def showdown_signature(lineup):
 
 def showdown_score(lineup, outcomes):
     return 1.5 * outcomes[player_key(lineup["Captain"])] + sum(outcomes[player_key(p)] for p in lineup["Flex"])
+
+
+def _compile_score_roster(lineup):
+    # Preserve FLEX order: changing floating-point summation order can move ties.
+    return player_key(lineup['Captain']), tuple(player_key(p) for p in lineup['Flex'])
+
+
+def _score_compiled_roster(roster, outcomes):
+    captain, flex = roster
+    return 1.5 * outcomes[captain] + sum(outcomes[key] for key in flex)
 
 
 def validate_showdown_lineup(lineup, players, salary_cap):
@@ -142,8 +153,10 @@ def rank_screening_metrics(rows):
 
 
 @phase("primary_sim", simulation=True)
+@observe_simulation
 def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, salary_cap=50000,
-                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False, diagnostic_field=None, history_profile=None):
+                      seed=90210, cancel_callback=None, progress_callback=None, field_model='salary-bands-v1', opponent_players=None, outcome_transform=None, capture_distributions=False, scenario_cache=False, diagnostic_field=None, history_profile=None, precompiled_rosters=False):
+    profile=simulation_clock()
     if diagnostic_field is not None and scenario_cache:
         raise ValueError('Explicit diagnostic fields cannot use the production scenario cache.')
     if not candidates:
@@ -179,6 +192,8 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     bank_rng = random.Random(seed + 37)
     banks = [field] + [[bank_rng.choice(field) for _ in field] for _ in range(2)]
     field_counts = Counter(showdown_signature(lu) for lu in field)
+    compiled_candidates = [_compile_score_roster(lu) for lu in candidates] if precompiled_rosters else None
+    compiled_banks = [[_compile_score_roster(lu) for lu in bank] for bank in banks] if precompiled_rosters else None
     scores = [array("f") for _ in candidates]
     hits = [[set() for _ in candidates] for _ in range(3)]
     sums = [0.0] * len(candidates)
@@ -190,24 +205,40 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     from scoring_distributions import DistributionCapture
     distribution = DistributionCapture(pool, "showdown", max(1, int(scenarios)), seed) if capture_distributions and outcome_transform is None else None
     from scenario_cache import ScenarioReplay
+    profile.setup_seconds=time.perf_counter()-profile.started
+    lookup_started=time.perf_counter()
     replay = ScenarioReplay(pool, [[showdown_signature(lu) for lu in bank] for bank in banks],
         kind='showdown', seed=seed, count=max(1,int(scenarios)),
         enabled=scenario_cache and outcome_transform is None, cancelled=cancel_callback,
         context=dict(players=list(players),opponent_players=opponent_players,field_model=field_model,salary_cap=salary_cap,
                      **({'history_profile':history_profile} if history_profile is not None else {})))
+    profile.cache_lookup_seconds=time.perf_counter()-lookup_started
     completed = 0
     for scenario in range(max(1, int(scenarios))):
         if cancel_callback and cancel_callback():
             break
         def compute_frame():
+            drawn=time.perf_counter()
             outcomes = _scenario_outcomes(rng, pool, script_counter=scripts)
             if outcome_transform is not None:
                 outcomes = outcome_transform(outcomes)
-            return outcomes, sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
+            profile.outcomes_seconds+=time.perf_counter()-drawn
+            opponent_started=time.perf_counter()
+            if compiled_banks is not None:
+                ranked = sorted(_score_compiled_roster(roster, outcomes) for roster in compiled_banks[scenario % 3])
+            else:
+                ranked = sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
+            profile.opponents_seconds+=time.perf_counter()-opponent_started
+            return outcomes, ranked
+        before=profile.outcomes_seconds+profile.opponents_seconds
+        access_started=time.perf_counter()
         outcomes, ranked = replay.frame(scenario, compute_frame, scripts)
+        profile.scenario_io_seconds+=max(0,time.perf_counter()-access_started-(profile.outcomes_seconds+profile.opponents_seconds-before))
+        candidate_started=time.perf_counter()
         top1, top5, cash, bust = [ranked[int(q * (len(ranked) - 1))] for q in (0.99, 0.95, 0.8, 0.4)]
         for i, lineup in enumerate(candidates):
-            score = showdown_score(lineup, outcomes)
+            score = (_score_compiled_roster(compiled_candidates[i], outcomes)
+                     if compiled_candidates is not None else showdown_score(lineup, outcomes))
             scores[i].append(score)
             pct = bisect.bisect_right(ranked, score) / len(ranked)
             sums[i] += pct
@@ -221,11 +252,15 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
             returns[i] += value
             if value >= 1.5:
                 values[i][scenario] = value
+        profile.candidates_seconds+=time.perf_counter()-candidate_started
         if distribution is not None: distribution.record(outcomes)
         completed += 1
         if progress_callback and (completed % 50 == 0 or completed == scenarios):
             progress_callback(completed, scenarios, "Scoring Captain and FLEX against Showdown opponents")
+    finalize_started=time.perf_counter()
     cache_report = replay.finish(completed)
+    profile.cache_finish_seconds=time.perf_counter()-finalize_started
+    profile.assembly_started=time.perf_counter()
     rows = []
     for i, lineup in enumerate(candidates):
         base = dict(getattr(lineup, "sim_metrics", {}) or {})
@@ -322,7 +357,8 @@ def run_deep_showdown(worker, shortlist_fn):
             salary_cap=worker.salary_cap, own_mode=worker.own_mode, own_weight=worker.own_weight,
             deadline=start + min(30.0, limit * generation_fraction * .10),
             cancelled=worker._cancel_event.is_set,
-            progress=lambda text: worker.progress.emit(len(bank), budget, 'Phase 1 of 4 - ' + text))
+            progress=lambda text: worker.progress.emit(len(bank), budget, 'Phase 1 of 4 - ' + text),
+            minimum_salary=salary_floor(worker.salary_cap, worker.salary_strategy))
         style_counts['Captain coverage'] = seeded
     exclusions = {(sig[0][4:], tuple(sig[1:])) for sig in retained_keys}
     exclusions.update((sig[0][4:], tuple(sig[1:])) for sig in bank)
@@ -332,7 +368,8 @@ def run_deep_showdown(worker, shortlist_fn):
         target = math.ceil((budget - len(bank)) / (len(jobs) - index))
         job_end = time.perf_counter() + max(0, generation_end - time.perf_counter()) / (len(jobs) - index)
         optimizer = ShowdownOptimizer(players, salary_cap=worker.salary_cap, seed=seed,
-            own_mode=worker.own_mode, own_weight=worker.own_weight, build_style=style)
+            own_mode=worker.own_mode, own_weight=worker.own_weight, build_style=style,
+            minimum_salary=salary_floor(worker.salary_cap, worker.salary_strategy))
         rows = optimizer.build_lineups(num_lineups=target,
             excluded_signatures=exclusions,
             cancel_callback=lambda: stop(job_end),
@@ -439,7 +476,7 @@ def run_deep_showdown(worker, shortlist_fn):
                 deep['ranking_audit'] = audit_ranking(short,
                     lambda audit_stop: simulate_showdown(short, players, scenarios=2000,
                         field_lineup_count=options['field'] or 2700, salary_cap=worker.salary_cap, **field_options,
-                        seed=481516, cancel_callback=audit_stop,
+                        seed=481516, cancel_callback=audit_stop, precompiled_rosters=True,
                         progress_callback=lambda a,b,c: worker.progress.emit(a,b,'Phase 3 of 4 - Ranking audit: ' + c)),
                     showdown_signature, deadline=validation_end, cancelled=worker._cancel_event.is_set)
             else:
@@ -483,6 +520,8 @@ def run_deep_showdown(worker, shortlist_fn):
     sim_report['ownership_leverage'] = leverage_report(retained+lineups,selected['lineups'],players,
         sim_report.get('field_diagnostic') or {},showdown=True)
     sim_report['salary_filter'] = dict(excluded=salary_excluded, minimum=salary_floor(worker.salary_cap, worker.salary_strategy))
+    if not library_build and sim_report['salary_filter']['minimum'] > 0:
+        sim_report['salary_filter']['generation_minimum'] = salary_floor(worker.salary_cap, worker.salary_strategy)
     sim_report["candidate_library"] = getattr(worker, "library_report", {})
     if profile and not sim_report.get('field_diagnostic'):
         sim_report['history_use_unscored'] = dict(profile_id=profile['profile_id'],

@@ -84,7 +84,7 @@ class WorkerTask(QtCore.QObject):
         state = 'Completed'
         if isinstance(result, dict):
             if result.get('cancelled'):
-                state = 'Cancelled'
+                state = 'Paused for manual work' if result.get('background_yield') else 'Cancelled'
             elif result.get('failed') or result.get('error'):
                 state = 'Failed'
             elif result.get('pause_reason') or result.get('complete') is False or result.get('screening_complete') is False:
@@ -93,10 +93,12 @@ class WorkerTask(QtCore.QObject):
                 state = 'Incomplete'
             elif result.get('errors') or result.get('unpaired') or result.get('changed_sources') or result.get('username_history', {}).get('errors'):
                 state = 'Needs review'
+            elif result.get('no_work'):
+                state = 'No current work'
             text = (self.formatter(result) if self.formatter else
                     str(result.get('error') or result.get('pause_reason') or
                         (f"{len(result.get('lineups') or []):,}/{result['requested']:,} lineups · {state}"
-                         if 'requested' in result else state)))
+                         if 'requested' in result else result.get('next_check') or state)))
         else:
             text = str(result)
             if text.startswith('Search stopped:'):
@@ -113,9 +115,9 @@ class WorkerTask(QtCore.QObject):
         outcome = self.outcome or 'Failed'
         if self.outcome is None:
             self.hub.update(self.key, 'Worker exited without reporting a completion result.')
-        if self.stop_event is not None and self.stop_event.is_set() and outcome == 'Completed':
+        if self.stop_event is not None and self.stop_event.is_set() and outcome in ('Completed','No current work'):
             outcome = 'Stopped'
-        if row['state'] == 'Stopping safely' and outcome == 'Completed':
+        if row['state'] == 'Stopping safely' and outcome in ('Completed','No current work'):
             outcome = 'Stopped'
         detail = ('Stopped; worker retired safely.' if outcome == 'Stopped' else
                   row['detail'].removesuffix(' · Retiring worker…'))
@@ -148,8 +150,11 @@ def install_dashboard(window, layout):
     layout.addLayout(bar)
     dock = QtWidgets.QDockWidget('Task dashboard', window)
     dock.setObjectName('taskDashboard')
-    dock.setWidget(task_panel(hub, dock))
-    window.addDockWidget(QtCore.Qt.BottomDockWidgetArea, dock)
+    dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
+    dock.setWidget(task_panel(hub, dock, compact=True))
+    window.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
+    window.resizeDocks([dock],[420],QtCore.Qt.Horizontal)
+    dock.topLevelChanged.connect(lambda floating: dock.resize(440,720) if floating else None)
     dock.hide()
     button.clicked.connect(lambda: dock.setVisible(not dock.isVisible()))
     def summary_refresh():
@@ -162,9 +167,13 @@ def install_dashboard(window, layout):
     return hub
 
 
-def task_panel(hub, parent):
+def task_panel(hub, parent, compact=False):
     body = QtWidgets.QWidget(parent)
     box = QtWidgets.QVBoxLayout(body)
+    overview = QtWidgets.QLabel()
+    overview.setObjectName('taskQueueOverview')
+    overview.setWordWrap(True)
+    box.addWidget(overview)
     table = QtWidgets.QTableWidget(0, 5)
     table.setObjectName('taskTable')
     table.setHorizontalHeaderLabels(['Task', 'State', 'Elapsed', 'Last update', 'Progress / outcome'])
@@ -172,7 +181,12 @@ def task_panel(hub, parent):
     table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
     table.horizontalHeader().setSectionResizeMode(4, QtWidgets.QHeaderView.Stretch)
     table.setAlternatingRowColors(True)
-    table.setWordWrap(False)
+    table.setWordWrap(compact)
+    if compact:
+        body.setMinimumWidth(340)
+        table.setHorizontalHeaderLabels(['Tasks','State','Elapsed','Last update','Progress / outcome'])
+        for column in range(1,5):table.setColumnHidden(column,True)
+        table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
     for column, width in enumerate((285, 140, 85, 170)):
         table.setColumnWidth(column, width)
     details = QtWidgets.QPlainTextEdit()
@@ -180,7 +194,13 @@ def task_panel(hub, parent):
     details.setPlaceholderText('Select a task above to see recent progress messages.')
     details.setObjectName('taskText')
     details.setMinimumHeight(65)
-    stop = QtWidgets.QPushButton('Cancel / pause selected task')
+    run = QtWidgets.QPushButton('Run now')
+    run.setObjectName('taskRunNow')
+    run.setToolTip('Recheck this queued task now. Manual workers, priority and safety checks still apply.')
+    run.setEnabled(False)
+    def get_queue():
+        return getattr(hub.parent(), 'background_queue', None)
+    stop = QtWidgets.QPushButton('Pause selected' if compact else 'Cancel / pause selected task')
     stop.setObjectName('taskStop')
     stop.setEnabled(False)
     from pane_styles import labelled_pane
@@ -192,7 +212,10 @@ def task_panel(hub, parent):
     panes.addWidget(labelled_pane('Selected task messages', details, 'taskDetails'))
     panes.setSizes([230, 110])
     box.addWidget(panes)
-    box.addWidget(stop)
+    actions = QtWidgets.QHBoxLayout()
+    actions.addWidget(run)
+    actions.addWidget(stop)
+    box.addLayout(actions)
 
     def selected():
         item = table.item(table.currentRow(), 0)
@@ -200,6 +223,8 @@ def task_panel(hub, parent):
 
     def selection():
         row = hub.rows.get(selected())
+        queue = get_queue()
+        run.setEnabled(bool(queue and any(j['task'] == selected() for j in queue.pending.values())))
         stop.setEnabled(bool(row and row['cancel']))
         text = '\n'.join(row['log']) if row else ''
         if details.toPlainText() != text:
@@ -207,15 +232,34 @@ def task_panel(hub, parent):
 
     def refresh():
         key = selected()
-        rows = sorted(hub.rows.items(), key=lambda pair: (pair[1]['ended'] is not None, -pair[0]))
+        queue=get_queue()
+        schedules=[]
+        owner=hub.parent()
+        discovery=getattr(owner,'slate_discovery',None)
+        if discovery and not discovery.paused and discovery.timer.isActive():
+            seconds=max(0,discovery.timer.remainingTime()//1000)
+            schedules.append(f'Slate recheck in {seconds//60}m {seconds%60}s')
+        history=getattr(owner,'history_refresh',None)
+        if history and history.watch.enabled() and not history.watch.paused:
+            schedules.append('History: watching for file changes')
+        backup=getattr(owner,'idle_backup',None)
+        if backup and not backup.paused and backup.enabled() and backup.destination():
+            seconds=max(0,int(backup.next_check-backup.clock()))
+            schedules.append('Backup: '+('changes pending' if backup.dirty else f'recheck in {seconds//60}m {seconds%60}s'))
+        active=any(r['ended'] is None and r['state']!='Queued' for r in hub.rows.values())
+        message=queue.summary() if queue and (queue.active or queue.pending) else 'Manual work underway; background tasks wait for worker retirement.' if active else 'No current work.'
+        overview.setText(message+('\n'+' | '.join(schedules) if schedules else ''))
+        rows = sorted(((k,r) for k,r in hub.rows.items() if not compact or r['state']!='Dispatched'), key=lambda pair: (pair[1]['ended'] is not None, -pair[0]))
         blocker = QtCore.QSignalBlocker(table)
         table.setRowCount(len(rows))
         for i, (task, r) in enumerate(rows):
             now = hub.clock()
             elapsed = int((r['ended'] if r['ended'] is not None else now) - r['started'])
             age = int(now-r['updated'])
-            update = f'{age}s ago' + (' · no recent update' if age >= 60 and r['ended'] is None else '')
+            update = f'{age}s ago' + (' · no recent update' if age >= 60 and r['ended'] is None and r['state']!='Queued' else '')
             values = [r['title'], r['state'], f'{elapsed//60}m {elapsed%60}s', update, r['detail']]
+            if compact:
+                values[0]=f"{r['title']}\n{r['state']} | {elapsed//60}m {elapsed%60}s | {update}\n{r['detail']}"
             for j, value in enumerate(values):
                 item = QtWidgets.QTableWidgetItem(value)
                 item.setToolTip(value)
@@ -224,6 +268,7 @@ def task_panel(hub, parent):
                 table.setItem(i, j, item)
             if task == key:
                 table.setCurrentCell(i, 0)
+        if compact:table.resizeRowsToContents()
         del blocker
         selection()
 
@@ -241,6 +286,7 @@ def task_panel(hub, parent):
     receiver = Receiver(body)
     hub.changed.connect(receiver.update)
     table.itemSelectionChanged.connect(selection)
+    run.clicked.connect(lambda: get_queue().run_now(selected()) if get_queue() else None)
     stop.clicked.connect(lambda: hub.cancel(selected()) if selected() in hub.rows else None)
     timer = QtCore.QTimer(body)
     timer.timeout.connect(refresh)

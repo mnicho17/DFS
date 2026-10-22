@@ -45,10 +45,10 @@ def setup_simple_build_panel(w, layout, count_labels, cap_labels):
     w.btn_review_build.clicked.connect(w.on_build_history)
     w.btn_review_build.setToolTip('Review recorded results, limits, preparation, SIM, and comparisons for a selected build.')
     grid.addWidget(w.btn_review_build, 0, 6)
-    w.btn_prepare_slate=QtWidgets.QPushButton('Prepare this slate',panel)
-    w.btn_prepare_slate.setObjectName('prepareThisSlateButton')
-    w.btn_prepare_slate.setToolTip('Check existing Showdown roster coverage and screening, then queue missing work while idle. Captured inputs; up to 12 hours and 8 GiB. See Tasks / Preparation.')
-    w.btn_prepare_slate.clicked.connect(w.on_prepare_this_slate)
+    # Move the existing Preparation entry here instead of adding a second shortcut.
+    w.btn_prepare_slate=w.findChild(QtWidgets.QPushButton,'preparationStatusButton')
+    w.btn_prepare_slate.setText('Preparation…')
+    w.btn_prepare_slate.setToolTip('Review coverage, screening, reuse and paused work; explicitly prepare or retry from one screen.')
     grid.addWidget(w.btn_prepare_slate,0,7)
     grid.addWidget(w.btn_primary_build, 0, 8)
     w.lbl_simple_build_summary = QtWidgets.QLabel(panel)
@@ -100,7 +100,6 @@ def setup_simple_build_panel(w, layout, count_labels, cap_labels):
         combo.currentTextChanged.connect(lambda *_: sync_simple_build_panel(w))
     w.spin_build_own_weight.valueChanged.connect(lambda *_: sync_simple_build_panel(w))
     w.action_show_build_controls.toggled.connect(lambda *_: sync_simple_build_panel(w))
-    w.action_auto_library.toggled.connect(lambda *_: sync_simple_build_panel(w))
     sync_simple_build_panel(w)
 
 
@@ -113,8 +112,8 @@ def sync_simple_build_panel(w):
         kind = 'showdown' if index == 0 else 'classic'
         lineup = index in (0, 1)
         nfl = w._current_sport() == 'NFL'
-        w.btn_prepare_slate.setVisible(nfl and kind=='showdown' and lineup)
-        w.btn_prepare_slate.setEnabled(bool(w.players))
+        w.btn_prepare_slate.setVisible(nfl and lineup)
+        w.btn_prepare_slate.setEnabled(True)
         w.simple_count_stack.setCurrentIndex(0 if kind == 'showdown' else 1)
         w.advanced_cap_stack.setCurrentIndex(0 if kind == 'showdown' else 1)
         w.lbl_simple_lineups.setVisible(lineup)

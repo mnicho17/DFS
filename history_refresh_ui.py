@@ -97,8 +97,8 @@ class HistoryRefreshController(QtCore.QObject):
         owner = self.parent()
         backup = getattr(owner, 'idle_backup', None)
         if backup is not None:
-            from PyQt5 import QtWidgets
-            if backup.clock()-backup.last_input < 60 or QtWidgets.QApplication.activeModalWidget() is not None:
+            from background_queue import idle_ready
+            if not idle_ready(owner,'history'):
                 return False
         queue = getattr(owner, 'background_queue', None)
         return not self._reports or bool(queue and queue.active)
@@ -169,6 +169,9 @@ class HistoryRefreshController(QtCore.QObject):
             self.changed.emit()
 
     def receive(self, result):
+        if self._yielded:result['background_yield']=True
+        if result.get('unchanged_checkpoint') and not result.get('cancelled'):
+            result.update(no_work=True,next_check='Watching Results/Salary folders for changes; no polling timer.')
         self._pending = result
 
     def failure(self, message):
@@ -188,7 +191,7 @@ class HistoryRefreshController(QtCore.QObject):
         retry = (self._yielded and not self.watch.closed and not self.watch.paused
                  and not result.get('failed') and not result.get('errors')
                  and not result.get('username_history', {}).get('errors'))
-        self.text = ('History refresh yielded safely; completed files remain saved. Waiting for idle app time to retry.'
+        self.text = ('History refresh yielded safely; completed files remain saved. Waiting for manual workers to retire before retrying.'
                      if retry else refresh_summary(result))
         self.settings.setValue('learning/last_history_refresh', self.text)
         self.settings.sync()

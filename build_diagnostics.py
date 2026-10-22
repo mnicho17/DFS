@@ -6,6 +6,7 @@ Reports may include compact lineup details to make strategy problems
 reproducible. They never include salary-file paths or API keys.
 """
 
+import copy
 import datetime as _dt
 from contest_objectives import normalize_objective, objective_report_label
 import json
@@ -318,8 +319,11 @@ def create_build_diagnostic(
 
     preset = dict(sim.get("preset_comparison") or {})
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
+    from preparation_audit import clean_build_audit
+    from simulation_profiling import clean as clean_simulation_profile
     diagnostic = {
         "schema_version": 4,
+        "preparation_audit": clean_build_audit(context.get("preparation_audit")),
         "contest_objective": normalize_objective(settings.get("contest_objective", context.get("contest_objective"))),
         "input_id": str(context.get('input_id') or ''),
         "candidate_library": dict(sim.get("candidate_library") or {}),
@@ -355,6 +359,7 @@ def create_build_diagnostic(
             "exact": bool(space.get("exact")),
             "explanation": str(space.get("explanation") or ""),
         },
+        **({'simulation_profile': clean_simulation_profile(timing.get('simulation_profile'))} if timing.get('simulation_profile') else {}),
         "timing": {
             "generation_seconds": max(0.0, _number(timing.get("generation_seconds"))),
             "simulation_seconds": max(0.0, _number(timing.get("simulation_seconds"))),
@@ -422,7 +427,7 @@ def create_build_diagnostic(
         "lineup_details": lineup_details,
         "lineup_details_total": len(list(lineups or [])),
         "sim": {
-            "scenario_cache": dict(sim.get("scenario_cache") or {}),
+            "scenario_cache": copy.deepcopy(dict(sim.get("scenario_cache") or {})),
             "preset_fit": _number(preset.get("fit_score")) if preset.get("available") else None,
             "field_lineups": max(0, _integer(sim.get("field_lineups"), _integer(sim.get("field_lineup_count")))),
             "opponent_field_samples": max(
@@ -630,10 +635,26 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Balance ownership/dup risk: {'On' if rules.get('balance_ownership') else 'Off'}",
         f"- Player groups: {_integer(rules.get('group_count'))} | Player limits: {_integer(rules.get('constrained_player_count'))}",
     ])
+
+    from simulation_profiling import clean as clean_simulation_profile
+    profiles=clean_simulation_profile(record.get('simulation_profile'))
+    if profiles:
+        lines.append('- SIM profile scope: sums within simulation calls; library discovery/loading and portfolio selection are separate stage timers.')
+        labels=dict(setup_seconds='field/setup',cache_lookup_seconds='cache lookup/verification',
+            outcomes_seconds='outcome draws',opponents_seconds='opponent scoring',scenario_io_seconds='scenario frame I/O',
+            candidates_seconds='candidate scores/metrics',cache_finish_seconds='cache finalization',
+            result_assembly_seconds='result assembly',other_seconds='other/progress',total_seconds='total')
+        for phase,row in profiles.items():
+            lines.append(f"- SIM profile [{phase}]: {row.get('calls',0)} calls; {row.get('completed_scenarios',0):,} completed scenarios; {row.get('reused_scenarios',0):,} reused; {row.get('candidate_evaluations',0):,} candidate evaluations.")
+            lines.append('- SIM profile ['+phase+'] seconds: '+', '.join(labels[key]+f" {_number(value):.3f}" for key,value in row['timings'].items()))
+    from preparation_audit import build_audit_lines
+    lines.extend([''] + build_audit_lines(record.get('preparation_audit')))
     if record.get('build_preparation'):
         lines.extend(['', 'Build preparation'])
         for row in record['build_preparation']:
-            lines.append(f"- {row.get('stage', 'Check')}: {row.get('state', 'Unknown')} — {row.get('detail', '')}")
+            seconds=row.get('seconds')
+            duration=f" ({seconds:.2f} s)" if type(seconds) in (int,float) and math.isfinite(seconds) and seconds>=0 else ''
+            lines.append(f"- {row.get('stage', 'Check')}: {row.get('state', 'Unknown')} — {row.get('detail', '')}{duration}")
     if deep_mode:
         options = sim.get("deep_options") or {}
         if sim.get("generation_allocation_seconds"):
@@ -715,6 +736,30 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         cache = sim.get('scenario_cache') or {}
         if cache and cache.get('status') != 'disabled':
             lines.append(f"- Reusable scenarios: {cache.get('status')}; {_integer(cache.get('reused_scenarios')):,}/{_integer(cache.get('requested_scenarios')):,} reused. Current lineup scoring and rules still apply; independent audits remain fresh.")
+            if cache.get('reason'):
+                reason=str(cache['reason'])
+                if len(reason)>500 or any(token in reason for token in ('\\','/','\n','\r')):
+                    reason='Legacy cache error details withheld; rerun to record a categorized reason.'
+                lines.append('- Scenario cache reason: '+reason)
+            comparison=cache.get('comparison') or {}
+            if comparison:
+                from scenario_cache_diagnostics import LABELS
+                changed=[label for label in comparison.get('changed_components',[]) if label in LABELS]
+                if changed:
+                    lines.append('- Scenario cache comparison: differences from a recent recorded same-slate cache: '+', '.join(changed)+'. Diagnostic only; exact-input and integrity checks still decide reuse.')
+                elif comparison.get('status')=='No comparable receipt recorded':
+                    lines.append('- Scenario cache comparison: no comparable completed-cache receipt recorded for this slate yet.')
+                elif comparison.get('status')=='Compared with a recent same-slate receipt':
+                    lines.append('- Scenario cache comparison: recorded input components match, but no exact artifact was found. Additional metadata or an unavailable artifact may prevent reuse; recomputation still required.')
+                else:
+                    lines.append('- Scenario cache comparison unavailable; exact-input validation still applies.')
+            maintenance=cache.get('maintenance') or {}
+            if isinstance(maintenance,dict) and maintenance:
+                status=maintenance.get('status')
+                if status not in ('not needed','storage bound','cancelled','maintenance bound','space reclaimed','protected files or storage bound'):status='unavailable'
+                lines.append(f"- Scenario cache maintenance: {status}; {_integer(maintenance.get('retired_files'))} old artifacts retired; {_integer(maintenance.get('reclaimed_bytes'))/1024**2:.1f} MiB reclaimed; {_integer(maintenance.get('skipped_busy'))} busy artifacts preserved; {_integer(maintenance.get('available_bytes'))/1024**2:.1f} MiB available of {_integer(maintenance.get('store_limit_bytes'))/1024**2:.0f} MiB.")
+            if 'lookup_seconds' in cache:
+                lines.append(f"- Scenario cache overhead: lookup/verification {_number(cache.get('lookup_seconds')):.2f}s; frame I/O/finalization {_number(cache.get('io_seconds')):.2f}s; saved artifact {_integer(cache.get('stored_bytes'))/1024**2:.1f} MiB")
     capture = record.get('distribution_capture') or {}
     from captain_coverage import format_coverage
     lines.extend(format_coverage(record.get('captain_coverage') or {}))
@@ -737,6 +782,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         salary_filter = record.get('salary_filter') or {}
         if salary_filter:
             lines.append(f"- Showdown salary filter: {salary_filter.get('excluded', 0):,} candidates excluded before screening; minimum ${salary_filter.get('minimum', 0):,.0f}.")
+        if _number(salary_filter.get('generation_minimum')) > 0:
+            lines.append(f"- Fresh Showdown search enforced the ${salary_filter['generation_minimum']:,.0f} minimum during construction; final salary filtering remains active.")
         feasibility = record.get('portfolio_feasibility') or {}
         if feasibility:
             method = feasibility.get('method')
