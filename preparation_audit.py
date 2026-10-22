@@ -39,14 +39,24 @@ def clean_build_audit(value):
         if type(duration) in (int,float) and math.isfinite(duration) and duration>=0:
             ownership['seconds']=duration
     return dict(captured_at=str(value.get('captured_at') or '')[:64],
-                snapshot_replay=bool(value.get('snapshot_replay')),csv_timings=clean,ownership=ownership)
+                snapshot_replay=bool(value.get('snapshot_replay')),csv_timings=clean,ownership=ownership,
+                automatic_compute=clean_compute(value.get('automatic_compute')))
 
 
-def capture_build_audit(window):
+def clean_compute(value):
+    if not isinstance(value, dict):return {}
+    from automatic_compute import select_profile
+    try:
+        expected=select_profile(value.get('requested'), value.get('cap'), value.get('prepared') is True)
+    except ValueError:return {}
+    return expected if value == expected else {}
+
+
+def capture_build_audit(window, automatic_compute=None):
     from datetime import datetime
     replay=bool(getattr(window,'_snapshot_replay',False))
     return clean_build_audit(dict(captured_at=datetime.now().astimezone().isoformat(),
-        snapshot_replay=replay,
+        snapshot_replay=replay,automatic_compute=automatic_compute,
         csv_timings=None if replay else getattr(window,'last_csv_load_timing',None),
         ownership=None if replay else getattr(window,'last_ownership_reuse',None)))
 
@@ -58,6 +68,8 @@ def build_audit_lines(value):
            'Captured: '+(audit['captured_at'] or 'not recorded')]
     if audit['snapshot_replay']:
         return lines+['Snapshot replay: current-session CSV/ownership timings were not attributed to this build.']
+    from automatic_compute import summary
+    if audit['automatic_compute']:lines.append(summary(audit['automatic_compute']))
     ownership=ownership_text(audit['ownership']) if audit['ownership'] else 'Ownership reuse decision not recorded for this build.'
     lines+=['Last successful CSV load:',timing_text(audit['csv_timings']),
             'Last applied ownership decision:',ownership,
