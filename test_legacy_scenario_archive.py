@@ -123,4 +123,14 @@ class LegacyArchiveTests(unittest.TestCase):
         finally:lock.unlock()
         self.assertTrue(path.exists());self.assertFalse(list(self.backup.rglob('*.sqlite')))
 
+    def test_cancel_inside_sql_validation_reports_incomplete(self):
+        from unittest.mock import patch
+        legacy(self.cache);stopped=[False]
+        def interrupt(*args,**kwargs):
+            stopped[0]=True;raise sqlite3.OperationalError('interrupted')
+        with patch('legacy_scenario_archive.inspect_legacy',side_effect=interrupt):
+            result=self.archive(cancelled=lambda:stopped[0])
+        self.assertTrue(result['cancelled']);self.assertFalse(result['complete'])
+        self.assertFalse(list(self.backup.rglob('*.sqlite')))
+
 if __name__=='__main__':unittest.main()

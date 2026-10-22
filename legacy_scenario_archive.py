@@ -105,7 +105,9 @@ def inspect_legacy(path,*,cancelled=lambda:False,deadline=None,progress=lambda t
 
 def read_json(path,limit=16384):
     if not plain_file(path,path.parent) or path.stat().st_size>limit:raise ValueError('Invalid archive metadata')
-    return json.loads(path.read_text(encoding='utf-8'))
+    value=json.loads(path.read_text(encoding='utf-8'))
+    if not isinstance(value,dict):raise ValueError('Archive metadata must be an object')
+    return value
 
 
 def safe_directory(path):
@@ -206,6 +208,9 @@ def validate_and_archive(folder,destination,*,protected=(),cancelled=lambda:Fals
             except Stopped as exc:
                 result.update(cancelled=cancelled(),complete=False);result['messages'].append(str(exc));break
             except (OSError,sqlite3.Error,ValueError,TypeError,KeyError,zlib.error,OverflowError) as exc:
+                if cancelled() or time.monotonic()>deadline:
+                    result.update(cancelled=cancelled(),complete=False)
+                    result['messages'].append('Validation stopped; working files remain in place.');break
                 result['preserved']+=1;result['errors']+=1
                 result['messages'].append(path.name+': '+str(exc)[:240])
             finally:lease.close()
