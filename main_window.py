@@ -4316,9 +4316,12 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
     def update_history_status(self):
         text = self.history_refresh.text
+        watch_message=self.history_refresh.watch.message
         if self.history_refresh.watch.pending or self.history_refresh.watch.paused:
-            text = self.history_refresh.status_line() + '\n' + text
-        self.history_status.setPlainText(text + '\n' + self.history_refresh.watch.message)
+            state_line=self.history_refresh.status_line()
+            if state_line!=watch_message and not text.startswith(state_line):text=state_line+'\n'+text
+        if watch_message and not text.endswith(watch_message):text+='\n'+watch_message
+        self.history_status.setPlainText(text)
         from history_workspace_ui import history_update_view
         view=history_update_view(self.history_refresh,self._import_thread is not None)
         if hasattr(self,'history_update_summary'):self.history_update_summary.setText(view['detail'])

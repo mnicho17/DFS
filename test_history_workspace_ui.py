@@ -206,6 +206,7 @@ class HistoryWorkspaceTests(unittest.TestCase):
         d,root=self.status_dialog();c=d.history_refresh;c.settings.setValue('learning/results_folder',str(root))
         c.settings.setValue('learning/auto_history_refresh',False);c.watch.paused=True
         d.update_history_status();self.assertEqual(d.history_refresh_button.text(),'Retry / Resume')
+        self.assertEqual(d.history_status.toPlainText().count(c.watch.message),1)
         with patch.object(c,'start') as start:d.history_refresh_button.click()
         start.assert_called_once_with();self.assertFalse(c.enabled())
         c.watch.paused=False;d.update_history_status()
