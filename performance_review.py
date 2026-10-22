@@ -149,6 +149,8 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             with conn:
                 refresh_cached_profile(conn,import_id,path,cancelled)
             inferred_date=result_date(name) or result_date(Path(path).name)
+            if salary_receipt and salary_receipt.get('date_correction'):
+                inferred_date=salary_receipt['date_correction']['corrected_date']
             from learning_db import _import_username_entries
             with conn:
                 _import_username_entries(conn,path,import_id,username,dict(field_size=field[0],sport=field[2]),cancelled)
@@ -165,8 +167,10 @@ def analyze_saved_results(*,db_path=None,username='',cancelled=lambda:False,prog
             from distribution_validation import compare_distributions
             with conn:
                 compare_distributions(conn,import_id,snapshot_check.get('input_id'),
-                    'showdown' if field[1]==6 else 'classic',scores,Path(db_path or history_db_path()).parent)
+                    'showdown' if field[1]==6 else 'classic',scores,Path(db_path or history_db_path()).parent,cancelled=cancelled)
             date_source='filename-unverified' if inferred_date else 'unknown'
+            if salary_receipt and salary_receipt.get('date_correction'):
+                date_source='explicit saved date correction'
             if not inferred_date and snapshot_check.get('date'):
                 inferred_date=snapshot_check['date'];date_source='saved contest-ID schedule'
             snap_meta=snapshot_metadata(Path(db_path or history_db_path()).parent/'snapshots',inferred_date,{k for k in scores if not k.startswith('@cpt:')})
@@ -273,6 +277,7 @@ def review_report(conn,username=''):
     from learning_db import _dk_username
     ensure_tables(conn)
     lines=['','Construction & Scenario Review — descriptive, no automatic tuning']
+    lines.append('- Legacy cached cohort estimates may include export/snapshot metadata. Salary estimates are hidden; use revision-bound Historical database evidence below. These cohorts are not verified complete fields.')
     reviews=conn.execute('SELECT payload,checked_at FROM construction_reviews ORDER BY checked_at').fetchall()
     if not reviews:lines.append('- Click Analyze Saved Results to compare field constructions and store player scores.')
     for encoded,checked in reviews:
@@ -281,9 +286,8 @@ def review_report(conn,username=''):
             if key=='yours' and _dk_username(username)!=p.get('username'):continue
             b=g[key]
             if not b['n']:continue
-            salary=f"${b['salary_sum']/b['salary_n']:,.0f} ({b['salary_n']} covered)" if b['salary_n'] else 'unknown'
             own=f"{b['own_sum']/b['own_n']:.1f}% ({b['own_n']} covered)" if b['own_n'] else 'unknown'
-            lines.append(f"  {label}: {b['n']:,} entries; construction metadata {b['mapped']:,}/{b['n']:,}; duplicated {100*b['duplicates']/b['n']:.1f}%; average salary {salary}; average slot ownership {own}.")
+            lines.append(f"  {label}: {b['n']:,} entries; legacy construction metadata {b['mapped']:,}/{b['n']:,}; duplicated {100*b['duplicates']/b['n']:.1f}%; average slot ownership {own}.")
         keys=set(field['features'])|set(g['top1']['features'])
         ranked=sorted(keys,key=lambda k:abs(g['top1']['features'].get(k,0)/max(1,g['top1']['mapped'])-field['features'].get(k,0)/max(1,field['mapped'])),reverse=True)
         important=['0 defenses','1 defense','2 defenses'] if p['format']=='Showdown' and p.get('construction_version',0)>=2 else []

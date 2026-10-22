@@ -47,6 +47,49 @@ the supplied salary universe, exact actuals and supported rules; its snapshot-lo
 comparison is optional. RL-07B remains unimplemented. Build archives do not establish submitted
 portfolios or phase timings. Zero and negative scores remain known observations.
 
+## Scoped imported roster coverage
+
+Imported files remain immutable sources cataloged in `analysis_sources`. Derived
+coverage is stored in `historical_contest_identities.payload`; reconciliation
+updates these derived records atomically without rewriting original observations.
+No re-upload is needed when the source is already cataloged and hash-valid.
+
+The overview and contest details distinguish full eligible-pool score coverage
+from scoped source roster-row coverage. Blank and malformed lineup rows are
+excluded and counted. Readable rows with known selected-player scores and a
+matching observed total can provide scoped score evidence even when an unused
+eligible player has no score. Unknown scores are never filled with zero. Missing
+totals, unknown selected-player scores and conflicting totals have separate counts.
+A score/identity conflict, source change or truncated scan withholds usable scoped
+evidence. Cross-contest score contradictions also withhold it.
+
+These counts describe source rows, including repeated EntryIds, rather than unique
+entries or users. They do not establish complete standings, submitted portfolios,
+ROI, or full-pool hindsight readiness. Existing username/field analysis retains its
+own identity validation and duplicate-entry handling. Full-pool RL-07 qualification
+still requires exact actuals for every eligible athlete and its existing safeguards.
+Unreadable stored personal rows are excluded when valid personal rows remain;
+wholly unreadable personal coverage stays blocked.
+
+Standings scores and roster coverage use two streaming passes, capped at 2 million
+rows per pass and a 1 GB source file, with at most 5,000 observed score identities.
+This is separate from the 200,000-row stored-personal-observation budget. Late
+scores and conflicts are read through EOF within the budget. Cancellation is checked
+per row, and source hashes are verified after both passes. Exhaustion discards
+partial score/coverage results and discloses the scan blocker.
+
+For a read-only SQLite audit of reconciled counts, query the existing JSON payload:
+
+```sql
+SELECT identity_id, state,
+       json_extract(payload, '$.results_evidence.source_hash') AS result_hash,
+       json_extract(payload, '$.salary_evidence.revision_hash') AS salary_hash,
+       json_extract(payload, '$.results_evidence.roster_row_coverage') AS roster_rows,
+       json_extract(payload, '$.blockers') AS blockers,
+       json_extract(payload, '$.conflicts') AS conflicts
+FROM historical_contest_identities;
+```
+
 ## Explicit choices
 
 Salary review uses the existing authoritative `pairing_state` and `save_pair` APIs.
@@ -78,7 +121,7 @@ unavailable because the archives do not prove submission.
 ## Shareable report and acceptance
 
 DFS Review schema 2 remains backward compatible. Its historical section adds
-`coverage_version=1`, independent evidence-level counts, category counts and
+`coverage_version=2`, independent evidence-level counts, category counts and
 capability-prerequisite counts. It uses freshly derived evidence under the existing
 report read transaction. No identity IDs, source hashes, paths, filenames, usernames
 or raw payloads are added to the shareable section. Existing preview, cancellation,
@@ -97,3 +140,95 @@ Opening cost grows with stored derived JSON, not source CSV size. Reconciliation
 still performs the existing bounded fresh inventory and score scan; no speculative
 caching or compute optimization was added. RL-05A scan limits remain visible as
 blockers. A long verification phase may show elapsed time without a percent total.
+
+Results & Learning **Copy Report** includes the cached reconciliation timestamp,
+method versions, exclusive evidence states, pending imports, invalid cached rows
+and score-supported source-row coverage. These cached state counts are historical;
+reconcile again after changing files or associations.
+
+Reconciliation method 4 also records `results_evidence.field_row_summary` in the
+existing hash-protected JSON. The second streaming results pass resolves each
+roster against its exact qualified salary revision (including separate Captain
+salary/ID). It uses no export or current-slate metadata fallback. Blank/malformed
+rosters, unknown or ambiguous identities, invalid Showdown team splits and rosters
+over $50,000 are counted separately and excluded from salary/construction metrics.
+The salary mean uses supported source rows as its denominator. Counts include
+duplicate EntryId rows and establish neither unique entries nor field completeness.
+Missing actual scores do not prevent salary reporting and still block unsupported
+outcome qualification. Cancellation, scan failure or changed results clear the
+proposed summary; reconciliation retains its existing atomic commit protection.
+
+Copy Report uses one catalog/evidence database snapshot and current file-verified
+pairings to gate these aggregates. A changed, invalid, ambiguous or different salary
+association hides its old metrics until reconciliation; old cached records cannot
+fall back to global export metadata. The report does not rebuild history itself.
+Use **Reconcile Historical Coverage** (or **Analyze Saved Results**, which ends in
+reconciliation) once after updating to populate the new summary. Source CSVs,
+salary associations and existing generation calibration tables are preserved.
+
+Older field summaries are labeled as legacy observed summaries with unverified
+completeness. Their salary, QB-stack and FLEX-mix figures are suppressed; cached
+cohort salary estimates are also hidden. Other legacy diagnostic estimates remain
+explicitly labeled. Existing generation calibration receipts remain visible and
+unchanged; this reporting fix does not tune ownership, projections, SIM, ranking
+or lineup generation.
+
+Method 5 / field-row summary version 2 adds descriptive rank and username cohorts
+to the same two streaming passes. Copy Report separates Classic and Showdown,
+then Single Entry, 3-Max, 20-Max, 150-Max and Unclassified groups using recorded
+contest/source names. Old version-1 summaries can immediately be separated by
+format/preset; their salary metrics remain usable but they do not supply cohorts.
+Reconcile once for the new comparison columns. Successful reconciliation now
+refreshes the main report automatically after its worker retires. Cancellation,
+failure and closing do not launch a hidden report.
+
+Each comparison shows field rows, rank-cutoff 5%, rank-cutoff 1%, rank-1 rows,
+and the selected username's submitted source rows. Positive integral ranks are
+required for rank cohorts; ties are included. A consistent supplied field size
+sets the percentile cutoffs but does not prove field completeness. Without a
+supplied size, cutoffs use the number of observed source rows (including blank
+rosters and duplicate EntryIds) and are explicitly labeled as observed-row rank
+cutoffs. Conflicting/invalid supplied sizes disable percentile cohorts instead
+of choosing an arbitrary size. Missing ranks remain disclosed in field/user
+cohorts, and each column shows supported-row and contributing-source counts.
+No payouts, profitability or independent-game advantage are inferred.
+
+Personal cohorts are computed for usernames represented in the stored historical
+observations, never for arbitrary inferred users. Copy Report selects the current
+username using the existing DraftKings suffix/case normalization. Up to 256
+observed usernames per source may be captured; above that bound no arbitrary
+subset is chosen, and the report discloses unavailable personal cohorts. All-user
+history remains accessible through the existing normalized opponent database.
+Incomplete scans clear every proposed cohort. Reconciliation remains atomic and
+continues to revalidate the exact results and salary revisions.
+
+Construction percentages use each cohort's supported rows. Kicker/defense counts
+and team splits no longer mix Classic and Showdown. Individual kicker/defense
+counts and Captain-with-opposing-FLEX-defense frequency are descriptive report
+features; they do not add exclusions, change exposure limits or tune generation.
+
+Copy Report also shows contest-by-contest comparisons and equal-slate matched
+percentage-point gaps within each format/preset. These use existing version-2
+cohorts; no new reconciliation method, source CSV pass or evidence migration is
+needed. Field and observed rank-cutoff comparisons require supported personal
+and comparator rows from the same contributing contest.
+
+Captain context uses the existing normalized opponent index, its current version
+and exact results/salary revisions. Complete personal readable and metadata
+coverage must match the cached personal cohort; conflicting duplicate-entry audit
+receipts are rejected. A single observed Captain across multiple personal rows
+uses the user's explicit lock assumption, not a recorded build/SIM receipt.
+Multiple Captains retain unknown settings; one submitted lineup alone does not
+establish a lock. Missing, stale or incomplete indexing remains unknown rather
+than falling back to current app settings or raw row-count agreement. Historical
+personal observation reads are bounded; exceeding the budget disables context.
+
+Within each context category, connected contests sharing any salary-manifest game
+on the same recorded date form one slate block, including overlapping Classic
+slates. Average contest rates within a block, then average blocks equally. This
+prevents large/repeated fields from dominating the summary. Missing date/game
+identity is excluded and counted; a different date is a different block. These
+are evidence groups, not proof of statistical independence. The report shows
+matched contest/block counts and unavailable comparisons. Context categories and
+entry presets are never pooled into an inferred normal-SIM cohort. No generated
+lineups, constraints, forecasts or model weights change.

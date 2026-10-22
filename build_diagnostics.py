@@ -6,6 +6,7 @@ Reports may include compact lineup details to make strategy problems
 reproducible. They never include salary-file paths or API keys.
 """
 
+import copy
 import datetime as _dt
 from contest_objectives import normalize_objective, objective_report_label
 import json
@@ -272,6 +273,9 @@ def create_build_diagnostic(
     forecast_review = (coverage.get('forecast_checks') or {}).get('review_players',0)
     if forecast_review:
         warnings.append(f'{forecast_review} players have automatic forecast review signals. See Automatic forecast checks; no projections were changed.')
+    defense_reviews = (coverage.get('defense_forecasts') or {}).get('review_players', 0)
+    if defense_reviews:
+        warnings.append(f'{defense_reviews} defenses use historical-average estimates. See Defense forecast review; no projections were changed.')
     if coverage.get('missing_count'):
         warnings.append(f"{coverage['missing_count']} eligible players have missing or invalid forecasts. See Projection and usage coverage.")
     elif projection_reviews and not coverage:
@@ -315,19 +319,26 @@ def create_build_diagnostic(
 
     preset = dict(sim.get("preset_comparison") or {})
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
+    from preparation_audit import clean_build_audit
+    from simulation_profiling import clean as clean_simulation_profile
     diagnostic = {
         "schema_version": 4,
+        "preparation_audit": clean_build_audit(context.get("preparation_audit")),
         "contest_objective": normalize_objective(settings.get("contest_objective", context.get("contest_objective"))),
         "input_id": str(context.get('input_id') or ''),
         "candidate_library": dict(sim.get("candidate_library") or {}),
+        "build_preparation": [dict(row) for row in timing.get("build_preparation", [])],
         "salary_filter": dict(sim.get("salary_filter") or {}),
         "portfolio_feasibility": dict((sim.get('deep_build') or timing).get('portfolio_feasibility') or {}),
         "feasible_shortlist_fallback_used": bool(portfolio.get('feasible_shortlist_fallback_used')),
         "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
         "ranking_bank": dict((sim.get('deep_build') or {}).get('ranking_bank') or {}),
+        "screening_audit": dict((sim.get('deep_build') or {}).get('screening_audit') or {}),
         "field_diagnostic": dict(sim.get('field_diagnostic') or {}),
+        **({"history_use_unscored": dict(sim['history_use_unscored'])} if sim.get('history_use_unscored') else {}),
         "ownership_leverage": dict(sim.get('ownership_leverage') or {}),
         "projection_coverage": coverage,
+        **({"ownership_refresh": dict(context["ownership_refresh"])} if context.get("ownership_refresh") else {}),
         "data_freshness": str(context.get('data_freshness') or ''),
         "created_at": _now_iso(),
         "status": "cancelled" if cancelled else "completed",
@@ -348,6 +359,7 @@ def create_build_diagnostic(
             "exact": bool(space.get("exact")),
             "explanation": str(space.get("explanation") or ""),
         },
+        **({'simulation_profile': clean_simulation_profile(timing.get('simulation_profile'))} if timing.get('simulation_profile') else {}),
         "timing": {
             "generation_seconds": max(0.0, _number(timing.get("generation_seconds"))),
             "simulation_seconds": max(0.0, _number(timing.get("simulation_seconds"))),
@@ -390,6 +402,10 @@ def create_build_diagnostic(
             "constrained_player_count": len(rules.get("player_constraints") or {}),
         },
         "portfolio": {
+            **({"zero_qb_rule": dict(portfolio['zero_qb_rule'])}
+               if portfolio.get('zero_qb_rule') else {}),
+            **({"exposure_cap_diagnostic": dict(portfolio['exposure_cap_diagnostic'])}
+               if portfolio.get('exposure_cap_diagnostic') else {}),
             "compliant": bool(portfolio.get("compliant", not warnings)),
             "warning_count": len(warnings),
             "warnings": warnings,
@@ -401,13 +417,17 @@ def create_build_diagnostic(
                 portfolio.get("automatic_showdown_guardrails") or {}
             ),
             "portfolio_recovery": aggregate_recovery(portfolio.get("portfolio_recovery")),
+            **({"captain_pool_adjustments": list(portfolio['captain_pool_adjustments'])}
+               if portfolio.get('captain_pool_adjustments') else {}),
+            **({"specialist_diagnostics": dict(portfolio['specialist_diagnostics'])}
+               if portfolio.get('specialist_diagnostics') else {}),
         },
         "ranked_groups": ranked_group_summaries(lineups, contest_type, salary_cap, salary_strategy),
         "exposures": exposure_summary,
         "lineup_details": lineup_details,
         "lineup_details_total": len(list(lineups or [])),
         "sim": {
-            "scenario_cache": dict(sim.get("scenario_cache") or {}),
+            "scenario_cache": copy.deepcopy(dict(sim.get("scenario_cache") or {})),
             "preset_fit": _number(preset.get("fit_score")) if preset.get("available") else None,
             "field_lineups": max(0, _integer(sim.get("field_lineups"), _integer(sim.get("field_lineup_count")))),
             "opponent_field_samples": max(
@@ -552,7 +572,7 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     field_target = _integer(candidates.get("field_shaped_target"))
     scenario_target = _integer(candidates.get("scenario_built_target"))
     if optimizer_target or field_target or scenario_target:
-        sources = [f"{optimizer_target:,} optimizer"]
+        sources = [f"{optimizer_target:,} " + ('library' if record.get('candidate_library',{}).get('type')=='prepared_showdown' else 'optimizer')]
         if field_target:
             sources.append(f"{field_target:,} field-shaped")
         if scenario_target:
@@ -566,6 +586,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         "DFS Optimizer Build Report",
         f"Input ID: {record.get('input_id') or 'not recorded'}",
         f"Data: {record.get('data_freshness') or 'freshness not recorded'}",
+        *(["Ownership: " + record["ownership_refresh"]["sources"]] if (record.get("ownership_refresh") or {}).get("sources") else []),
+        *([record["ownership_refresh"]["notice"]] if (record.get("ownership_refresh") or {}).get("notice") else []),
         f"Run: {_created_label(record.get('created_at'))}",
         f"Status: {str(record.get('status') or 'completed').title()}",
         *([f"Saved repair: {record['application'].get('status', 'unknown')} ({record['application'].get('reason', 'unknown')})"]
@@ -619,6 +641,26 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         f"- Balance ownership/dup risk: {'On' if rules.get('balance_ownership') else 'Off'}",
         f"- Player groups: {_integer(rules.get('group_count'))} | Player limits: {_integer(rules.get('constrained_player_count'))}",
     ])
+
+    from simulation_profiling import clean as clean_simulation_profile
+    profiles=clean_simulation_profile(record.get('simulation_profile'))
+    if profiles:
+        lines.append('- SIM profile scope: sums within simulation calls; library discovery/loading and portfolio selection are separate stage timers.')
+        labels=dict(setup_seconds='field/setup',cache_lookup_seconds='cache lookup/verification',
+            outcomes_seconds='outcome draws',opponents_seconds='opponent scoring',scenario_io_seconds='scenario frame I/O',
+            candidates_seconds='candidate scores/metrics',cache_finish_seconds='cache finalization',
+            result_assembly_seconds='result assembly',other_seconds='other/progress',total_seconds='total')
+        for phase,row in profiles.items():
+            lines.append(f"- SIM profile [{phase}]: {row.get('calls',0)} calls; {row.get('completed_scenarios',0):,} completed scenarios; {row.get('reused_scenarios',0):,} reused; {row.get('candidate_evaluations',0):,} candidate evaluations.")
+            lines.append('- SIM profile ['+phase+'] seconds: '+', '.join(labels[key]+f" {_number(value):.3f}" for key,value in row['timings'].items()))
+    from preparation_audit import build_audit_lines
+    lines.extend([''] + build_audit_lines(record.get('preparation_audit')))
+    if record.get('build_preparation'):
+        lines.extend(['', 'Build preparation'])
+        for row in record['build_preparation']:
+            seconds=row.get('seconds')
+            duration=f" ({seconds:.2f} s)" if type(seconds) in (int,float) and math.isfinite(seconds) and seconds>=0 else ''
+            lines.append(f"- {row.get('stage', 'Check')}: {row.get('state', 'Unknown')} — {row.get('detail', '')}{duration}")
     if deep_mode:
         options = sim.get("deep_options") or {}
         if sim.get("generation_allocation_seconds"):
@@ -626,7 +668,17 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.append("- Search styles: " + ("All five styles (shared budget)" if options.get("all_styles") else "Selected style"))
         library = record.get("candidate_library") or {}
         if library:
-            lines.append(f"- Candidate library: {library.get('saved', 0):,} saved; {library.get('accepted', 0):,} accepted; {library.get('rejected', 0):,} rejected by current eligibility/rules. Scores recalculated with current inputs.")
+            if library.get('type') == 'prepared_showdown':
+                lines.append(f"- Prepared roster library: {library.get('saved',0):,} saved; {library.get('valid_seen',0):,} valid rosters scanned; {library.get('accepted',0):,} admitted for fresh detailed SIM")
+                lines.append('- Library coverage: preparation '+('complete' if library.get('preparation_complete') else 'partial (explicitly allowed)')+'; current scan '+('complete' if library.get('scan_complete') else 'time limited')+'. Captain-balanced sampling is not full-library SIM or proof of portfolio feasibility.')
+                if library.get('full_screened'):
+                    lines.append(f"- Full overnight screening: all {library['full_screened']:,} currently legal rosters screened; {library['screening_reused']:,} retained leaders reused. Detailed SIM and audits run fresh.")
+                elif library.get('screening_reused'):
+                    lines.append(f"- Overnight screening: {library['screening_reused']:,} compatible sampled candidates reused; scan counts above describe original admission. Detailed SIM and independent audits run fresh.")
+                elif library.get('screening_miss'):
+                    lines.append('- Overnight screening not reused: '+str(library['screening_miss']))
+            else:
+                lines.append(f"- Candidate library: {library.get('saved', 0):,} saved; {library.get('accepted', 0):,} accepted; {library.get('rejected', 0):,} rejected by current eligibility/rules. Scores recalculated with current inputs.")
         if sim.get("style_candidate_counts"):
             lines.append("- Style candidates before deduplication: " + "; ".join(f"{name} {int(count):,}" for name, count in sim["style_candidate_counts"].items()))
         lines.append("- Output selection: " + str(options.get("selection_mode") or "Portfolio selection"))
@@ -685,13 +737,41 @@ def format_build_report(record: Mapping[str, Any]) -> str:
     if sim.get("kicker_opportunity_count"):
         lines.append(f"- Kicker opportunity forecasts: {sim['kicker_opportunity_count']} players use weekly attempts, accuracy and distance data (experimental)")
     if sim.get("specialist_model"):
-        lines.append("- Specialist scoring: shared possession events (experimental); K/DST projections guide event rates, not guaranteed SIM means")
-        lines.append("- Specialist limits: offense remains projection-based; event rates await historical calibration")
+        if sim['specialist_model'] == 'kicker-events-projection-defense-v2':
+            lines.append("- Specialist scoring: kicker opportunity events; defense uses projection-centered draws with game/opponent correlation and a -4 floor")
+            lines.append("- Specialist limits: defense event override disabled after forecast drift; kicker tails and defense distributions await historical calibration")
+        else:
+            lines.append("- Specialist scoring: shared possession events (experimental); K/DST projections guide event rates, not guaranteed SIM means")
+            lines.append("- Specialist limits: offense remains projection-based; event rates await historical calibration")
     if sim.get("volatility_model"):
         lines.append("- Scenario model: game scripts, role-aware player ranges, and guarded rare ceiling outcomes")
         cache = sim.get('scenario_cache') or {}
         if cache and cache.get('status') != 'disabled':
             lines.append(f"- Reusable scenarios: {cache.get('status')}; {_integer(cache.get('reused_scenarios')):,}/{_integer(cache.get('requested_scenarios')):,} reused. Current lineup scoring and rules still apply; independent audits remain fresh.")
+            if cache.get('reason'):
+                reason=str(cache['reason'])
+                if len(reason)>500 or any(token in reason for token in ('\\','/','\n','\r')):
+                    reason='Legacy cache error details withheld; rerun to record a categorized reason.'
+                lines.append('- Scenario cache reason: '+reason)
+            comparison=cache.get('comparison') or {}
+            if comparison:
+                from scenario_cache_diagnostics import LABELS
+                changed=[label for label in comparison.get('changed_components',[]) if label in LABELS]
+                if changed:
+                    lines.append('- Scenario cache comparison: differences from a recent recorded same-slate cache: '+', '.join(changed)+'. Diagnostic only; exact-input and integrity checks still decide reuse.')
+                elif comparison.get('status')=='No comparable receipt recorded':
+                    lines.append('- Scenario cache comparison: no comparable completed-cache receipt recorded for this slate yet.')
+                elif comparison.get('status')=='Compared with a recent same-slate receipt':
+                    lines.append('- Scenario cache comparison: recorded input components match, but no exact artifact was found. Additional metadata or an unavailable artifact may prevent reuse; recomputation still required.')
+                else:
+                    lines.append('- Scenario cache comparison unavailable; exact-input validation still applies.')
+            maintenance=cache.get('maintenance') or {}
+            if isinstance(maintenance,dict) and maintenance:
+                status=maintenance.get('status')
+                if status not in ('not needed','storage bound','cancelled','maintenance bound','space reclaimed','protected files or storage bound'):status='unavailable'
+                lines.append(f"- Scenario cache maintenance: {status}; {_integer(maintenance.get('retired_files'))} old artifacts retired; {_integer(maintenance.get('reclaimed_bytes'))/1024**2:.1f} MiB reclaimed; {_integer(maintenance.get('skipped_busy'))} busy artifacts preserved; {_integer(maintenance.get('available_bytes'))/1024**2:.1f} MiB available of {_integer(maintenance.get('store_limit_bytes'))/1024**2:.0f} MiB.")
+            if 'lookup_seconds' in cache:
+                lines.append(f"- Scenario cache overhead: lookup/verification {_number(cache.get('lookup_seconds')):.2f}s; frame I/O/finalization {_number(cache.get('io_seconds')):.2f}s; saved artifact {_integer(cache.get('stored_bytes'))/1024**2:.1f} MiB")
     capture = record.get('distribution_capture') or {}
     from captain_coverage import format_coverage
     lines.extend(format_coverage(record.get('captain_coverage') or {}))
@@ -706,9 +786,16 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             lines.append(f"- Repeatability shortlist saved: {bank['candidates']:,} candidates; bank {bank['bank_id'][:12]}. Open Settings > Ranking Repeatability.")
         elif bank:
             lines.append('- Repeatability shortlist was not saved; check local storage and rerun Deep.')
+        screening = record.get('screening_audit') or {}
+        if screening.get('status') == 'saved':
+            lines.append(f"- Screening audit saved: {screening['generated']:,} generated; {screening['salary_eligible']:,} salary eligible; {screening['retained']:,} retained; {screening['shortlisted']:,} shortlisted; coarse scoring {screening['screening_status']}. Audit-only file: history/screening-audits/{screening['filename']}.")
+        elif screening:
+            lines.append('- Screening audit not saved: ' + screening.get('reason', 'Unavailable.'))
         salary_filter = record.get('salary_filter') or {}
         if salary_filter:
             lines.append(f"- Showdown salary filter: {salary_filter.get('excluded', 0):,} candidates excluded before screening; minimum ${salary_filter.get('minimum', 0):,.0f}.")
+        if _number(salary_filter.get('generation_minimum')) > 0:
+            lines.append(f"- Fresh Showdown search enforced the ${salary_filter['generation_minimum']:,.0f} minimum during construction; final salary filtering remains active.")
         feasibility = record.get('portfolio_feasibility') or {}
         if feasibility:
             method = feasibility.get('method')
@@ -776,6 +863,10 @@ def format_build_report(record: Mapping[str, Any]) -> str:
                 f"Captain {_number(guardrails.get('captain_pct')):.0f}% max; "
                 f"combined K/DST Captain {_number(guardrails.get('specialist_captain_pct')):.0f}% max"
             )
+    from zero_qb_rules import text as zero_qb_text
+    lines.extend(zero_qb_text(portfolio))
+    from exposure_cap_diagnostics import text as cap_pressure_text
+    lines.extend(cap_pressure_text(portfolio.get('exposure_cap_diagnostic')))
     from portfolio_recovery import format_recovery
     lines.extend('- ' + line for line in format_recovery(portfolio.get('portfolio_recovery')))
     selected_sources = dict(sim.get("selected_sources") or {})
@@ -804,11 +895,19 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         lines.append("- None")
     from pipeline_audit import format_quarterback_pipeline, format_defense_pipeline
     lines.extend(format_quarterback_pipeline(sim.get("quarterback_pipeline") or {}))
+    if portfolio.get('captain_pool_adjustments'):
+        from captain_pool import adjustment_text
+        lines.append(adjustment_text(portfolio['captain_pool_adjustments']))
+    if portfolio.get('specialist_diagnostics'):
+        from specialist_diagnostics import text
+        lines.extend(text(portfolio['specialist_diagnostics']))
     lines.extend(format_defense_pipeline(sim.get("defense_pipeline") or {}))
     from field_diagnostics import format_field
     from projection_coverage import format_projection_coverage
     lines.extend(format_projection_coverage(record.get('projection_coverage') or {}))
     lines.extend(format_field(record.get('field_diagnostic') or {}))
+    if record.get('history_use_unscored'):
+        lines.append('- '+record['history_use_unscored']['reason']+' Profile '+record['history_use_unscored']['profile_id'][:12]+'.')
     from ownership_strategy import format_leverage
     lines.extend(format_leverage(record.get('ownership_leverage') or {}))
     lines.extend(format_ranked_groups(record.get("ranked_groups") or []))

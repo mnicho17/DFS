@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 
+from ownership_refresh_notice import describe as describe_ownership
 from PyQt5 import QtCore, QtGui, QtWidgets
 from saved_repair import BuildReceipt, signatures, validate_proposal
 
@@ -84,6 +85,7 @@ class OwnershipSimWorker(QtCore.QObject):
     finished = QtCore.pyqtSignal(dict)  # {"total":{k:pct},"cpt":{k:pct},"flex":{k:pct}} (pct=0-100)
 
     error = QtCore.pyqtSignal(str)
+    settled = QtCore.pyqtSignal()
 
 
 
@@ -91,13 +93,13 @@ class OwnershipSimWorker(QtCore.QObject):
 
         super().__init__()
 
-        self.players = players
+        self.players = deepcopy(players)
 
         self.mode = mode  # 'classic' or 'showdown'
 
         if sport == "NFL":
             from nfl_eligibility import eligible_players, apply_qb_eligibility
-            self.players = eligible_players(apply_qb_eligibility([dict(p) for p in players]), reject_locks=False)
+            self.players = eligible_players(apply_qb_eligibility([dict(p) for p in self.players]), reject_locks=False)
         self.num_sims = max(1, int(num_sims))
 
         self.salary_cap = float(salary_cap or 50000.0)
@@ -107,26 +109,28 @@ class OwnershipSimWorker(QtCore.QObject):
         self.sport = (sport or "NFL").strip().upper()
 
         self._cancel = False
+        self.cache_report = None
 
 
 
     @QtCore.pyqtSlot()
-
     def run(self) -> None:
-
         try:
-
-            result = self._simulate()
-
+            if self._cancel:
+                return
+            if getattr(self,'reuse_prepared',False):
+                from ownership_cache import estimate
+                result,self.cache_report=estimate(self,self._simulate)
+            else:
+                result = self._simulate()
             if not self._cancel:
-
                 self.finished.emit(result)
-
-        except Exception as e:
-
-            self.error.emit(str(e))
-
-
+        except Exception as exc:
+            if not self._cancel:
+                self.error.emit(str(exc))
+        finally:
+            # Every terminal path, including cancellation, retires the thread.
+            self.settled.emit()
 
     def cancel(self) -> None:
 
@@ -269,6 +273,12 @@ class OwnershipSimWorker(QtCore.QObject):
 
 
     def _simulate(self) -> Dict[str, Dict[str, float]]:
+
+        if self.mode == 'showdown' and self.sport == 'NFL':
+            from showdown_ownership import estimate_ownership
+            return estimate_ownership(self.players, self.num_sims, salary_cap=self.salary_cap,
+                                      cancelled=lambda: self._cancel,
+                                      progress=lambda done, total, text: self.progress.emit(done, total, text))
 
         start = time.time()
 
@@ -1039,9 +1049,12 @@ class LineupBuildWorker(QtCore.QObject):
 
         repair_source: str = "",
         candidate_library: str = "",
+        automatic_libraries: tuple = (),
+        library_folder: str = "",
         scenario_cache: bool = False,
 
         compute_telemetry: bool = True,
+        allow_partial_library: bool = False,
 
     ):
 
@@ -1068,6 +1081,7 @@ class LineupBuildWorker(QtCore.QObject):
         self.salary_strategy = salary_strategy or "Near Cap"
 
         self.portfolio_rules = dict(portfolio_rules or {})
+        self.captain_adjustments = []
 
         self.sim_enabled = bool(sim_enabled)
 
@@ -1105,12 +1119,58 @@ class LineupBuildWorker(QtCore.QObject):
 
         self.scenario_cache = scenario_cache
         self.candidate_library = candidate_library
+        self.automatic_libraries = automatic_libraries
+        self.library_folder = library_folder
+        self.allow_partial_library = allow_partial_library
         self.library_candidates = []
         self.library_report = {}
 
         self._cancel_event = threading.Event()
 
 
+
+    def _load_candidate_library(self, profile):
+        if self.retained_lineups:
+            raise ValueError("Clear the candidate library before repairing an existing portfolio.")
+        if self.sport != "NFL" or not self.sim_enabled or not self.compute_mode.casefold().startswith("deep"):
+            raise ValueError("Candidate libraries require NFL Deep with SIM enabled.")
+        from showdown_library import is_prepared_library,load_bounded
+        if is_prepared_library(self.candidate_library):
+            if self.kind != 'showdown':
+                raise ValueError('Prepared Showdown libraries require NFL Showdown.')
+            from compute_settings import deep_candidate_budget as prepared_candidate_budget
+            try:
+                from showdown_screening import load_screening,settings as screening_settings
+                screening_diagnostic={}
+                cached=None if self.allow_partial_library else load_screening(self.candidate_library,self.players,
+                    limit=prepared_candidate_budget(self.num_lineups,self.deep_options,False),
+                    salary_cap=self.salary_cap,salary_strategy=self.salary_strategy,rules=self.portfolio_rules,
+                    screening=screening_settings(self.deep_options,self.sim_scenarios,profile),cancelled=self._cancel_event.is_set,
+                    diagnostic=screening_diagnostic)
+                self.library_candidates,self.library_report=cached or load_bounded(self.candidate_library,self.players,
+                    limit=prepared_candidate_budget(self.num_lineups,self.deep_options,False),
+                    seconds=max(.1,min(60 if str(self.candidate_library).lower().endswith('.sdfull') else 30,self.deep_time_limit_seconds*.1)),
+                    salary_cap=self.salary_cap,salary_strategy=self.salary_strategy,rules=self.portfolio_rules,
+                    allow_partial=self.allow_partial_library,cancelled=self._cancel_event.is_set,
+                    progress=lambda text:self.progress.emit(0,0,text))
+                if not cached:
+                    self.library_report['screening_miss']=screening_diagnostic.get('reason','Partial libraries require fresh screening.')
+                from compute_ledger import library_loaded
+                library_loaded(dict(self.library_report,rejected=0,input_id='prepared_roster_library'),self.library_candidates)
+            except InterruptedError:
+                if not self._cancel_event.is_set():raise
+                self._emit_finished(dict(kind=self.kind,sport=self.sport,lineups=[],requested=self.num_lineups,
+                    cancelled=True,portfolio_report={},sim_report={},timing_report={}))
+                return
+            self.progress.emit(0,len(self.library_candidates),f'Prepared library: {len(self.library_candidates):,} candidates sampled for fresh SIM')
+        else:
+            from candidate_library import load_candidates
+            self.library_candidates, self.library_report = load_candidates(self.candidate_library,
+                self.players, kind=self.kind, salary_cap=self.salary_cap,
+                salary_strategy=self.salary_strategy, rules=self.portfolio_rules)
+            self.progress.emit(0, len(self.library_candidates),
+                f"Library: {len(self.library_candidates):,} candidates accepted; {self.library_report['rejected']:,} rejected")
+        return True
 
     def request_cancel(self) -> None:
 
@@ -1134,21 +1194,9 @@ class LineupBuildWorker(QtCore.QObject):
                 if self.kind == 'showdown' and not self.compute_mode.casefold().startswith('deep'):
                     raise ValueError('Contest-specific Showdown optimization requires Deep with SIM enabled.')
 
-            if self.candidate_library:
-                if self.retained_lineups:
-                    raise ValueError("Clear the candidate library before repairing an existing portfolio.")
-                if self.sport != "NFL" or not self.sim_enabled or not self.compute_mode.casefold().startswith("deep"):
-                    raise ValueError("Candidate libraries require NFL Deep with SIM enabled.")
-                from candidate_library import load_candidates
-                self.library_candidates, self.library_report = load_candidates(self.candidate_library,
-                    self.players, kind=self.kind, salary_cap=self.salary_cap,
-                    salary_strategy=self.salary_strategy, rules=self.portfolio_rules)
-                self.progress.emit(0, len(self.library_candidates),
-                    f"Library: {len(self.library_candidates):,} candidates accepted; {self.library_report['rejected']:,} rejected")
-            if self.sport == "NFL":
-                from nfl_eligibility import eligible_players, apply_qb_eligibility
-                self.players = apply_qb_eligibility([dict(p) for p in self.players])
-                eligible_players(self.players)
+            from build_workflow import prepare_build
+            if not prepare_build(self):
+                return
             if self.portfolio_rules.get('qb_coverage'):
                 if self.sport != 'NFL':
                     raise ValueError('QB coverage requires NFL.')
@@ -2633,6 +2681,7 @@ class LineupBuildWorker(QtCore.QObject):
                     "refinement_swaps", "duplication_refinement_swaps", "refinement_attempts",
 
                     "refinement_stop_reason", "refinement_seconds", "effective_min_unique",
+                    "specialist_diagnostics", "exposure_cap_diagnostic",
 
                 ):
 
@@ -2866,6 +2915,24 @@ class LineupBuildWorker(QtCore.QObject):
 
             })
 
+        except InterruptedError:
+            if self._cancel_event.is_set():
+                if (self.retained_lineups and self.sport == 'NFL' and self.kind == 'showdown'
+                        and self.sim_enabled and self.compute_mode.casefold().startswith('deep')
+                        and self.repair_source != 'saved' and not self.field_calibration.get('showdown_field_profile')):
+                    # Preserve the established retained-portfolio cancellation
+                    # receipt. The stopped Deep path validates retained rows and
+                    # reports incomplete validation without searching or SIM.
+                    from showdown_simulation import run_deep_showdown
+                    result = run_deep_showdown(self, _deep_shortlist)
+                    result['contest_objective'] = self.contest_objective
+                    result.setdefault('sim_report', {})['contest_objective'] = self.contest_objective
+                    self._emit_finished(result)
+                else:
+                    self._finish_cancelled_repair()
+            else:
+                self.error.emit(traceback.format_exc())
+
         except PortfolioSelectionShortage as exc:
             if self.repair_source == "saved" and self._cancel_event.is_set():
                 self._finish_cancelled_repair()
@@ -2873,7 +2940,7 @@ class LineupBuildWorker(QtCore.QObject):
                 self.error.emit(str(exc))
 
         except Exception:
-            if self.repair_source == "saved" and self._cancel_event.is_set():
+            if self._cancel_event.is_set() and (self.repair_source == "saved" or self.field_calibration.get('showdown_field_profile')):
                 self._finish_cancelled_repair()
             else:
                 self.error.emit(traceback.format_exc())
@@ -2913,6 +2980,19 @@ class LineupBuildWorker(QtCore.QObject):
         if self.contest_profile:
             from contest_strategy import strategy_label
             payload.setdefault('sim_report',{})['selection_strategy'] = strategy_label(self.contest_profile)
+        profile = self.field_calibration.get('showdown_field_profile')
+        if profile and not payload.get('cancelled') and not self._cancel_event.is_set():
+            from learning_db import history_db_path
+            from showdown_history_field import revalidate_profile
+            revalidate_profile(profile, history_db_path(), self.players, self.field_preset, self._cancel_event.is_set,
+                lambda text: self.progress.emit(0, self.num_lineups, 'Final history evidence check: '+text))
+        if getattr(self, 'captain_adjustments', []) and not payload.get('cancelled'):
+            report = payload.setdefault('portfolio_report', {})
+            report['captain_pool_adjustments'] = self.captain_adjustments
+            report['text'] = format_portfolio_report_text(report)
+        if hasattr(self, 'preparation'):
+            payload.setdefault('timing_report', {})['build_preparation'] = self.preparation.report(
+                cancelled=bool(payload.get('cancelled') or self._cancel_event.is_set()))
         finish_worker(payload)
         self.finished.emit(payload)
 
@@ -4132,6 +4212,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.attach_salary_button.clicked.connect(self.review_salary_matches)
 
         buttons.addWidget(self.attach_salary_button)
+        self.sim_build_review_button = QtWidgets.QPushButton("Review SIM Builds")
+        self.sim_build_review_button.setObjectName("reviewSIMValidationBuildsButton")
+        self.sim_build_review_button.clicked.connect(lambda: self.review_sim_builds())
+        buttons.addWidget(self.sim_build_review_button)
+
 
 
 
@@ -4196,14 +4281,102 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
         layout.addWidget(self.import_status_label)
 
-        self.refresh_report()
+        self._report_pending = False
+        self._initial_report_started = False
+        self._initial_report_timer = QtCore.QTimer(self)
+        self._initial_report_timer.setSingleShot(True)
+        self._initial_report_timer.timeout.connect(self._load_initial_report)
+        self.summary.setText('Preparing results report…')
+        self.history_refresh = getattr(parent, 'history_refresh', None)
+        self._owns_history_refresh = self.history_refresh is None
+        self._close_after_history_refresh = False
+        if self.history_refresh is None:
+            from history_refresh_ui import HistoryRefreshController
+            self.history_refresh = HistoryRefreshController(self.learning_settings, self.db_path, self)
+        refresh_row = QtWidgets.QHBoxLayout()
+        self.auto_history = QtWidgets.QCheckBox('Refresh history automatically (startup and folder changes)')
+        self.auto_history.setChecked(self.history_refresh.enabled())
+        self.auto_history.toggled.connect(self.history_refresh.set_enabled)
+        refresh_row.addWidget(self.auto_history)
+        self.history_refresh_button = QtWidgets.QPushButton('Check now')
+        self.history_refresh_button.clicked.connect(self.refresh_username_history)
+        refresh_row.addWidget(self.history_refresh_button)
+        self.history_cancel_button = QtWidgets.QPushButton('Pause current check')
+        self.history_cancel_button.clicked.connect(self.history_refresh.cancel)
+        refresh_row.addWidget(self.history_cancel_button)
+        layout.addLayout(refresh_row)
+        self.history_status = QtWidgets.QPlainTextEdit()
+        self.history_status.setReadOnly(True)
+        self.history_status.setMaximumHeight(100)
+        layout.addWidget(self.history_status)
+        self.history_refresh.changed.connect(self.update_history_status)
+        self.history_refresh.completed.connect(self._history_refresh_completed)
+        self.update_history_status()
+        from history_workspace_ui import install_history_workspace
+        install_history_workspace(self, layout)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._initial_report_started:
+            self._initial_report_started = True
+            self._initial_report_timer.start(0)
 
+    def _load_initial_report(self):
+        if self.isVisible():
+            self.refresh_report()
+        else:
+            self._initial_report_started = False
+
+    def _history_refresh_completed(self):
+        if self._close_after_history_refresh:
+            QtCore.QTimer.singleShot(0, self.reject)
+        else:
+            self.coverage.reload()
+            if hasattr(self, 'refresh_history_overview'):
+                self.refresh_history_overview()
+            self.refresh_report()
+
+    def refresh_username_history(self):
+        from history_workspace_ui import history_update_view
+        view=history_update_view(self.history_refresh,self._import_thread is not None)
+        if not view['can_check']:return
+        if view['action']=='sources':
+            self.history_sources_toggle.setChecked(True)
+            self.results_folder.setFocus()
+            return
+        if self._import_thread is not None:
+            return
+        self.learning_settings.setValue('learning/dk_username', self.username_edit.text().strip())
+        self.learning_settings.sync()
+        self.history_refresh.start()
+
+    def update_history_status(self):
+        text = self.history_refresh.text
+        watch_message=self.history_refresh.watch.message
+        if self.history_refresh.watch.pending or self.history_refresh.watch.paused:
+            state_line=self.history_refresh.status_line()
+            if state_line!=watch_message and not text.startswith(state_line):text=state_line+'\n'+text
+        if watch_message and not text.endswith(watch_message):text+='\n'+watch_message
+        self.history_status.setPlainText(text)
+        from history_workspace_ui import history_update_view
+        view=history_update_view(self.history_refresh,self._import_thread is not None)
+        if hasattr(self,'history_update_summary'):self.history_update_summary.setText(view['detail'])
+        self.history_refresh_button.setText(view['label']);self.history_refresh_button.setEnabled(view['can_check'])
+        self.history_refresh_button.setToolTip('Recheck configured folders with the existing full importer, indexing and reconciliation. Automatic unchanged checks retain their fast path.')
+        self.history_cancel_button.setEnabled(view['can_pause'])
+        busy = self.history_refresh.busy
+        self._set_import_controls(not busy and self._import_thread is None)
 
     def open_opponent_portfolios(self):
         from opponent_analysis_ui import OpponentAnalysisDialog
-        dialog = OpponentAnalysisDialog(self.username_edit.text().strip(), self.results_folder.text(), self)
-        dialog.exec_()
+        if self._import_thread is not None or self.history_refresh.busy:
+            return
+        self.history_refresh.report_started()
+        try:
+            dialog = OpponentAnalysisDialog(self.username_edit.text().strip(), self.results_folder.text(), self, db_path=self.db_path)
+            dialog.exec_()
+        finally:
+            self.history_refresh.report_finished()
 
     def start_performance_review(self, stats=False):
         if self._import_thread is not None:
@@ -4231,10 +4404,32 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.refresh_report()
 
     def refresh_report(self) -> None:
+        if self._close_after_import or self._close_after_history_refresh:
+            return
+        if self._import_thread is not None or self.history_refresh.busy:
+            self._report_pending = True
+            return
+        from learning_report_ui import LearningReportWorker
+        self._report_pending = False
+        worker = LearningReportWorker(generate_learning_report, self.username_edit.text().strip(), self.db_path)
+        self._initial_report_started = True
+        self._start_background_import(worker, self._on_report_finished)
+        self._import_job['report'] = True
+        self.import_status_label.setText('Building report and verifying saved evidence…')
+
+    def _on_report_finished(self, result):
+        if result.get('cancelled'):
+            self.summary.setText('Report refresh cancelled. Refresh to try again.')
+            return
+        self._apply_report(result['report'])
+
+    def _on_report_error(self, message):
+        logger.error('Learning report refresh failed: %s', message)
+        self.summary.setText(f'Results report is temporarily unavailable: {message}. Refresh to retry.')
+
+    def _apply_report(self, payload):
 
         try:
-
-            payload = generate_learning_report(username=self.username_edit.text().strip(), db_path=self.db_path)
 
             roi = payload.get("roi_pct")
 
@@ -4273,6 +4468,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.results_folder.setText(folder)
             self.learning_settings.setValue("learning/results_folder", folder)
             self.learning_settings.sync()
+            self.history_refresh.watch.configuration_changed()
 
     def choose_salary_folder(self) -> None:
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Choose salary folder", self.salary_folder.text())
@@ -4280,11 +4476,13 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.salary_folder.setText(folder)
             self.learning_settings.setValue("learning/salary_folder", folder)
             self.learning_settings.sync()
+            self.history_refresh.watch.configuration_changed()
 
     def clear_salary_folder(self) -> None:
         self.salary_folder.clear()
         self.learning_settings.setValue("learning/salary_folder", "")
         self.learning_settings.sync()
+        self.history_refresh.watch.configuration_changed()
 
     def _suggest_risk_source(self, index) -> None:
         if self.results_tabs.widget(index) is self.risk:
@@ -4330,6 +4528,38 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         if result.get('committed'):
             text += f" Elapsed: {result['seconds']:.1f}s. Timing recorded by the compute ledger when storage is available."
         self.coverage.finish(text)
+        if result.get('committed') and not result.get('cancelled'):
+            self.refresh_report()
+
+    def review_sim_builds(self, import_id=None):
+        if self._import_thread is not None or self.history_refresh.busy:
+            return
+        from distribution_build_selection_ui import SIMBuildWorker, SIMBuildDialog
+        worker = SIMBuildWorker(self.db_path, import_id)
+        cancelled = worker.cancelled
+        def ready(result):
+            if result.get('cancelled') or cancelled.is_set():
+                return
+            if import_id is None:
+                imports = result.get('imports', [])
+                if not imports:
+                    QtWidgets.QMessageBox.information(self, 'SIM Builds', 'Save a qualified salary/results pairing first.')
+                    return
+                labels = [str(i+1)+'. '+r[1] for i,r in enumerate(imports)]
+                name, ok = QtWidgets.QInputDialog.getItem(self, 'SIM Builds', 'Results contest', labels, 0, False)
+                if ok:
+                    self.review_sim_builds(imports[labels.index(name)][0])
+            else:
+                dialog = SIMBuildDialog(result, self)
+                if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                    save_worker = SIMBuildWorker(self.db_path, import_id, dialog.choice)
+                    self._start_background_import(save_worker, self._on_sim_build_saved)
+        self._start_background_import(worker, ready)
+
+    def _on_sim_build_saved(self, result):
+        if result.get('committed'):
+            self.import_status_label.setText(result['message'])
+            self.refresh_report()
 
     def review_salary_matches(self, result_hash='') -> None:
         if self._import_thread is not None:
@@ -4345,12 +4575,18 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             from analysis_imports_ui import SalaryMatchesDialog, CombinedImportWorker
             dialog = SalaryMatchesDialog(self, db_path=self.db_path, state=result['state'], result_hash=result_hash)
             if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selection:
-                self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip(), db_path=self.db_path), self._on_combined_import_finished)
+                self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip(), db_path=self.db_path, refresh_history=True), self._on_combined_import_finished)
         self._start_background_import(worker, ready)
 
     def _on_combined_import_finished(self, result) -> None:
         from analysis_imports_ui import import_summary
         message = import_summary(result)
+        self.history_refresh.watch.accept_result(result)
+        if result.get('username_history'):
+            from history_refresh_ui import refresh_summary
+            self.history_refresh.text = refresh_summary(result)
+            self.learning_settings.setValue('learning/last_history_refresh', self.history_refresh.text)
+            self.update_history_status()
         self.import_status_label.setText(
             ("Import cancelled. " if result.get('cancelled') else "Import complete. ") +
             f"{result.get('results_imported', 0)} new results, {result.get('salaries_imported', 0)} new salaries, "
@@ -4373,7 +4609,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.learning_settings.setValue("learning/dk_username", self.username_edit.text().strip())
             self.learning_settings.sync()
             self._start_background_import(CombinedImportWorker(self.results_folder.text(), self.salary_folder.text(),
-                self.username_edit.text().strip(), db_path=self.db_path), self._on_combined_import_finished)
+                self.username_edit.text().strip(), db_path=self.db_path, refresh_history=True), self._on_combined_import_finished)
 
     def import_results(self) -> None:
 
@@ -4434,7 +4670,7 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def _start_background_import(self, worker: QtCore.QObject, finished_slot: Any) -> None:
-        if self._import_thread is not None:
+        if self._import_thread is not None or (getattr(self, 'history_refresh', None) and self.history_refresh.busy):
             worker.deleteLater()
             return
         self._set_import_controls(False)
@@ -4448,6 +4684,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_worker = worker
         job = dict(thread=self._import_thread, completion=None)
         self._import_job = job
+        self.history_refresh.report_started()
+        job['history_protected'] = True
         self._import_worker.moveToThread(self._import_thread)
         self._import_thread.started.connect(self._import_worker.run)
         self._import_worker.progress.connect(lambda done, total, text: self._job_progress(job, done, total, text))
@@ -4459,13 +4697,18 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_worker.error.connect(self._import_worker.deleteLater)
         self._import_thread.finished.connect(lambda: self._on_import_thread_finished(job))
         self._import_thread.finished.connect(self._import_thread.deleteLater)
+        from task_dashboard import watch_task
+        watch_task(self, 'Results / learning operation', self._import_worker, self._import_thread,
+                   self.cancel_import)
         self._import_thread.start()
 
     def _set_import_controls(self, enabled):
+        if hasattr(self, 'history_explore'):
+            self.history_explore.setEnabled(enabled)
         self.coverage.setEnabled(enabled)
         self.risk.setEnabled(enabled)
         self.hindsight.setEnabled(enabled)
-        for control in (self.import_new_button, self.import_button, self.attach_salary_button,
+        for control in (self.sim_build_review_button, self.import_new_button, self.import_button, self.attach_salary_button,
                         self.refresh_button, self.analyze_button, self.stats_button, self.opponents_button,
                         self.choose_results_button, self.choose_salary_button, self.clear_salary_button,
                         self.save_username_button, self.username_edit, self.stats_season,
@@ -4481,6 +4724,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
     def _job_completed(self, job, handler, payload):
         if self._import_job is job and job['completion'] is None:
+            if job.get('report'):
+                if job.get('cancelled'):
+                    handler, payload = self._on_report_finished, dict(cancelled=True)
+                elif handler == self._on_import_error:
+                    handler = self._on_report_error
             job['completion'] = (handler, payload)
 
     def export_review_report(self) -> None:
@@ -4558,7 +4806,8 @@ class ResultsLearningDialog(QtWidgets.QDialog):
     def cancel_import(self) -> None:
 
         if self._import_worker is not None:
-
+            if self._import_job.get('report'):
+                self._import_job['cancelled'] = True
             self._import_worker.request_cancel()
             self.coverage.progress('Cancellation requested; waiting for the transaction to finish')
             self.risk.progress('Cancellation requested; waiting for worker retirement')
@@ -4571,7 +4820,9 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def _finish_import_ui(self) -> None:
-        self._set_import_controls(self._import_thread is None)
+        self._set_import_controls(self._import_thread is None and not (getattr(self, 'history_refresh', None) and self.history_refresh.busy))
+        if hasattr(self, 'history_refresh_button'):
+            self.update_history_status()
 
         self.import_progress.setVisible(False)
 
@@ -4677,8 +4928,11 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self._import_thread = None
         self._import_worker = None
         self._import_job = None
+        if job.get('history_protected') or job.get('report'):
+            self.history_refresh.report_finished(resume=not (self._owns_history_refresh and self._close_after_import))
         self._finish_import_ui()
-        self.coverage.reload()
+        if not job.get('report'):
+            self.coverage.reload()
         if self._close_after_import:
             if self.hindsight.started is not None:
                 self.hindsight.finish({},cancelled=True)
@@ -4689,11 +4943,24 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             QtCore.QTimer.singleShot(0, self.accept)
         elif job['completion'] is not None:
             handler, payload = job['completion']
+            if job.get('report') and job.get('cancelled'):
+                handler, payload = self._on_report_finished, dict(cancelled=True)
             handler(payload)
+        if self._report_pending and not self._close_after_import and self._import_thread is None:
+            self.refresh_report()
+        if hasattr(self, 'refresh_history_overview'):
+            self.refresh_history_overview()
 
 
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        if self._owns_history_refresh:
+            self.history_refresh.watch.shutdown()
+        if self._owns_history_refresh and self.history_refresh.busy:
+            self._close_after_history_refresh = True
+            self.history_refresh.cancel()
+            event.ignore()
+            return
 
         if self._import_thread is not None:
 
@@ -4710,6 +4977,12 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
 
     def reject(self) -> None:
+        if self._owns_history_refresh:
+            self.history_refresh.watch.shutdown()
+        if self._owns_history_refresh and self.history_refresh.busy:
+            self._close_after_history_refresh = True
+            self.history_refresh.cancel()
+            return
 
         if self._import_thread is not None:
 
@@ -6033,9 +6306,10 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         intro = QtWidgets.QLabel(
 
-            "Recent lineup builds are saved locally so timing and settings can be compared between app releases. "
-
-            "Reports can include player names, lineup details and strategy inputs; they exclude file paths and API keys."
+            "Review one recorded build across all tabs, or select two result receipts to compare. "
+            "Copy/export use the Full report or the selected two-build comparison. "
+            "Reports include player/strategy details; session-only failed-attempt errors may include traceback paths. "
+            "Current portfolio tools are separate from the selected historical receipt."
 
         )
 
@@ -6065,7 +6339,9 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         self.report.setFont(QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont))
 
-        splitter.setSizes([390, 590])
+        from build_review_ui import install_review
+        install_review(self, splitter)
+        splitter.setSizes([330, 850])
 
         layout.addWidget(splitter, 1)
 
@@ -6086,6 +6362,10 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         self.copy_button = buttons.addButton("Copy Selected Report", QtWidgets.QDialogButtonBox.ActionRole)
 
         self.copy_button.setObjectName("copySelectedBuildReport")
+        from build_review_ui import export_review
+        self.export_button = buttons.addButton('Export report…', QtWidgets.QDialogButtonBox.ActionRole)
+        self.export_button.setObjectName('exportBuildReview')
+        self.export_button.clicked.connect(lambda:export_review(self))
 
         self.copy_button.clicked.connect(self.copy_selected_report)
 
@@ -6096,6 +6376,11 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         self.compare_button.setToolTip("Select exactly two build-history rows, then compare their timing, settings, and SIM portfolio metrics.")
 
         self.compare_button.clicked.connect(self.compare_selected)
+        self.current_tools_button = buttons.addButton('Current portfolio tools…', QtWidgets.QDialogButtonBox.ActionRole)
+        self.current_tools_button.setEnabled(hasattr(self.parent(), 'on_portfolio_summary'))
+        self.current_tools_button.setToolTip('Open existing Insights/repair tools for the current saved or generated portfolio, separate from the selected historical receipt.')
+        self.current_tools_button.clicked.connect(lambda:self.parent().on_portfolio_summary())
+
 
         self.clear_button = buttons.addButton("Clear History", QtWidgets.QDialogButtonBox.DestructiveRole)
 
@@ -6122,10 +6407,17 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
         self.history_list.clear()
 
         records = load_build_history()
+        has_saved_records = bool(records)
+        latest = getattr(self.parent(), 'last_build_diagnostic', None)
+        if latest and not any(row == latest for row in records):
+            records = [deepcopy(latest)] + records
+        failure = getattr(self.parent(), '_last_build_failure', None)
+        if failure:
+            records = [deepcopy(failure)] + records
 
         for record in records:
 
-            item = QtWidgets.QListWidgetItem(build_history_label(record))
+            item = QtWidgets.QListWidgetItem('Latest failed attempt (this session)' if record.get('record_type') == 'failed_attempt' else build_history_label(record))
 
             item.setData(QtCore.Qt.UserRole, record)
 
@@ -6135,7 +6427,7 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         self.copy_button.setEnabled(has_records)
 
-        self.clear_button.setEnabled(has_records)
+        self.clear_button.setEnabled(has_saved_records)
 
         self.compare_button.setEnabled(False)
 
@@ -6150,6 +6442,8 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
             self.report.setPlainText("No completed lineup builds have been recorded yet.")
 
             self.note.setText("Generate lineups to create the first local build report.")
+            from build_review_ui import refresh_review
+            refresh_review(self, {})
 
 
 
@@ -6171,7 +6465,9 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         record = self.selected_record()
 
-        self.report.setPlainText(format_build_report(record) if record else "Select a build to view its report.")
+        from build_review_ui import report_text, refresh_review
+        self.report.setPlainText(report_text(record))
+        refresh_review(self, record)
 
         self.copy_button.setEnabled(bool(record))
 
@@ -6179,7 +6475,9 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
     def _update_compare_button(self) -> None:
 
-        self.compare_button.setEnabled(len(self.history_list.selectedItems()) == 2)
+        selected = self.history_list.selectedItems()
+        self.compare_button.setEnabled(len(selected) == 2 and all(
+            item.data(QtCore.Qt.UserRole).get('record_type') != 'failed_attempt' for item in selected))
 
 
 
@@ -6187,7 +6485,7 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
 
         items = self.history_list.selectedItems()
 
-        if len(items) != 2:
+        if len(items) != 2 or any(item.data(QtCore.Qt.UserRole).get('record_type') == 'failed_attempt' for item in items):
 
             self.note.setText("Select exactly two build rows to compare.")
 
@@ -6202,6 +6500,8 @@ class BuildDiagnosticsDialog(QtWidgets.QDialog):
             return
 
         self.report.setPlainText(format_build_comparison(records[0], records[1]))
+        self.review_panels['comparisons'].setPlainText(self.report.toPlainText())
+        self.review_tabs.setCurrentWidget(self.review_panels['comparisons'])
 
         self.copy_button.setEnabled(True)
 
@@ -6962,8 +7262,31 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
         self._build_ui()
+        from history_refresh_ui import HistoryRefreshController
+        from learning_db import history_db_path
+        self.history_refresh = HistoryRefreshController(self.app_settings, history_db_path(), self)
+        self._close_after_history = False
+        self.history_refresh.changed.connect(lambda: self.status.showMessage(self.history_refresh.status_line()))
+        self.history_refresh.completed.connect(self._history_refresh_retired)
+        QtCore.QTimer.singleShot(0, self.history_refresh.startup)
+        from background_queue import BackgroundQueue
+        self.background_queue = BackgroundQueue(self)
+        from preparation_readiness import ReadinessRecords
+        self.slate_readiness = ReadinessRecords(self.app_settings,self)
+        from idle_preparation_ui import IdlePreparationController
+        self.idle_preparation = IdlePreparationController(self)
+        from idle_backup_ui import IdleBackupController
+        from pathlib import Path
+        self.idle_backup = IdleBackupController(self, self.app_settings, Path(history_db_path()).parent)
+        self._close_after_backup = False
+        from preparation_readiness import install_summary
+        install_summary(self)
+        from slate_picker import SlateDiscoveryController
+        self.slate_discovery = SlateDiscoveryController(self, Path(history_db_path()).parent / 'slate-catalog.sqlite')
 
-
+    def _history_refresh_retired(self):
+        if self._close_after_history:
+            QtCore.QTimer.singleShot(0, self.close)
 
     # ---------------- UI ----------------
 
@@ -6974,6 +7297,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         root = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
 
         root.setObjectName("workspaceSplitter")
+        root.setHandleWidth(8)
 
         self.workspace_splitter = root
 
@@ -7097,7 +7421,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         btn_own_sim.setToolTip("Run a lineup simulation to estimate slate ownership (uses projections/value + salary cap constraints).")
 
-        btn_own_sim.clicked.connect(self.on_recalc_ownership_sim)
+        from ownership_ui import retry_ownership
+        btn_own_sim.clicked.connect(lambda:retry_ownership(self))
 
         row1.addWidget(btn_own_sim)
 
@@ -7331,6 +7656,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         row2.addWidget(self.combo_field_preset)
 
+        self.chk_showdown_history = QtWidgets.QCheckBox("Use historical field (experimental)")
+        self.chk_showdown_history.setToolTip("Deep only. Prepare a verified profile for this slate and entry target; builds disclose application or fallback.")
+        self.btn_showdown_history = QtWidgets.QPushButton("Prepare field history…")
+        self.btn_showdown_history.clicked.connect(self.on_prepare_showdown_history)
+        row2.addWidget(self.chk_showdown_history)
+        row2.addWidget(self.btn_showdown_history)
+
 
 
         self.lbl_nfl_compute_mode = QtWidgets.QLabel("Build depth")
@@ -7466,6 +7798,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
         btn_cpt_lock = QtWidgets.QPushButton("CPT Lock")
+        btn_cpt_lock.setToolTip('Select one Captain for all lineups, or multiple Captains as a pool. Build-local exposure adjustments and allocated lineup counts are shown in the report.')
 
         btn_cpt_lock.clicked.connect(lambda: self.apply_tags(mode="cpt_lock"))
 
@@ -7764,6 +8097,18 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         brand.setObjectName("workspaceBrand")
 
         command_layout.addWidget(brand)
+        from app_version import identity, label, RELEASE_URL
+        from html import escape
+        build = identity()
+        self.lbl_app_version = QtWidgets.QLabel(
+            '<a style="color: #C7D2E3;" href="' + RELEASE_URL + '">' + escape(label(build)) + '</a>')
+        self.lbl_app_version.setObjectName("appVersionLabel")
+        self.lbl_app_version.setOpenExternalLinks(True)
+        self.lbl_app_version.setToolTip(
+            "Running " + build['source'] + " build: " + label(build)
+            + "\nClick to compare with the latest published release. Source builds may be newer than that release.")
+        command_layout.addWidget(self.lbl_app_version)
+
 
         command_layout.addSpacing(8)
 
@@ -7821,15 +8166,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         settings_menu.addSection("Data")
 
-        settings_menu.addAction("Long Search / Resume...", self.on_long_search)
         settings_menu.addAction("Ranking Repeatability...", self.on_ranking_repeatability)
         from core_plays_ui import open_core_plays
         settings_menu.addAction("Core Plays...", lambda: open_core_plays(self))
         settings_menu.addAction("Ownership & Leverage...", self.on_ownership_leverage)
         settings_menu.addAction("Ownership Sensitivity...", self.on_ownership_sensitivity)
         settings_menu.addAction("Projection Sensitivity...", self.on_projection_sensitivity)
-        settings_menu.addAction("Load Candidate Library...", self.on_load_candidate_library)
-        settings_menu.addAction("Clear Candidate Library", self.on_clear_candidate_library)
+        settings_menu.addAction("Showdown Captain Pool...", self.on_captain_pool)
+        from preparation_status_ui import open_preparation_status
+        settings_menu.addAction("Preparation...", lambda:open_preparation_status(self))
         settings_menu.addAction("Open Automatic Build Archives...", self.on_open_build_archives)
         settings_menu.addAction("Save Build Snapshot...", self.on_save_snapshot)
 
@@ -7888,9 +8233,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
+        from idle_backup_ui import open_backups
+        settings_menu.addAction('Backups…', lambda:open_backups(self))
+
         settings_menu.addSection("Workspace")
 
-        self.action_show_build_controls = settings_menu.addAction("Show Build Controls")
+        self.action_show_build_controls = settings_menu.addAction("Advanced Build Controls")
 
         self.action_show_build_controls.setObjectName("showBuildControlsAction")
 
@@ -7977,6 +8325,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         live_strip_layout.addWidget(self.lbl_readiness)
 
         left_layout.addWidget(live_strip)
+        from task_dashboard import install_dashboard
+        install_dashboard(self, left_layout)
+        self.lbl_ownership_source = QtWidgets.QLabel()
+        self.lbl_ownership_source.setObjectName("ownershipSourceStatus")
+        self.lbl_ownership_source.setWordWrap(True)
+        self.lbl_ownership_source.hide()
+        left_layout.addWidget(self.lbl_ownership_source)
 
 
 
@@ -7988,7 +8343,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self.tabs_workspace_controls.setObjectName("workspaceControlTabs")
 
-        self.tabs_workspace_controls.setMaximumHeight(230)
+        self.tabs_workspace_controls.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Maximum)
 
 
 
@@ -8001,11 +8356,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         strategy_grid.setHorizontalSpacing(8)
 
         strategy_grid.setVerticalSpacing(6)
+        strategy_grid.setAlignment(QtCore.Qt.AlignTop)
 
         from build_controls_ui import setup_build_controls
         setup_build_controls(self, strategy_panel, strategy_grid)
 
-        self.tabs_workspace_controls.addTab(strategy_panel, "Build")
+        from simple_build_ui import advanced_scroll_page
+        self.tabs_workspace_controls.addTab(advanced_scroll_page(strategy_panel), "Build")
 
 
 
@@ -8024,6 +8381,17 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         portfolio_grid.addWidget(self.spin_portfolio_unique, 0, 1)
 
         portfolio_grid.addWidget(self.chk_portfolio_balance, 0, 2, 1, 2)
+
+        self.spin_zero_qb_max = QtWidgets.QDoubleSpinBox()
+        self.spin_zero_qb_max.setObjectName("portfolioZeroQbMaximum")
+        self.spin_zero_qb_max.setRange(-1, 100)
+        self.spin_zero_qb_max.setDecimals(1)
+        self.spin_zero_qb_max.setSpecialValueText("Unset")
+        self.spin_zero_qb_max.setSuffix("%")
+        self.spin_zero_qb_max.setValue(-1)
+        self.spin_zero_qb_max.setToolTip("Showdown only: maximum percentage of lineups without a QB at Captain or FLEX. 0 requires a QB in every lineup. An explicit hard rule; conflicts stop the build.")
+        portfolio_grid.addWidget(QtWidgets.QLabel("Showdown zero-QB maximum"), 3, 0, 1, 2)
+        portfolio_grid.addWidget(self.spin_zero_qb_max, 3, 2)
 
         portfolio_grid.addWidget(QtWidgets.QLabel("Team maximum"), 1, 0)
 
@@ -8073,11 +8441,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         data_grid.addWidget(btn_clear_order, 3, 1)
 
-        ownership_group = QtWidgets.QGroupBox("Ownership estimates")
-        ownership_layout = QtWidgets.QFormLayout(ownership_group)
-        ownership_layout.addRow("Sampling count", self.spin_own_sims)
-        ownership_layout.addRow(self.chk_sd_template_sim)
-        ownership_layout.addRow(btn_own_sim)
+        from ownership_ui import setup_ownership_controls
+        ownership_group=setup_ownership_controls(self,btn_own_sim)
         data_grid.addWidget(ownership_group, 0, 2, 4, 1)
         data_grid.setColumnStretch(3, 1)
 
@@ -8140,6 +8505,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         player_area = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
 
         player_area.setObjectName("playerWorkspaceSplitter")
+        player_area.setHandleWidth(8)
 
         player_area.addWidget(self.tbl_players)
 
@@ -8337,7 +8703,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         sd_controls = QtWidgets.QHBoxLayout()
 
-        sd_controls.addWidget(QtWidgets.QLabel("Lineups:"))
+        sd_count_label = QtWidgets.QLabel("Lineups:")
+        sd_controls.addWidget(sd_count_label)
 
         self.spin_sd = QtWidgets.QSpinBox()
 
@@ -8351,7 +8718,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        sd_controls.addWidget(QtWidgets.QLabel("Cap:"))
+        sd_cap_label = QtWidgets.QLabel("Cap:")
+        sd_controls.addWidget(sd_cap_label)
 
         self.edit_sd_cap = QtWidgets.QLineEdit("50000")
 
@@ -8445,7 +8813,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         cl_controls = QtWidgets.QHBoxLayout()
 
-        cl_controls.addWidget(QtWidgets.QLabel("Lineups:"))
+        cl_count_label = QtWidgets.QLabel("Lineups:")
+        cl_controls.addWidget(cl_count_label)
 
         self.spin_cl = QtWidgets.QSpinBox()
 
@@ -8459,7 +8828,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        cl_controls.addWidget(QtWidgets.QLabel("Cap:"))
+        cl_cap_label = QtWidgets.QLabel("Cap:")
+        cl_controls.addWidget(cl_cap_label)
 
         self.edit_cl_cap = QtWidgets.QLineEdit("50000")
 
@@ -8777,6 +9147,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._own_thread = None
 
         self._own_worker = None
+        self._ownership_run = None
+        self._ownership_closing = False
 
 
 
@@ -8883,6 +9255,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.combo_field_preset.currentTextChanged.connect(self._update_workspace_summary)
         from entry_target import setup_entry_target
         setup_entry_target(self)
+        from simple_build_ui import setup_simple_build_panel
+        setup_simple_build_panel(self, left_layout, (sd_count_label, cl_count_label), (sd_cap_label, cl_cap_label))
 
         self.combo_nfl_compute_mode.currentTextChanged.connect(self._update_workspace_summary)
 
@@ -8901,6 +9275,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         if hasattr(self, "tabs_workspace_controls"):
 
             self.tabs_workspace_controls.setVisible(bool(visible))
+            if self.action_show_build_controls.isChecked() != bool(visible):
+                blocker = QtCore.QSignalBlocker(self.action_show_build_controls)
+                self.action_show_build_controls.setChecked(bool(visible))
+                del blocker
+            from simple_build_ui import sync_simple_build_panel
+            sync_simple_build_panel(self)
 
 
 
@@ -9083,6 +9463,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             parts.insert(0, self._active_recipe_name)
 
         self.lbl_workspace_summary.setText(" | ".join(parts))
+        from simple_build_ui import sync_simple_build_panel
+        sync_simple_build_panel(self)
 
 
 
@@ -9266,12 +9648,14 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "nfl_sim_scenarios": self.spin_nfl_sim_scenarios.value(),
 
             "nfl_field_preset": self.combo_field_preset.currentText(),
+            **({"showdown_history_field": True} if self.chk_showdown_history.isChecked() else {}),
             "auto_entry_target": self.chk_auto_entry_target.isChecked(),
 
             "nfl_compute_mode": self.combo_nfl_compute_mode.currentText(),
 
             "deep_compute": dict(self.deep_compute_settings),
 
+            **({"max_zero_qb_pct": self.spin_zero_qb_max.value()} if self.spin_zero_qb_max.value() >= 0 else {}),
             "min_unique": self.spin_portfolio_unique.value(),
 
             "team_max_pct": self.spin_team_exposure.value(),
@@ -9611,6 +9995,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self.spin_nfl_sim_scenarios.setValue(int(value["nfl_sim_scenarios"]))
 
         self._set_recipe_combo(self.combo_field_preset, value.get("nfl_field_preset"))
+        self.chk_showdown_history.setChecked(bool(value.get("showdown_history_field", False)))
 
         recipe_mode = str(value.get("nfl_compute_mode") or "")
 
@@ -9627,6 +10012,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.app_settings.setValue("build/deep_compute_json", json.dumps(self.deep_compute_settings))
 
         self._update_deep_compute_button()
+
+        self.spin_zero_qb_max.setValue(float(value.get("max_zero_qb_pct", -1)))
 
         if "min_unique" in value:
 
@@ -9875,6 +10262,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self.lbl_field_preset.setVisible(is_nfl_classic)
 
             self.combo_field_preset.setVisible(is_nfl_classic)
+            self.chk_showdown_history.setVisible(sport_u == "NFL" and not is_nfl_classic)
+            self.btn_showdown_history.setVisible(sport_u == "NFL" and not is_nfl_classic)
 
             self.lbl_nfl_compute_mode.setVisible(sport_u == "NFL")
 
@@ -9892,7 +10281,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         if hasattr(self, "chk_sd_template_sim"):
 
-            self.chk_sd_template_sim.setVisible(is_showdown)
+            self.chk_sd_template_sim.setVisible(is_showdown and sport_u != 'NFL')
 
 
 
@@ -10354,6 +10743,36 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
+    def _refresh_player_tags(self, players) -> None:
+        """Update tag text/styles in place; preserve view identity and scroll."""
+        table = self.tbl_players
+        targets = {_pkey(player): player for player in players}
+        sorting = table.isSortingEnabled()
+        updates = table.updatesEnabled()
+        table_guard = QtCore.QSignalBlocker(table)
+        selection_guard = QtCore.QSignalBlocker(table.selectionModel())
+        try:
+            table.setUpdatesEnabled(False)
+            table.setSortingEnabled(False)
+            for row in range(table.rowCount()):
+                name = table.item(row, 0)
+                player = targets.get(str(name.data(QtCore.Qt.UserRole))) if name else None
+                if player is None:
+                    continue
+                tags = table.item(row, 14)
+                if tags is not None:
+                    tags.setText(self._tags_to_text(player))
+                self._set_player_row_style(row, player)
+            table.setSortingEnabled(sorting)
+        finally:
+            table.setSortingEnabled(sorting)
+            table.setUpdatesEnabled(updates)
+            del selection_guard, table_guard
+        self._update_player_inspector()
+        self._apply_readiness_player_filter()
+        self._update_readiness_badge()
+        self._update_lineup_space_dashboard()
+
     def apply_tags(self, mode: str) -> None:
 
         rows = self._get_selected_player_rows()
@@ -10406,7 +10825,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        self._refresh_players_table()
+        self._refresh_player_tags([self.players[r] for r in rows])
 
         self.status.showMessage(f"Applied tags: {mode}", 2000)
 
@@ -10442,7 +10861,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        self._refresh_players_table()
+        self._refresh_player_tags(targets)
 
         self.status.showMessage(msg, 3000)
 
@@ -10592,6 +11011,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         return {
 
+            **({"max_zero_qb_pct": float(self.spin_zero_qb_max.value())} if self.spin_zero_qb_max.value() >= 0 and self.tabs_lineups.currentIndex() == 0 else {}),
             "min_unique": int(self.spin_portfolio_unique.value()),
 
             "max_team_pct": float(self.spin_team_exposure.value()),
@@ -11195,116 +11615,56 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-    def _set_player_row_style(self, row: int, p: Dict[str, Any]) -> None:
-
-        """
-
-        Visual-only highlighting. Does NOT change any logic.
-
-
-
-        The old fade style painted the whole row very light gray, which made faded
-
-        players hard to distinguish in the dark theme. This version keeps the row
-
-        readable and uses the Tags/Injury cells plus muted text to show state:
-
-          - Overall fade: muted text + red-tinted Tags/Injury cells
-
-          - CPT fade only: red-tinted Tags cell
-
-          - Lock: green/blue-tinted Tags cell
-
-        """
-
-        is_faded = bool(p.get("FadeFlex"))
-
-        is_cpt_fade = bool(p.get("FadeCpt"))
-
-        is_lock_cpt = bool(p.get("LockCpt"))
-
-        is_lock_flex = bool(p.get("LockFlex"))
-
-
-
-        # Column indices from player table headers.
-
-        injury_col = 3
-
-        tags_col = 14
-
-
-
-        for c in range(self.tbl_players.columnCount()):
-
-            item = self.tbl_players.item(row, c)
-
+    def _set_player_row_style(self, row: int, p: Dict[str, Any], *, fresh=False) -> None:
+        """Apply the existing row colors, preserving custom fonts on in-place updates."""
+        table = self.tbl_players
+        brushes = getattr(self, '_player_row_brushes', None)
+        if brushes is None:
+            brushes = self._player_row_brushes = {
+                'empty': QtGui.QBrush(),
+                'normal': QtGui.QBrush(QtGui.QColor(232, 234, 237)),
+                'muted': QtGui.QBrush(QtGui.QColor(160, 160, 160)),
+                'pink': QtGui.QBrush(QtGui.QColor(255, 205, 205)),
+                'fade': QtGui.QBrush(QtGui.QColor(85, 38, 38)),
+                'cpt_fade': QtGui.QBrush(QtGui.QColor(85, 48, 48)),
+                'cpt_lock': QtGui.QBrush(QtGui.QColor(38, 70, 110)),
+                'lock': QtGui.QBrush(QtGui.QColor(35, 85, 55)),
+            }
+        faded = bool(p.get('FadeFlex'))
+        # Newly populated cells all start with the same default font. Reuse two
+        # font values for this row; in-place tag edits retain each cell's font.
+        normal_font = bold_font = None
+        first = table.item(row, 0)
+        if fresh and first is not None:
+            normal_font = first.font()
+            normal_font.setBold(False)
+            normal_font.setStrikeOut(False)
+            bold_font = QtGui.QFont(normal_font)
+            bold_font.setBold(True)
+        for column in range(table.columnCount()):
+            item = table.item(row, column)
             if item is None:
-
                 continue
-
-
-
-            # Reset first so sorting/refreshing does not leave stale styles.
-
-            item.setBackground(QtGui.QBrush())
-
-            item.setForeground(QtGui.QBrush(QtGui.QColor(232, 234, 237)))
-
-            font = item.font()
-
-            font.setStrikeOut(False)
-
-            font.setBold(False)
-
+            background = brushes['empty']
+            foreground = brushes['muted' if faded else 'normal']
+            bold = False
+            if faded and column in (3, 14):
+                background, foreground, bold = brushes['fade'], brushes['pink'], True
+            elif not faded and column == 14:
+                if p.get('LockCpt'):
+                    background, bold = brushes['cpt_lock'], True
+                elif p.get('LockFlex'):
+                    background, bold = brushes['lock'], True
+                elif p.get('FadeCpt'):
+                    background, foreground = brushes['cpt_fade'], brushes['pink']
+            font = (bold_font if bold else normal_font)
+            if font is None:
+                font = item.font()
+                font.setStrikeOut(False)
+                font.setBold(bold)
+            item.setBackground(background)
+            item.setForeground(foreground)
             item.setFont(font)
-
-
-
-            if is_faded:
-
-                # Keep the table dark/readable; do not white-out the whole row.
-
-                item.setForeground(QtGui.QBrush(QtGui.QColor(160, 160, 160)))
-
-                if c in (injury_col, tags_col):
-
-                    item.setBackground(QtGui.QBrush(QtGui.QColor(85, 38, 38)))
-
-                    item.setForeground(QtGui.QBrush(QtGui.QColor(255, 205, 205)))
-
-                    font = item.font()
-
-                    font.setBold(True)
-
-                    item.setFont(font)
-
-            elif is_lock_cpt and c == tags_col:
-
-                item.setBackground(QtGui.QBrush(QtGui.QColor(38, 70, 110)))
-
-                font = item.font()
-
-                font.setBold(True)
-
-                item.setFont(font)
-
-            elif is_lock_flex and c == tags_col:
-
-                item.setBackground(QtGui.QBrush(QtGui.QColor(35, 85, 55)))
-
-                font = item.font()
-
-                font.setBold(True)
-
-                item.setFont(font)
-
-            elif is_cpt_fade and c == tags_col:
-
-                item.setBackground(QtGui.QBrush(QtGui.QColor(85, 48, 48)))
-
-                item.setForeground(QtGui.QBrush(QtGui.QColor(255, 215, 215)))
-
 
 
     # ---------------- Helpers ----------------
@@ -11420,274 +11780,143 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def on_load_csv(self) -> None:
-
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select Player CSV", "", "CSV Files (*.csv)")
-
-        if not path:
-
+        if self._snapshot_busy():
+            self.status.showMessage('Wait for the current load, build or ownership calculation to finish.', 5000)
             return
+        from slate_picker import SlatePicker
+        picker = SlatePicker(self.slate_discovery, self)
+        accepted = picker.exec_()
+        path = picker.path if accepted else ''
+        picker.deleteLater()
+        if not path:
+            return
+        from csv_loading import CsvLoadController
+        if not hasattr(self, 'csv_load'):
+            self.csv_load = CsvLoadController(self)
+        self.csv_load.start(path)
+
+    def _apply_csv_payload(self, payload) -> None:
+        path, detected_sport = payload['path'], payload['sport']
+        self.last_live_check_summary.pop('ownership_reuse',None)
+        self.last_ownership_reuse=None
+        self.players = payload['players']
+        self._snapshot_replay = False
+        self._candidate_library = ''
+        self._candidate_library_allow_partial = False
+
+        self._refresh_snapshot_label()
+
+        self.last_showdown = []
+
+        self.last_classic = []
+
+        self.last_portfolio_report = {}
+
+        self.last_sim_report = {}
+
+        self.last_readiness_report = {}
+
+        self.last_final_lock_report = {}
+
+        self.last_build_timing_report = {}
+
+        self._active_build_context = {}
+
+        self._readiness_filter_names.clear()
+
+        self._lineup_space_phase = ""
+
+        self.last_live_check_summary = {}
+
+        self._last_live_check_epoch = 0.0
+
+        if hasattr(self, "tbl_sd"):
+
+            self.tbl_sd.setRowCount(0)
+
+        if hasattr(self, "tbl_cl"):
+
+            self.tbl_cl.setRowCount(0)
+
+        parsed_opponents = sum(1 for p in self.players if str(p.get("Opponent") or "").strip())
+
+        parsed_games = len({str(p.get("GameKey") or "").strip() for p in self.players if str(p.get("GameKey") or "").strip()})
+
+        logger.info(
+
+            "Parsed DK game context: opponents=%d/%d | games=%d",
+
+            parsed_opponents, len(self.players), parsed_games,
+
+        )
 
 
 
-        progress = QtWidgets.QProgressDialog("Starting CSV load…", None, 0, 100, self)
+        self.combo_sport.setCurrentText(detected_sport)
+        if payload.get('live_summary') is not None:
+            self._record_live_check(payload['live_summary'])
 
-        progress.setWindowTitle("Loading Player CSV")
+        detected_mode = payload["mode"]
 
-        progress.setWindowModality(QtCore.Qt.WindowModal)
+        try:
 
-        progress.setMinimumDuration(0)
+            if hasattr(self, "tabs_lineups"):
 
-        progress.setAutoClose(True)
+                self.tabs_lineups.setCurrentIndex(0 if detected_mode == "showdown" else 1)
 
-        progress.setAutoReset(True)
+        except Exception:
 
-        progress.setValue(0)
+            pass
+
+
+
+        faded = self._auto_fade_out_players()
+
+        self.recalc_ownership_quick()
+
+        try:
+
+            self._refresh_best_stacks_table()
+
+        except Exception:
+
+            pass
+
 
 
 
         try:
 
-            logger.info("Loading CSV: %s", path)
+            if detected_mode == "showdown":
 
-            self._load_step(progress, 5, "Reading DraftKings CSV…")
-
-            self.players = read_players_csv(path)
-
-            self._snapshot_replay = False
-
-            self._refresh_snapshot_label()
-
-            self.last_showdown = []
-
-            self.last_classic = []
-
-            self.last_portfolio_report = {}
-
-            self.last_sim_report = {}
-
-            self.last_readiness_report = {}
-
-            self.last_final_lock_report = {}
-
-            self.last_build_timing_report = {}
-
-            self._active_build_context = {}
-
-            self._readiness_filter_names.clear()
-
-            self._lineup_space_phase = ""
-
-            self.last_live_check_summary = {}
-
-            self._last_live_check_epoch = 0.0
-
-            if hasattr(self, "tbl_sd"):
-
-                self.tbl_sd.setRowCount(0)
-
-            if hasattr(self, "tbl_cl"):
-
-                self.tbl_cl.setRowCount(0)
-
-            parsed_opponents = sum(1 for p in self.players if str(p.get("Opponent") or "").strip())
-
-            parsed_games = len({str(p.get("GameKey") or "").strip() for p in self.players if str(p.get("GameKey") or "").strip()})
-
-            logger.info(
-
-                "Parsed DK game context: opponents=%d/%d | games=%d",
-
-                parsed_opponents, len(self.players), parsed_games,
-
-            )
-
-
-
-            self._load_step(progress, 18, "Initializing player fields…")
-
-            for p in self.players:
-
-                p.setdefault("LockFlex", False)
-
-                p.setdefault("FadeFlex", False)
-
-                p.setdefault("LockCpt", False)
-
-                p.setdefault("FadeCpt", False)
-
-                p.setdefault("MaxCptPct", None)
-
-                p.setdefault("MaxPct", None)
-
-                p.setdefault("MaxFlexPct", None)
-
-                p.setdefault("MinCptPct", None)
-
-                p.setdefault("MinPct", None)
-
-                p.setdefault("CoreClassicMinPct", None)
-
-                p.setdefault("CoreShowdownMinFlexPct", None)
-
-                p.setdefault("CoreShowdownMinCptPct", None)
-
-                p.setdefault("BaseProjection", float(p.get("FlexProjection", 0.0) or 0.0))
-
-                p.setdefault("BattingOrder", 0)
-
-                p.setdefault("Bats", "")
-
-                p.setdefault("ConfirmedLineup", False)
-
-                p.setdefault("LineupStatus", "")
-
-
-
-            self._load_step(progress, 28, "Detecting sport and contest type…")
-
-            detected_sport = self._detect_sport_from_players()
-
-            try:
-
-                if hasattr(self, "combo_sport") and self.combo_sport.currentText().strip().upper() != detected_sport:
-
-                    self.combo_sport.setCurrentText(detected_sport)
-
-                    logger.info("Auto-detected sport: %s", detected_sport)
-
-            except Exception:
-
-                detected_sport = self._current_sport()
-
-
-
-            self._load_step(progress, 40, f"Refreshing {detected_sport} injury/status data…")
-
-            if detected_sport == "NFL":
-
-                self._load_step(progress, 46, "Refreshing NFL role, usage, matchup, and weather context...")
-
-                try:
-
-                    ctx = apply_auto_nfl_context(self.players)
-
-                    self._record_live_check(ctx)
-
-                    logger.info("NFL auto context applied: %s", ctx)
-
-                except Exception:
-
-                    # Loading the CSV remains useful even if an unexpected
-
-                    # external payload bypasses the enrichment fallbacks.
-
-                    logger.exception("NFL auto context failed; using neutral context")
-
-            elif self._should_run_injury_enrichment(detected_sport):
-
-                enrich_players_with_injuries(self.players, sport=detected_sport)
+                cap = self._safe_float(self.edit_sd_cap.text(), 50000.0)
 
             else:
 
-                self._clear_injury_fields()
+                cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
 
-                logger.info("Skipping injury enrichment for unsupported sport: %s", detected_sport)
+        except Exception:
 
-
-
-            if detected_sport == "MLB":
-
-                self._load_step(progress, 58, "Applying MLB ballpark factors and batting orders…")
-
-                try:
-
-                    ctx = apply_auto_mlb_context(self.players)
-
-                    logger.info("MLB auto context applied: %s", ctx)
-
-                except Exception:
-
-                    logger.exception("MLB auto context failed")
+            cap = 50000.0
 
 
 
-            self._load_step(progress, 72, "Preparing tables and ownership…")
-
-            detected_mode = self._detect_contest_mode_from_players()
-
-            try:
-
-                if hasattr(self, "tabs_lineups"):
-
-                    self.tabs_lineups.setCurrentIndex(0 if detected_mode == "showdown" else 1)
-
-            except Exception:
-
-                pass
+        self._start_ownership_sim(num_sims=500, mode=detected_mode, cap=cap, reuse_prepared=True)
 
 
 
-            faded = self._auto_fade_out_players()
 
-            self.recalc_ownership_quick()
+        extra = f" | auto-faded {faded}" if faded else ""
 
-            try:
+        self.status.showMessage(
 
-                self._refresh_best_stacks_table()
+            f"Loaded {len(self.players)} players ({detected_mode}, {self._current_sport()}) from {os.path.basename(path)}{extra}",
 
-            except Exception:
+            6000
 
-                pass
+        )
 
-
-
-            self._load_step(progress, 88, "Starting ownership simulation…")
-
-            try:
-
-                if detected_mode == "showdown":
-
-                    cap = self._safe_float(self.edit_sd_cap.text(), 50000.0)
-
-                else:
-
-                    cap = self._safe_float(self.edit_cl_cap.text(), 50000.0)
-
-            except Exception:
-
-                cap = 50000.0
-
-
-
-            self._start_ownership_sim(num_sims=500, mode=detected_mode, cap=cap)
-
-
-
-            self._load_step(progress, 100, "CSV load complete.")
-
-            extra = f" | auto-faded {faded}" if faded else ""
-
-            self.status.showMessage(
-
-                f"Loaded {len(self.players)} players ({detected_mode}, {self._current_sport()}) from {os.path.basename(path)}{extra}",
-
-                6000
-
-            )
-
-            self._update_readiness_badge()
-
-        except Exception as e:
-
-            logger.exception("Failed to load CSV")
-
-            traceback.print_exc()
-
-            QtWidgets.QMessageBox.critical(self, "Load Error", str(e))
-
-        finally:
-
-            self._finish_load_progress()
+        self._update_readiness_badge()
 
 
 
@@ -12195,6 +12424,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
     def _run_live_nfl_check(self, *, show_dialog: bool, full_context: bool) -> Dict[str, Any]:
 
+        from showdown_screening import scoring_players
+
+        previous_fallback = (self.last_live_check_summary or {}).get("ownership_simulation_replaced", 0) if isinstance(self.last_live_check_summary, dict) else 0
+        simulated_count = sum(p.get("OwnershipSource") == "Lineup simulation" for p in self.players)
+        ownership_inputs = scoring_players(self.players)
+        has_ownership = all(p.get("OwnershipSource") for p in self.players) and bool(self.players)
+
         self._snapshot_replay = False
 
         self._refresh_snapshot_label()
@@ -12211,11 +12447,18 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 summary = refresh_live_nfl_data(self.players)
 
-            self._record_live_check(summary)
-
             faded = self._auto_fade_out_players()
 
-            self.recalc_ownership_quick()
+            preserve_ownership = has_ownership and ownership_inputs == scoring_players(self.players)
+            if preserve_ownership:
+                ownership_message = "Ownership preserved: scoring inputs unchanged."
+            else:
+                self.recalc_ownership_quick()
+                ownership_message = "Ownership recalculated using quick estimates: inputs changed or ownership missing."
+            summary["ownership_simulation_replaced"] = (simulated_count or previous_fallback) if not preserve_ownership else previous_fallback
+            summary["ownership_action"] = "preserved" if preserve_ownership else "recalculated"
+            summary["ownership_message"] = ownership_message
+            self._record_live_check(summary)
 
             self._refresh_players_table()
 
@@ -12223,7 +12466,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 f"Game-day check complete: {int(summary.get('sleeper', 0))}/{len(self.players)} players matched."
 
-                + (f" Auto-faded {faded}." if faded else ""),
+                + (f" Auto-faded {faded}." if faded else "")
+                + " " + ownership_message,
 
                 7000,
 
@@ -12263,7 +12507,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 f"Next active players promoted: {int(summary.get('replacement_promotions', 0))}."
 
-                f"{change_text}",
+                f"\n{ownership_message}{change_text}",
 
             )
 
@@ -12576,6 +12820,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             k = _pkey(p)
 
             p["OwnershipSource"] = "Quick roster-slot estimate"
+            p.pop('OwnershipModel', None)
+            p.pop('OwnershipSampleSize', None)
             p["OwnershipUnits"] = "percent_of_entries"
             p["ProjOwnPct"] = float(tot.get(k, 0.0) or 0.0)
 
@@ -12587,62 +12833,25 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-    def _start_ownership_sim(self, *, num_sims: int, mode: str, cap: float, sport: Optional[str] = None) -> None:
-
-        # UI: show progress bar + eta in status bar
-
-        self._own_progress.setValue(0)
-
-        self._own_progress.setMaximum(num_sims)
-
-        self._own_progress.setVisible(True)
-
-        self._own_eta.setText("Starting…")
-
-        self._own_eta.setVisible(True)
-
-        self.status.showMessage(f"Simulating ownership ({mode}, {num_sims:,} lineups)…")
-
-
-
-        # Thread setup
-
-        self._own_thread = QtCore.QThread(self)
-
-        self._own_worker = OwnershipSimWorker(self.players, mode=mode, num_sims=num_sims, salary_cap=cap, template_sim=(mode=="showdown" and getattr(self, "chk_sd_template_sim", None) is not None and self.chk_sd_template_sim.isChecked()), sport=(sport or self._current_sport()))
-
-        self._own_worker.moveToThread(self._own_thread)
-
-
-
-        self._own_thread.started.connect(self._own_worker.run)
-
-        self._own_worker.progress.connect(self._on_own_sim_progress)
-
-        self._own_worker.finished.connect(self._on_own_sim_finished)
-
-        self._own_worker.error.connect(self._on_own_sim_error)
-
-
-
-        # Cleanup
-
-        self._own_worker.finished.connect(self._own_thread.quit)
-
-        self._own_worker.finished.connect(self._own_worker.deleteLater)
-
-        self._own_thread.finished.connect(self._own_thread.deleteLater)
-
-
-
-        self._own_worker.error.connect(self._own_thread.quit)
-
-        self._own_worker.error.connect(self._own_worker.deleteLater)
-
-
-
-        self._own_thread.start()
-
+    def _start_ownership_sim(self, *, num_sims: int, mode: str, cap: float, sport: Optional[str] = None, reuse_prepared: bool = False) -> None:
+        if self._ownership_closing:
+            return
+        if self._ownership_run is not None:
+            self.status.showMessage('Ownership estimation is already running or retiring. Stop it in Tasks or wait before starting another.', 6000)
+            return
+        from ownership_lifecycle import OwnershipRun
+        try:
+            worker = OwnershipSimWorker(self.players, mode=mode, num_sims=num_sims,
+                salary_cap=cap, template_sim=(mode=='showdown' and getattr(self,'chk_sd_template_sim',None) is not None
+                    and self.chk_sd_template_sim.isChecked()), sport=(sport or self._current_sport()))
+            worker.reuse_prepared=reuse_prepared
+            run = OwnershipRun(self, worker)
+        except Exception as exc:
+            self._on_own_sim_error(str(exc))
+            return
+        self._ownership_run = run
+        self._own_thread, self._own_worker = run.thread, worker
+        run.start()
 
 
     def on_recalc_ownership_sim(self) -> None:
@@ -12694,6 +12903,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         from nfl_pipeline import apply_ownership
 
         apply_ownership(self.players, own_map or {})
+        self.last_live_check_summary.pop("ownership_simulation_replaced", None)
 
         meta = (own_map or {}).get('meta', {}) or {}
 
@@ -12734,6 +12944,27 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def _refresh_players_table(self) -> None:
+        """Populate one visual batch; restore Qt state even if rendering fails."""
+        table = self.tbl_players
+        updates, sorting = table.updatesEnabled(), table.isSortingEnabled()
+        table_guard = QtCore.QSignalBlocker(table)
+        selection_guard = QtCore.QSignalBlocker(table.selectionModel())
+        try:
+            table.setUpdatesEnabled(False)
+            self._populate_players_table()
+        finally:
+            table.setSortingEnabled(sorting)
+            table.setUpdatesEnabled(updates)
+            del selection_guard, table_guard
+
+    def _populate_players_table(self) -> None:
+
+        from ownership_ui import update_ownership_controls
+        update_ownership_controls(self)
+        ownership = describe_ownership(self.players, self.last_live_check_summary)
+        self.lbl_ownership_source.setText("Ownership: " + ownership["sources"] + ("\n" + ownership["notice"] if ownership["notice"] else ""))
+        self.lbl_ownership_source.setVisible(bool(self.players))
+        self.lbl_ownership_source.setStyleSheet("color: " + ("#FFD180" if ownership["notice"] else "#C7D2E3") + "; background-color: #10151f; padding: 3px 8px;")
 
         selected_keys = set()
 
@@ -12772,6 +13003,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.tbl_players.setRowCount(len(self.players))
 
 
+
+        alignments = [self._player_column_alignment(c) for c in range(self.tbl_players.columnCount())]
 
         for r, p in enumerate(self.players):
 
@@ -13100,7 +13333,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             # Visual-only highlighting
 
-            self._set_player_row_style(r, p)
+            self._set_player_row_style(r, p, fresh=True)
 
 
 
@@ -13110,7 +13343,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 if item is not None:
 
-                    item.setTextAlignment(self._player_column_alignment(column))
+                    item.setTextAlignment(alignments[column])
 
 
 
@@ -13363,6 +13596,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 logger.exception("NFL field calibration could not be loaded; using baseline preset")
 
+        elif str(sport or "").strip().upper() == "NFL" and kind == "showdown" and sim_enabled:
+            try:
+                field_calibration = self._snapshot_calibration()
+            except Exception as exc:
+                QtWidgets.QMessageBox.warning(self, "Historical Field", str(exc))
+                return
+
 
 
         portfolio_rules = self._portfolio_rules()
@@ -13419,7 +13659,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
                 snapshot = None
 
+        from preparation_audit import capture_build_audit
         self._active_build_context = {
+            "preparation_audit": capture_build_audit(self),
 
             "sport": str(sport or "NFL").strip().upper(),
 
@@ -13471,6 +13713,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             "input_id": snapshot['input_id'] if snapshot else '',
 
+            "ownership_refresh": describe_ownership(self.players, self.last_live_check_summary),
             "data_freshness": freshness_text(self.last_live_check_summary, getattr(self, '_snapshot_replay', False)),
 
             "projection_review_count": sum(bool(p.get('ProjectionNeedsReview')) for p in self.players),
@@ -13540,6 +13783,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._build_receipt = receipt
         self._build_thread = QtCore.QThread(self)
 
+        from build_preparation import automatic_library_inputs
         self._build_worker = LineupBuildWorker(
             worker_players,
             kind=kind,
@@ -13583,6 +13827,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             retained_lineups=retained,
 
             candidate_library=getattr(self, "_candidate_library", ""),
+            **automatic_library_inputs(self),
+            allow_partial_library=getattr(self,"_candidate_library_allow_partial",False),
             scenario_cache=True,
             repair_source=repair_source,
 
@@ -13613,6 +13859,12 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
+        from task_dashboard import watch_task
+        watch_task(self, 'Build preparation / ' + kind + ' lineups', self._build_worker,
+                   self._build_thread, self._cancel_lineup_build)
+        self._build_flow_active = True
+        if hasattr(self, 'lbl_build_flow'):
+            self.lbl_build_flow.setText('Preparing build — current inputs, requested evidence, candidate inputs, and eligibility…')
         self._build_thread.start()
 
     def _on_lineup_thread_finished(self, *, receipt=None) -> None:
@@ -13646,9 +13898,15 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
+        if hasattr(self, 'lbl_build_flow'):
+            self.lbl_build_flow.setText(str(text or 'Building…'))
+
         phase_text = str(text or "").lower()
 
-        if "phase 4" in phase_text or "selecting" in phase_text or "refining" in phase_text:
+        if phase_text.startswith('preparing'):
+            self._lineup_space_phase = 'Preparing'
+
+        elif "phase 4" in phase_text or "selecting" in phase_text or "refining" in phase_text:
 
             self._lineup_space_phase = "Selecting"
 
@@ -13681,12 +13939,17 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self._build_cancel.setEnabled(False)
 
         self._build_eta.setText("Cancelling after the current candidate…")
+        if hasattr(self, 'lbl_build_flow'):
+            self.lbl_build_flow.setText('Stopping safely; waiting for the current preparation or build operation.')
 
         self.status.showMessage("Cancelling lineup build…")
 
 
 
     def _finish_lineup_build_ui(self) -> None:
+        self._build_flow_active = False
+        from simple_build_ui import sync_simple_build_panel
+        sync_simple_build_panel(self)
 
         self._build_progress.setVisible(False)
 
@@ -14659,6 +14922,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             "contest": self._active_contest_profile(),
             "deep_compute": self.deep_compute_settings,
             "candidate_library": getattr(self, "_candidate_library", ""),
+            "allow_partial_library": getattr(self,"_candidate_library_allow_partial",False),
         })
 
     def _repair_rejection(self, receipt, payload):
@@ -14761,6 +15025,37 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self._record_repair_attempt(receipt, payload)
 
     def closeEvent(self, event):
+        self._ownership_closing = True
+        run = getattr(self, '_ownership_run', None)
+        if run is not None and run.shutdown():
+            event.ignore()
+            return
+        if getattr(self, 'csv_load', None) and self.csv_load.shutdown():
+            event.ignore()
+            return
+        if getattr(self, 'slate_discovery', None) and self.slate_discovery.shutdown():
+            event.ignore()
+            return
+        if getattr(self, 'slate_readiness_timer', None):self.slate_readiness_timer.stop()
+        if getattr(self, 'background_queue', None):self.background_queue.shutdown()
+        audit=getattr(self,'_storage_audit_dialog',None)
+        if audit is not None and audit.shutdown():
+            self._close_after_storage_audit=True
+            event.ignore();return
+        if getattr(self, 'idle_preparation', None) and self.idle_preparation.shutdown():
+            event.ignore()
+            return
+        if getattr(self, 'idle_backup', None) and self.idle_backup.shutdown():
+            self._close_after_backup = True
+            event.ignore()
+            return
+        if getattr(self, 'history_refresh', None):
+            self.history_refresh.watch.shutdown()
+        if getattr(self, 'history_refresh', None) and self.history_refresh.busy:
+            self._close_after_history = True
+            self.history_refresh.cancel()
+            event.ignore()
+            return
         self._accept_build_results = False
         thread = getattr(self, "_build_thread", None)
         try:
@@ -14867,6 +15162,13 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             if receipt is not self._build_receipt or not self._accept_build_results:
                 return
         self._finish_lineup_build_ui()
+        if receipt is None or not receipt.cancelled:
+            context = deepcopy(receipt.context if receipt is not None else self._active_build_context or {})
+            self._last_build_failure = dict(record_type='failed_attempt', status='failed',
+                failure_message=str(msg), input_id=context.get('input_id',''),
+                created_at=QtCore.QDateTime.currentDateTimeUtc().toString(QtCore.Qt.ISODate),
+                sport=context.get('sport','unknown'), contest_type=context.get('kind','unknown'),
+                requested_count=context.get('requested_count','not recorded'))
 
         self._active_build_context = {}
 
@@ -15135,74 +15437,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def _detect_sport_from_players(self) -> str:
-
-        """Best-effort sport detection from DK position labels.
-
-
-
-        This is intentionally position-based instead of filename-based:
-
-        - MLB has P/SP/RP plus infield/OF positions.
-
-        - NBA/WNBA has PG/SG/SF/PF/C/G/F and no NFL/MLB-only positions.
-
-        - NFL has QB/RB/WR/TE/DST/K.
-
-        WNBA shares NBA position labels, so we default ambiguous basketball files to NBA;
-
-        user can still switch the dropdown to WNBA.
-
-        """
-
-        tokens = set()
-
-        for p in self.players or []:
-
-            raw = str(p.get("Position", "") or "").upper()
-
-            raw = raw.replace("/", ",").replace(";", ",")
-
-            for part in raw.split(","):
-
-                part = part.strip()
-
-                if part:
-
-                    tokens.add(part)
-
-
-
-        mlb_tokens = {"P", "SP", "RP", "C", "1B", "2B", "3B", "SS", "OF", "LF", "CF", "RF"}
-
-        nfl_tokens = {"QB", "RB", "WR", "TE", "DST", "K"}
-
-        nba_tokens = {"PG", "SG", "SF", "PF", "C", "G", "F", "UTIL"}
-
-
-
-        # MLB is easiest to distinguish because of baseball-only positions.
-
-        if tokens & {"1B", "2B", "3B", "SS", "OF", "LF", "CF", "RF", "SP", "RP"}:
-
-            return "MLB"
-
-
-
-        if tokens & {"QB", "RB", "WR", "TE", "DST", "K"}:
-
-            return "NFL"
-
-
-
-        if tokens & {"PG", "SG", "SF", "PF", "G", "F"}:
-
-            return "NBA"
-
-
-
-        return "NFL"
-
-
+        from csv_loading import detect_sport
+        return detect_sport(self.players)
 
     def _current_sport(self) -> str:
 
@@ -15441,6 +15677,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             )
         if make_current:
             self.last_build_diagnostic = diagnostic
+            if not payload.get('cancelled'):
+                self._last_build_failure = None
         if make_current and hasattr(self, "action_copy_build_report"):
             self.action_copy_build_report.setEnabled(True)
 

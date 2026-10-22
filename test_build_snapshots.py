@@ -13,6 +13,26 @@ from test_showdown_performance import _showdown_players
 
 
 class BuildSnapshotTests(unittest.TestCase):
+    def test_zero_qb_control_and_old_snapshot_restore(self):
+        window=MainWindow()
+        try:
+            window.tabs_lineups.setCurrentIndex(0)
+            window.players=_showdown_players()
+            self.assertEqual(window.spin_zero_qb_max.value(),-1)
+            original=window._capture_snapshot(calibration={},contest={})
+            window.spin_zero_qb_max.setValue(10)
+            current=window._capture_snapshot(calibration={},contest={})
+            self.assertEqual(current['inputs']['rules']['max_zero_qb_pct'],10)
+            self.assertEqual(current['inputs']['recipe']['max_zero_qb_pct'],10)
+            window.spin_zero_qb_max.setValue(20)
+            window._restore_snapshot(current)
+            self.assertEqual(window.spin_zero_qb_max.value(),10)
+            self.assertEqual(window._capture_snapshot()['inputs'],current['inputs'])
+            window._restore_snapshot(original)
+            self.assertEqual(window.spin_zero_qb_max.value(),-1)
+            self.assertNotIn('max_zero_qb_pct',window._portfolio_rules())
+        finally:window.close()
+
     @classmethod
     def setUpClass(cls):
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])

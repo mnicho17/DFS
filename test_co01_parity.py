@@ -14,6 +14,7 @@ from test_environment import install, network_attempts
 install()
 
 import copy
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -36,14 +37,14 @@ def stable(value):
     if isinstance(value, dict):
         return {k: stable(v) for k, v in value.items()
                 if k not in {'created_at', 'started_at', 'finished_at', 'seconds',
-                             'contest_objective', 'objective', 'p25', 'p75'}
+                             'contest_objective', 'objective', 'p25', 'p75', 'simulation_profile'}
                 and not k.endswith('_seconds')}
     if isinstance(value, (list, tuple)):
         return [stable(v) for v in value]
     return value
 
 
-def evidence(kind, objective=None, compute_telemetry=False):
+def evidence(kind, objective=None, compute_telemetry=False, historical=False):
     players = _fixture_players() if kind == 'classic' else _showdown_players()
     original = copy.deepcopy(players)
     kwargs = {} if objective is None else {'contest_objective': objective}
@@ -62,6 +63,8 @@ def evidence(kind, objective=None, compute_telemetry=False):
     def simulate(rows, *args, **kwargs):
         candidates = [roster_keys(row, kind) for row in rows]
         result = real(rows, *args, **kwargs)
+        if historical:
+            result['report']['specialist_model'] = 'shared-specialist-events-v1'
         stages.append(dict(candidates=candidates, count=len(candidates),
             scored=[dict(signature=roster_keys(row, kind),
                          metrics=stable(row.sim_metrics)) for row in result['lineups']],
@@ -107,9 +110,39 @@ class ObjectiveParityTests(unittest.TestCase):
     @staticmethod
     def compatible_evidence(value):
         value = copy.deepcopy(value)
+        # Preparation receipts add observability only. Preserve the exact frozen
+        # candidates, metrics, selections, exports and all other report content.
+        preparation = value['diagnostic'].pop('build_preparation', None)
+        if preparation:
+            block = '\n\nBuild preparation\n' + '\n'.join(
+                f"- {r.get('stage', 'Check')}: {r.get('state', 'Unknown')} — {r.get('detail', '')}"
+                for r in preparation)
+            value['build_report'] = value['build_report'].replace(block, '')
         report = value['portfolio_report']
         # Only additive safety reporting is excluded from the older fixture.
         report.pop('showdown_policy', None)
+        specialist=report.pop('specialist_diagnostics',None)
+        if specialist:
+            from specialist_diagnostics import text
+            observational_lines=set(text(specialist))
+            report['text']='\n'.join(line for line in report['text'].split('\n') if line not in observational_lines)
+            value['build_report']='\n'.join(line for line in value['build_report'].split('\n') if line not in observational_lines)
+        # New read-only cap reporting is outside the frozen historical receipt.
+        cap_diagnostic = report.pop('exposure_cap_diagnostic', None)
+        if cap_diagnostic:
+            from exposure_cap_diagnostics import text as cap_text
+            cap_lines = cap_text(cap_diagnostic)
+            if cap_lines:
+                block = '\n' + '\n'.join(cap_lines)
+                report['text'] = report['text'].replace(block, '')
+                value['build_report'] = value['build_report'].replace(block, '')
+        value['diagnostic']['portfolio'].pop('exposure_cap_diagnostic', None)
+        value['diagnostic']['portfolio'].pop('specialist_diagnostics',None)
+        # Prospective screening evidence is observational; scoring remains exact.
+        screening = value['diagnostic'].pop('screening_audit', None)
+        if screening:
+            value['build_report'] = '\n'.join(line for line in value['build_report'].split('\n')
+                if not line.startswith('- Screening audit '))
         report['text'] = '\n'.join(line for line in report['text'].split('\n')
                                    if line.strip() and not line.startswith('Showdown guardrails:'))
         feasibility = value['diagnostic'].get('portfolio_feasibility') or {}
@@ -119,6 +152,30 @@ class ObjectiveParityTests(unittest.TestCase):
         for stage in value['stages']:
             stage['candidates'].sort()
             stage['scored'].sort(key=lambda row: row['signature'])
+            (stage['report'].get('projection_coverage') or {}).pop('defense_forecasts', None)
+        # Only the new read-only defense provenance receipt/text is additive.
+        # Candidate identities, all scores, selections and exports remain exact.
+        from defense_forecast_review import format_defense_forecasts
+        defenses = (value['diagnostic'].get('projection_coverage') or {}).pop('defense_forecasts', None)
+        if defenses:
+            block = '\n' + '\n'.join(format_defense_forecasts(defenses))
+            if format_defense_forecasts(defenses):
+                value['build_report'] = value['build_report'].replace(block, '')
+            if defenses.get('review_players'):
+                warning = f"{defenses['review_players']} defenses use historical-average estimates. See Defense forecast review; no projections were changed."
+                warnings = value['diagnostic']['portfolio'].get('warnings') or []
+                value['diagnostic']['portfolio']['warnings'] = [w for w in warnings if w != warning]
+        # Builds in this frozen computational fixture have no captured session
+        # preparation metadata. Remove only the exact additive missing-data notice.
+        # All candidate identities, scores, selections and exports stay exact.
+        if not value['diagnostic'].get('preparation_audit'):
+            value['diagnostic'].pop('preparation_audit', None)
+            value['build_report'] = value['build_report'].replace(
+                '\n\nPreparation reuse and timings: not recorded for this build.', '')
+        # The field-use receipt is additive reporting. Keep all sampled fields,
+        # candidate metrics, selections and exports in the frozen comparison.
+        value['build_report'] = '\n'.join(line for line in value['build_report'].split('\n')
+            if not line.startswith(('- Historical field use: not enabled','- SIM profile ')))
         return value
 
     def test_classic_golden_and_all_objectives(self):
@@ -126,6 +183,18 @@ class ObjectiveParityTests(unittest.TestCase):
 
     def test_showdown_golden_and_all_objectives(self):
         self.check_kind('showdown')
+
+    def test_current_specialist_model_keeps_all_objectives_computationally_equal(self):
+        for kind in ('classic', 'showdown'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as folder:
+                output = Path(folder) / 'evidence.json'
+                run = subprocess.run([sys.executable, str(Path(__file__).resolve()), kind, str(output), 'current'],
+                    env=dict(os.environ, PYTHONHASHSEED='0'), capture_output=True, text=True, timeout=180)
+                self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+                actual = json.loads(output.read_text())
+                expected = self.compatible_evidence(actual['None'])
+                for objective, result in actual.items():
+                    self.assertEqual(self.compatible_evidence(result), expected, objective)
 
     def check_kind(self, kind):
         fixture = json.loads((Path(__file__).parent / 'tests' / 'fixtures' / 'co01-golden.json').read_text())
@@ -146,10 +215,18 @@ class ObjectiveParityTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    kind, destination = sys.argv[1:]
-    # CO-02 deliberately replaces metadata-only cash execution. Retain the
-    # untouched Tournament/default fixture; cash execution now needs payouts.
-    values = {str(objective): evidence(kind, objective)
-              for objective in (None, 'TOURNAMENT')}
+    kind, destination = sys.argv[1:3]
+    historical = len(sys.argv) == 3
+    def capture():
+        return {str(objective): evidence(kind, objective, historical=historical)
+                for objective in (None, 'TOURNAMENT')}
+    if historical:
+        spec = importlib.util.spec_from_file_location('co01_specialists_v1',
+            Path(__file__).parent / 'tests' / 'fixtures' / 'nfl_specialists_v1.py')
+        baseline = importlib.util.module_from_spec(spec); spec.loader.exec_module(baseline)
+        with patch('nfl_specialists.specialist_outcomes', baseline.specialist_outcomes):
+            values = capture()
+    else:
+        values = capture()
     assert not network_attempts, network_attempts
     Path(destination).write_text(json.dumps(values, sort_keys=True))

@@ -658,8 +658,6 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
             return sum(value * weight for value, weight in pairs) / sum(weight for _, weight in pairs)
 
         field_dup_pct = _weighted_field_average(5)
-        field_metadata_coverage = _weighted_field_average(4)
-        field_avg_salary = _weighted_field_average(8)
         field_ownership_mae = _weighted_field_average(10)
         top_dup_pairs = [
             (_safe_float(row[7]), _safe_int(row[6], 0))
@@ -961,16 +959,12 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
                 f"{name}: {count}" for name, count in field_presets.most_common()
             )
             lines.append(
-                f"- Complete fields analyzed: {field_contests} | field entries: {field_entries:,} | {preset_text}"
+                f"- Legacy stored field summaries (completeness unverified): {field_contests} | observed entries: {field_entries:,} | {preset_text}"
             )
             if field_dup_pct is not None:
-                lines.append(f"- Entries sharing a duplicated roster: {field_dup_pct:.1f}%")
+                lines.append(f"- Legacy observed entries sharing a duplicated roster: {field_dup_pct:.1f}%")
             if field_top_dup_pct is not None:
-                lines.append(f"- Top 1% entries sharing a duplicated roster: {field_top_dup_pct:.1f}%")
-            if field_metadata_coverage is not None:
-                lines.append(f"- Player metadata coverage: {field_metadata_coverage:.1f}%")
-            if field_avg_salary is not None:
-                lines.append(f"- Average field salary used: ${field_avg_salary:,.0f}")
+                lines.append(f"- Legacy observed top 1% entries sharing a duplicated roster: {field_top_dup_pct:.1f}%")
             if field_ownership_mae is not None:
                 lines.append(
                     f"- Legacy export-metadata ownership difference: {field_ownership_mae:.2f} percentage points (mixed contests; forecast timing/units may be unverified). Use snapshot-backed ownership accuracy below for current comparisons."
@@ -1033,27 +1027,11 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
                                 for label, values in useful_buckets
                             )
                         )
-                if stack_rates and sum(_safe_float(value) for value in stack_rates.values()) > 0:
-                    lines.append(
-                        "- Latest NFL field QB stacks: "
-                        + " | ".join(
-                            f"{key if key != '3' else '3+'}: {_safe_float(stack_rates.get(key)) * 100.0:.1f}%"
-                            for key in ("0", "1", "2", "3")
-                        )
-                    )
-                if flex_rates and sum(_safe_float(value) for value in flex_rates.values()) > 0:
-                    lines.append(
-                        "- Latest NFL FLEX mix: "
-                        + " | ".join(
-                            f"{key}: {_safe_float(flex_rates.get(key)) * 100.0:.1f}%"
-                            for key in ("RB", "WR", "TE")
-                        )
-                    )
             for preset_name in ("Single Entry", "3-Max", "20-Max", "150-Max"):
                 if field_presets.get(preset_name, 0) <= 0:
                     continue
                 calibration = load_nfl_field_calibration(preset_name, db_path=path)
-                lines.append(f"- Classic calibration: {calibration['message']}")
+                lines.append(f"- Existing Classic generation calibration receipt (legacy inputs, unchanged): {calibration['message']}")
             if field_presets.get("Unclassified", 0):
                 lines.append(
                     "- Unclassified fields remain report-only; include Single Entry, 3-Max, 20-Max, or 150-Max in the contest/file name to enable preset learning."
@@ -1129,11 +1107,25 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
         from performance_review import review_report
         lines.extend(review_report(conn, username=username))
         from analysis_imports import pairing_state, report_lines
-        pairings = pairing_state(path, conn=conn)
+        from historical_coverage import load_saved
+        from historical_field_report import summarize, report_lines as evidence_report_lines
+        # Keep catalog associations and cached evidence in one database snapshot.
+        conn.execute('SAVEPOINT learning_evidence_report')
+        try:
+            pairings = pairing_state(path, conn=conn)
+            saved_evidence = load_saved(path, conn=conn)
+            from historical_contest_comparison import personal_observations
+            observations = personal_observations(conn, username)
+            field_evidence = summarize(saved_evidence, pairings, username, observations=observations)
+        finally:
+            conn.execute('RELEASE learning_evidence_report')
+        field_metadata_coverage = field_evidence['metadata_coverage_pct']
         lines.extend(report_lines(state=pairings))
+        lines.extend(evidence_report_lines(saved_evidence, field_evidence))
         return {
             "text": "\n".join(lines), "db_path": path, "export_count": export_count,
             "pairing_state": pairings,
+            "historical_field_evidence": field_evidence,
             "contest_objectives": recorded_objectives,
             "exported_lineups": exported_lineups, "historical_rows": imported_rows,
             "personal_results_count": len(own_rows),

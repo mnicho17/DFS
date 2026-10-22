@@ -4,7 +4,7 @@ The fast view reads the last committed derived state. Only explicit background
 reconciliation revalidates files. Cached evidence cannot authorize analysis.
 """
 from collections import Counter
-from contextlib import closing
+from contextlib import closing, nullcontext
 import hashlib
 import json
 from pathlib import Path
@@ -30,7 +30,9 @@ REASONS = {
     'incomplete_stored_player_role_coverage': 'Some stored result players/roles are not covered by the salary revision.',
     'source_revision_changed_during_reconciliation': 'A source revision changed during reconciliation.',
     'restore_immutable_source_revision': 'Restore the original saved source revision and reconcile again.',
-    'unreadable_result_rosters': 'Some result rosters are unreadable and excluded from qualification.',
+    'unreadable_result_rosters': 'No readable result rosters are available from a complete source scan.',
+    'excluded_unreadable_result_rows': 'Blank or malformed source roster rows were excluded; valid rows remain available. Full-field coverage is not established.',
+    'excluded_unreadable_stored_rows': 'Unreadable stored personal roster rows were excluded; valid rows remain available.',
     'unknown_eligible_actual_scores': 'Some eligible player-role scores are unknown. They are not treated as zero.',
     'conflicting_actual_scores': 'The source contains conflicting actual scores.',
     'unreadable_stored_result_rosters': 'Some stored result rosters are unreadable.',
@@ -84,26 +86,37 @@ def capabilities(data):
 def aggregate(contests):
     result = coverage(contests)
     levels, groups, supported = Counter(), Counter(), Counter()
+    roster_rows = Counter()
     for contest in contests:
         data = contest.data
         levels.update({k:int(v) for k,v in evidence_levels(data).items()})
         groups.update({k:int(v) for k,v in categories(data).items()})
         supported.update({k:int(v) for k,v in capabilities(data).items()})
-    result.update(coverage_version=1, evidence_levels=dict(levels), categories=dict(groups),
+        scoped = (data.get('results_evidence') or {}).get('roster_row_coverage') or {}
+        qualified = bool((data.get('salary_evidence') or {}).get('qualified'))
+        if qualified and scoped.get('scan_complete'):
+            roster_rows.update({k:scoped.get(k,0) for k in ('entry_rows','blank_roster_rows','malformed_roster_rows','readable_roster_rows')})
+            roster_rows['complete_source_scans'] += 1
+            if scoped.get('usable'):
+                roster_rows['usable_sources'] += 1
+                roster_rows['score_supported_roster_rows'] += scoped['score_supported_roster_rows']
+    result.update(coverage_version=2, roster_row_coverage=dict(roster_rows), evidence_levels=dict(levels), categories=dict(groups),
         capability_evidence=dict(supported),
         capability_basis='cached prerequisites only; the legacy hindsight count describes the full evidence ladder, not RL-07A readiness; Hindsight independently requalifies salary, exact actuals, rules and optional snapshot; generated evidence does not establish timings or submission')
     return result
 
 
-def load_saved(db_path):
+def load_saved(db_path, *, conn=None):
     """Read cached JSON and catalog counts, never open/hash/reparse source files."""
     path = Path(db_path).resolve()
     result = dict(contests=(), updated_at=None, pending_imports=0, invalid_rows=0, labels={})
-    if not path.exists():
+    if conn is None and not path.exists():
         return result
     from historical_identity import QualifiedHistoricalContest
-    with closing(sqlite3.connect(path.as_uri()+'?mode=ro', uri=True)) as conn:
-        conn.execute('BEGIN')
+    owned = conn is None
+    with closing(sqlite3.connect(path.as_uri()+'?mode=ro', uri=True)) if owned else nullcontext(conn) as conn:
+        if owned:
+            conn.execute('BEGIN')
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         saved, imports, dates = [], set(), []
         if 'historical_contest_identities' in tables:
@@ -175,6 +188,12 @@ def detail_text(data):
         lines += [f"Salary revision: {salary.get('revision_hash','')[:12]}",
                   'Association: ' + salary.get('association_method','unknown').replace('_',' ')]
     roles = r.get('stored_player_role_coverage') or {}
+    scoped = r.get('roster_row_coverage') or {}
+    if scoped:
+        lines += [f"Source roster-row scan: {'complete' if scoped['scan_complete'] else 'incomplete'}; {scoped['entry_rows']} entry rows.",
+                  f"Excluded roster rows: {scoped['blank_roster_rows']} blank, {scoped['malformed_roster_rows']} malformed.",
+                  f"Readable rows: {scoped['readable_roster_rows']}; score-supported: {scoped['score_supported_roster_rows']}; unknown player scores: {scoped['unknown_score_roster_rows']}; missing totals: {scoped['missing_total_rows']}; conflicting totals: {scoped['conflicting_total_rows']}.",
+                  f"Scoped score evidence: {'available' if scoped['usable'] else 'unavailable'}. Counts describe rows, including duplicate EntryIds; not unique entries or complete-field coverage."]
     if roles:
         lines.append(f"Stored player/role coverage: {roles['matched']} / {roles['observed']}")
     snap = data.get('snapshot_evidence') or {}

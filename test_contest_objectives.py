@@ -195,6 +195,7 @@ class ObjectiveStorageTests(unittest.TestCase):
             initialize(path, original)
             with connect(path) as con:
                 con.execute("DELETE FROM library_meta WHERE key='candidate_generation_id'")
+                con.execute("DELETE FROM library_meta WHERE key='roster_format'")
             before = path.read_bytes()
             initialize(path, snap(DOUBLE_UP))
             self.assertEqual(path.read_bytes(), before)

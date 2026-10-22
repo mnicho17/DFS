@@ -200,6 +200,7 @@ def _results_manifest(path, cancelled):
                 observed.add((role, _name(label), numeric.group(1) if numeric else ''))
     if not entries:
         raise ValueError('No result entry rows found.')
+    csv_dates=sorted(dates)
     filename_dates = _dates(Path(path).name)
     games.update('@'.join(g) for g in re.findall(r'\b([A-Z]{2,3})\s*@\s*([A-Z]{2,3})\b', Path(path).name.upper()))
     if dates and filename_dates and dates != filename_dates:
@@ -207,7 +208,7 @@ def _results_manifest(path, cancelled):
     elif not dates:
         dates = filename_dates
     return dict(version=1, format=next(iter(formats)) if len(formats) == 1 else None,
-                dates=sorted(dates), games=sorted(games), date_source='CSV/filename (unverified)', contest_ids=sorted(contests),
+                dates=sorted(dates), csv_dates=csv_dates, games=sorted(games), date_source='CSV/filename (unverified)', contest_ids=sorted(contests),
                 contest_names=sorted(contest_names),
                 entries=entries, unreadable=unreadable, observed=sorted(observed))
 
@@ -228,12 +229,22 @@ def ensure_tables(conn):
 
 
 def _sources(conn):
-    return [dict(hash=h, kind=k, snapshot=p, name=n, source_path=s, manifest=json.loads(m), import_id=i, created_at=t)
+    sources=[dict(hash=h, kind=k, snapshot=p, name=n, source_path=s, manifest=json.loads(m), import_id=i, created_at=t)
             for h, k, p, n, s, m, i, t in conn.execute(
                 'SELECT hash,kind,snapshot,original_name,source_path,manifest,import_id,created_at FROM analysis_sources ORDER BY created_at,hash')]
+    from analysis_date_corrections import apply
+    return apply(conn,sources)
 
 
-def qualify_pair(result, salary):
+def _salary_identity_index(salary):
+    """Index one fresh manifest, preserving every duplicate identity."""
+    index = {}
+    for player in salary['manifest']['players']:
+        index.setdefault(_name(player['name']), []).append(player)
+    return index
+
+
+def qualify_pair(result, salary, *, _identity_index=None):
     """Return compatibility and exact role/ID/name matches; never guess aliases."""
     r, s = result['manifest'], salary['manifest']
     failures = []
@@ -254,9 +265,9 @@ def qualify_pair(result, salary):
                     matched=0, observed=len(r['observed']), matches={})
     matches = {}
     missing = []
+    identity_index = _identity_index if _identity_index is not None else _salary_identity_index(salary)
     for role, name, player_id in r['observed']:
-        eligible = [p for p in s['players'] if _name(p['name']) == name
-                    and (not player_id or p['id'] == player_id)
+        eligible = [p for p in identity_index.get(name, []) if (not player_id or p['id'] == player_id)
                     and (p['role'] == role if s['format'] == 'showdown' else role in p['role'].split('/'))]
         if len(eligible) != 1:
             missing.append(f'{role} {name}' + (' (ambiguous)' if eligible else ' (missing)'))
@@ -333,14 +344,23 @@ def _pairing_state(conn, path, cancelled):
         except ValueError:
             verification[source['hash']] = 'Saved source snapshot changed; restore the original revision.'
 
+    # Operation-local only: later reports rebuild from fresh manifests and
+    # verify the saved evidence again. Never collapse ambiguous player rows.
+    identity_indexes = {s['hash']: _salary_identity_index(s) for s in salaries
+                        if not verification[s['hash']]}
+
     def candidate(result, salary):
         _check(cancelled)
         reason = verification[result['hash']] or verification[salary['hash']]
-        q = dict(compatible=False, automatic=False, reason=reason) if reason else qualify_pair(result, salary)
-        return dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'],
+        q = dict(compatible=False, automatic=False, reason=reason) if reason else qualify_pair(
+            result, salary, _identity_index=identity_indexes[salary['hash']])
+        from analysis_date_corrections import candidate as date_candidate
+        correctable=not reason and not q['compatible'] and date_candidate(result,salary,identity_indexes.get(salary['hash']))
+        return dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'],date_correctable=bool(correctable),
                     automatic=q['automatic'], reason=q['reason'], dates=salary['manifest'].get('dates',[]),
                     format=salary['manifest'].get('format'), games=salary['manifest'].get('games',[]),
-                    player_roles=len(salary['manifest'].get('players',[])), imported_at=salary['created_at'])
+                    player_roles=len(salary['manifest'].get('players',[])), imported_at=salary['created_at'],
+                    linked_contests=sum(h==salary['hash'] for h in pairs.values()))
 
     output, qualified = [], 0
     for result in (s for s in sources if s['kind'] == 'results'):
@@ -359,6 +379,7 @@ def _pairing_state(conn, path, cancelled):
         entries, unreadable = manifest.get('entries'), manifest.get('unreadable', 0)
         readable = max(0, entries - unreadable) if entries is not None else None
         output.append(dict(hash=result['hash'], name=result['name'], salary_hash=saved_hash,
+                           dates=manifest['dates'],date_correction=result.get('date_correction'),
                            status=status, saved_pair=saved, candidates=candidates, entries=entries,
                            unreadable=unreadable, readable=readable,
                            readable_pct=100.0 * readable / entries if entries else None))
@@ -437,7 +458,7 @@ def _snapshot(path, digest, root, cancelled):
 
 
 def import_folders(results_folder, salary_folder='', *, username='', db_path=None,
-                   cancelled=lambda: False, progress=lambda done, total, text: None):
+                   cancelled=lambda: False, progress=lambda done, total, text: None, watch_paths=None):
     """Commit complete files individually; duplicates never rerun result analysis.
 
     Missing configured roots abort before writes. Other per-file errors are
@@ -452,7 +473,7 @@ def import_folders(results_folder, salary_folder='', *, username='', db_path=Non
         if not root.is_dir():
             raise ValueError(f'Folder unavailable: {root}. Reconnect the drive or choose an available folder.')
     result = dict(results_imported=0, salaries_imported=0, duplicates_skipped=0, ignored=0,
-                  personal_results_added=0, pairs_added=0, errors=[], cancelled=False, analysis_import_ids=[])
+                  personal_results_added=0, pairs_added=0, errors=[], cancelled=False, analysis_import_ids=[], changed_sources=[])
     database = db_path or history_db_path()
     with closing(_connect(database)) as conn:
         init_historical_import_tables(conn)
@@ -464,11 +485,16 @@ def import_folders(results_folder, salary_folder='', *, username='', db_path=Non
             for root in roots:
                 for folder, dirs, names in os.walk(root, followlinks=False, onerror=scan_error):
                     _check(cancelled)
+                    if watch_paths is not None and len(watch_paths) < 4096:
+                        watch_paths.append(str(Path(folder).resolve()))
                     dirs[:] = sorted(d for d in dirs if not Path(folder, d).is_symlink())
                     for name in sorted(names):
                         path = Path(folder, name)
                         if path.suffix.casefold() == '.csv' and not path.is_symlink():
-                            files.add(path.resolve())
+                            resolved = path.resolve()
+                            files.add(resolved)
+                            if watch_paths is not None and len(watch_paths) < 4096:
+                                watch_paths.append(str(resolved))
             for index, path in enumerate(sorted(files), 1):
                 _check(cancelled)
                 progress(index, len(files), f'Checking {path.name} ({index}/{len(files)})')
@@ -504,9 +530,13 @@ def import_folders(results_folder, salary_folder='', *, username='', db_path=Non
                             result['personal_results_added'] += imported['personal_results_added']
                             result['analysis_import_ids'].append(import_id)
                     _check(cancelled)
+                    changed = conn.execute('SELECT 1 FROM analysis_sources WHERE source_path=? AND hash<>?',
+                                           (str(path), digest)).fetchone() is not None
                     with conn:
                         conn.execute('INSERT INTO analysis_sources(hash,kind,snapshot,original_name,source_path,manifest,import_id) VALUES(?,?,?,?,?,?,?)',
                             (digest, kind, str(snapshot), path.name, str(path), json.dumps(manifest), import_id))
+                    if changed:
+                        result['changed_sources'].append(path.name)
                     if kind == 'salary':
                         result['salaries_imported'] += 1
                 except ImportCancelled:
@@ -558,7 +588,8 @@ def paired_metadata(conn, import_id, cancelled=lambda: False):
         metadata[key] = value
     for key in collisions:
         metadata.pop(key, None)
-    return metadata, dict(salary_hash=salary['hash'], result_hash=result['hash'], source='explicit saved salary/results pair')
+    return metadata, dict(salary_hash=salary['hash'], result_hash=result['hash'], source='explicit saved salary/results pair',
+                         effective_dates=result['manifest']['dates'],date_correction=result.get('date_correction'))
 
 
 def report_lines(conn=None, *, state=None):
@@ -568,6 +599,14 @@ def report_lines(conn=None, *, state=None):
              f"- Qualified saved pairings: {state['qualified_saved_pairings']}; Invalid saved pairings: {state['invalid_saved_pairings']}."]
     label = 'Unpaired cataloged results' if state['warnings'] else 'Results awaiting a salary match'
     lines.append(f"- {label}: {state['unpaired_results']}. Compatible candidates are not saved pairings. Use Review Salary Matches.")
+    lines.append('- Each salary snapshot may serve multiple contests; pairing one result never consumes the salary file.')
+    for row in state['results']:
+        if row.get('date_correction'):
+            correction=row['date_correction']
+            lines.append(f"- Corrected contest date: {row['name']}; {', '.join(correction['original_dates']) or 'unknown'} → {correction['corrected_date']}; reason: {correction['reason']}. Original source preserved.")
+        elif row['status']=='NO_COMPATIBLE_MATCH':
+            correctable=[c['name'] for c in row['candidates'] if c.get('date_correctable')]
+            lines.append(f"- Unpaired: {row['name']}; "+('date correction requires review: '+', '.join(correctable) if correctable else 'no salary revision covers every observed player/role on the recorded date; see rejected candidates in Review Salary Matches.'))
     lines.extend('- WARNING: ' + warning for warning in state['warnings'])
     lines.extend([f"- Pairing database identity: {state['database_identity']}.",
                   '- Pairing validates observed roster identities and source revisions; full eligible-pool coverage and payouts remain unverified.'])

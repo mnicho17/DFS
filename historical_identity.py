@@ -21,11 +21,13 @@ from compute_ledger import instrument_reconciliation, phase
 from results_audit import _number
 
 SCHEMA_VERSION = 1
-METHOD_VERSION = 2
+METHOD_VERSION = 5
 STATES = ('UNRESOLVED', 'CANDIDATE', 'SALARY_QUALIFIED', 'SNAPSHOT_QUALIFIED',
           'BUILD_QUALIFIED', 'OUTCOME_QUALIFIED')
 MAX_RESULTS = 200_000
 MAX_SCORE_ROWS = 5000
+MAX_OUTCOME_ROWS = 2_000_000
+MAX_OUTCOME_BYTES = 1_000_000_000
 
 
 def _json(value):
@@ -91,7 +93,7 @@ def _inventory(root, cancelled, evidence_reader=None):
     from review_build_evidence import Reader, snapshot, timestamp, archive_identity
     # Use one cancellation exception throughout the reconciliation API, including
     # directory enumeration before individual files are opened.
-    reader = evidence_reader or Reader(lambda: _check(cancelled))
+    reader = evidence_reader or Reader(lambda: _check(cancelled), historical=True)
     snapshots, archives, issues = {}, {}, Counter()
     for folder, suffix in (('snapshots', '.json'), ('build-archives', '.zip')):
         for path in reader.paths(Path(root) / folder, suffix):
@@ -166,73 +168,127 @@ def _stored_role_coverage(rows, manifest, salary, cancelled):
     return qualify_pair({'manifest':dict(manifest,observed=sorted(observed))},{'manifest':salary})
 
 
-def _outcomes(source, salary, cancelled):
-    """Observe the immutable result side table, including duplicate conflicts.
+def _result_rows(source, cancelled):
+    """Stream the complete immutable standings, with separate finite scan limits."""
+    if Path(source['snapshot']).stat().st_size > MAX_OUTCOME_BYTES:
+        raise OverflowError('result byte budget')
+    with open(source['snapshot'], newline='', encoding='utf-8-sig') as handle:
+        reader = csv.DictReader(handle)
+        for index, row in enumerate(reader):
+            _check(cancelled)
+            if index >= MAX_OUTCOME_ROWS:
+                raise OverflowError('result row budget')
+            yield row
 
-    Base scores apply once per athlete; Captain scores are explicitly 1.5x base.
-    An observed Captain value is also checked. Missing base values stay unknown.
+
+def _outcomes(source, salary, cancelled, *, usernames=()):
+    """Full-pool scores and scoped roster-row coverage are separate evidence.
+
+    Two streaming passes avoid retaining an entire field in memory. Missing
+    eligible scores remain unknown; coverage counts rows, not unique entries,
+    users, submitted portfolios or proof of a complete contest.
     """
     from review_build_evidence import roster_key, name_key
     observed, conflicts, limitations = defaultdict(set), set(), []
-    result_rosters = set()
+    coverage = Counter()
+    from historical_field_report import FieldRows, RankRows, positive_integer
+    from opponent_analysis import username_key
+    field_rows = FieldRows(salary)
+    rank_rows = RankRows()
+    scan_complete = False
+    rows = []
     try:
         with open(source['snapshot'], newline='', encoding='utf-8-sig') as handle:
-            reader = csv.DictReader(handle)
-            if not {'Player', 'FPTS'} <= set(reader.fieldnames or []):
-                limitations.append('missing_player_score_table')
+            header = next(csv.reader(handle), [])
+        has_scores = {'Player', 'FPTS'} <= set(header)
+        if not has_scores:
+            limitations.append('missing_player_score_table')
+        for row in _result_rows(source, cancelled):
+            rank_rows.add(row)
+            if not has_scores:
+                continue
+            name = _name(row.get('Player') or '')
+            if not name:
+                continue
+            role = str(row.get('Roster Position') or '').strip().upper()
+            key = ('@cpt:' if role in ('CPT', 'CAPTAIN') else '') + name
+            value = _number(row.get('FPTS'))
+            if value is not None:
+                observed[key].add(value)
+            if len(observed) > MAX_SCORE_ROWS:
+                raise OverflowError('score identity budget')
+        for key, values in observed.items():
+            if max(values) - min(values) > .02:
+                conflicts.add(key)
+        for player in salary['players']:
+            name = _name(player['name'])
+            captain = player['role'] == 'CPT'
+            key = ('@cpt:' if captain else '') + name
+            values = observed.get(name, set())
+            value = min(values) if values and name not in conflicts else None
+            score = value * (1.5 if captain else 1) if value is not None else None
+            if captain and score is not None and any(abs(v-score) > .02 for v in observed.get(key, ())):
+                conflicts.add(key)
+            if key in conflicts or name in conflicts:
+                score = None
+            rows.append(dict(player_id=player['id'], name=player['name'], role=player['role'], actual=score,
+                             basis='base_score_x1.5' if captain else 'observed_base_score'))
+        by_role = {('@cpt:' if r['role']=='CPT' else '')+name_key(r['name']):r['actual'] for r in rows}
+        rank_size, rank_basis = rank_rows.receipt()
+        field_rows = FieldRows(salary, usernames=usernames,rank_size=rank_size,rank_basis=rank_basis)
+        for row in _result_rows(source, cancelled):
+            if not (row.get('EntryId') or row.get('EntryName')):
+                continue
+            coverage['entry_rows'] += 1
+            text = row.get('Lineup') or row.get('Roster') or ''
+            field_rows.add(text, rank=positive_integer(row.get('Rank')),username=username_key(str(row.get('EntryName') or '')))
+            parsed = roster_key(text)
+            if not text.strip():
+                coverage['blank_roster_rows'] += 1
+            elif not parsed or parsed[0] != salary['format']:
+                coverage['malformed_roster_rows'] += 1
             else:
-                for index, row in enumerate(reader):
-                    _check(cancelled)
-                    if index >= MAX_RESULTS or len(observed) > MAX_SCORE_ROWS:
-                        limitations.append('player_score_read_limit')
-                        break
-                    if row.get('EntryId') or row.get('EntryName'):
-                        parsed = roster_key(row.get('Lineup') or row.get('Roster'))
-                        total = _number(row.get('Points') or row.get('ActualPoints'))
-                        if parsed and total is not None:
-                            result_rosters.add((parsed[1],total))
-                    name = _name(row.get('Player') or '')
-                    if not name:
-                        continue
-                    role = str(row.get('Roster Position') or '').strip().upper()
-                    key = ('@cpt:' if role in ('CPT', 'CAPTAIN') else '') + name
-                    value = _number(row.get('FPTS'))
-                    if value is not None:
-                        observed[key].add(value)
+                coverage['readable_roster_rows'] += 1
+                total = _number(row.get('Points') or row.get('ActualPoints'))
+                values = [by_role.get(key) for key in parsed[1]]
+                if total is None:
+                    coverage['missing_total_rows'] += 1
+                elif any(value is None for value in values):
+                    coverage['unknown_score_roster_rows'] += 1
+                else:
+                    coverage['checked_roster_rows'] += 1
+                    if abs(sum(values)-total) > .15:
+                        coverage['conflicting_total_rows'] += 1
+                    else:
+                        coverage['score_supported_roster_rows'] += 1
         _verify(source, cancelled)
+        scan_complete = True
+    except OverflowError:
+        limitations.append('player_score_read_limit')
     except (OSError, UnicodeError, ValueError, csv.Error):
         limitations.append('result_source_unavailable_or_changed')
-        observed.clear()
-    for key, values in observed.items():
-        if max(values) - min(values) > .02:
-            conflicts.add(key)
-    rows = []
-    for player in salary['players']:
-        name = _name(player['name'])
-        key = ('@cpt:' if player['role'] == 'CPT' else '') + name
-        values = observed.get(name, set())
-        value = min(values) if values and name not in conflicts else None
-        captain = player['role'] == 'CPT'
-        score = value * (1.5 if captain else 1) if value is not None else None
-        if captain and score is not None and any(abs(v-score) > .02 for v in observed.get(key, ())):
-            conflicts.add(key)
-        if key in conflicts or name in conflicts:
-            score = None
-        rows.append(dict(player_id=player['id'], name=player['name'], role=player['role'], actual=score,
-                         basis='base_score_x1.5' if captain else 'observed_base_score'))
-    unknown = sum(r['actual'] is None for r in rows)
-    by_role = {('@cpt:' if r['role']=='CPT' else '')+name_key(r['name']):r['actual'] for r in rows}
-    checked = mismatches = 0
-    for roster, total in result_rosters:
-        values = [by_role.get(k) for k in roster]
-        if all(v is not None for v in values):
-            checked += 1
-            mismatches += abs(sum(values)-total) > .15
-    if mismatches:
+    if not scan_complete:
+        # No partial score pool or subset coverage may authorize analysis.
+        rows = [dict(player_id=p['id'], name=p['name'], role=p['role'], actual=None,
+                     basis='observed_base_score') for p in salary['players']]
+        coverage.clear()
+    if coverage['conflicting_total_rows']:
         limitations.append('roster_actual_total_conflict')
+    unknown = sum(r['actual'] is None for r in rows)
+    counts = {key:coverage[key] for key in ('entry_rows','blank_roster_rows','malformed_roster_rows',
+        'readable_roster_rows','missing_total_rows','unknown_score_roster_rows','checked_roster_rows',
+        'conflicting_total_rows','score_supported_roster_rows')}
+    field_summary = field_rows.payload(scan_complete)
+    from learning_db import _infer_field_preset
+    field_summary['entry_preset'] = _infer_field_preset(' '.join([source.get('name',''),*source.get('manifest',{}).get('contest_names',[])]))
     return dict(eligible_player_roles=len(rows), known_scores=len(rows)-unknown, unknown_scores=unknown,
                 conflicting_scores=sorted(conflicts), scores=rows, limitations=limitations,
-                checked_roster_totals=checked, conflicting_roster_totals=mismatches,
+                checked_roster_totals=coverage['checked_roster_rows'],
+                conflicting_roster_totals=coverage['conflicting_total_rows'],
+                field_row_summary=field_summary,
+                roster_row_coverage=dict(counts, scan_complete=scan_complete,
+                    usable=scan_complete and bool(coverage['score_supported_roster_rows']) and not conflicts and not limitations,
+                    basis='source rows only; duplicate EntryIds are not deduplicated; not complete-field or submission evidence'),
                 complete=bool(rows) and not unknown and not conflicts and not limitations,
                 captain_handling='separate salary IDs; base scores counted once; Captain = 1.5x base')
 
@@ -319,7 +375,9 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
         conflicts.append('stored_result_player_role_conflict')
         blockers.append('incomplete_stored_player_role_coverage')
         return result
-    outcome = _outcomes(source, salary, cancelled)
+    from opponent_analysis import username_key
+    usernames = sorted({username_key(str(r['raw'].get('entryname') or '')) for r in rows} - {''})
+    outcome = _outcomes(source, salary, cancelled, usernames=usernames)
     result['actual_score_evidence'] = outcome
     try:
         _verify(by_hash[selected], cancelled)
@@ -331,8 +389,13 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
         conflicts.append('source_revision_changed_during_reconciliation')
         blockers.append('restore_immutable_source_revision')
         return result
-    if pair['unreadable'] or not pair['readable']:
+    roster_coverage = outcome['roster_row_coverage']
+    result['results_evidence']['roster_row_coverage'] = roster_coverage
+    result['results_evidence']['field_row_summary'] = outcome['field_row_summary']
+    if not roster_coverage['readable_roster_rows']:
         blockers.append('unreadable_result_rosters')
+    elif roster_coverage['blank_roster_rows'] or roster_coverage['malformed_roster_rows']:
+        limitations.append('excluded_unreadable_result_rows')
     if outcome['unknown_scores']:
         blockers.append('unknown_eligible_actual_scores')
     if outcome['conflicting_scores']:
@@ -342,8 +405,11 @@ def _contest(ident, key, rows, source, pair, basis, by_hash, snapshots, archives
     invalid_rows = sum(not (parsed := roster_key(r['raw'].get('lineup') or r['raw'].get('roster'))) or
                        parsed[0] != salary['format'] for r in rows)
     result['results_evidence']['unreadable_stored_rosters'] = invalid_rows
-    if invalid_rows:
+    result['results_evidence']['readable_stored_rosters'] = len(rows)-invalid_rows
+    if invalid_rows and invalid_rows == len(rows):
         blockers.append('unreadable_stored_result_rosters')
+    elif invalid_rows:
+        limitations.append('excluded_unreadable_stored_rows')
     compatible = [s for s in snapshots if _snapshot_compatible(s, salary)]
     candidate_ids = {s['raw']['input_id'] for s in compatible if s['pregame']}
     result['build_candidates'] = [a for a in archives if a['input_id'] in candidate_ids and a['pregame'] and a['completed']]
@@ -474,6 +540,7 @@ def derive_contests(conn, root, *, cancelled=lambda: False, progress=lambda text
             outcome['cross_contest_conflicts'] = affected
             if affected:
                 outcome['complete'] = False
+                outcome['roster_row_coverage']['usable'] = False
                 data['conflicts'] = sorted(set(data['conflicts']+['cross_contest_actual_score_conflict']))
                 if data['state']=='OUTCOME_QUALIFIED':
                     data['state']='BUILD_QUALIFIED'

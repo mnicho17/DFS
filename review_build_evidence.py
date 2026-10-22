@@ -186,9 +186,17 @@ def explanation(snap, details_left):
             'player_decisions': summary, **({'player_details': detail} if details_left else {})}
 
 
+HISTORY_MAX_FILES = 2000
+HISTORY_MAX_DIRECTORY_ENTRIES = 10000
+HISTORY_MAX_TOTAL_BYTES = 1_000_000_000
+
+
 class Reader:
-    def __init__(self, cancelled):
+    def __init__(self, cancelled, *, historical=False):
         self.cancelled = cancelled
+        self.max_files = HISTORY_MAX_FILES if historical else MAX_FILES
+        self.max_directory_entries = HISTORY_MAX_DIRECTORY_ENTRIES if historical else MAX_DIRECTORY_ENTRIES
+        self.max_total_bytes = HISTORY_MAX_TOTAL_BYTES if historical else MAX_TOTAL_BYTES
         self.bytes = 0
         self.issues = Counter()
         self.receipts = {}
@@ -199,7 +207,7 @@ class Reader:
 
     def consume(self, amount):
         self.check()
-        if amount > MAX_FILE_BYTES or self.bytes + amount > MAX_TOTAL_BYTES:
+        if amount > MAX_FILE_BYTES or self.bytes + amount > self.max_total_bytes:
             raise OverflowError('read budget')
         self.bytes += amount
 
@@ -209,13 +217,16 @@ class Reader:
             if folder.is_symlink() or getattr(folder, 'is_junction', lambda: False)():
                 self.issues['unsupported_directory'] += 1
                 return []
-            entries = list(itertools.islice(folder.iterdir(), MAX_DIRECTORY_ENTRIES + 1))
-            if len(entries) > MAX_DIRECTORY_ENTRIES:
+            entries = []
+            for entry in itertools.islice(folder.iterdir(), self.max_directory_entries + 1):
+                self.check()
+                entries.append(entry)
+            if len(entries) > self.max_directory_entries:
                 self.issues['directory_scan_limit'] += 1
-            paths = sorted((p for p in entries[:MAX_DIRECTORY_ENTRIES] if p.suffix == suffix), reverse=True)
-            if len(paths) > MAX_FILES:
-                self.issues['file_count_limit'] += len(paths) - MAX_FILES
-            return paths[:MAX_FILES]
+            paths = sorted((p for p in entries[:self.max_directory_entries] if p.suffix == suffix), reverse=True)
+            if len(paths) > self.max_files:
+                self.issues['file_count_limit'] += len(paths) - self.max_files
+            return paths[:self.max_files]
         except FileNotFoundError:
             return []
         except OSError:

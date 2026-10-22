@@ -376,7 +376,7 @@ class HindsightEvidenceTests(unittest.TestCase):
 
     def test_read_limits_source_change_missing_db_and_linked_roots_fail_without_writes(self):
         chosen=self.f.selection();before=logical_db(self.f.db);files=source_bytes(self.f.root)
-        with patch.object(be,'MAX_TOTAL_BYTES',10),self.assertRaises(OverflowError):he.capture(self.f.db,chosen)
+        with patch.object(be,'HISTORY_MAX_TOTAL_BYTES',10),self.assertRaises(OverflowError):he.capture(self.f.db,chosen)
         with self.assertRaises(ValueError):he.capture(self.f.root/'absent.sqlite',chosen)
         self.assertFalse((self.f.root/'absent.sqlite').exists())
         with patch.object(Path,'is_symlink',return_value=True),self.assertRaises(ValueError):he.capture(self.f.db,chosen)

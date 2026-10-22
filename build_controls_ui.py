@@ -30,6 +30,8 @@ def setup_build_controls(window, panel, grid):
     w.lbl_nfl_scenarios=QtWidgets.QLabel('Scenarios')
     grid.addWidget(w.lbl_nfl_scenarios,4,2);grid.addWidget(w.spin_nfl_sim_scenarios,4,3)
     grid.addWidget(w.lbl_compute_summary,5,0,1,4)
+    grid.addWidget(w.chk_showdown_history,6,0,1,2)
+    grid.addWidget(w.btn_showdown_history,6,2,1,2)
     for col in (1,3):grid.setColumnStretch(col,1)
     # Existing controls remain the recipe source of truth but no longer duplicate the profile picker.
     w.combo_nfl_compute_mode.setParent(panel);w.lbl_nfl_compute_mode.setParent(panel)
@@ -52,6 +54,7 @@ def setup_build_controls(window, panel, grid):
     w.combo_compute_profile.activated[str].connect(apply)
     w.chk_nfl_contest_sim.toggled.connect(lambda *_:sync_build_controls(w))
     w.spin_nfl_sim_scenarios.valueChanged.connect(lambda *_:sync_build_controls(w))
+    w.chk_showdown_history.toggled.connect(lambda *_:sync_build_controls(w))
 
 
 def sync_build_controls(w):
@@ -67,6 +70,8 @@ def sync_build_controls(w):
     w.chk_nfl_contest_sim.setVisible(nfl and not deep and w._contest_mode()!='showdown')
     w.lbl_nfl_scenarios.setVisible(nfl and not deep and w._contest_mode()!='showdown' and w.chk_nfl_contest_sim.isChecked())
     w.spin_nfl_sim_scenarios.setVisible(not w.lbl_nfl_scenarios.isHidden())
+    w.chk_showdown_history.setVisible(nfl and w._contest_mode()=='showdown')
+    w.btn_showdown_history.setVisible(nfl and w._contest_mode()=='showdown')
     all_styles=nfl and deep and w.deep_compute_settings['all_styles']
     w.combo_build_style.setEnabled(not all_styles)
     w.lbl_build_style.setText('Build style (all searched)' if all_styles else 'Build style')

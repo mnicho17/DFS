@@ -80,15 +80,36 @@ def format_field(report):
     if report['showdown']:
         lines.append(f"- Both defenses: {report['both_defenses_pct']:.1f}%; three-plus kickers/defenses: {report['three_specialists_pct']:.1f}%")
     sampling=report.get('sampling') or {}
+    history=sampling.get('history_use') or {}
+    if report['showdown']:
+        if history:
+            lines.append(f"- Historical field use: {history['status']}; profile {history['profile_id'][:12]}; {history['preset']}; {history['games']} prior games, {history['entries']:,} known entries, strictly before {history['cutoff']}; historical weight {100*history['history_weight']:.0f}%.")
+            lines.append('- History coverage: '+history['coverage_basis']+'. '+history['validation_status']+'.')
+            if history.get('reason'):lines.append('- History fallback reason: '+history['reason'])
+            if 'historical_ownership_mae_pp' in history:
+                lines.append(f"- History acceptance guard: ownership MAE {history['baseline_ownership_mae_pp']:.2f} → {history['historical_ownership_mae_pp']:.2f} pp; allowed increase at most {history['ownership_tolerance_pp']:.2f} pp, complete field, and no worse fit to blended construction targets.")
+        else:
+            lines.append('- Historical field use: not enabled for this simulation. Saved username/construction history does not enter this opponent field.')
     if sampling:
-        lines.append(f"- Field model: {sampling['model']}; experimental salary-spending prior, not learned from results.")
-        lines.append('- Salary bands (target / sampled entries): ' + '; '.join(f"{key}: {target} / {sampling.get('salary_band_counts',{}).get(key,0)}" for key,target in sampling.get('salary_band_targets',{}).items()))
-        lines.append(f"- Salary-band fallback entries: {sampling.get('fallback_entries',0)}; requested field {sampling['requested']:,}, returned {report['entries']:,}. Shortages and cancellation can change the mix.")
+        lines.append(f"- Field model: {sampling['model']}; "+('experimental historical construction blend.' if history.get('status')=='applied' else 'experimental salary-spending prior, not learned from results.'))
+        if sampling.get('salary_band_targets'):
+            lines.append('- Salary bands (target / sampled entries): ' + '; '.join(f"{key}: {target} / {sampling.get('salary_band_counts',{}).get(key,0)}" for key,target in sampling.get('salary_band_targets',{}).items()))
+            lines.append(f"- Salary-band fallback entries: {sampling.get('fallback_entries',0)}; requested field {sampling['requested']:,}, returned {report['entries']:,}. Shortages and cancellation can change the mix.")
+        if history.get('status')=='applied':
+            lines.append('- Historical targets shape opponents, without hard construction quotas. Current athlete identities and ownership forecasts are retained; historical winners are not used to train targets.')
+            if sampling.get('unavailable_targets'):lines.append('- Unavailable historical construction targets: '+str(sampling['unavailable_targets']))
         if sampling.get('model') == 'showdown-salary-bands-v2':
             lines.append('- Band-conditioned sampling: draw Captain and four FLEX players, then a weighted legal fifth FLEX for an underfilled salary band. This experimental sampler is not a calibrated joint ownership model; feedback cannot trade a worse salary-band shortage for lower ownership error.')
     if report['candidate_fallback']:
         lines.append('- Field generation failed; candidates were used as fallback opponents. This is not an independently generated field.')
     fit=report.get('ownership_fit') or {}
+    salary_check=(report.get('sampling') or {}).get('ownership_salary_check')
+    if salary_check:
+        lines.append(f"- Ownership/salary compatibility: slot ownership implies mean salary ${salary_check['ownership_implied_mean']:,.2f}; requested salary-band mix permits ${salary_check['band_mean_min']:,.2f}–${salary_check['band_mean_max']:,.2f} on average.")
+        if salary_check['incompatible']:
+            lines.append('- Incompatible targets: exact ownership percentages and the requested salary-band mix cannot both be met. More ownership feedback passes cannot resolve this conflict. No targets or settings were changed.')
+        else:
+            lines.append('- Mean-salary condition satisfied; this does not prove joint player/slot feasibility or ownership accuracy.')
     if fit.get('status')=='completed':
         lines.append(f"- Ownership matching: MAE {fit['before_mae_pp']:.2f} → {fit['after_mae_pp']:.2f} pp; {fit['passes']} feedback passes. Legal field with lowest error retained; targets are not guaranteed. This is matching to forecasts, not historical accuracy.")
     elif fit:

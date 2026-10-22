@@ -8,13 +8,26 @@ import statistics
 from scoring_distributions import load_distribution
 
 
-def compare_distributions(conn,import_id,input_id,kind,scores,folder):
+def compare_distributions(conn,import_id,input_id,kind,scores,folder,*,cancelled=lambda:False):
+    from analysis_imports import _check
+    from distribution_build_selection import resolve_choice
+    selection=None;selection_error=''
+    try:
+        selection=resolve_choice(conn,import_id,folder,kind,scores,cancelled)
+        if selection:input_id=selection['input_id']
+    except (ValueError,OSError,KeyError,TypeError) as exc:
+        selection_error=str(exc)
+        input_id=None
     rows=[];skipped=0;candidates=[]
     if input_id:
         for path in (Path(folder)/'scoring-distributions').glob(input_id+'-*.json'):
             try:
                 value=load_distribution(path);p=value['payload']
                 if p['input_id']!=input_id or p['kind']!=kind:continue
+                if selection and value['capture_id']!=selection['capture_id']:continue
+                if selection:
+                    import hashlib
+                    if hashlib.sha256(path.read_bytes()).hexdigest()!=selection['capture_digest']:continue
                 finished=dt.datetime.fromisoformat(p['finished_at']);started=dt.datetime.fromisoformat(p['started_at'])
                 if not finished.tzinfo or not started.tzinfo or started>finished:continue
                 candidates.append((finished,value))
@@ -35,6 +48,10 @@ def compare_distributions(conn,import_id,input_id,kind,scores,folder):
                 captured_at=p['finished_at'],scenarios=p['scenarios']))
     payload=dict(version=1,rows=rows,skipped=skipped,status='matched' if rows else 'unavailable',
         reason='Exact snapshot ID and completed pre-kickoff capture required; older inputs do not recreate historical simulation ranges.')
+    if selection:
+        payload.update(input_id=input_id,capture_id=selection['capture_id'],selection='explicit validation build; submission not established',model=selection['model'])
+    if selection_error:payload.update(status='unavailable',reason=selection_error)
+    _check(cancelled)
     conn.execute('CREATE TABLE IF NOT EXISTS distribution_validations(import_id TEXT PRIMARY KEY,payload TEXT)')
     conn.execute('INSERT OR REPLACE INTO distribution_validations VALUES (?,?)',(import_id,json.dumps(payload,allow_nan=False)))
     return payload
@@ -49,6 +66,9 @@ def validation_report(conn):
     for name,encoded in conn.execute('SELECT h.file_name,d.payload FROM distribution_validations d JOIN historical_imports h ON h.import_id=d.import_id'):
         p=json.loads(encoded);all_rows.extend(p['rows'])
         lines.append(f"- {name}: {len(p['rows'])} player comparisons; {p['status']}; {p['skipped']} capture rows excluded for missing/ambiguous game identity or timing.")
+        if p.get('selection'):
+            lines.append(f"  SIM validation build: {p['input_id']}; capture {p['capture_id']}; {p['selection']}; model {p['model']}.")
+        if p['status']=='unavailable':lines.append('  Reason: '+p.get('reason','No qualifying capture.'))
     if not all_rows:return lines+['- No qualifying ranges saved for these results. Historical snapshots alone cannot supply them. New pre-game builds capture them automatically; no extra long run is needed.']
     outcomes=defaultdict(list)
     for r in all_rows:outcomes[(r['game'],r['name'])].append(r['actual'])

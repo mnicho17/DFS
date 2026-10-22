@@ -168,12 +168,16 @@ class HistoricalCoverageWidget(QtWidgets.QWidget):
             summary = aggregate(saved['contests'])
             levels = summary['evidence_levels']
             cats = summary['categories']
+            scoped = summary['roster_row_coverage']
             self.summary.setText(f"Historical contests reconciled: {len(self.rows)} | " +
                 ' | '.join(f'{label}: {levels.get(k,0)}' for label,k in
                            [('Results','results'),('Salary','salary'),('Snapshot','snapshot'),('Build','build'),('Complete scores','outcome')]) +
                 f"\nFull chain ready: {cats.get('ready',0)} | Needs review: {cats.get('needs_review',0)} | "
                 f"Missing evidence: {cats.get('missing_evidence',0)} | Conflicts: {cats.get('conflict',0)} (included in review). "
                 'Stage counts are independent.' +
+                f"\nScoped roster scores: {scoped.get('usable_sources',0)} sources; {scoped.get('score_supported_roster_rows',0):,} supported rows. "
+                f"Excluded: {scoped.get('blank_roster_rows',0):,} blank and {scoped.get('malformed_roster_rows',0):,} malformed roster rows. "
+                'Counts include duplicate EntryIds and do not establish full-field coverage.' +
                 f"\nLast evidence change: {saved['updated_at'] or 'not yet reconciled'}. "
                 f"Imports awaiting first reconciliation: {saved['pending_imports']}; unreadable derived rows: {saved['invalid_rows']}. "
                 'Saved states may be stale. Generated builds do not establish submission.')

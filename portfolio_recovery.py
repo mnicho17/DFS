@@ -9,10 +9,11 @@ CONCENTRATION_WARNING = ('Portfolio concentration increased to complete the requ
 
 
 def explicit_lineup_ok(keys, captain_key, players):
+    pool = {key for key, player in players.items() if player.get('LockCpt')}
+    if pool and captain_key not in pool:
+        return False
     for key, player in players.items():
         if player.get('LockFlex') and (key not in keys or key == captain_key):
-            return False
-        if player.get('LockCpt') and key != captain_key:
             return False
         if key in keys and player.get('FadeCpt' if key == captain_key else 'FadeFlex'):
             return False
@@ -35,7 +36,7 @@ def recovery_diagnostics(requested, strict_count, starting):
 
 
 def recover(pool, retained, selected, meta, conflicts, limits, group_ok, score, *,
-            total_keys, captain_keys, diagnostics, deadline, cancelled, conflict_groups=None):
+            total_keys, captain_keys, diagnostics, deadline, cancelled, conflict_groups=None, captain_targets=None):
     """Try three cap ceilings; explicit limits and candidates never change.
 
     The final stage permits up to the request, but commits only the increases
@@ -45,9 +46,11 @@ def recover(pool, retained, selected, meta, conflicts, limits, group_ok, score, 
     from portfolio_feasibility import repair, valid_portfolio
     starting = diagnostics['starting_automatic_caps']
     requested = limits['requested']
+    captain_targets = captain_targets or {}
     if not total_keys and not captain_keys and starting['specialist'] is None:
         return None, limits
-    for stage, factor in [('ceil+10%', 1.10), ('ceil+25%', 1.25), ('required', None)]:
+    stages = [('ceil+10%', 1.10), ('ceil+25%', 1.25), ('required', None)]
+    for stage_index, (stage, factor) in enumerate(stages):
         if cancelled():
             raise ValueError('Selection cancelled')
         if time.perf_counter() >= deadline:
@@ -58,12 +61,16 @@ def recover(pool, retained, selected, meta, conflicts, limits, group_ok, score, 
         for label, keys in [('total', total_keys), ('captain', captain_keys)]:
             for key in keys:
                 trial[label][key] = increased(starting[label][key])
+        for key, target in captain_targets.items():
+            trial['min_captain'][key] = 1 if factor is None else max(1, math.floor(target / factor + 1e-9))
         if starting['specialist'] is not None:
             trial['specialist'] = increased(starting['specialist'])
         diagnostics['automatic_recovery_ran'] = True
         diagnostics['attempted_stages'].append(stage)
+        remaining = max(0, deadline - time.perf_counter())
+        stage_seconds = remaining / (len(stages) - stage_index) if captain_targets else remaining
         result = repair(pool, retained, selected, meta, conflicts, trial, group_ok, score,
-                        seconds=max(0, deadline - time.perf_counter()),
+                        seconds=stage_seconds,
                         cancelled=cancelled, conflict_groups=conflict_groups)
         if cancelled():
             raise ValueError('Selection cancelled')
@@ -76,6 +83,10 @@ def recover(pool, retained, selected, meta, conflicts, limits, group_ok, score, 
                 trial[label][key] = max(starting[label][key], counts[key])
         if starting['specialist'] is not None:
             trial['specialist'] = max(starting['specialist'], sum(meta[id(lu)]['specialist_captain'] for lu in result))
+        if captain_targets:
+            diagnostics['captain_pool_allocation'] = {
+                key: dict(target=target, selected=captain[key])
+                for key, target in sorted(captain_targets.items())}
         diagnostics.update(recovery_stage=stage, final_selected_count=len(result),
                            effective_automatic_caps=automatic_caps(trial, total_keys, captain_keys))
         return result, trial
@@ -89,6 +100,8 @@ def format_recovery(report):
              f"{report['strict_selected_count']}; automatic recovery "
              f"{'ran' if report['automatic_recovery_ran'] else 'not needed / not run'}; "
              f"stage {report['recovery_stage']}; final selected {report['final_selected_count']}."]
+    if report.get('attempted_stages'):
+        lines.append('Automatic recovery stages attempted: ' + ', '.join(report['attempted_stages']) + '.')
     starting = report['starting_automatic_caps']
     lines.append('Starting automatic caps (lineups): total ' + ', '.join(map(str, sorted(set(starting['total'].values()))))
                  + '; Captain ' + ', '.join(map(str, sorted(set(starting['captain'].values()))))
@@ -99,6 +112,9 @@ def format_recovery(report):
         changes = [f'{key}: {start[key]} -> {end[key]}' for key in start if start[key] != end[key]]
         if changes:
             lines.append(f"Automatic {title} caps (lineups): " + '; '.join(changes))
+    for key, row in report.get('captain_pool_allocation', {}).items():
+        if row['target'] != row['selected']:
+            lines.append(f"Automatic Captain allocation {key}: {row['target']} -> {row['selected']} lineups (locked pool preserved).")
     start = report['starting_automatic_caps']['specialist']
     end = report['effective_automatic_caps']['specialist']
     if start != end:
@@ -113,6 +129,9 @@ def aggregate_recovery(report):
     result = deepcopy(report)
     keys = sorted(set(report['starting_automatic_caps']['total']) | set(report['starting_automatic_caps']['captain']))
     labels = {key: f'player {index + 1}' for index, key in enumerate(keys)}
+    if 'captain_pool_allocation' in result:
+        result['captain_pool_allocation'] = {labels[key]: value
+            for key, value in result['captain_pool_allocation'].items()}
     for field in ('starting_automatic_caps', 'effective_automatic_caps'):
         for role in ('total', 'captain'):
             result[field][role] = {labels[key]: value for key, value in report[field][role].items()}

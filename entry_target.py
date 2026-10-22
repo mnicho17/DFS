@@ -44,9 +44,19 @@ def sync_entry_target(w, persist=False, count=None, kind=None):
             w.deep_compute_settings['selection_mode']=target['selection_mode']
         if nfl:
             summary=('Auto: '+target['label']) if auto else 'Manual contest and selection settings'
-            summary+=' · Showdown opponent sample remains generic.' if kind=='showdown' else ' · Actual field size/payouts require a contest profile.'
+            if kind=='showdown':
+                history=getattr(w,'chk_showdown_history',None)
+                requested=history is not None and history.isChecked()
+                deep=w.chk_nfl_contest_sim.isChecked() and w.combo_nfl_compute_mode.currentText().startswith('Deep')
+                summary+=(' · Historical field requested; see build report for application or fallback.' if deep else
+                          ' · Historical field requested; choose a Deep profile to use it.') if requested else ' · Showdown opponent sample remains generic.'
+            else:
+                summary+=' · Actual field size/payouts require a contest profile.'
             text=w.lbl_compute_summary.text().split('\nEntry target:')[0]
             if auto:
                 for mode in ('Individual ranking','Portfolio selection'):text=text.replace(mode,target['selection_mode'])
             w.lbl_compute_summary.setText(text+'\nEntry target: '+summary)
-    finally:w._syncing_entry_target=False
+    finally:
+        w._syncing_entry_target=False
+        from simple_build_ui import sync_simple_build_panel
+        sync_simple_build_panel(w)

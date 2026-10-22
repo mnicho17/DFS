@@ -127,6 +127,12 @@ class ReviewReportTests(unittest.TestCase):
         self.assertFalse(self.db.parent.exists())
         parent = ResultsLearningDialog()
         self.dialogs.append(parent)
+        parent.refresh_report()
+        deadline = time.monotonic() + 10
+        while parent._import_thread is not None and time.monotonic() < deadline:
+            self.app.processEvents()
+            time.sleep(.002)
+        self.assertIsNone(parent._import_thread)
         self.assertTrue(self.db.exists())  # Explicit preexisting legacy behavior.
         self.assertIsNotNone(parent.findChild(QtWidgets.QPushButton, 'exportReviewReportButton'))
         before = self.dump()

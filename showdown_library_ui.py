@@ -1,0 +1,297 @@
+"""Explicit desktop preparation with safe checkpointed pause and close."""
+import copy
+import threading
+import time
+from pathlib import Path
+from PyQt5 import QtCore,QtWidgets
+from showdown_library import prepare,status,validate_library
+from portfolio_rules import player_key
+
+
+class PreparationWorker(QtCore.QObject):
+    progress=QtCore.pyqtSignal(dict)
+    finished=QtCore.pyqtSignal(dict)
+    error=QtCore.pyqtSignal(str)
+
+    def __init__(self,path,players,seconds,limit,salary_cap,captain_keys=None,screen_snapshot=None,storage_bytes=8*1024**3,full_screen=False,skip_rosters=False):
+        super().__init__()
+        self.path,self.players,self.seconds,self.limit,self.salary_cap=path,copy.deepcopy(players),seconds,limit,salary_cap
+        self.stop=threading.Event();self.last_update=0
+        self.captain_keys=captain_keys
+        self.screen_snapshot=screen_snapshot
+        self.storage_bytes=storage_bytes
+        self.full_screen=full_screen
+        self.skip_rosters=skip_rosters
+
+    def update(self,value):
+        now=time.monotonic()
+        if now-self.last_update>=1 or value.get('complete') or value.get('screening_complete'):
+            self.last_update=now;self.progress.emit(value)
+
+    @QtCore.pyqtSlot()
+    def run(self):
+        try:
+            started=time.monotonic()
+            if self.skip_rosters:
+                result=status(self.path)
+            elif Path(self.path).suffix=='.sdfull':
+                from showdown_full_library import prepare as prepare_full
+                result=prepare_full(self.path,self.players,seconds=self.seconds,max_bytes=self.storage_bytes,
+                    salary_cap=self.salary_cap,cancelled=self.stop.is_set,progress=self.update)
+            else:
+                result=prepare(self.path,self.players,seconds=self.seconds,max_candidates=self.limit,
+                    salary_cap=self.salary_cap,cancelled=self.stop.is_set,progress=self.update,captain_keys=self.captain_keys)
+            if self.screen_snapshot and result['complete'] and not self.stop.is_set():
+                from slate_preparation import screening_request
+                from showdown_screening import prepare_screening
+                inputs=self.screen_snapshot['inputs'];recipe=inputs['recipe']
+                players,screen_request=screening_request(self.screen_snapshot)
+                profile=inputs.get('calibration',{}).get('showdown_field_profile')
+                if profile:
+                    from learning_db import history_db_path
+                    from showdown_history_field import revalidate_profile
+                    revalidate_profile(profile,history_db_path(),players,recipe.get('nfl_field_preset','150-Max'),
+                        self.stop.is_set,lambda text:self.update(dict(history_verification=text)))
+                remaining=self.seconds-(time.monotonic()-started)
+                if remaining>0:
+                    if self.full_screen:
+                        from showdown_full_screening import prepare as prepare_screening
+                    result.update(prepare_screening(self.path,players,**screen_request,seconds=remaining,
+                        cancelled=self.stop.is_set,progress=self.update))
+            result['screening_requested']=bool(self.screen_snapshot)
+            self.finished.emit(result)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class SlatePreparationWorker(PreparationWorker):
+    planned=QtCore.pyqtSignal(dict)
+
+    def __init__(self,snapshot,known,folder,seconds,storage_bytes):
+        from slate_preparation import ROSTER_LIMIT
+        super().__init__('',snapshot['inputs']['players'],seconds,ROSTER_LIMIT,
+            snapshot['inputs']['recipe'].get('salary_cap',50000),screen_snapshot=copy.deepcopy(snapshot),storage_bytes=storage_bytes)
+        self.known,self.folder=tuple(known),str(folder)
+
+    @QtCore.pyqtSlot()
+    def run(self):
+        from slate_preparation import plan_preparation
+        started=time.monotonic()
+        try:
+            plan=plan_preparation(self.screen_snapshot,self.known,self.folder,cancelled=self.stop.is_set,
+                progress=lambda text:self.progress.emit(dict(preparation_check=text)))
+            if self.stop.is_set():raise InterruptedError('Slate preparation cancelled.')
+            self.path=plan['path'];self.captain_keys=plan['scope'];self.skip_rosters=plan['stage']!='rosters'
+            plan['coverage']=status(self.path) if Path(self.path).exists() else dict(plan['info'],checked=0)
+            self.planned.emit(plan)
+            self.progress.emit(dict(preparation_check='Existing coverage and screening are ready.' if plan['stage']=='ready' else
+                'Queued missing '+('roster coverage and bounded screening.' if plan['stage']=='rosters' else 'bounded screening; roster coverage reused.')))
+            if plan['stage']=='ready':
+                self.finished.emit(dict(plan['info'],screening_complete=True,screening_requested=True,
+                    screening_reused=plan['screening_reused'],prepared_path=self.path));return
+            self.seconds-=time.monotonic()-started
+            if self.seconds<=0:raise ValueError('Preparation time allowance exhausted during coverage validation.')
+            Path(self.path).parent.mkdir(parents=True,exist_ok=True)
+            super().run()
+        except InterruptedError:
+            self.finished.emit(dict(cancelled=True,complete=False,screening_complete=False,saved=0,checked=0))
+        except Exception as exc:self.error.emit(str(exc))
+
+
+class PreparationDialog(QtWidgets.QDialog):
+    def __init__(self,snapshot,parent=None):
+        super().__init__(parent)
+        self.snapshot=copy.deepcopy(snapshot)
+        self.scope=sorted(player_key(p) for p in self.snapshot['inputs']['players'] if p.get('LockCpt')) or None
+        self.thread=self.worker=None;self.stop=None;self.pending=None;self.closing=False
+        self.readiness_store=getattr(parent,'slate_readiness',None);self.readiness_key=None
+        self.setWindowTitle('Prepare Showdown Roster Library')
+        layout=QtWidgets.QVBoxLayout(self)
+        from task_dashboard import add_task_button
+        add_task_button(self, layout)
+        note=QtWidgets.QLabel('Prepare reusable rosters while the PC is awake. With Captain locks, preparation covers those Captains; otherwise it covers all Captains. All FLEX combinations are considered, with current exclusions and rules applied later. Optional screening can score a bounded sample or every currently legal roster using captured inputs. Limits can leave partial coverage.')
+        note.setWordWrap(True);layout.addWidget(note)
+        self.path=QtWidgets.QLineEdit();self.path.setReadOnly(True);layout.addWidget(self.path)
+        row=QtWidgets.QHBoxLayout()
+        self.new=QtWidgets.QPushButton('New library');self.open=QtWidgets.QPushButton('Open existing')
+        row.addWidget(self.new);row.addWidget(self.open);layout.addLayout(row)
+        self.new.clicked.connect(self.choose_new);self.open.clicked.connect(self.choose_existing)
+        self.hours=QtWidgets.QComboBox()
+        for value in (1,2,4,8,12): self.hours.addItem(f'{value} hours',value)
+        self.limit=QtWidgets.QComboBox()
+        for value in (250000,1000000,5000000,10000000,50000000):self.limit.addItem(f'{value:,} saved rosters',value)
+        self.limit.setCurrentIndex(3)
+        self.full=QtWidgets.QCheckBox('Full slate: prepare every Captain in separate partitions')
+        self.full.setToolTip('Ignores Captain locks for roster preparation only. Current Captain locks and all rules still apply when building. Keep the manifest and its .parts folder together.')
+        layout.addWidget(self.full)
+        self.storage=QtWidgets.QComboBox()
+        for gb in (4,8,16,32):self.storage.addItem(f'{gb} GiB',gb*1024**3)
+        self.storage.setCurrentIndex(1);self.storage.setEnabled(False)
+        self.full.toggled.connect(self.change_format)
+        form=QtWidgets.QFormLayout();form.addRow('Maximum preparation time',self.hours);form.addRow('Stored roster limit',self.limit);layout.addLayout(form)
+        form.addRow('Full-library storage budget',self.storage)
+        self.screen=QtWidgets.QCheckBox('Also prepare screening for Deep reuse')
+        self.screen.setToolTip('Only complete libraries can be screened. Completed batches are saved for resume. Select the option below to screen every currently legal roster. Final SIM and audits run fresh.')
+        layout.addWidget(self.screen)
+        self.full_screen=QtWidgets.QCheckBox('Screen every currently legal roster (may require multiple nights)')
+        self.full_screen.setEnabled(False)
+        self.screen.toggled.connect(self.change_screen)
+        self.full_screen.setToolTip('Scores every legal roster under captured inputs and rules, retaining at most 20,000 leaders across Captains and constructions. Resume with identical inputs. Detailed SIM and audit remain fresh.')
+        layout.addWidget(self.full_screen)
+        self.message=QtWidgets.QLabel('Choose a new library or an existing checkpoint. Complete coverage is reported only after every combination is checked.')
+        self.message.setWordWrap(True);layout.addWidget(self.message)
+        self.start=QtWidgets.QPushButton('Start / Resume');self.pause=QtWidgets.QPushButton('Pause and save')
+        self.pause.setEnabled(False)
+        row=QtWidgets.QHBoxLayout();row.addWidget(self.start);row.addWidget(self.pause);layout.addLayout(row)
+        self.start.clicked.connect(self.begin);self.pause.clicked.connect(self.cancel)
+        self.idle=QtWidgets.QPushButton('Queue for idle time…')
+        self.idle.setToolTip('Session-only job using these captured inputs and limits. Pauses for app input, higher-priority work and shutdown; saved checkpoints remain resumable.')
+        self.idle.clicked.connect(self.queue_idle)
+        self.idle.setVisible(hasattr(parent,'idle_preparation'))
+        layout.addWidget(self.idle)
+        self.controls=(self.new,self.open,self.hours,self.limit,self.start,self.screen,self.full,self.storage,self.full_screen,self.idle)
+
+    def queue_idle(self):
+        if self.thread is not None or not self.path.text():return
+        controller=self.parent().idle_preparation
+        if controller.enqueue(self.path.text(),self.snapshot,self.hours.currentData()*3600,
+                self.limit.currentData(),self.scope,self.storage.currentData(),self.screen.isChecked(),self.full_screen.isChecked()):
+            from build_preparation import remember_library
+            remember_library(self.parent().app_settings,self.path.text())
+            self.accept()
+        else:self.message.setText('An idle preparation job is already queued or running. Cancel it in Tasks before queuing another.')
+
+    def change_screen(self,enabled):
+        self.full_screen.setEnabled(enabled)
+        if not enabled:self.full_screen.setChecked(False)
+
+    def change_format(self,full):
+        self.limit.setEnabled(not full);self.storage.setEnabled(full)
+        if bool(Path(self.path.text()).suffix=='.sdfull')!=full:self.path.clear()
+
+    def choose_new(self):
+        full=self.full.isChecked()
+        path,_=QtWidgets.QFileDialog.getSaveFileName(self,'New Showdown Roster Library',
+            'full-showdown.sdfull' if full else 'showdown-rosters.sdlib',
+            'Full Showdown manifest (*.sdfull)' if full else 'Showdown roster library (*.sdlib)')
+        if path:
+            if Path(path).exists():
+                self.message.setText('Choose a new filename; existing libraries must be opened for resume.');return
+            self.path.setText(path)
+            self.scope=sorted(player_key(p) for p in self.snapshot['inputs']['players'] if p.get('LockCpt')) or None
+
+    def choose_existing(self):
+        path,_=QtWidgets.QFileDialog.getOpenFileName(self,'Resume Showdown Roster Library','','Showdown roster library (*.sdlib *.sdfull *.sqlite)')
+        if not path:return
+        try:
+            recipe=self.snapshot['inputs']['recipe']
+            validate_library(path,self.snapshot['inputs']['players'],salary_cap=recipe.get('salary_cap',50000),allow_partial=True)
+            self.full.setChecked(Path(path).suffix=='.sdfull');self.path.setText(path)
+            saved=status(path);self.scope=saved['captains'];self.describe(saved)
+        except Exception as exc:self.message.setText(str(exc))
+
+    def describe(self,result):
+        if 'history_verification' in result:
+            self.message.setText(result['history_verification'])
+            return
+        if 'screened' in result:
+            total=result.get('screening_total')
+            scope=f"{total:,}" if total is not None else 'all legal rosters (counting)'
+            if result['screening_complete']:detail='screening complete. Final SIM remains fresh.'
+            elif result.get('pause_reason'):
+                detail='Paused: '+result['pause_reason']+'. Completed batches are saved; resume with the same captured inputs.'
+            elif result.get('screening_phase'):
+                detail=result['screening_phase']+'. '
+                if result.get('batch_candidates'):
+                    detail+=f"Current batch: {result['batch_candidates']:,} rosters; {result.get('batch_scenarios',0):,}/{result.get('batch_scenarios_total',0):,} scenarios. "
+                detail+=f"Last checkpoint {result.get('seconds_since_checkpoint',0):.0f}s ago; {result.get('remaining_seconds',0)/60:.1f} min remaining."
+            else:detail='partial screening; resume to continue.'
+            self.message.setText(f"Screened {result['screened']:,}/{scope} candidates; "+detail)
+            return
+        extra=f" {result['completed_partitions']}/{result['partition_count']} Captain partitions complete." if 'partition_count' in result else ''
+        if result.get('pause_reason'):extra+=' Paused: '+result['pause_reason']+'.'
+        if result.get('screening_requested') is False:extra+=' Screening was not requested; roster completion does not mean screening is complete.'
+        elif result.get('screening_requested') and 'screened' not in result:extra+=' Screening has not completed; resume with screening enabled.'
+        self.message.setText(f"{result['saved']:,} saved rosters; {result['checked']:,} combinations checked. Coverage: "+('complete.' if result['complete'] else 'partial; resume to continue.')+extra)
+
+    def begin(self):
+        if self.thread is not None or not self.path.text():return
+        recipe=self.snapshot['inputs']['recipe']
+        self.worker=PreparationWorker(self.path.text(),self.snapshot['inputs']['players'],
+            self.hours.currentData()*3600,self.limit.currentData(),recipe.get('salary_cap',50000),self.scope,
+            self.snapshot if self.screen.isChecked() else None,self.storage.currentData(),self.full_screen.isChecked())
+        if self.readiness_store:
+            self.readiness_key=self.readiness_store.begin(self.snapshot,self.path.text(),self.scope,self.screen.isChecked(),self.full_screen.isChecked())
+            self.readiness_store.state(self.readiness_key,'Running','Foreground preparation started.')
+        self.stop=self.worker.stop;self.pending=None
+        self.thread=QtCore.QThread(self);self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.progress.connect(self.receive_progress)
+        self.worker.finished.connect(self.receive)
+        self.worker.error.connect(self.failure)
+        self.worker.finished.connect(self.thread.quit);self.worker.error.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater);self.worker.error.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.retire)
+        for control in self.controls:control.setEnabled(False)
+        self.pause.setEnabled(True);self.message.setText('Preparing and saving rosters…')
+        from build_preparation import remember_library
+        if self.parent() is not None and hasattr(self.parent(), 'app_settings'):
+            remember_library(self.parent().app_settings, self.path.text())
+        from task_dashboard import watch_task
+        watch_task(self, 'Showdown roster preparation / screening', self.worker, self.thread,
+                   self.cancel, self.task_text)
+        self.thread.start()
+
+    def task_text(self, result):
+        # Use the same description as the preparation window, including pause reasons.
+        previous = self.message.text()
+        if result.get('error'):
+            return str(result['error'])
+        self.describe(result)
+        text = self.message.text()
+        self.message.setText(previous)
+        return text
+
+    def receive_progress(self,result):
+        if self.stop is not None and not self.stop.is_set():
+            if self.readiness_store:self.readiness_store.update(self.readiness_key,result)
+            self.describe(result)
+
+    def receive(self,result):self.pending=result
+    def failure(self,message):self.pending=dict(error=message)
+
+    def cancel(self):
+        if self.thread is not None:
+            self.stop.set();self.pause.setEnabled(False)
+            if self.readiness_store:self.readiness_store.state(self.readiness_key,'Yielding','App closing; waiting for checkpoint and worker retirement.' if self.closing else 'User pause; waiting for checkpoint and worker retirement.')
+            self.message.setText('Pausing; waiting for the current checkpoint and worker retirement…')
+
+    def retire(self):
+        thread=self.thread;self.thread=self.worker=None
+        thread.deleteLater()
+        for control in self.controls:control.setEnabled(True)
+        self.limit.setEnabled(not self.full.isChecked());self.storage.setEnabled(self.full.isChecked())
+        self.full_screen.setEnabled(self.screen.isChecked())
+        self.pause.setEnabled(False)
+        if self.readiness_store:
+            result=self.pending or dict(error='No worker result')
+            complete=result.get('screening_complete') if self.screen.isChecked() else result.get('complete')
+            state='Needs attention' if result.get('error') else 'Paused' if self.stop.is_set() or not complete else 'Completed'
+            reason=('App closing; resume explicitly later.' if self.closing else 'Paused by user.' if self.stop.is_set() else
+                str(result.get('error') or result.get('pause_reason') or ('Recorded preparation complete.' if complete else 'Partial checkpoint; explicit resume is required.')))
+            self.readiness_store.finish(self.readiness_key,state,reason,result)
+        if self.closing:
+            self.accept();return
+        if self.pending is None or 'error' in self.pending:
+            self.message.setText('Preparation stopped: '+str((self.pending or {}).get('error','No result')))
+        else:self.describe(self.pending)
+
+    def reject(self):
+        if self.thread is not None:
+            self.closing=True;self.cancel();return
+        super().reject()
+
+    def closeEvent(self,event):
+        if self.thread is not None:
+            self.closing=True;self.cancel();event.ignore()
+        else:super().closeEvent(event)

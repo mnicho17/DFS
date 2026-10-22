@@ -721,7 +721,7 @@ class ShowdownOptimizer:
     """DK Showdown
 
     - 1 CPT + 5 FLEX
-    - salary cap
+    - salary cap and an optional candidate-search minimum
     - maximize (projection + optional ownership term)
 
     Tags:
@@ -742,12 +742,16 @@ class ShowdownOptimizer:
         own_mode: str = "Balanced",
         own_weight: float = 0.0,
         build_style: str = "Strategic",
+        minimum_salary: float = 0.0,
     ):
         from nfl_eligibility import eligible_players
         allowed_qb_keys = {_pkey(p) for p in eligible_players(players)}
         players = [p for p in players if _pkey(p) in allowed_qb_keys]
         self.players = [p for p in players if p.get("NFLQBEligible") is not False and (_salary(p) > 0 or _cpt_salary(p) > 0)]
         self.salary_cap = float(salary_cap)
+        self.minimum_salary = float(minimum_salary)
+        if not math.isfinite(self.minimum_salary) or not 0 <= self.minimum_salary <= self.salary_cap:
+            raise ValueError("Showdown minimum salary must be finite and between zero and the salary cap.")
         self._compute_seed = seed
         self.rng = random.Random(seed)
         self.own_mode = own_mode
@@ -784,9 +788,6 @@ class ShowdownOptimizer:
             return []
 
         locked = [p for p in self.players if p.get("LockCpt")]
-        if len(locked) > 1:
-            names = ", ".join(str(p.get("Name")) for p in locked[:10])
-            raise ValueError(f"Multiple CPT locks set (only 1 CPT allowed). Locked: {names}")
 
         if locked:
             logger.info("CPT LOCK ACTIVE: %s | key=%s", locked[0].get("Name", ""), _pkey(locked[0]))
@@ -1022,7 +1023,16 @@ class ShowdownOptimizer:
                 <= self.salary_cap
             )
 
+            if self.minimum_salary > 0:
+                prob += pulp.lpSum(
+                    cpt[pk] * _cpt_salary(key_to_player[pk])
+                    + flx[pk] * _salary(key_to_player[pk]) for pk in keys
+                ) >= self.minimum_salary
+
             # Tags
+            captain_pool = [pk for pk in keys if key_to_player[pk].get('LockCpt')]
+            if captain_pool:
+                prob += pulp.lpSum(cpt[pk] for pk in captain_pool) == 1
             for pk in keys:
                 p = key_to_player[pk]
                 if p.get("FadeFlex"):
@@ -1031,9 +1041,6 @@ class ShowdownOptimizer:
                     prob += cpt[pk] == 0
                 if p.get("LockFlex"):
                     prob += flx[pk] == 1
-                if p.get("LockCpt"):
-                    prob += cpt[pk] == 1
-                    prob += flx[pk] == 0
 
             # Ownership caps (Showdown only)
             for pk in keys:
@@ -1129,7 +1136,7 @@ class ShowdownOptimizer:
             for second in players[index + 1:]
         }
 
-        locked_cpt = next((p for p in players if p.get("LockCpt")), None)
+        locked_cpts = [p for p in players if p.get("LockCpt")]
         conflicting_locks = [
             p for p in players
             if (p.get("LockFlex") and p.get("FadeFlex"))
@@ -1179,8 +1186,8 @@ class ShowdownOptimizer:
                 and not p.get("LockFlex")
                 and under_cap(cap_cpt, used_cpt, player_key[id(p)])
             ]
-            if locked_cpt is not None:
-                cpt_pool = [locked_cpt] if locked_cpt in cpt_pool else []
+            if locked_cpts:
+                cpt_pool = [p for p in cpt_pool if p.get('LockCpt')]
             if not cpt_pool:
                 return None
 
@@ -1235,11 +1242,21 @@ class ShowdownOptimizer:
                 and under_cap(cap_flex, used_flex, player_key[id(p)])
             ]
 
+            # Optimistic salary bounds prune only unreachable floors; final
+            # construction and downstream validation still enforce legality.
+            if self.minimum_salary > 0:
+                slots = 5 - len(flex)
+                richest = sorted((flex_salary[id(p)] for p in available), reverse=True)[:slots]
+                if len(richest) < slots or self.salary_cap - cap_left + sum(richest) < self.minimum_salary - 1e-9:
+                    return None
+
             while len(flex) < 5:
                 slots_after_pick = 4 - len(flex)
                 feasible: List[Dict[str, Any]] = []
                 raw_scores: List[float] = []
                 cheapest_options = sorted((flex_salary[id(p)], player_key[id(p)]) for p in available)
+                richest_options = (list(reversed(cheapest_options[-slots_after_pick - 1:]))
+                                   if self.minimum_salary > 0 else ())
                 for player in available:
                     salary = flex_salary[id(player)]
                     if salary > cap_left:
@@ -1254,6 +1271,12 @@ class ShowdownOptimizer:
                         or sum(cheapest_others) > cap_left - salary
                     ):
                         continue
+                    if self.minimum_salary > 0:
+                        richest_others = [other_salary for other_salary, other_key in richest_options
+                                          if other_key != candidate_key][:slots_after_pick]
+                        possible_salary = self.salary_cap - cap_left + salary + sum(richest_others)
+                        if possible_salary < self.minimum_salary - 1e-9:
+                            continue
                     raw = flex_score(player)
                     raw += 0.10 * (flex_score(player) / max(salary, 1.0)) * 1000.0
                     raw += style * sum(
@@ -1271,6 +1294,10 @@ class ShowdownOptimizer:
                 chosen_key = player_key[id(chosen)]
                 available = [p for p in available if player_key[id(p)] != chosen_key]
 
+            if self.minimum_salary > 0 and (
+                captain_salary[id(captain)] + sum(flex_salary[id(p)] for p in flex) < self.minimum_salary
+            ):
+                return None
             flex_keys = tuple(sorted(player_key[id(p)] for p in flex))
             signature = (captain_key, flex_keys)
             if signature in used_signatures:
@@ -1363,11 +1390,11 @@ class ShowdownOptimizer:
         def score_flex(p: Dict[str, Any]) -> float:
             return _proj(p) + w_flex * _showdown_flex_own(p)
 
-        locked_cpt = next((p for p in self.players if p.get("LockCpt")), None)
+        locked_cpts = [p for p in self.players if p.get("LockCpt")]
 
         # CPT pool
-        if locked_cpt:
-            cpt_choices = [locked_cpt]
+        if locked_cpts:
+            cpt_choices = locked_cpts
         else:
             cpt_pool = [p for p in self.players if not p.get("FadeCpt")]
             cpt_pool = sorted(cpt_pool, key=lambda p: (score_cpt(p) / max(_cpt_salary(p), 1.0)), reverse=True)

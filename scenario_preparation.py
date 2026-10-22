@@ -5,10 +5,10 @@ from build_snapshots import validate_snapshot, snapshot_objective
 from compute_settings import normalize_deep_settings
 
 
-def prepare_scenarios(path, snapshot, *, seconds, cancelled=lambda:False, progress=lambda text:None):
+def scenario_preparation_result(path, snapshot, *, seconds, cancelled=lambda:False, progress=lambda text:None):
     snapshot = validate_snapshot(snapshot)
     if seconds < 60 or cancelled():
-        return 'Scenario preparation skipped: less than one minute remains or Pause was requested.'
+        return dict(state='Paused',message='Scenario preparation skipped: less than one minute remains or Pause was requested.',cache={})
     from main_window import LineupBuildWorker
     inputs = copy.deepcopy(snapshot['inputs']); recipe = inputs['recipe']
     options = normalize_deep_settings(recipe.get('deep_compute'))
@@ -32,9 +32,17 @@ def prepare_scenarios(path, snapshot, *, seconds, cancelled=lambda:False, progre
     worker.progress.connect(lambda done,total,text:progress('Preparing scenarios: '+text))
     worker.run()
     if errors:
-        return 'Scenario preparation stopped; saved combinations remain available. '+str(errors[0])
-    if cancelled():return 'Scenario preparation paused. Only completed scenario caches are reusable.'
+        return dict(state='Needs attention',message='Scenario preparation stopped; saved combinations remain available. '+str(errors[0]),cache={})
+    if cancelled():return dict(state='Paused',message='Scenario preparation paused. Only completed scenario caches are reusable.',cache={})
     cache=(results[0].get('sim_report',{}).get('scenario_cache',{}) if results else {})
     status=cache.get('status','unavailable')
-    return (f'Scenario preparation finished; validation cache {status}. Matching completed scenarios can be reused by Deep; '
-            'no prepared portfolio was submitted or applied to the current output table.')
+    reason=str(cache.get('reason') or 'No cache outcome reason recorded.')
+    message=(f'Scenario preparation finished; validation cache {status}. {reason} Matching completed scenarios can be reused by Deep; '
+             'no prepared portfolio was submitted or applied to the current output table.')
+    complete=status in ('saved','reused') and cache.get('requested_scenarios',0)>0
+    state='Completed' if complete else 'Paused' if time.monotonic()>=deadline else 'Needs attention'
+    return dict(state=state,message=message,cache=dict(cache))
+
+
+def prepare_scenarios(path, snapshot, *, seconds, cancelled=lambda:False, progress=lambda text:None):
+    return scenario_preparation_result(path,snapshot,seconds=seconds,cancelled=cancelled,progress=progress)['message']

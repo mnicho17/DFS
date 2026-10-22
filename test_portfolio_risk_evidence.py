@@ -392,7 +392,7 @@ class RiskArchiveEvidenceTests(unittest.TestCase):
 
     def test_read_budget_checksums_allowlist_and_row_limit_stay_enforced(self):
         selection=self.setup_source();original=self.path.read_bytes()
-        with patch.object(be,'MAX_TOTAL_BYTES',10):
+        with patch.object(be,'HISTORY_MAX_TOTAL_BYTES',10):
             with self.assertRaises((ValueError,OverflowError)):self.capture(selection)
         with patch.object(be,'MAX_LINEUPS',0):
             with self.assertRaises(ValueError):self.capture(selection)
@@ -401,7 +401,7 @@ class RiskArchiveEvidenceTests(unittest.TestCase):
             with zipfile.ZipFile(self.path,'a') as archive:archive.writestr(name,content)
             with self.assertRaises(ValueError):self.capture(selection)
         self.path.write_bytes(original)
-        with patch.object(be,'MAX_FILES',0):
+        with patch.object(be,'HISTORY_MAX_FILES',0):
             with self.assertRaises(ValueError):self.capture(selection)
 
     def test_cached_catalog_reads_no_sources_and_does_not_authorize_capture(self):

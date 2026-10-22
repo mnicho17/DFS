@@ -1,4 +1,6 @@
 from __future__ import annotations
+import time
+from simulation_profiling import observe_simulation,current as simulation_clock
 from compute_ledger import generator, phase
 
 
@@ -820,6 +822,7 @@ def _scenario_outcomes(
     *,
     script_counter: Optional[Counter[str]] = None,
     specialist_model: str = 'events',
+    rotation_zero_prototype=None,
 ) -> Dict[str, float]:
     # Sorted inputs make seeded builds reproducible across separate app runs;
     # set iteration order varies with Python's per-process hash seed.
@@ -961,6 +964,9 @@ def _scenario_outcomes(
                 score *= 1.35 + 0.55 * rng.random()
             score = min(score, mean * 6.0 + 20.0)
         outcomes[player_key(player)] = score
+    if rotation_zero_prototype is not None:
+        # Explicit diagnostic call only; normal builds leave this disabled.
+        outcomes = rotation_zero_prototype.apply(players, sampled_workloads, outcomes, rng)
     if specialist_model == 'events':
         from nfl_specialists import specialist_outcomes
         outcomes.update(specialist_outcomes(rng, players, outcomes, game_factor, team_environment))
@@ -1231,6 +1237,7 @@ def _learned_ownership_profile_fit(
 
 
 @phase("primary_sim", simulation=True)
+@observe_simulation
 def simulate_nfl_contest(
     candidates: Sequence[Sequence[Dict[str, Any]]],
     players: Sequence[Dict[str, Any]],
@@ -1248,6 +1255,7 @@ def simulate_nfl_contest(
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     cancel_callback: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
+    profile=simulation_clock()
     candidate_objects = [lineup for lineup in candidates if lineup]
     candidate_lists = [list(lineup) for lineup in candidate_objects]
     if not candidate_lists:
@@ -1340,22 +1348,34 @@ def simulate_nfl_contest(
     script_counts: Counter[str] = Counter()
 
     from scenario_cache import ScenarioReplay
+    profile.setup_seconds=time.perf_counter()-profile.started
+    lookup_started=time.perf_counter()
     replay = ScenarioReplay(sim_players, opponent_field_banks, kind='classic', seed=seed,
         count=scenario_count, enabled=scenario_cache and outcome_transform is None, cancelled=cancel_callback,
         context=dict(players=list(players),opponent_players=opponent_players,config=config,salary_cap=salary_cap,field_size=effective_field_size))
+    profile.cache_lookup_seconds=time.perf_counter()-lookup_started
     for scenario_index in range(scenario_count):
         if cancel_callback and cancel_callback():
             break
         def compute_frame():
+            drawn=time.perf_counter()
             outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
             if outcome_transform is not None:
                 outcomes = outcome_transform(outcomes)
+            profile.outcomes_seconds+=time.perf_counter()-drawn
+            opponent_started=time.perf_counter()
             active_field_keys = opponent_field_banks[scenario_index % len(opponent_field_banks)]
-            return outcomes, sorted(sum(outcomes.get(key, 0.0) for key in signature)
+            ranked=sorted(sum(outcomes.get(key, 0.0) for key in signature)
                 for signature in active_field_keys)
+            profile.opponents_seconds+=time.perf_counter()-opponent_started
+            return outcomes, ranked
+        before=profile.outcomes_seconds+profile.opponents_seconds
+        access_started=time.perf_counter()
         outcomes, field_scores = replay.frame(scenario_index, compute_frame, script_counts)
+        profile.scenario_io_seconds+=max(0,time.perf_counter()-access_started-(profile.outcomes_seconds+profile.opponents_seconds-before))
         if not field_scores:
             continue
+        candidate_started=time.perf_counter()
         top_one_threshold = field_scores[max(0, int(math.floor(0.99 * (len(field_scores) - 1))))]
         top_two_threshold = field_scores[max(0, int(math.floor(0.98 * (len(field_scores) - 1))))]
         top_five_threshold = field_scores[max(0, int(math.floor(0.95 * (len(field_scores) - 1))))]
@@ -1422,12 +1442,16 @@ def simulate_nfl_contest(
             return_scores[index] += scenario_value
             if scenario_value >= 1.5:
                 scenario_values[index][scenario_index] = scenario_value
+        profile.candidates_seconds+=time.perf_counter()-candidate_started
         if distribution is not None: distribution.record(outcomes)
         completed += 1
         if progress_callback and ((scenario_index + 1) % batch == 0 or scenario_index + 1 == scenario_count):
             progress_callback(scenario_index + 1, scenario_count, "Ranking candidates against simulated NFL fields")
 
+    finalize_started=time.perf_counter()
     cache_report = replay.finish(completed)
+    profile.cache_finish_seconds=time.perf_counter()-finalize_started
+    profile.assembly_started=time.perf_counter()
     denominator = float(max(1, completed))
     if progress_callback:
         progress_callback(0, len(candidate_lists), "Summarizing candidate scores")
@@ -1614,7 +1638,7 @@ def simulate_nfl_contest(
                 label: count / max(1, sum(script_counts.values())) * 100.0
                 for label, count in sorted(script_counts.items())
             },
-            "specialist_model": "shared-specialist-events-v1",
+            "specialist_model": "kicker-events-projection-defense-v2",
             "volatility_model": "role-aware-player-volatility-v1",
             "rare_event_model": "guardrailed-breakout-tails-v1",
             "payout_model": "exact-rank-tie-split-v1" if contest_profile else "payout-shape-proxy-v1",
@@ -1860,7 +1884,7 @@ def simulate_nfl_portfolio_contest(
             label: count / script_total * 100.0
             for label, count in sorted(script_counts.items())
         },
-        "specialist_model": "shared-specialist-events-v1",
+        "specialist_model": "kicker-events-projection-defense-v2",
             "volatility_model": "role-aware-player-volatility-v1",
         "rare_event_model": "guardrailed-breakout-tails-v1",
     }

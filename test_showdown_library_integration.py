@@ -1,0 +1,293 @@
+from test_environment import install
+install()
+import copy
+from contextlib import closing
+from collections import Counter
+from pathlib import Path
+import tempfile
+import threading
+import time
+import unittest
+from unittest.mock import patch
+from PyQt5 import QtWidgets
+from build_snapshots import create_snapshot
+from showdown_library import prepare,status,load_bounded
+from showdown_library_ui import PreparationDialog
+from snapshot_ui import SnapshotActions
+from test_showdown_library import players,signatures
+from portfolio_rules import player_key
+
+
+class LibraryWindow(QtWidgets.QWidget,SnapshotActions):
+    def __init__(self,rows):
+        super().__init__();self.players=rows
+        self.lbl_snapshot_data=QtWidgets.QLabel(self);self.status=QtWidgets.QStatusBar(self)
+    def _snapshot_busy(self):return False
+    def _current_sport(self):return 'NFL'
+    def _contest_mode(self):return 'showdown'
+    def _current_build_recipe(self):return dict(salary_cap=50000)
+
+
+class PreparedIntegrationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):cls.app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.path=Path(self.temp.name)/'rosters.sdlib';self.players=players()
+
+    def wait(self,predicate):
+        deadline=time.monotonic()+15
+        while not predicate() and time.monotonic()<deadline:
+            self.app.processEvents();time.sleep(.005)
+        self.assertTrue(predicate())
+
+    def locked(self):
+        rows=copy.deepcopy(self.players);rows[0]['LockCpt']=rows[1]['LockCpt']=True
+        return rows
+
+    def test_scoped_preparation_completes_only_requested_captains_and_resumes(self):
+        scope=[player_key(p) for p in self.players[:2]]
+        first=prepare(self.path,self.players,captain_keys=scope,max_candidates=4)
+        self.assertFalse(first['complete'])
+        final=prepare(self.path,list(reversed(self.players)),captain_keys=list(reversed(scope)))
+        self.assertTrue(final['complete']);self.assertEqual(final['checked'],42)
+        self.assertEqual(final['structural_total'],42)
+        with self.assertRaisesRegex(ValueError,'current Captain pool'):
+            load_bounded(self.path,self.players,limit=16,salary_strategy='Flexible')
+
+    def test_bounded_sampling_is_repeatable_captain_balanced_and_reads_fresh_inputs(self):
+        current=self.locked();scope=[player_key(p) for p in current[:2]]
+        prepare(self.path,self.players,captain_keys=scope)
+        before=self.path.read_bytes();current[0]['CptProjection']=99
+        first,report=load_bounded(self.path,current,limit=10,salary_strategy='Flexible')
+        second,_=load_bounded(self.path,list(reversed(current)),limit=10,salary_strategy='Flexible')
+        self.assertEqual(signatures(first),signatures(second));self.assertEqual(len(first),10)
+        self.assertEqual(Counter(player_key(r['Captain']) for r in first),dict.fromkeys(scope,5))
+        self.assertTrue(report['scan_complete']);self.assertEqual(report['valid_seen'],42)
+        self.assertEqual(self.path.read_bytes(),before)
+        for row in first:
+            if player_key(row['Captain'])==scope[0]:self.assertEqual(row['Captain']['CptProjection'],99)
+
+    def test_partial_library_requires_explicit_opt_in_and_cancellation_withholds_rows(self):
+        prepare(self.path,self.players,max_candidates=9)
+        current=copy.deepcopy(self.players);current[0]['LockCpt']=True
+        with self.assertRaisesRegex(ValueError,'incomplete'):
+            load_bounded(self.path,current,limit=4,salary_strategy='Flexible')
+        rows,report=load_bounded(self.path,current,limit=4,salary_strategy='Flexible',allow_partial=True)
+        self.assertEqual(len(rows),4);self.assertFalse(report['preparation_complete'])
+        with self.assertRaises(InterruptedError):
+            load_bounded(self.path,current,limit=4,salary_strategy='Flexible',allow_partial=True,cancelled=lambda:True)
+
+    def test_bounded_scan_skips_large_inactive_prefix_without_changing_roster_set(self):
+        from itertools import combinations
+        import showdown_library as library
+        rows=[]
+        for i in range(12):
+            row=copy.deepcopy(self.players[i%8])
+            row.update(Name=f'Player {i:02}',FlexID=str(i+1),CptID=str(i+101),
+                FlexNamePlusID=f'Player {i:02} ({i+1})',FlexSalary=7500,CptSalary=11250,
+                Team='A' if i%2 else 'B')
+            rows.append(row)
+        prepare(self.path,rows)
+        for row in rows[:5]:row['InjuryStatus']='OUT'
+        clock=[0.0]
+        def tick():clock[0]+=.0001;return clock[0]
+        with patch.object(library.time,'monotonic',side_effect=tick):
+            result,report=load_bounded(self.path,rows,limit=100,seconds=.1,salary_strategy='Near Cap')
+        expected=set()
+        for cpt in rows[5:]:
+            for flex in combinations([p for p in rows[5:] if p is not cpt],5):
+                expected.add((player_key(cpt),tuple(sorted(player_key(p) for p in flex))))
+        self.assertEqual(signatures(result),expected)
+        self.assertTrue(report['scan_complete'])
+
+    def test_unlocked_scan_excludes_setup_and_counts_library_only_twice(self):
+        import showdown_library as library
+        prepare(self.path,self.players)
+        clock=[0.0];counts=[];original=library._read
+        def slow_read(con,**kwargs):
+            counts.append(kwargs.get('verify_count',True))
+            result=original(con,**kwargs)
+            clock[0]+=5.0  # Setup exceeds each Captain's scan allowance.
+            return result
+        with patch.object(library,'_read',side_effect=slow_read),patch.object(library.time,'monotonic',side_effect=lambda:clock[0]):
+            rows,report=load_bounded(self.path,self.players,limit=16,seconds=.1,salary_strategy='Flexible')
+        self.assertEqual(len(rows),16)
+        self.assertTrue(report['scan_complete'])
+        self.assertEqual(sum(counts),2)
+        self.assertEqual(len(counts),len(self.players)+2)
+        self.assertTrue(all(c['sampled']==2 for c in report['captain_sampling']))
+
+    def test_partial_unlocked_library_cannot_silently_drop_unprepared_captains(self):
+        prepare(self.path,self.players,max_candidates=9)
+        with self.assertRaisesRegex(ValueError,'Partial library has no saved rosters'):
+            load_bounded(self.path,self.players,limit=16,salary_strategy='Flexible',allow_partial=True)
+
+    def test_bounded_scan_rejects_changed_saved_count_after_sampling(self):
+        import sqlite3
+        import showdown_library as library
+        prepare(self.path,self.players)
+        original=library.iter_candidates;changed=[False]
+        def mutate_after_scan(*args,**kwargs):
+            yield from original(*args,**kwargs)
+            if not changed[0]:
+                with closing(sqlite3.connect(self.path)) as con:
+                    with con:
+                        con.execute('DELETE FROM rosters WHERE (captain,flex) IN (SELECT captain,flex FROM rosters LIMIT 1)')
+                changed[0]=True
+        with patch.object(library,'iter_candidates',side_effect=mutate_after_scan):
+            with self.assertRaisesRegex(ValueError,'saved count'):
+                load_bounded(self.path,self.players,limit=16,salary_strategy='Flexible')
+
+    def test_dialog_prepares_real_scoped_library_off_gui_thread(self):
+        rows=self.locked()
+        snapshot=create_snapshot(rows,dict(sport='NFL',contest_kind='showdown',salary_cap=50000),{})
+        dialog=PreparationDialog(snapshot);dialog.path.setText(str(self.path))
+        seen=[]
+        from showdown_library_ui import prepare as actual
+        def checked(*args,**kwargs):
+            seen.append(threading.get_ident()!=gui);return actual(*args,**kwargs)
+        gui=threading.get_ident()
+        with patch('showdown_library_ui.prepare',side_effect=checked):
+            dialog.begin();self.wait(lambda:dialog.thread is None)
+        self.assertEqual(seen,[True]);self.assertTrue(status(self.path)['complete'])
+        self.assertEqual(status(self.path)['checked'],42)
+        self.assertIn('complete',dialog.message.text());dialog.close();dialog.deleteLater()
+
+    def test_disabling_screening_clears_full_screen_and_completion_is_explicit(self):
+        snapshot=create_snapshot(self.players,dict(sport='NFL',contest_kind='showdown',salary_cap=50000),{})
+        dialog=PreparationDialog(snapshot)
+        dialog.screen.setChecked(True);dialog.full_screen.setChecked(True)
+        dialog.screen.setChecked(False)
+        self.assertFalse(dialog.full_screen.isChecked());self.assertFalse(dialog.full_screen.isEnabled())
+        dialog.describe(dict(saved=100,checked=100,complete=True,screening_requested=False))
+        self.assertIn('Screening was not requested',dialog.message.text())
+        dialog.close();dialog.deleteLater()
+
+    def test_screening_phase_and_pause_reason_are_visible(self):
+        snapshot=create_snapshot(self.players,dict(sport='NFL',contest_kind='showdown',salary_cap=50000),{})
+        dialog=PreparationDialog(snapshot)
+        self.addCleanup(dialog.deleteLater)
+        dialog.describe(dict(screened=76800,screening_total=None,screening_complete=False,
+            screening_phase='Scoring current batch',batch_candidates=256,batch_scenarios=50,
+            batch_scenarios_total=1000,seconds_since_checkpoint=15,remaining_seconds=600))
+        self.assertIn('Scoring current batch',dialog.message.text())
+        self.assertIn('50/1,000 scenarios',dialog.message.text())
+        self.assertNotIn('resume to continue',dialog.message.text())
+        dialog.describe(dict(screened=76800,screening_total=None,screening_complete=False,
+            pause_reason='time allowance reached'))
+        self.assertIn('Paused: time allowance reached',dialog.message.text())
+        self.assertIn('Completed batches are saved',dialog.message.text())
+
+    def test_dialog_full_partition_and_stream_screening_off_gui_thread(self):
+        from showdown_full_screening import prepare as actual
+        rows=self.locked()
+        for i,p in enumerate(rows):
+            p['FlexSalary']=6500+i*200;p['CptSalary']=p['FlexSalary']*1.5
+        snapshot=create_snapshot(rows,dict(sport='NFL',contest_kind='showdown',salary_cap=50000,
+            salary_strategy='Flexible',requested_lineups=2,nfl_sim_scenarios=250),{})
+        dialog=PreparationDialog(snapshot);dialog.full.setChecked(True)
+        dialog.path.setText(str(self.path.with_suffix('.sdfull')))
+        dialog.screen.setChecked(True);dialog.full_screen.setChecked(True)
+        gui=threading.get_ident();seen=[]
+        def checked(*args,**kwargs):
+            seen.append(threading.get_ident()!=gui)
+            kwargs['folder']=Path(self.temp.name)/'cache'
+            return actual(*args,**kwargs)
+        with patch('showdown_full_screening.prepare',side_effect=checked):
+            dialog.begin();self.wait(lambda:dialog.thread is None)
+        self.assertEqual(seen,[True]);self.assertTrue(status(dialog.path.text())['complete'])
+        self.assertEqual(status(dialog.path.text())['partition_count'],len(rows))
+        self.assertIn('screening complete',dialog.message.text())
+        dialog.describe(dict(screened=23,screening_total=None,screening_complete=False))
+        self.assertIn('counting',dialog.message.text());dialog.close();dialog.deleteLater()
+
+    def test_dialog_close_waits_for_worker_retirement(self):
+        snapshot=create_snapshot(self.players,dict(sport='NFL',contest_kind='showdown',salary_cap=50000),{})
+        dialog=PreparationDialog(snapshot);dialog.path.setText(str(self.path));dialog.show()
+        entered=threading.Event();release=threading.Event()
+        def slow(path,rows,**kwargs):
+            entered.set();release.wait(8);return prepare(path,rows,**kwargs)
+        try:
+            with patch('showdown_library_ui.prepare',side_effect=slow):
+                dialog.begin();self.wait(entered.is_set)
+                dialog.close();self.assertIsNotNone(dialog.thread);self.assertTrue(dialog.isVisible())
+                release.set();self.wait(lambda:dialog.thread is None and not dialog.isVisible())
+        finally:
+            release.set();self.wait(lambda:dialog.thread is None);dialog.close();dialog.deleteLater()
+
+    def test_load_action_does_not_materialize_library_and_partial_decline_preserves_selection(self):
+        prepare(self.path,self.players,max_candidates=9)
+        window=LibraryWindow(self.players);window._candidate_library='previous.dfslib'
+        with patch.object(QtWidgets.QFileDialog,'getOpenFileName',return_value=(str(self.path),'')),patch.object(QtWidgets.QMessageBox,'question',return_value=QtWidgets.QMessageBox.No):
+            window.on_load_candidate_library()
+        self.assertEqual(window._candidate_library,'previous.dfslib')
+        with patch.object(QtWidgets.QFileDialog,'getOpenFileName',return_value=(str(self.path),'')),patch.object(QtWidgets.QMessageBox,'question',return_value=QtWidgets.QMessageBox.Yes),patch('showdown_library.load_bounded',side_effect=AssertionError('GUI must not load rows')):
+            window.on_load_candidate_library()
+        self.assertEqual(window._candidate_library,str(self.path));self.assertTrue(window._candidate_library_allow_partial)
+        window._refresh_snapshot_label=lambda:None;window.on_clear_candidate_library()
+        self.assertFalse(window._candidate_library_allow_partial);window.deleteLater()
+
+    def test_real_deep_worker_scores_prepared_candidates_without_optimizer_search(self):
+        from main_window import LineupBuildWorker
+        for i,p in enumerate(self.players):
+            p['FlexSalary']=6500+i*200;p['CptSalary']=p['FlexSalary']*1.5
+        current=self.locked();prepare(self.path,self.players,captain_keys=[player_key(p) for p in current[:2]])
+        worker=LineupBuildWorker(current,kind='showdown',num_lineups=2,salary_cap=50000,
+            salary_strategy='Flexible',sim_enabled=True,sim_scenarios=250,compute_mode='Deep',
+            deep_time_limit_seconds=20,deep_options=dict(candidates=100,field=200,screening=250,shortlist=100),
+            candidate_library=str(self.path))
+        results=[];errors=[];worker.finished.connect(results.append);worker.error.connect(errors.append)
+        with patch('showdown_simulation.ShowdownOptimizer',side_effect=AssertionError('Prepared builds must skip candidate searches')):
+            worker.run()
+        self.assertFalse(errors,errors);self.assertEqual(len(results),1)
+        output=results[0]['lineups'];self.assertEqual(len(output),2)
+        self.assertEqual(Counter(player_key(r['Captain']) for r in output),dict.fromkeys([player_key(p) for p in current[:2]],1))
+        self.assertTrue(all(r.sim_metrics.get('sim_scenarios',0)>0 for r in output))
+        self.assertEqual(results[0]['sim_report']['candidate_library']['type'],'prepared_showdown')
+
+
+    def test_cached_worker_skips_only_screening_and_runs_fresh_validation(self):
+        from main_window import LineupBuildWorker
+        from captain_pool import prepare_captain_pool
+        from showdown_screening import prepare_screening,settings
+        import showdown_simulation
+        for i,p in enumerate(self.players):
+            p['FlexSalary']=6500+i*200;p['CptSalary']=p['FlexSalary']*1.5
+        current=self.locked();prepare(self.path,self.players,captain_keys=[player_key(p) for p in current[:2]])
+        options=dict(candidates=100,field=200,screening=250,shortlist=100)
+        adjusted,rules,_=prepare_captain_pool(current,{},2)
+        prepare_screening(self.path,adjusted,limit=100,salary_cap=50000,salary_strategy='Flexible',
+            rules=rules,screening=settings(options,250))
+        worker=LineupBuildWorker(current,kind='showdown',num_lineups=2,salary_cap=50000,
+            salary_strategy='Flexible',sim_enabled=True,sim_scenarios=250,compute_mode='Deep',
+            deep_time_limit_seconds=20,deep_options=options,candidate_library=str(self.path))
+        calls=[];original=showdown_simulation.simulate_showdown
+        def fresh(*args,**kwargs):
+            calls.append(kwargs['scenarios']);return original(*args,**kwargs)
+        results=[];errors=[];worker.finished.connect(results.append);worker.error.connect(errors.append)
+        with patch.object(showdown_simulation,'simulate_showdown',side_effect=fresh),patch('main_window.load_bounded',create=True,side_effect=AssertionError('unused')):
+            worker.run()
+        self.assertFalse(errors,errors)
+        self.assertEqual(len(results[0]['lineups']),2)
+        self.assertGreater(results[0]['sim_report']['candidate_library']['screening_reused'],0)
+        self.assertNotIn(250,calls);self.assertIn(2500,calls)
+
+    def test_dialog_runs_optional_screening_off_gui_thread(self):
+        for i,p in enumerate(self.players):
+            p['FlexSalary']=6500+i*200;p['CptSalary']=p['FlexSalary']*1.5
+        snapshot=create_snapshot(self.locked(),dict(sport='NFL',contest_kind='showdown',salary_cap=50000,
+            requested_lineups=2,nfl_sim_scenarios=250,deep_compute=dict(candidates=100,screening=250,field=20),salary_strategy='Flexible'),{})
+        dialog=PreparationDialog(snapshot);dialog.path.setText(str(self.path));dialog.screen.setChecked(True)
+        from showdown_screening import prepare_screening
+        threads=[]
+        def record(*args,**kwargs):
+            threads.append(threading.get_ident());return prepare_screening(*args,**kwargs)
+        with patch('showdown_screening.prepare_screening',side_effect=record):
+            dialog.begin();self.wait(lambda:dialog.thread is None)
+        self.assertTrue(dialog.pending['screening_complete'])
+        self.assertNotEqual(threads[0],threading.get_ident());dialog.close()
+
+
+if __name__=='__main__':unittest.main()
