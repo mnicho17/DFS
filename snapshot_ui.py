@@ -158,6 +158,9 @@ class SnapshotActions:
             QtWidgets.QMessageBox.warning(self,'Preparation unavailable',str(exc))
 
     def _snapshot_busy(self):
+        entry_dialog = getattr(self, '_entries_setup_dialog', None)
+        if entry_dialog is not None and entry_dialog.task is not None:
+            return True
         if getattr(self, '_ownership_run', None) is not None:
             return True
         if getattr(self, 'csv_load', None) and self.csv_load.busy:
@@ -226,6 +229,7 @@ class SnapshotActions:
         self.players = copy.deepcopy(inputs['players'])
         self.spin_zero_qb_max.setValue(float(inputs["rules"].get("max_zero_qb_pct", -1)))
         self.portfolio_groups = copy.deepcopy(inputs['rules'].get('groups') or [])
+        self._entries_build_setup = None
         self._qb_coverage = copy.deepcopy(inputs['rules'].get('qb_coverage'))
         self.lbl_portfolio_groups.setText(f'Groups: {len(self.portfolio_groups)}')
         self.last_live_check_summary = copy.deepcopy(value.get('freshness') or {})

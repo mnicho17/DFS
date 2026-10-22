@@ -132,7 +132,7 @@ Always confirm that the loaded salary file matches the contest type you intend t
 
 
 
-Choose **Load Player CSV** and select a DraftKings salary file. The player table is your slate workspace.
+Choose **Load CSV / Entries > Load salary CSV…** and select a DraftKings salary file. The player table is your slate workspace.
 
 
 
@@ -2387,9 +2387,51 @@ with candidate count, field size, data and hardware; the optimization does not
 guarantee that every audit will finish within its cap.
 
 
+### Build from your entries file
+
+Choose **Load CSV / Entries > Build these entries…**. Select a
+DraftKings entry-edit CSV and the exact contest by name and Contest ID. The
+setup reads the file on a background task, shows your entry count and entry fee,
+and uses its embedded salary table when available. Without an embedded pool,
+choose a salary slate from the existing picker and confirm that choice.
+
+Choose the actual supported entry-limit preset and either Tournament finish-rate
+selection or an existing saved payout profile. One requested entry does not
+establish a Single Entry contest. Payout profiles must have the same entry fee
+and accommodate your entry count. Profile-backed builds enable NFL SIM;
+Showdown switches from Fast to the existing Baseline Deep profile. An existing
+Deep budget is retained. Create or edit profiles in **Settings > Contest-Aware
+SIM** before using them here.
+
+![Entries-first contest setup](images/entries-first-setup.png)
+
+**Load contest setup** uses the existing CSV preparation, ownership and automatic
+library routes. It applies the captured entry count, turns off count-based
+entry-target guessing, and selects the confirmed preset and strategy only after
+successful CSV loading and worker retirement. Cancellation, changed sources,
+invalid IDs or mismatched pools retain the previous slate and settings. The
+working copies are private and bounded to 32 MiB; original files are not edited.
+Conflicting explicit salary identities are rejected; identical repeated salary
+rows remain usable. Existing filled slots are checked by explicit ID and
+Captain/FLEX role. Blank or partial rosters can still be set up.
+
+Successful loading remembers these choices for the same Contest ID, name, fee
+and format. Changed payout profiles require a fresh choice, including edits made while a load is running. The Build summary
+shows the captured contest and flags later count, preset or strategy changes.
+Ordinary CSV loading and snapshot replay clear that session receipt. These
+choices describe captured input consistency; they do not prove submission or
+historical contest qualification, and no objective, entry limit or payouts are
+inferred from a contest name.
+
+Next, use **Generate**, save your chosen lineups and **Update Entries** through
+the existing export workflow. Existing manual rules, historical evidence gates
+and cancellation safeguards still apply. This setup supports NFL Classic and
+six-player Showdown with the current Single Entry, 3-Max, 20-Max and 150-Max
+presets. Other formats retain the ordinary Load CSV workflow.
+
 ### Load slate and automatic salary discovery
 
-**Load CSV** opens a searchable slate list from the Salary Files folder configured in Data and Learning. The default view includes today and future game dates parsed from the salary table, rather than the file modification date. **All dates** includes older slates and files with unknown dates. **Browse…** still accepts a salary CSV or an entries CSV containing a salary table from any location. Team/game labels describe the salary slate; they do not invent contest names absent from the file.
+**Load CSV / Entries > Load salary CSV…** opens a searchable slate list from the Salary Files folder configured in Data and Learning. The default view includes today and future game dates parsed from the salary table, rather than the file modification date. **All dates** includes older slates and files with unknown dates. **Browse…** still accepts a salary CSV or an entries CSV containing a salary table from any location. Team/game labels describe the salary slate; they do not invent contest names absent from the file.
 
 The persistent `slate-catalog.sqlite` beside the learning database records file metadata, content digests, and discovery/preparation status. Identical byte copies appear once. Unchanged files skip hashing and parsing across restarts; changed metadata triggers another scan. Files still being written are retried later. This catalog is scheduling metadata, never saved evidence or permission to skip build validation.
 
