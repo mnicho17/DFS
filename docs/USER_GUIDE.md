@@ -517,6 +517,11 @@ prizes for tied ranks. These are simulated estimates, not guaranteed returns.
 The output adds **Paid %** and **Profit $**; **Best first** uses the executed
 objective. Hover for the ranking rule and payout estimates.
 
+An explicit payout profile can reuse compatible raw prepared rosters, but
+requires fresh screening for that objective. A saved Tournament screening
+shortlist is not reused as payout screening. Compatible scenario draws may still
+be reused; payout estimates are recalculated using the current contest table.
+
 **Use Tournament Preset** explicitly switches to Tournament and disables the
 exact profile. **Save and Use** saves the objective
 with the profile; selecting that saved profile restores it. Build recipes and new

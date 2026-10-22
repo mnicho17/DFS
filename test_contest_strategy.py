@@ -121,6 +121,23 @@ class ContestStrategyTests(unittest.TestCase):
         compiled = simulate_showdown(rows, players, precompiled_rosters=True, **opts)
         self.assertEqual([lu.sim_metrics for lu in ordinary['lineups']], [lu.sim_metrics for lu in compiled['lineups']])
 
+    def test_prepared_library_does_not_reuse_tournament_screening_for_cash(self):
+        from main_window import LineupBuildWorker
+        players = _showdown_players()
+        rows = ShowdownOptimizer(players).build_lineups(2)
+        worker = LineupBuildWorker(players, kind='showdown', num_lineups=1, salary_cap=50000,
+            contest_profile=profile(), sim_enabled=True, compute_mode='Deep',
+            candidate_library='prepared.sdlib')
+        with patch('showdown_library.is_prepared_library', return_value=True), \
+                patch('showdown_screening.load_screening', return_value=(rows, {'screening_reused': 2})) as cached, \
+                patch('showdown_library.load_bounded', return_value=(rows, {})) as raw, \
+                patch('compute_ledger.library_loaded'):
+            self.assertTrue(worker._load_candidate_library(None))
+        cached.assert_not_called()
+        raw.assert_called_once()
+        self.assertNotIn('screening_reused', worker.library_report)
+        self.assertIn('payout', worker.library_report['screening_miss'].lower())
+
     def test_worker_blocks_unscored_cash_and_fast_showdown(self):
         from main_window import LineupBuildWorker
         for kwargs in (dict(contest_objective='DOUBLE_UP'),

@@ -1141,8 +1141,9 @@ class LineupBuildWorker(QtCore.QObject):
             from compute_settings import deep_candidate_budget as prepared_candidate_budget
             try:
                 from showdown_screening import load_screening,settings as screening_settings
-                screening_diagnostic={}
-                cached=None if self.allow_partial_library else load_screening(self.candidate_library,self.players,
+                screening_diagnostic=({'reason': 'Explicit contest payouts require fresh screening under the current objective.'}
+                    if self.contest_profile else {})
+                cached=None if self.allow_partial_library or self.contest_profile else load_screening(self.candidate_library,self.players,
                     limit=prepared_candidate_budget(self.num_lineups,self.deep_options,False),
                     salary_cap=self.salary_cap,salary_strategy=self.salary_strategy,rules=self.portfolio_rules,
                     screening=screening_settings(self.deep_options,self.sim_scenarios,profile),cancelled=self._cancel_event.is_set,
@@ -2969,12 +2970,12 @@ class LineupBuildWorker(QtCore.QObject):
 
 
     def _emit_finished(self, payload):
+        from portfolio_rules import format_portfolio_report_text
         if self.portfolio_rules.get('qb_coverage'):
             from qb_coverage import coverage_report
             report = coverage_report(payload.get('lineups') or [],self.players,
                                      self.portfolio_rules['qb_coverage'],self.kind)
             payload.setdefault('portfolio_report',{})['qb_coverage'] = report
-            from portfolio_rules import format_portfolio_report_text
             payload['portfolio_report']['text'] = format_portfolio_report_text(payload['portfolio_report'])
             payload.setdefault('sim_report',{})['qb_coverage'] = report
         if self.contest_profile:
