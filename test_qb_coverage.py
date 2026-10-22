@@ -46,6 +46,19 @@ class QBCoverageTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'QB targets remain hard'):
                 select_portfolio(bank,3,kind='showdown',rules=dict(qb_coverage=config),retained_lineups=retained,automatic_recovery=True)
 
+    def test_zero_qb_maximum_and_fade_minimum_remain_hard_together(self):
+        rows, players, config = fixtures()
+        from selection_shortage import PortfolioSelectionShortage
+        rules = dict(qb_coverage=config, max_zero_qb_pct=0, player_constraints={'WR': {'MaxPct': 100}})
+        before = copy.deepcopy((rows, players, rules))
+        with self.assertRaises(PortfolioSelectionShortage):
+            select_portfolio(rows, 3, kind='showdown', rules=rules, automatic_recovery=True)
+        self.assertEqual((rows, players, rules), before)
+        rules['max_zero_qb_pct'] = 34
+        result = select_portfolio(rows, 3, kind='showdown', rules=rules, automatic_recovery=True)
+        self.assertEqual(result['report']['zero_qb_rule']['count'], 1)
+        self.assertFalse(any(row['shortage'] for row in result['report']['qb_coverage']['targets'].values()))
+
     def test_disabled_parity_and_validation(self):
         rows,players,config = fixtures()
         plain = select_portfolio(rows,3,kind='showdown')

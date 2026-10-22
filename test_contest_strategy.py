@@ -87,6 +87,40 @@ class ContestStrategyTests(unittest.TestCase):
             self.assertNotIn('sim_selection_fields',row.sim_metrics)
             self.assertNotIn('sim_expected_profit',row.sim_metrics)
 
+    def test_showdown_cache_replays_draws_but_recomputes_changed_payouts(self):
+        import os
+        import tempfile
+        players = _showdown_players()
+        rows = ShowdownOptimizer(players).build_lineups(3)
+        opts = dict(scenarios=12, field_lineup_count=20, seed=47)
+        first_profile = profile()
+        changed_profile = profile(payouts='1-4=40')
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'DFS_OPTIMIZER_DATA_DIR': folder}):
+            cold = simulate_showdown(rows, players, contest_profile=first_profile, scenario_cache=True, **opts)
+            self.assertEqual(cold['report']['scenario_cache']['status'], 'saved')
+            with patch('showdown_simulation._scenario_outcomes', side_effect=AssertionError('new draw')):
+                warm = simulate_showdown(rows, players, contest_profile=changed_profile, scenario_cache=True,
+                                         precompiled_rosters=True, **opts)
+            live = simulate_showdown(rows, players, contest_profile=changed_profile, **opts)
+        self.assertEqual(warm['report']['scenario_cache']['status'], 'reused')
+        self.assertEqual([lu.sim_metrics for lu in warm['lineups']], [lu.sim_metrics for lu in live['lineups']])
+        for before, after in zip(cold['lineups'], warm['lineups']):
+            self.assertEqual(before.sim_metrics['sim_mean'], after.sim_metrics['sim_mean'])
+            self.assertAlmostEqual(after.sim_metrics['sim_expected_payout'], 2 * before.sim_metrics['sim_expected_payout'])
+            self.assertNotEqual(before.sim_metrics['sim_contest_profile_id'], after.sim_metrics['sim_contest_profile_id'])
+
+    def test_explicit_diagnostic_field_with_payouts_keeps_cache_guard(self):
+        from showdown_simulation import generate_showdown_field
+        players = _showdown_players()
+        rows = ShowdownOptimizer(players).build_lineups(2)
+        field = generate_showdown_field(players, 12, seed=5)
+        opts = dict(scenarios=5, field_lineup_count=12, diagnostic_field=field, contest_profile=profile())
+        with self.assertRaisesRegex(ValueError, 'diagnostic fields'):
+            simulate_showdown(rows, players, scenario_cache=True, **opts)
+        ordinary = simulate_showdown(rows, players, **opts)
+        compiled = simulate_showdown(rows, players, precompiled_rosters=True, **opts)
+        self.assertEqual([lu.sim_metrics for lu in ordinary['lineups']], [lu.sim_metrics for lu in compiled['lineups']])
+
     def test_worker_blocks_unscored_cash_and_fast_showdown(self):
         from main_window import LineupBuildWorker
         for kwargs in (dict(contest_objective='DOUBLE_UP'),
