@@ -169,3 +169,44 @@ class SimpleBuildTests(unittest.TestCase):
             w._candidate_library=''; w._snapshot_replay=True
             self.assertIn('search fresh candidates', preparation_plan(w))
         self.assertEqual(w._current_build_recipe(),before)
+
+
+    def test_auto_budget_opt_in_cancel_and_manual_override(self):
+        w=self.window()
+        before=copy.deepcopy(w._current_build_recipe())
+        with patch('PyQt5.QtWidgets.QInputDialog.getItem',return_value=('15 minutes',False)):
+            self.choose(w,'Automatic')
+        self.assertEqual(w._current_build_recipe(),before)
+        with patch('PyQt5.QtWidgets.QInputDialog.getItem',return_value=('15 minutes',True)):
+            self.choose(w,'Automatic')
+        self.assertEqual(w._automatic_compute_cap,15)
+        self.assertEqual(w._current_build_recipe(),before)
+        from automatic_compute import apply
+        decision=apply(w,150)
+        self.assertEqual(decision['minutes'],15)
+        self.assertEqual(w.deep_compute_settings['minutes'],15)
+        self.assertEqual(w._automatic_compute_cap,15)
+        self.assertEqual(w.combo_simple_time.currentData(),'Automatic')
+        self.choose(w,'Fast')
+        self.assertIsNone(w._automatic_compute_cap)
+
+    def test_auto_preserves_rules_and_snapshot_recipe_is_explicit(self):
+        w=self.window();w._automatic_compute_cap=5
+        w.spin_portfolio_unique.setValue(3)
+        before=copy.deepcopy(w._portfolio_rules())
+        from automatic_compute import apply
+        apply(w,150)
+        self.assertEqual(w._portfolio_rules(),before)
+        recipe=w._current_build_recipe()
+        self.assertEqual(recipe['deep_compute']['minutes'],5)
+        w._apply_build_recipe('Saved',recipe)
+        self.assertIsNone(w._automatic_compute_cap)
+
+    def test_auto_replay_and_repair_do_not_change_widgets(self):
+        w=self.window();w._automatic_compute_cap=15
+        from automatic_compute import apply
+        before=copy.deepcopy(w._current_build_recipe())
+        self.assertIsNone(apply(w,150,repair=True))
+        w._snapshot_replay=True
+        self.assertIsNone(apply(w,150))
+        self.assertEqual(w._current_build_recipe(),before)
