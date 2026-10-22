@@ -88,3 +88,19 @@ def setup_ownership_controls(owner,button):
     owner.tasks.changed.connect(changed)
     update_ownership_controls(owner)
     return group
+
+
+
+def show_ownership_controls(owner):
+    """Navigate to existing diagnostics without expanding or running recalculation."""
+    target=owner.ownership_status_label
+    owner.action_show_build_controls.setChecked(True)
+    tabs=owner.tabs_workspace_controls
+    for index in range(tabs.count()):
+        page=tabs.widget(index)
+        if page.isAncestorOf(target):
+            tabs.setCurrentIndex(index)
+            if isinstance(page,QtWidgets.QScrollArea):page.ensureWidgetVisible(target)
+            break
+    update_ownership_controls(owner)
+    owner.ownership_troubleshooting.setFocus()

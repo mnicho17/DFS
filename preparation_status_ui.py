@@ -27,6 +27,9 @@ def preparation_rows(w):
     timing = getattr(w, 'last_csv_load_timing', None)
     add('csv-timing', 'Last CSV load timings', 'Recorded' if timing else 'Not recorded',
         timing_text(timing) + '\nSource phases are included in source preparation; totals overlap. Ownership runs separately.', 'Tasks dashboard')
+    from ownership_ui import ownership_status
+    ownership=ownership_status(w)
+    add('ownership','Current ownership',ownership['state'],ownership['detail'],'Review ownership')
     reuse = getattr(w, 'last_ownership_reuse', None)
     add('ownership-reuse', 'Last applied ownership',
         str(reuse.get('status', 'Unknown')).title() if reuse else 'Not recorded',
@@ -178,6 +181,9 @@ class PreparationStatusDialog(QtWidgets.QDialog):
         self.accept()
         if key == 'inputs':
             w.on_data_freshness()
+        elif key == 'ownership':
+            from ownership_ui import show_ownership_controls
+            show_ownership_controls(w)
         elif key == 'readiness':
             w.on_slate_readiness()
         elif key == 'library':

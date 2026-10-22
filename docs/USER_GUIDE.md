@@ -2401,3 +2401,10 @@ Normal CSV loading already starts ownership estimation or checks compatible comp
 Open **Manual recalculation / troubleshooting** to use the original Sampling count, legacy template switch and **Recalculate / Retry ownership** action. Opening this section performs no estimation or cache lookup. The explicit action uses the existing estimator, format, salary cap and sampling settings. It waits for CSV, build and existing ownership workers to retire; cancellation, errors and stale-result checks keep their existing behavior. Snapshot replay starts no new estimate from viewing these controls; an explicit manual recalculation remains available as before.
 
 No ownership formulas, automatic sampling policy, reuse validation or lineup behavior changed. Tasks retains the full worker outcome and cancellation controls. Quick-estimate and mixed-source notices remain visible when live input changes replace simulated ownership. No new periodic source scan or background estimation job was added.
+
+
+### Review ownership from Preparation
+
+Preparation now includes **Current ownership** alongside **Last applied ownership**. Current ownership shows the displayed sources and live worker state; the last-applied row remains a separate recorded reuse/timing receipt and may describe older inputs. Neither row independently validates current reuse.
+
+Select **Current ownership → Review ownership** to open the existing Data and Learning ownership diagnostics directly. This closes the preparation dialog, reveals the existing Advanced page and leaves manual recalculation collapsed. It performs no source refresh, cache lookup, snapshot capture or estimation and does not change sampling settings, replay, player inputs or the build recipe. Expand troubleshooting only when you explicitly want to recalculate.

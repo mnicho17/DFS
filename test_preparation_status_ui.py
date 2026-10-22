@@ -150,3 +150,36 @@ class PreparationStatusTests(unittest.TestCase):
             open_preparation_status(w)
         self.assertEqual(w.players,before)
         self.assertEqual(w._current_build_recipe(),recipe)
+
+    def test_current_ownership_is_separate_from_prior_reuse_and_never_estimates(self):
+        w=self.window();w.players=[dict(Name='Current player',OwnershipSource='Quick roster-slot estimate')]
+        w.last_ownership_reuse=dict(status='reused',reason='Earlier slate record')
+        before=copy.deepcopy(w.players)
+        with patch('ownership_cache.estimate',side_effect=AssertionError('No cache lookup')),patch.object(w,'_start_ownership_sim',side_effect=AssertionError('No estimate')):
+            rows=self.rows(w)
+        self.assertIn('Quick roster-slot estimate',rows['ownership']['detail'])
+        self.assertNotIn('Earlier slate record',rows['ownership']['detail'])
+        self.assertIn('Earlier slate record',rows['ownership-reuse']['detail'])
+        self.assertEqual(w.players,before)
+
+    def test_review_ownership_routes_to_original_controls_without_expanding_or_running(self):
+        w=self.window();d=PreparationStatusDialog(w);self.addCleanup(d.deleteLater)
+        before=copy.deepcopy(w._current_build_recipe());players=copy.deepcopy(w.players)
+        for index in range(d.table.topLevelItemCount()):
+            item=d.table.topLevelItem(index)
+            if item.text(0)=='Current ownership':d.table.setCurrentItem(item);break
+        with patch.object(w,'_start_ownership_sim',side_effect=AssertionError('No estimate')),patch.object(w,'_capture_snapshot',side_effect=AssertionError('No capture')):
+            d.open_tool()
+        self.assertEqual(d.result(),QtWidgets.QDialog.Accepted)
+        self.assertTrue(w.action_show_build_controls.isChecked())
+        self.assertTrue(w.tabs_workspace_controls.currentWidget().isAncestorOf(w.ownership_status_label))
+        self.assertTrue(w.ownership_manual_panel.isHidden());self.assertEqual(w.players,players)
+        self.assertEqual(w._current_build_recipe(),before)
+
+    def test_ownership_navigation_finds_data_page_after_tab_reordering(self):
+        from ownership_ui import show_ownership_controls
+        w=self.window();tabs=w.tabs_workspace_controls
+        index=next(i for i in range(tabs.count()) if tabs.widget(i).isAncestorOf(w.ownership_status_label))
+        page=tabs.widget(index);title=tabs.tabText(index);tabs.removeTab(index);tabs.insertTab(0,page,title)
+        show_ownership_controls(w)
+        self.assertIs(tabs.currentWidget(),page);self.assertTrue(w.ownership_manual_panel.isHidden())
