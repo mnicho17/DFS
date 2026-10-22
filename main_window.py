@@ -4262,10 +4262,10 @@ class ResultsLearningDialog(QtWidgets.QDialog):
         self.auto_history.setChecked(self.history_refresh.enabled())
         self.auto_history.toggled.connect(self.history_refresh.set_enabled)
         refresh_row.addWidget(self.auto_history)
-        self.history_refresh_button = QtWidgets.QPushButton('Refresh history now')
+        self.history_refresh_button = QtWidgets.QPushButton('Check now')
         self.history_refresh_button.clicked.connect(self.refresh_username_history)
         refresh_row.addWidget(self.history_refresh_button)
-        self.history_cancel_button = QtWidgets.QPushButton('Cancel history refresh')
+        self.history_cancel_button = QtWidgets.QPushButton('Pause current check')
         self.history_cancel_button.clicked.connect(self.history_refresh.cancel)
         refresh_row.addWidget(self.history_cancel_button)
         layout.addLayout(refresh_row)
@@ -4301,6 +4301,13 @@ class ResultsLearningDialog(QtWidgets.QDialog):
             self.refresh_report()
 
     def refresh_username_history(self):
+        from history_workspace_ui import history_update_view
+        view=history_update_view(self.history_refresh,self._import_thread is not None)
+        if not view['can_check']:return
+        if view['action']=='sources':
+            self.history_sources_toggle.setChecked(True)
+            self.results_folder.setFocus()
+            return
         if self._import_thread is not None:
             return
         self.learning_settings.setValue('learning/dk_username', self.username_edit.text().strip())
@@ -4309,12 +4316,19 @@ class ResultsLearningDialog(QtWidgets.QDialog):
 
     def update_history_status(self):
         text = self.history_refresh.text
+        watch_message=self.history_refresh.watch.message
         if self.history_refresh.watch.pending or self.history_refresh.watch.paused:
-            text = self.history_refresh.status_line() + '\n' + text
-        self.history_status.setPlainText(text + '\n' + self.history_refresh.watch.message)
+            state_line=self.history_refresh.status_line()
+            if state_line!=watch_message and not text.startswith(state_line):text=state_line+'\n'+text
+        if watch_message and not text.endswith(watch_message):text+='\n'+watch_message
+        self.history_status.setPlainText(text)
+        from history_workspace_ui import history_update_view
+        view=history_update_view(self.history_refresh,self._import_thread is not None)
+        if hasattr(self,'history_update_summary'):self.history_update_summary.setText(view['detail'])
+        self.history_refresh_button.setText(view['label']);self.history_refresh_button.setEnabled(view['can_check'])
+        self.history_refresh_button.setToolTip('Recheck configured folders with the existing full importer, indexing and reconciliation. Automatic unchanged checks retain their fast path.')
+        self.history_cancel_button.setEnabled(view['can_pause'])
         busy = self.history_refresh.busy
-        self.history_refresh_button.setEnabled(not busy and self._import_thread is None)
-        self.history_cancel_button.setEnabled((busy and not self.history_refresh.stop.is_set()) or self.history_refresh.queued)
         self._set_import_controls(not busy and self._import_thread is None)
 
     def open_opponent_portfolios(self):

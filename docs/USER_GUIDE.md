@@ -50,9 +50,9 @@ Build setup, preparation overview/details, and task progress/messages now have l
 
 With **Refresh history automatically (startup and folder changes)** enabled in Results and Learning, the app watches the configured Results/Salary folders and the CSV files/subfolders found during its existing import scan. A change queues a visible history-refresh request in **Tasks** and **Preparation**, waits for 30 seconds of quiet, and runs the existing validated importer after other tracked app work and history operations retire. Bursts of events coalesce into one request. No periodic content hashing or extra directory scan is used to detect changes; actual refresh retains the existing full hashing, source snapshots, reconciliation and mapping safeguards. Changed source revisions still require review and do not retarget prior mappings.
 
-Cancellation or refresh errors pause watching until **Refresh history now** resumes it. Turning automatic history off cancels queued automatic requests and removes watches; it does not cancel an already running import. Closing the app cancels queued work and retains existing safe worker retirement. The app must remain open for file notifications. Notifications are not source validation, and a quiet folder is not proof its history is current.
+Cancellation or refresh errors pause watching until **Retry / Resume** on Overview resumes it. Turning automatic history off cancels queued automatic requests and removes watches; it does not cancel an already running import. Closing the app cancels queued work and retains existing safe worker retirement. The app must remain open for file notifications. Notifications are not source validation, and a quiet folder is not proof its history is current.
 
-Watch registration is bounded to 4,096 paths and may be limited by Windows or an unavailable drive. Results and Learning and Preparation show partial-registration or paused status; use **Refresh history now** for full coverage, after reconnecting drives, or if filesystem notifications were missed. Newly discovered subfolders/files are registered after import; application-owned analysis-source archives are excluded from watching.
+Watch registration is bounded to 4,096 paths and may be limited by Windows or an unavailable drive. Results and Learning and Preparation show partial-registration or paused status; use **Check now** for full coverage, after reconnecting drives, or if filesystem notifications were missed. Newly discovered subfolders/files are registered after import; application-owned analysis-source archives are excluded from watching.
 
 ## Unified preparation summary
 
@@ -2032,7 +2032,7 @@ The comparison is a bounded diagnostic search, not a replay of the full Deep pip
 ### Comparing other users’ constructions
 
 Results & Learning can automatically refresh your configured Results and Salary
-folders at startup. Use **Refresh history now** for new downloads during a session;
+folders at startup. New downloads are detected during a session when folder watching is enabled. Use **Check now** to explicitly verify configured folders;
 the summary shows imported entries and records needing review. The startup option
 can be disabled. Refresh imports evidence and username history without changing SIM.
 
@@ -2198,7 +2198,7 @@ this checkpoint. The dashboard says history is unchanged instead of reporting
 another indexing pass. The first successful check establishes the checkpoint.
 
 Changed inputs trigger the existing full verification; failed or cancelled work
-is never marked complete. **Refresh history now** always runs full verification
+is never marked complete. **Check now** always runs full verification
 and is also the way to check externally restored files whose content was changed
 while preserving all file metadata. These startup checkpoints do not qualify
 evidence for analysis or bypass downstream historical-data safeguards.
@@ -2439,3 +2439,12 @@ Use **Preparation…** beside Generate, or **Settings → Preparation…**, to r
 **Prepare this slate**, **Retry / Resume**, or **Check coverage / reuse** invokes the same current-input capture and background preparation workflow. It checks saved coverage and screening, then queues only missing work under the existing time and storage limits. While a captured job is queued or running, a second preparation request is disabled; Tasks shows the job's captured inputs. **Run queued work now** applies only to a matching captured preparation job and uses the existing scheduler, including manual-worker and safety gates. Other captured jobs remain available in Tasks. Automatic folder watching and preparation continue as before.
 
 Opening this screen does not scan files, refresh sources, capture a snapshot, or start a worker. CSV loading, ownership calculation and manual builds must retire before explicit capture. Replay remains fixed, and automatic slate preparation remains NFL Showdown only. **Advanced tools** retains the explicit Showdown library/screening dialog and Classic candidate search/resume without changing the current format or settings. These replace their separate Settings menu entries. Generate still applies every existing identity, eligibility, historical-evidence, rule, screening and reuse check.
+
+
+### History updates without duplicate manual steps
+
+History Overview now shows whether automatic updates are on, whether folder monitoring is armed, and whether a check is queued, running, stopping or paused. **Check now** uses the existing full importer, indexing and reconciliation; when watching is paused, the same action becomes **Retry / Resume**. With no configured source folders it opens **Sources and account settings** instead of queuing an empty import. Running checks and report/import work retain their existing worker and retirement guards.
+
+Routine downloads continue through the existing folder watcher after 30 seconds of source quietness; unchanged automatic checks retain their metadata/checkpoint fast path. No new polling timer or periodic content scan was added. Watch registration can be partial or unavailable; the displayed watcher message and Check now remain available for missed notifications and drive changes. Monitoring status and the last recorded result are not proof of current source evidence or field-model qualification.
+
+The automatic-updates preference is under **Sources and account settings**. Explicit checking does not enable an off preference. The original **Import new results** tool remains under **More reports and analysis tools** for manual troubleshooting. Salary matching, learning coverage, source revisions, mappings and historical qualification retain their existing validation and review paths. No import, indexing or model change is triggered simply by viewing this status.
