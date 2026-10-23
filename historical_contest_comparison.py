@@ -133,7 +133,41 @@ def matched_summary(contests, feature, comparator):
 
 
 
-def field_comparison(contests, feature, comparator):
+
+def captain_defense_rate(contest, cohort, position):
+    """Joint counts cannot be reconstructed from legacy marginal percentages."""
+    if contest.get('version')!=3:return None
+    group=contest.get('cohorts',{}).get(cohort,{})
+    n=group.get('features',{}).get('Captain position: '+position,0)
+    total=group.get('counts',{}).get('supported_rows',0)
+    joint=group.get('captain_defense')
+    if not isinstance(joint,dict):return None
+    yes,no=joint.get(position+' with',0),joint.get(position+' without',0)
+    if (not all(type(v) is int and v>=0 for v in (n,total,yes,no)) or
+            not 0<n<=total or yes+no!=n):return None
+    return 100*yes/n
+
+
+def captain_defense_report(scope):
+    if scope['format']!='showdown' or not scope.get('contests'):return []
+    if not any(c.get('version')==3 for c in scope['contests']):
+        return ['', 'Opposing FLEX defense within Captain position: unavailable',
+            '- Cached summaries contain marginal counts only. Reconcile Historical Coverage once, or use subsequent normal reconciliation, to record joint counts; no values were inferred and earlier broad comparisons remain available.']
+    lines=['', 'Opposing FLEX defense within Captain position — equal slate weight',
+        '- Compares the share using an opposing FLEX defense within the same recorded Captain position. Each field/cohort pair uses the same contests. Position denominators can differ between comparisons; this is not a controlled experiment or a causal effect.',
+        '- Legacy summaries cannot supply joint counts. Reconcile Historical Coverage once, or use summaries produced during subsequent normal reconciliation. Missing/inconsistent counts and absent position coverage stay unavailable. Earlier broad comparisons remain readable.',
+        '| Captain | Rank cohort | Field with opposing DST | Cohort with opposing DST | Cohort − field (pp) | Slate blocks / sources | Captain-position source rows field / cohort | Excluded identity / cohort / legacy / conflicting source |',
+        '|---|---|---:|---:|---:|---:|---:|---:|']
+    for position in ('QB','RB','WR','TE','K','DST'):
+        for key,label in (('top1','Rank cutoff 1%'),('top5','Rank cutoff 5%'),('rank1','Rank 1')):
+            r=field_comparison(scope['contests'],'',key,captain_position=position)
+            cells=(f"{r['field']:.1f}% | {r['comparator']:.1f}% | {r['gap']:+.1f}" if r['slates'] else 'unavailable | unavailable | unavailable')
+            lines.append(f"| {position} | {label} | {cells} | {r['slates']} / {r['contests']} | {r['field_rows']:,} / {r['comparator_rows']:,} | {r['excluded_identity']} / {r['excluded_cohort']} / {r['excluded_legacy']} / {r['excluded_conflicting_sources']} |")
+    lines.append('- Source rows include duplicate EntryIds; rank cutoffs include ties and do not certify full fields or payouts. Formats/presets can share games; sample counts must not be added. No Captain locks, limits, forecasts or model defaults are changed.')
+    return lines
+
+
+def field_comparison(contests, feature, comparator, *, captain_position=None):
     """Matched field/cohort source rows, regardless of personal participation.
 
     Identical source receipts count once; contradictory copies are withheld.
@@ -141,6 +175,14 @@ def field_comparison(contests, feature, comparator):
     """
     if comparator not in ('top1','top5','rank1'):
         raise ValueError('Choose a recorded rank cohort for field comparison.')
+    if captain_position is not None and captain_position not in ('QB','RB','WR','TE','K','DST'):
+        raise ValueError('Invalid Captain position.')
+    versions = (3,) if captain_position else (2,3)
+    def measured(c,cohort):
+        return captain_defense_rate(c,cohort,captain_position) if captain_position else rate(c,cohort,feature)
+    def denominator(c,cohort):
+        group=c['cohorts'][cohort]
+        return group['features']['Captain position: '+captain_position] if captain_position else group['counts']['supported_rows']
     copies = defaultdict(dict)
     missing_source = 0
     for contest in contests:
@@ -152,14 +194,14 @@ def field_comparison(contests, feature, comparator):
     repeated = len(contests)-missing_source-sum(len(v) for v in copies.values())
     conflicts = sum(len(v)>1 for v in copies.values())
     unique = [next(iter(v.values())) for _,v in sorted(copies.items()) if len(v)==1]
-    legacy = sum(c.get('version')!=2 for c in unique)
-    current = [c for c in unique if c.get('version')==2]
-    paired = [c for c in current if rate(c,'field',feature) is not None and rate(c,comparator,feature) is not None]
+    legacy = sum(c.get('version') not in versions for c in unique)
+    current = [c for c in unique if c.get('version') in versions]
+    paired = [c for c in current if measured(c,'field') is not None and measured(c,comparator) is not None]
     blocks, excluded = slate_blocks(paired)
     field, other = [], []
     for block in blocks:
-        field.append(statistics.mean(rate(c,'field',feature) for c in block['contests']))
-        other.append(statistics.mean(rate(c,comparator,feature) for c in block['contests']))
+        field.append(statistics.mean(measured(c,'field') for c in block['contests']))
+        other.append(statistics.mean(measured(c,comparator) for c in block['contests']))
     included = [c for b in blocks for c in b['contests']]
     return dict(slates=len(blocks),contests=len(included),excluded_identity=excluded+missing_source,
         excluded_cohort=len(current)-len(paired),excluded_legacy=legacy,
@@ -167,8 +209,8 @@ def field_comparison(contests, feature, comparator):
         field=statistics.mean(field) if field else None,
         comparator=statistics.mean(other) if other else None,
         gap=statistics.mean(b-a for a,b in zip(field,other)) if field else None,
-        field_rows=sum(c['cohorts']['field']['counts']['supported_rows'] for c in included),
-        comparator_rows=sum(c['cohorts'][comparator]['counts']['supported_rows'] for c in included))
+        field_rows=sum(denominator(c,'field') for c in included),
+        comparator_rows=sum(denominator(c,comparator) for c in included))
 
 
 def field_report_lines(scope):
@@ -199,7 +241,7 @@ def report_lines(scope):
     if not contests:
         return []
     features = FEATURES if scope['format']=='showdown' else CLASSIC_FEATURES
-    lines = field_report_lines(scope) + ['', 'Contest-by-contest construction comparisons',
+    lines = field_report_lines(scope) + captain_defense_report(scope) + ['', 'Contest-by-contest construction comparisons',
              '- Captain-lock labels use your single-Captain instruction and require complete personal coverage in the normalized opponent index bound to the current results/salary revisions. They are assumptions rather than build receipts. Missing/stale indexing remains unknown. Multiple Captains do not prove a normal SIM build. A single submitted lineup does not establish lock settings.']
     for c in sorted(contests,key=lambda c:(c['date'] or '',c['name'],c['source'])):
         n = c['cohorts'].get('yours',{}).get('counts',{}).get('supported_rows',0)
