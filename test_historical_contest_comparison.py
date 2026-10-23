@@ -69,19 +69,13 @@ class ContestComparisonTests(unittest.TestCase):
         self.assertEqual(context('showdown',group,observation,verified=True),('Multiple Captains; settings unknown',3))
         self.assertEqual(context('showdown',dict(counts=dict(entry_rows=1,supported_rows=1)),dict(rows=1,readable=1,captains={'a'}),verified=True),('Single submitted lineup; settings unknown',1))
 
-    def test_personal_reader_normalizes_username_and_rejects_incomplete_or_over_budget_context(self):
+    def test_raw_personal_rosters_never_establish_verified_context(self):
         with closing(sqlite3.connect(':memory:')) as conn:
             conn.execute('CREATE TABLE historical_results(result_id INTEGER,import_id TEXT,entry_name TEXT,raw_json TEXT)')
             roster='CPT Alpha FLEX Bravo FLEX Charlie FLEX Delta FLEX Echo FLEX Foxtrot'
             conn.executemany('INSERT INTO historical_results VALUES(?,?,?,?)',[(1,'a','ME (1/20)',json.dumps({'Lineup':roster})),(2,'a','me',json.dumps({'lineup':roster})),(3,'a','other','{}')])
-            value=personal_observations(conn,'Me')
-            self.assertEqual(value['imports']['a']['rows'],2)
-            self.assertEqual(value['imports']['a']['readable'],2)
-            self.assertEqual(len(value['imports']['a']['captains']),1)
-            self.assertFalse(personal_observations(conn,'Me',limit=2)['complete'])
-            self.assertEqual(personal_observations(conn,'Me',limit=2)['imports'],{})
-            conn.execute("UPDATE historical_results SET raw_json='bad' WHERE result_id=2")
-            self.assertEqual(personal_observations(conn,'Me')['imports']['a']['readable'],1)
+            value=personal_observations(conn,'Me',limit=2)
+            self.assertTrue(value['complete']);self.assertEqual(value['imports'],{});self.assertEqual(value['receipts'],{})
 
     def test_report_stratifies_context_and_labels_observed_cutoffs_and_no_causal_claim(self):
         a=contest('a');b=contest('b',yours=90)
@@ -114,15 +108,15 @@ class ContestComparisonTests(unittest.TestCase):
     def test_normalized_receipts_reject_conflicts_incomplete_metadata_and_old_versions(self):
         with closing(sqlite3.connect(':memory:')) as conn:
             conn.execute('CREATE TABLE historical_results(result_id INTEGER,import_id TEXT,entry_name TEXT,raw_json TEXT)')
-            conn.execute('CREATE TABLE opponent_contests(contest_key TEXT,result_hash TEXT,salary_hash TEXT,audit_json TEXT,version INTEGER)')
+            conn.execute("CREATE TABLE opponent_contests(contest_key TEXT,result_hash TEXT,salary_hash TEXT,audit_json TEXT,version INTEGER,format TEXT DEFAULT 'showdown')")
             conn.execute('CREATE TABLE opponent_user_contest_stats(contest_key TEXT,user_key TEXT,entries INTEGER,readable INTEGER,stats_json TEXT)')
-            stats=json.dumps(dict(captain_pool=1,constructions=dict(known_entries=20)))
-            conn.execute('INSERT INTO opponent_contests VALUES(?,?,?,?,?)',('a','r','s','{}',2))
+            stats=json.dumps(dict(entries=20,readable_rosters=20,captain_pool=1,constructions=dict(known_entries=20,unknown_entries=0)))
+            conn.execute('INSERT INTO opponent_contests(contest_key,result_hash,salary_hash,audit_json,version) VALUES(?,?,?,?,?)',('a','r','s',json.dumps(dict(conflicting_entry_ids_excluded=0)),2))
             conn.execute('INSERT INTO opponent_user_contest_stats VALUES(?,?,?,?,?)',('a','dk:me',20,20,stats))
             self.assertIn(('r','s'),personal_observations(conn,'ME')['receipts'])
             conn.execute("UPDATE opponent_contests SET audit_json=?",(json.dumps(dict(conflicting_entry_ids_excluded=1)),))
             self.assertEqual(personal_observations(conn,'me')['receipts'],{})
-            conn.execute("UPDATE opponent_contests SET audit_json='{}',version=1")
+            conn.execute('UPDATE opponent_contests SET audit_json=?,version=1',(json.dumps(dict(conflicting_entry_ids_excluded=0)),))
             self.assertEqual(personal_observations(conn,'me')['receipts'],{})
             conn.execute('UPDATE opponent_contests SET version=2')
             conn.execute('UPDATE opponent_user_contest_stats SET readable=19')

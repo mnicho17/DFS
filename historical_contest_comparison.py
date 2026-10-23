@@ -14,47 +14,43 @@ CLASSIC_FEATURES = ('Defenses: 1','QB same-team WR/TE: 0','QB same-team WR/TE: 1
                     'FLEX position: RB','FLEX position: WR','FLEX position: TE')
 
 
-def personal_observations(conn, username, *, limit=200000):
-    """Read stored personal rosters, never source CSVs or current build settings."""
-    from opponent_analysis import username_key, _roster
-    selected = username_key(username)
-    result = dict(complete=True, imports={},receipts={})
-    if not selected:
-        return result
-    for index,(ident,name,encoded) in enumerate(conn.execute('SELECT import_id,entry_name,raw_json FROM historical_results ORDER BY result_id')):
-        if index >= limit:
-            return dict(complete=False,imports={},receipts={})
-        if username_key(str(name or '')) != selected:
-            continue
-        group = result['imports'].setdefault(ident,dict(rows=0,readable=0,captains=set()))
-        group['rows'] += 1
+def personal_observations(conn, username, *, limit=4096):
+    """Bounded exact-username indexed receipts; raw rosters cannot verify context."""
+    from opponent_analysis import username_key
+    from opponent_history import VERSION
+    selected=username_key(username)
+    result=dict(complete=True,imports={},receipts={})
+    if not selected:return result
+    tables={r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if not {'opponent_contests','opponent_user_contest_stats'} <= tables:return result
+    rows=conn.execute('''SELECT c.result_hash,c.salary_hash,c.audit_json,s.entries,s.readable,s.stats_json
+        FROM opponent_user_contest_stats s JOIN opponent_contests c ON c.contest_key=s.contest_key
+        WHERE s.user_key=? AND c.version=? AND c.format='showdown'
+        ORDER BY c.result_hash,c.salary_hash,c.contest_key LIMIT ?''',('dk:'+selected,VERSION,limit+1))
+    seen=set();ambiguous=set()
+    for index,(source,salary,audit,entries,readable,encoded) in enumerate(rows):
+        if index>=limit:return dict(complete=False,imports={},receipts={})
+        key=(source,salary)
+        if key in seen:ambiguous.add(key)
+        seen.add(key)
         try:
-            raw = json.loads(encoded or '{}')
-            raw = {str(k).lower().replace(' ','').replace('_',''):v for k,v in raw.items()}
-            text = raw.get('lineup') or raw.get('roster') or ''
-            roster = _roster(text,'showdown') if isinstance(text,str) else None
-        except (ValueError,TypeError,AttributeError):
-            roster = None
-        if roster:
-            group['readable'] += 1
-            group['captains'].add(roster[2])
-    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if {'opponent_contests','opponent_user_contest_stats'} <= tables:
-        from opponent_history import VERSION
-        rows = conn.execute('''SELECT c.result_hash,c.salary_hash,c.audit_json,s.entries,s.readable,s.stats_json
-            FROM opponent_contests c JOIN opponent_user_contest_stats s ON s.contest_key=c.contest_key
-            WHERE c.version=? AND s.user_key=?''',(VERSION,'dk:'+selected))
-        for source,salary,audit,entries,readable,encoded in rows:
-            try:
-                audit=json.loads(audit);stats=json.loads(encoded)
-                pool=stats['captain_pool']
-                if (audit.get('conflicting_entry_ids_excluded',0) or not entries or readable!=entries or
-                        stats.get('constructions',{}).get('known_entries')!=entries or
-                        not isinstance(pool,int) or not 0 < pool <= entries):
-                    continue
-                result['receipts'][(source,salary)] = dict(rows=entries,readable=readable,captain_pool=pool)
-            except (ValueError,TypeError,KeyError,AttributeError):
-                continue
+            if not all(isinstance(v,str) and v for v in key):continue
+            if not all(isinstance(v,str) and len(v)<=65536 for v in (audit,encoded)):continue
+            audit=json.loads(audit);stats=json.loads(encoded)
+            if not isinstance(audit,dict) or not isinstance(stats,dict):continue
+            conflicts=audit.get('conflicting_entry_ids_excluded')
+            construction=stats.get('constructions')
+            if not isinstance(construction,dict):continue
+            pool=stats.get('captain_pool')
+            counts=(entries,readable,stats.get('entries'),stats.get('readable_rosters'),
+                    construction.get('known_entries'),construction.get('unknown_entries'),pool,conflicts)
+            if (not all(type(v) is int for v in counts) or conflicts!=0 or not 0<entries or
+                    any(v!=entries for v in counts[1:5]) or construction['unknown_entries']!=0 or
+                    not 0<pool<=entries):continue
+            result['receipts'][key]=dict(rows=entries,readable=readable,captain_pool=pool)
+        except (ValueError,TypeError):
+            continue
+    for key in ambiguous:result['receipts'].pop(key,None)
     return result
 
 

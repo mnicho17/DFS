@@ -2751,6 +2751,22 @@ Position comparisons may have different contributing contests. No Captain locks,
 limits, projections, SIM settings, ranking or generation defaults are changed.
 
 
+### Personal Captain context on large histories
+
+The construction report looks up your exact normalized username in the existing
+field-history index. It no longer scans every saved result row first. Unrelated
+contest rows cannot exhaust the personal-context read allowance or turn a valid
+indexed receipt into an unknown result merely because the database grew.
+
+Single-Captain context still requires the current result and salary revision,
+complete matching personal counts, exact salary metadata and an unambiguous
+indexed receipt. Conflicting EntryIds, incomplete/invalid counts, old index
+versions, ambiguous receipts and unavailable evidence remain unknown. A single
+Captain is labeled a user-assumed lock; multiple Captains do not establish normal
+SIM settings. Raw stored rosters alone cannot certify this context. The lookup
+is bounded, reads no CSVs and makes no history, model or generation changes.
+
+
 ### Slate sensitivity in construction comparisons
 
 Field/top-finisher and within-Captain-position tables now show how many matched
