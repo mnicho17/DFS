@@ -161,3 +161,52 @@ class HistoryFolderWatchTests(unittest.TestCase):
         self.assertFalse(controller.watch.pending)
         self.assertFalse(controller.watch.watcher.files()+controller.watch.watcher.directories())
         self.assertFalse(Path(controller.db_path).exists())
+
+
+    def test_saved_capture_queues_one_visible_request_and_ignores_missing_or_failed_capture(self):
+        controller,_=self.controller(); watch=controller.watch
+        for report in (None, {}, {'distribution_capture':None}, {'distribution_capture':{'status':'failed'}}):
+            controller.capture_saved(report)
+            self.assertFalse(watch.pending)
+        controller.capture_saved({'distribution_capture':{'status':'saved'}})
+        key=watch.task
+        self.assertTrue(watch.pending)
+        self.assertIn('report-only calibration',watch.hub.rows[key]['detail'])
+        controller.capture_saved({'distribution_capture':{'status':'saved'}})
+        self.assertEqual(watch.task,key)
+        self.assertEqual(watch.timer.interval(),QUIET_MS)
+
+    def test_capture_notification_respects_preferences_pause_shutdown_and_worker_gating(self):
+        controller,_=self.controller(); watch=controller.watch
+        report={'distribution_capture':{'status':'saved'}}
+        for key in ('learning/auto_history_refresh','learning/watch_history_changes'):
+            controller.settings.setValue(key,False)
+            controller.capture_saved(report); self.assertFalse(watch.pending)
+            controller.settings.setValue(key,True)
+        watch.paused=True
+        controller.capture_saved(report); self.assertFalse(watch.pending)
+        watch.paused=False; controller.capture_saved(report)
+        other=watch.hub.start('Lineup generation')
+        with patch.object(controller,'start') as start:
+            watch.dispatch(); start.assert_not_called()
+        watch.hub.finish(other,'Completed'); watch.shutdown()
+        controller.capture_saved(report); self.assertFalse(watch.pending)
+
+    def test_capture_notification_failure_does_not_interrupt_build_completion(self):
+        controller,_=self.controller()
+        with patch.object(controller.watch,'schedule',side_effect=RuntimeError('watch unavailable')):
+            with self.assertLogs('history_refresh_ui',level='WARNING'):
+                controller.capture_saved({'distribution_capture':{'status':'saved'}})
+
+    def test_only_accepted_build_completion_notifies_capture_discovery(self):
+        from types import SimpleNamespace
+        from main_window import MainWindow
+        window=MainWindow(); self.addCleanup(window.close)
+        payload=dict(kind='classic',sport='NFL',requested=0,lineups=[],cancelled=False,
+                     portfolio_report={'warnings':[]},sim_report={'distribution_capture':{'status':'saved'}})
+        stale=SimpleNamespace(repair=False,disposition='pending')
+        with patch.object(window.history_refresh,'capture_saved') as notify, patch.object(window,'_record_build_diagnostic'):
+            window._on_lineup_build_finished(payload,receipt=stale)
+            notify.assert_not_called()
+            window._on_lineup_build_finished(payload)
+            notify.assert_called_once_with(payload['sim_report'])

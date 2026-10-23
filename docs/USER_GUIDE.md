@@ -352,6 +352,14 @@ P10/P25/P50/P75/P90 coverage measures how often actual scores were at or below e
 
 Repeated contests, duplicate entries and Captain multipliers do not create extra independent outcomes. Models and formats remain separate and can share the same player-game results. Conflicting scores are excluded; zero and negative scores remain known. Legacy captures without P25/P75 show those values as unavailable. Players from the same game remain correlated, and a small number of games does not establish accuracy. These reports do not automatically tune projections, ownership, SIM or compute settings.
 
+### Automatic calibration capture discovery
+
+History refresh also discovers completed pregame SIM captures independently of the selected forecast or validation build. Its separate **Automatic calibration capture discovery — report only** section can use an earlier qualified capture when a newer forecast has no saved SIM ranges. Existing salary associations, forecast choices and explicit validation-build choices stay fixed. It never reconstructs missing historical simulations or changes model defaults.
+
+The first refresh qualifies available evidence using the existing strict source, identity, role, game, timing and capture-integrity checks. Later refreshes reuse completed qualifications while file metadata, source receipts, mappings and application code remain unchanged. Changed or unavailable evidence is withheld until rechecked. Cancellation or changing inputs prevents partial publication. Repeated contests do not create additional independent player-game outcomes; conflicting scores are excluded and models/formats remain separate. Sample counts overlap other calibration reports and must not be added together.
+
+With automatic history updates and folder watching enabled, saving a SIM capture queues a visible history refresh after the existing quiet period. Current manual workers retain priority. Capture-only updates reuse completed CSV imports and username indexes; they refresh calibration evidence without reimporting unchanged results. The existing pause, resume and automatic-update preferences still apply. **Check now** on History Overview can explicitly refresh the evidence.
+
 ### Portfolio Insights
 
 

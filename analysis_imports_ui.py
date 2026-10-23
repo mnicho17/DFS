@@ -31,7 +31,7 @@ class CombinedImportWorker(QtCore.QObject):
     @QtCore.pyqtSlot()
     def run(self):
         try:
-            source_checkpoint = checkpoint = None
+            source_checkpoint = checkpoint = source_reuse = None
             if self.automatic and self.refresh_history and not self.pair and not self.salary_review:
                 import history_refresh_cache as cache
                 self.progress.emit(0, 0, 'Checking history for changes…')
@@ -41,10 +41,14 @@ class CombinedImportWorker(QtCore.QObject):
                     if cached is not None and not self.cancelled.is_set():
                         self.finished.emit(cached)
                         return
+                    history_inputs, _ = cache.inputs(self, include_calibration=False)
+                    source_reuse = cache.read(self, history_inputs, sources_only=True)
                     source_checkpoint, _ = cache.inputs(self, sources_only=True)
                 except (OSError, ValueError, sqlite3.Error):
                     checkpoint = None
-            if self.salary_review:
+            if source_reuse is not None:
+                result = source_reuse
+            elif self.salary_review:
                 from analysis_salary_reviews import save as save_review
                 saved = save_review(*self.salary_review, db_path=self.db_path, cancelled=self.cancelled.is_set)
                 result = dict(review_association_saved=int(saved), review_only=True, errors=[])
@@ -92,7 +96,18 @@ class CombinedImportWorker(QtCore.QObject):
                     result['cancelled'] = True
                 except Exception:
                     result['errors'].append('Sources saved; Historical Coverage > Reconcile can retry evidence qualification.')
-            if not result['cancelled'] and any(result.get(key) for key in ('results_imported','salaries_imported','pairs_added')):
+            if not self.salary_review and not result['cancelled']:
+                from calibration_capture_discovery import refresh as discover_calibration
+                try:
+                    result['calibration_discovery'] = discover_calibration(self.db_path,
+                        cancelled=self.cancelled.is_set,
+                        progress=lambda text: self.progress.emit(0, 0, text))
+                except ImportCancelled:
+                    result['cancelled'] = True
+                except Exception as exc:
+                    result['errors'].append('Calibration captures need retry: ' + str(exc))
+            if not result['cancelled'] and (any(result.get(key) for key in ('results_imported','salaries_imported','pairs_added'))
+                    or result.get('calibration_discovery', {}).get('changed')):
                 from learning_db import generate_learning_report
                 try:
                     self.progress.emit(0, 0, 'Refreshing the saved-results report…')
@@ -102,7 +117,7 @@ class CombinedImportWorker(QtCore.QObject):
             result['cancelled'] = bool(result.get('cancelled') or self.cancelled.is_set())
             if result['cancelled']:
                 result.pop('report', None)
-            if self.refresh_history and not self.salary_review and not result['cancelled']:
+            if self.refresh_history and not self.salary_review and not result['cancelled'] and not result.get('calibration_only'):
                 from opponent_history import sync_saved
                 try:
                     result['username_history'] = sync_saved(self.db_path, self.cancelled.is_set,

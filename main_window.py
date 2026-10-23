@@ -15160,6 +15160,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             cancelled = bool(payload.get("cancelled", False))
             self.last_portfolio_report = dict(payload.get("portfolio_report") or {})
             self.last_sim_report = dict(payload.get("sim_report") or {})
+            self.history_refresh.capture_saved(self.last_sim_report)
             self.last_build_timing_report = dict(payload.get("timing_report") or {})
             repair_source = str(payload.get("repair_source") or "")
             retained_count = int(self.last_build_timing_report.get("retained_count", 0) or 0)

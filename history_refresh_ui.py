@@ -8,6 +8,12 @@ def refresh_summary(result):
         return ('History unchanged; completed imports and indexes reused.\n'
                 'Checked file metadata and database revision; no source hashing or indexing needed.\n'
                 f"{result.get('unpaired', 0)} results still need salary matching.")
+    if result.get('calibration_only') and not result.get('errors') and not result.get('cancelled'):
+        data = result.get('calibration_discovery', {})
+        return ('History sources unchanged; imports and username indexes reused.\n'
+                f"Calibration captures: {data.get('reused', 0)} results reused; "
+                f"{data.get('changed', 0)} refreshed; {data.get('unavailable', 0)} unavailable.\n"
+                'Report-only evidence; saved forecast/build choices and model defaults are unchanged.')
     history = result.get('username_history', {})
     contests = history.get('contests', [])
     added = [row for row in contests if not row.get('unchanged')]
@@ -76,6 +82,16 @@ class HistoryRefreshController(QtCore.QObject):
 
     def enabled(self):
         return str(self.settings.value('learning/auto_history_refresh', 'true')).lower() in ('true', '1')
+
+    def capture_saved(self, report):
+        capture = report.get('distribution_capture') if isinstance(report, dict) else None
+        if isinstance(capture, dict) and capture.get('status') == 'saved':
+            try:
+                self.watch.schedule(reason='Saved SIM capture; waiting for quiet before checking report-only calibration evidence.')
+            except (OSError, RuntimeError):
+                # Notification is optional; the next history refresh also discovers it.
+                import logging
+                logging.getLogger(__name__).warning('Could not queue calibration discovery; retry on history refresh.', exc_info=True)
 
     def startup(self):
         if self.enabled() and (self.settings.value('learning/results_folder', '') or self.settings.value('learning/salary_folder', '')):

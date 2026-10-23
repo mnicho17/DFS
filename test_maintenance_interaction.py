@@ -67,6 +67,13 @@ class MaintenanceInteractionTests(unittest.TestCase):
 
     def test_explicit_history_refresh_replaces_queued_auto_and_waits_for_manual_worker(self):
         w,clock,root=self.window();c=w.history_refresh
+        # The mocked importer below must leave the real empty catalog that a
+        # successful import creates, so downstream evidence discovery can run.
+        from contextlib import closing
+        from learning_db import _connect
+        from analysis_imports import ensure_tables
+        with closing(_connect(c.db_path)) as conn:
+            ensure_tables(conn);conn.commit()
         manual=w.tasks.start('Manual worker')
         c.start(automatic=True)
         self.assertIn('history',w.background_queue.pending);self.assertFalse(c.busy)
@@ -78,7 +85,10 @@ class MaintenanceInteractionTests(unittest.TestCase):
             self.assertFalse(w.background_queue.active['idle_only'])
             self.assertFalse(c._automatic)
             self.wait(lambda:not c.busy)
-        self.assertFalse(c.watch.paused)
+        self.assertFalse(c.watch.paused,c.text)
+        self.assertIn('0 errors need retry/review',c.text)
+        with closing(_connect(c.db_path)) as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM calibration_capture_evidence').fetchone()[0],0)
 
     def test_user_cancel_after_automatic_yield_prevents_retry(self):
         w,clock,root=self.window();c=w.history_refresh;clock[0]=61;entered=threading.Event()

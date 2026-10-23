@@ -80,7 +80,7 @@ class HistoryFolderWatch(QtCore.QObject):
             self.schedule()
         self.controller.changed.emit()
 
-    def schedule(self, *_):
+    def schedule(self, *_, reason=None):
         if not self.enabled() or self.paused or not self.roots():
             return
         self.pending = True
@@ -91,7 +91,7 @@ class HistoryFolderWatch(QtCore.QObject):
             if self.hub:
                 self.task = self.hub.start('History refresh request', self.pause, state='Queued', background=True)
         if self.hub and self.task is not None:
-            self.hub.update(self.task, 'Source change noticed; waiting for 30 seconds of quiet before validated import.')
+            self.hub.update(self.task, reason or 'Source change noticed; waiting for 30 seconds of quiet before validated import.')
         self.controller.changed.emit()
 
     def clear_pending(self, state='Dispatched', detail='Queued update handed to the history refresh worker.'):
