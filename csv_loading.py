@@ -120,6 +120,43 @@ class CsvLoadWorker(QtCore.QObject):
             self.finished.emit(dict(failed=True, error=str(exc)))
 
 
+class CsvLoadProgressDialog(QtWidgets.QDialog):
+    """Modal progress without QProgressDialog's nested event processing."""
+    canceled = QtCore.pyqtSignal()
+
+    def __init__(self, owner):
+        super().__init__(owner)
+        self.setWindowTitle('Loading Player CSV')
+        self.setWindowModality(QtCore.Qt.WindowModal)
+        self.setMinimumWidth(500)
+        layout = QtWidgets.QVBoxLayout(self)
+        self.label = QtWidgets.QLabel('Waiting for current maintenance to retire…')
+        self.label.setTextFormat(QtCore.Qt.PlainText)
+        self.label.setWordWrap(True)
+        self.label.setMinimumSize(460, 48)
+        layout.addWidget(self.label)
+        self.bar = QtWidgets.QProgressBar()
+        self.bar.setRange(0, 100)
+        layout.addWidget(self.bar)
+        self.cancel_button = QtWidgets.QPushButton('Cancel')
+        self.cancel_button.clicked.connect(self.canceled.emit)
+        layout.addWidget(self.cancel_button)
+
+    def setLabelText(self, text):
+        self.label.setText(text)
+
+    def setValue(self, value):
+        # Never pump queued completion/retirement from inside a progress slot.
+        self.bar.setValue(value)
+
+    def reject(self):
+        self.canceled.emit()
+
+    def closeEvent(self, event):
+        event.ignore()
+        self.canceled.emit()
+
+
 class CsvLoadController(QtCore.QObject):
     def __init__(self, owner):
         super().__init__(owner)
@@ -144,18 +181,7 @@ class CsvLoadController(QtCore.QObject):
         self.cancelled = False
         self.payload = None
         self.task = self.owner.tasks.start('Loading player CSV', self.cancel)
-        self.dialog = QtWidgets.QProgressDialog('Waiting for current maintenance to retire…', 'Cancel', 0, 100, self.owner)
-        label = QtWidgets.QLabel('Waiting for current maintenance to retire…')
-        label.setTextFormat(QtCore.Qt.PlainText)
-        label.setWordWrap(True)
-        label.setMinimumSize(460, 48)
-        self.dialog.setLabel(label)
-        self.dialog.setMinimumWidth(500)
-        self.dialog.setWindowTitle('Loading Player CSV')
-        self.dialog.setWindowModality(QtCore.Qt.WindowModal)
-        self.dialog.setMinimumDuration(0)
-        self.dialog.setAutoClose(False)
-        self.dialog.setAutoReset(False)
+        self.dialog = CsvLoadProgressDialog(self.owner)
         self.dialog.canceled.connect(self.cancel)
         self.dialog.show()
         self.owner.tasks.update(self.task, 'Waiting for background workers to retire safely before reading and enriching the CSV.')
@@ -252,7 +278,7 @@ class CsvLoadController(QtCore.QObject):
         self.owner.tasks.finish(self.task, state, detail)
         self.task = self.payload = None
         if self.dialog:
-            self.dialog.close()
+            self.dialog.done(QtWidgets.QDialog.Accepted)
             self.dialog.deleteLater()
             self.dialog = None
         self.owner._finish_load_progress()
