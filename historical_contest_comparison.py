@@ -132,12 +132,74 @@ def matched_summary(contests, feature, comparator):
                 gap=statistics.mean(a-b for a,b in zip(yours,other)) if yours else None)
 
 
+
+def field_comparison(contests, feature, comparator):
+    """Matched field/cohort source rows, regardless of personal participation.
+
+    Identical source receipts count once; contradictory copies are withheld.
+    The caller supplies one format/entry-preset scope from verified pairings.
+    """
+    if comparator not in ('top1','top5','rank1'):
+        raise ValueError('Choose a recorded rank cohort for field comparison.')
+    copies = defaultdict(dict)
+    missing_source = 0
+    for contest in contests:
+        if not contest.get('source'):
+            missing_source += 1
+            continue
+        encoded = json.dumps(contest, sort_keys=True)
+        copies[contest['source']][encoded] = contest
+    repeated = len(contests)-missing_source-sum(len(v) for v in copies.values())
+    conflicts = sum(len(v)>1 for v in copies.values())
+    unique = [next(iter(v.values())) for _,v in sorted(copies.items()) if len(v)==1]
+    legacy = sum(c.get('version')!=2 for c in unique)
+    current = [c for c in unique if c.get('version')==2]
+    paired = [c for c in current if rate(c,'field',feature) is not None and rate(c,comparator,feature) is not None]
+    blocks, excluded = slate_blocks(paired)
+    field, other = [], []
+    for block in blocks:
+        field.append(statistics.mean(rate(c,'field',feature) for c in block['contests']))
+        other.append(statistics.mean(rate(c,comparator,feature) for c in block['contests']))
+    included = [c for b in blocks for c in b['contests']]
+    return dict(slates=len(blocks),contests=len(included),excluded_identity=excluded+missing_source,
+        excluded_cohort=len(current)-len(paired),excluded_legacy=legacy,
+        excluded_conflicting_sources=conflicts,repeated_source_copies=repeated,
+        field=statistics.mean(field) if field else None,
+        comparator=statistics.mean(other) if other else None,
+        gap=statistics.mean(b-a for a,b in zip(field,other)) if field else None,
+        field_rows=sum(c['cohorts']['field']['counts']['supported_rows'] for c in included),
+        comparator_rows=sum(c['cohorts'][comparator]['counts']['supported_rows'] for c in included))
+
+
+def field_report_lines(scope):
+    contests=scope.get('contests',[])
+    if not contests:return []
+    features=(('Kicker/defense slots: 0','Kicker/defense slots: 1')+FEATURES
+        if scope['format']=='showdown' else CLASSIC_FEATURES)
+    lines=['', 'Field versus top-finisher construction — equal slate weight',
+        '- Uses all contributing contests in this format and entry-preset scope, including contests you did not enter. Each comparison uses the same contests for the field and rank cohort.',
+        '- Contests with overlapping games on the same recorded date form one slate block. Average contest rates within each block, then weight blocks equally; these blocks are not a claim of statistical independence.',
+        '- Formats and entry presets can share games; do not add their sample counts. Rates describe mapped source rows, including duplicate EntryIds. Rank cutoffs include ties; missing ranks and partial fields can affect the cohort. Rank-1 rows are not verified wins, profit or a construction advantage.',
+        '| Construction | Rank cohort | Field | Cohort | Cohort − field (pp) | Slate blocks / sources | Mapped source rows field / cohort | Excluded identity / cohort / legacy / conflicting source |',
+        '|---|---|---:|---:|---:|---:|---:|---:|']
+    repeats=0
+    for feature in features:
+        for key,label in (('top1','Rank cutoff 1%'),('top5','Rank cutoff 5%'),('rank1','Rank 1')):
+            r=field_comparison(contests,feature,key)
+            repeats=max(repeats,r['repeated_source_copies'])
+            cells=(f"{r['field']:.1f}% | {r['comparator']:.1f}% | {r['gap']:+.1f}" if r['slates']
+                else 'unavailable | unavailable | unavailable')
+            lines.append(f"| {feature} | {label} | {cells} | {r['slates']} / {r['contests']} | {r['field_rows']:,} / {r['comparator_rows']:,} | {r['excluded_identity']} / {r['excluded_cohort']} / {r['excluded_legacy']} / {r['excluded_conflicting_sources']} |")
+    lines.append(f'- Identical repeated source receipts omitted: {repeats}. Differences are descriptive frequencies, not finish probabilities, payout estimates or tuning recommendations. No generation limits or model defaults are changed.')
+    return lines
+
+
 def report_lines(scope):
     contests = scope.get('contests',[])
     if not contests:
         return []
     features = FEATURES if scope['format']=='showdown' else CLASSIC_FEATURES
-    lines = ['', 'Contest-by-contest construction comparisons',
+    lines = field_report_lines(scope) + ['', 'Contest-by-contest construction comparisons',
              '- Captain-lock labels use your single-Captain instruction and require complete personal coverage in the normalized opponent index bound to the current results/salary revisions. They are assumptions rather than build receipts. Missing/stale indexing remains unknown. Multiple Captains do not prove a normal SIM build. A single submitted lineup does not establish lock settings.']
     for c in sorted(contests,key=lambda c:(c['date'] or '',c['name'],c['source'])):
         n = c['cohorts'].get('yours',{}).get('counts',{}).get('supported_rows',0)

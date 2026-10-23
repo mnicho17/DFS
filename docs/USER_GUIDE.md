@@ -2676,3 +2676,27 @@ In **Results & Learning > Review Salary Matches**, the group selector collects p
 **Next** explains the appropriate action. **Inspect proposed revision** shows a unique review candidate without saving or confirming anything. Equally plausible revisions remain a choice for individual inspection; recorded manual choices remain the review target. Conflicts distinguish missing players, explicit ID or name conflicts, roster roles, ambiguous identities, source access/integrity, dates, formats and games. Identity coverage stays unknown when an earlier check prevented it. Issue examples are bounded; counts describe observations across contests and may repeat the same identity.
 
 A proposed date correction opens the existing date-review controls and still requires a reason and explicit confirmation. Filenames are context; parsed source contents and exact identities decide compatibility. Changing groups clears draft confirmations and reasons. Compatible Save, Record as Needs review, date corrections, cancellation and changed-source checks keep their existing safeguards. Opening or filtering this review never changes source files, saved associations, forecasts or lineup behavior.
+
+
+### Compare field constructions without personal entries
+
+Results & Learning now includes **Field versus top-finisher construction — equal
+slate weight** in the revision-bound historical database review. It uses usable
+contests even when you did not enter them. Classic and Showdown, and each recorded
+entry-limit preset, remain separate. Showdown comparisons include K/DST slot
+counts, K/DST Captains, opposing FLEX defense and team splits; Classic uses its
+own QB-stack and FLEX-position features.
+
+The field and each 1%, 5% or rank-1 cohort use the same contributing contests.
+Average contest percentages within overlapping-game/date slate blocks, then give
+each block equal weight. The report shows mapped source-row denominators, source
+and block counts, and missing identity/cohort/legacy/conflicting-source exclusions.
+Identical source receipts count once; contradictory copies are withheld. A zero
+feature count among mapped rows differs from unavailable cohort coverage.
+
+These summaries retain source-row semantics, including duplicate EntryIds; they
+do not certify unique entries, full-field percentiles, official wins or payouts.
+Rank cutoffs include ties. Formats and presets may share games, so their samples
+must not be added. Frequencies can reflect other construction differences and do
+not establish a causal edge. No exposure limits, projections, SIM defaults,
+rankings or lineup-generation settings are changed.
