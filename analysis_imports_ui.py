@@ -165,6 +165,40 @@ class SalaryMatchReviewWorker(QtCore.QObject):
             self.error.emit('Salary matches could not be read. Check saved source access and retry.')
 
 
+class SalaryReviewCheckBox(QtWidgets.QWidget):
+    """Keep full confirmation text readable instead of forcing a wide dialog."""
+    toggled = QtCore.pyqtSignal(bool)
+
+    def __init__(self, text):
+        super().__init__()
+        self.box = QtWidgets.QCheckBox(self)
+        self.label = QtWidgets.QLabel(self)
+        self.label.setTextFormat(QtCore.Qt.PlainText);self.label.setWordWrap(True)
+        self.label.setBuddy(self.box);self.label.installEventFilter(self)
+        layout = QtWidgets.QHBoxLayout(self);layout.setContentsMargins(0,0,0,0)
+        layout.addWidget(self.box,0,QtCore.Qt.AlignTop);layout.addWidget(self.label,1)
+        self.box.toggled.connect(self.toggled)
+        self.setFocusProxy(self.box);self._pressed=False;self.setText(text)
+
+    def setText(self, text):
+        self.label.setText(text);self.box.setAccessibleName(text)
+
+    def text(self):return self.label.text()
+    def isChecked(self):return self.box.isChecked()
+    def setChecked(self, value):self.box.setChecked(value)
+    def click(self):self.box.click()
+
+    def eventFilter(self, obj, event):
+        if obj is self.label and self.isEnabled():
+            if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
+                self._pressed=True;return True
+            if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.LeftButton:
+                pressed,self._pressed=self._pressed,False
+                if pressed and self.label.rect().contains(event.pos()):self.box.click()
+                return True
+        return super().eventFilter(obj,event)
+
+
 class SalaryMatchesDialog(QtWidgets.QDialog):
     """Select an explicit compatible revision; verification runs in the parent worker."""
     def __init__(self, parent=None, db_path=None, *, state=None, result_hash=None):
@@ -175,7 +209,11 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.review_selection = None
         self.state = state if state is not None else pairing_state(db_path)
         self.rows = self.state['results']
-        layout = QtWidgets.QVBoxLayout(self)
+        outer = QtWidgets.QVBoxLayout(self)
+        scroll = QtWidgets.QScrollArea()
+        scroll.setObjectName('salaryReviewScroll');scroll.setWidgetResizable(True)
+        body = QtWidgets.QWidget();layout = QtWidgets.QVBoxLayout(body);scroll.setWidget(body)
+        outer.addWidget(scroll,1)
         label = QtWidgets.QLabel('Choose the exact contest and salary snapshot. Existing pairings stay fixed. '
             'One salary file can serve multiple contests. '
             'Matching covers readable rosters; it does not establish a complete eligible pool or payouts.')
@@ -192,6 +230,9 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         from salary_match_review import groups
         self.review_groups = QtWidgets.QComboBox()
         self.review_groups.setObjectName('salaryReviewGroups')
+        self.review_groups.setMinimumContentsLength(24)
+        self.review_groups.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.review_groups.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.review_groups.addItem('All results (' + str(len(self.rows)) + ')', None)
         for group in groups(self.rows):self.review_groups.addItem(group['label'], group)
         layout.addWidget(self.review_groups)
@@ -208,20 +249,26 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.inspect_group.setToolTip('Inspect a unique review candidate for this contest. This does not save, confirm a date, or qualify a pairing.')
         layout.addWidget(self.inspect_group)
         self.results = QtWidgets.QComboBox()
+        self.results.setMinimumContentsLength(24)
+        self.results.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.results.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         for row in self.rows:
             best = max(row['candidates'], key=lambda c:c.get('matched',0), default={})
             coverage = (f" — best observed coverage {best['matched']}/{best['observed']}" if best.get('observed') and best.get('identity_checked') else '')
             self.results.addItem(row['name'] + ' [' + row['hash'][:12] + '] — ' + ('Needs review (manual choice recorded)' if row['status']=='NEEDS_REVIEW_ASSOCIATION' else row['status']) + coverage, row)
         layout.addWidget(self.results)
-        self.correct_date=QtWidgets.QCheckBox('Review a contest-date correction (preserves the original file)')
+        self.correct_date=SalaryReviewCheckBox('Review a contest-date correction (preserves the original file)')
         layout.addWidget(self.correct_date)
         self.date_reason=QtWidgets.QLineEdit()
         self.date_reason.setPlaceholderText('Reason for correcting the recorded date (at least 8 characters)')
         layout.addWidget(self.date_reason)
-        self.inspect_rejected = QtWidgets.QCheckBox('Choose a salary revision manually / inspect conflicts')
+        self.inspect_rejected = SalaryReviewCheckBox('Choose a salary revision manually / inspect conflicts')
         self.inspect_rejected.setToolTip('Shows imported salary revisions, including rejected ones. Full qualification still requires compatible dates, games and player identities.')
         layout.addWidget(self.inspect_rejected)
         self.salaries = QtWidgets.QComboBox()
+        self.salaries.setMinimumContentsLength(24)
+        self.salaries.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.salaries.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         layout.addWidget(self.salaries)
         self.candidate_details = QtWidgets.QLabel()
         self.candidate_details.setWordWrap(True)
@@ -230,7 +277,7 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.details = QtWidgets.QPlainTextEdit()
         self.details.setReadOnly(True)
         layout.addWidget(self.details)
-        self.show_diagnostics = QtWidgets.QCheckBox('Show rejected salary candidates (diagnostics)')
+        self.show_diagnostics = SalaryReviewCheckBox('Show rejected salary candidates (diagnostics)')
         layout.addWidget(self.show_diagnostics)
         self.diagnostics = QtWidgets.QPlainTextEdit()
         self.diagnostics.setReadOnly(True)
@@ -238,10 +285,10 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.diagnostics.hide()
         self.show_diagnostics.toggled.connect(self.diagnostics.setVisible)
         layout.addWidget(self.diagnostics)
-        self.confirm_date = QtWidgets.QCheckBox('I confirm this salary slate belongs to the selected contest (result date missing).')
+        self.confirm_date = SalaryReviewCheckBox('I confirm this salary slate belongs to the selected contest (result date missing).')
         layout.addWidget(self.confirm_date)
         self.buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Close)
-        self.confirm_review = QtWidgets.QCheckBox('I understand this records my choice only; conflicts still prevent full qualification.')
+        self.confirm_review = SalaryReviewCheckBox('I understand this records my choice only; conflicts still prevent full qualification.')
         layout.addWidget(self.confirm_review)
         self.record_review = self.buttons.addButton('Record as Needs review', QtWidgets.QDialogButtonBox.ActionRole)
         self.record_review.clicked.connect(self._record_review)
@@ -249,7 +296,7 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.date_reason.textChanged.connect(self._review_enabled)
         self.buttons.accepted.connect(self._select)
         self.buttons.rejected.connect(self.reject)
-        layout.addWidget(self.buttons)
+        outer.addWidget(self.buttons)
         self.results.currentIndexChanged.connect(self._update)
         self.salaries.currentIndexChanged.connect(self._candidate_changed)
         self.correct_date.toggled.connect(self._update)
@@ -310,7 +357,7 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
             self.buttons.button(QtWidgets.QDialogButtonBox.Save).setEnabled(False)
             self._candidate_changed()
             return
-        notes = [f"Status: {row['status']}"]
+        notes = [f"Status: {row['status']}", 'Result file: ' + row['name']]
         notes.append('Recorded dates: '+(', '.join(row.get('dates',[])) or 'unknown'))
         review = row.get('review_association')
         if review and not row['saved_pair']:

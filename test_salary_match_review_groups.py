@@ -6,7 +6,8 @@ from contextlib import closing
 import sqlite3
 import unittest
 from unittest.mock import patch
-from PyQt5 import QtWidgets
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtTest import QTest
 import analysis_imports as ai
 from analysis_imports_ui import SalaryMatchesDialog
 from salary_match_review import candidate_details,plan,groups,group_text,issue_text
@@ -135,6 +136,35 @@ class SalaryMatchReviewGroupsTests(PairingFixture):
         self.assertFalse(dialog.confirm_review.isChecked());self.assertEqual(dialog.date_reason.text(),'')
         dialog.review_groups.setCurrentIndex(0);self.assertEqual(dialog.results.count(),2)
         self.assertEqual(state,before)
+
+    def test_long_names_do_not_force_review_dialog_wider_than_small_window(self):
+        state=self.seed_conflict();state=copy.deepcopy(state)
+        state['results'][0]['name']='Long contest title '*30+'.csv'
+        state['results'][0]['candidates'][0]['name']='Long salary revision title '*30+'.csv'
+        dialog=SalaryMatchesDialog(state=state);self.addCleanup(dialog.deleteLater)
+        # Match the application's actual theme/font rather than offscreen Qt's
+        # platform-default font; keep this test's styling local to the dialog.
+        from app import DARK_QSS
+        dialog.setStyleSheet(DARK_QSS)
+        dialog.review_groups.setCurrentIndex(1);dialog.inspect_group.click()
+        dialog.show();self.app.processEvents();dialog.resize(780,650);self.app.processEvents()
+        self.assertLessEqual(dialog.minimumSizeHint().width(),780)
+        self.assertEqual(dialog.width(),780);self.assertEqual(dialog.height(),650)
+        self.assertLess(dialog.buttons.geometry().bottom(),dialog.height())
+        self.assertIn(state['results'][0]['candidates'][0]['name'],dialog.group_details.toPlainText())
+        self.assertIn(state['results'][0]['name'],dialog.details.toPlainText())
+        self.assertEqual(dialog.salaries.currentData()['hash'],state['results'][0]['candidates'][0]['hash'])
+
+    def test_wrapped_confirmation_keeps_full_wording_and_click_does_not_save(self):
+        state=self.seed_conflict();before=self.dump()
+        dialog=SalaryMatchesDialog(state=state);self.addCleanup(dialog.deleteLater)
+        dialog.inspect_group.click();dialog.date_reason.setText('This is the intended source revision')
+        dialog.show();self.app.processEvents()
+        self.assertIn('conflicts still prevent full qualification',dialog.confirm_review.text())
+        self.assertFalse(dialog.record_review.isEnabled())
+        QTest.mouseClick(dialog.confirm_review.label,QtCore.Qt.LeftButton)
+        self.assertTrue(dialog.confirm_review.isChecked());self.assertTrue(dialog.record_review.isEnabled())
+        self.assertIsNone(dialog.review_selection);self.assertEqual(self.dump(),before)
 
     def test_saved_pair_is_excluded_from_pending_groups_and_never_retargeted(self):
         state=self.seed();row=state['results'][0];self.save(row);state=ai.pairing_state(self.db);before=self.dump()
