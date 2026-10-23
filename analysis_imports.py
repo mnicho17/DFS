@@ -262,7 +262,7 @@ def qualify_pair(result, salary, *, _identity_index=None):
         failures.append('Explicit game/team information conflicts.')
     if failures:
         return dict(compatible=False, automatic=False, reason=' '.join(failures),
-                    matched=0, observed=len(r['observed']), matches={})
+                    matched=0, observed=len(r['observed']), identity_checked=False, matches={})
     matches = {}
     missing = []
     identity_index = _identity_index if _identity_index is not None else _salary_identity_index(salary)
@@ -270,7 +270,9 @@ def qualify_pair(result, salary, *, _identity_index=None):
         eligible = [p for p in identity_index.get(name, []) if (not player_id or p['id'] == player_id)
                     and (p['role'] == role if s['format'] == 'showdown' else role in p['role'].split('/'))]
         if len(eligible) != 1:
-            missing.append(f'{role} {name}' + (' (ambiguous)' if eligible else ' (missing)'))
+            same_identity = [p for p in identity_index.get(name, []) if not player_id or p['id'] == player_id]
+            detail = 'ambiguous' if eligible else ('role conflict; salary allows ' + ', '.join(sorted({p['role'] for p in same_identity})) if same_identity else 'missing')
+            missing.append(f'{role} {name} ({detail})')
         else:
             matches[(role, name, player_id)] = eligible[0]
     if missing:
@@ -290,7 +292,7 @@ def qualify_pair(result, salary, *, _identity_index=None):
     return dict(compatible=not failures, automatic=not failures and bool(r['dates']),
                 reason=' '.join(failures) or ('Date and all observed player/role identities match.' if r['dates'] else
                     'Result date missing. Confirm this exact contest and salary slate.'),
-                matched=len(matches), observed=len(r['observed']), matches=matches)
+                matched=len(matches), observed=len(r['observed']), identity_checked=True, matches=matches)
 
 
 def _verify(source, cancelled=lambda: False):
@@ -357,11 +359,13 @@ def _pairing_state(conn, path, cancelled):
         from analysis_date_corrections import candidate as date_candidate
         correctable=not reason and not q['compatible'] and date_candidate(result,salary,identity_indexes.get(salary['hash']))
         return dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'],date_correctable=bool(correctable),
-                    automatic=q['automatic'], reason=q['reason'], dates=salary['manifest'].get('dates',[]),
+                    automatic=q['automatic'], reason=q['reason'], matched=q.get('matched',0), observed=q.get('observed',len(result['manifest']['observed'])), identity_checked=q.get('identity_checked',False), dates=salary['manifest'].get('dates',[]),
                     format=salary['manifest'].get('format'), games=salary['manifest'].get('games',[]),
                     player_roles=len(salary['manifest'].get('players',[])), imported_at=salary['created_at'],
                     linked_contests=sum(h==salary['hash'] for h in pairs.values()))
 
+    from analysis_salary_reviews import latest
+    reviews = latest(conn) if conn else {}
     output, qualified = [], 0
     for result in (s for s in sources if s['kind'] == 'results'):
         candidates = [candidate(result, salary) for salary in salaries]
@@ -375,12 +379,15 @@ def _pairing_state(conn, path, cancelled):
             qualified += int(saved['compatible'])
         else:
             status = 'READY_TO_PAIR' if any(c['compatible'] for c in candidates) else 'NO_COMPATIBLE_MATCH'
+        review = reviews.get(result['hash'])
+        if review and not saved:
+            status = 'NEEDS_REVIEW_ASSOCIATION'
         manifest = result['manifest']
         entries, unreadable = manifest.get('entries'), manifest.get('unreadable', 0)
         readable = max(0, entries - unreadable) if entries is not None else None
         output.append(dict(hash=result['hash'], name=result['name'], salary_hash=saved_hash,
                            dates=manifest['dates'],date_correction=result.get('date_correction'),
-                           status=status, saved_pair=saved, candidates=candidates, entries=entries,
+                           status=status, saved_pair=saved, review_association=review, candidates=candidates, entries=entries,
                            unreadable=unreadable, readable=readable,
                            readable_pct=100.0 * readable / entries if entries else None))
     orphans = [dict(result_hash=r, salary_hash=s) for r, s in pairs.items()
@@ -389,6 +396,7 @@ def _pairing_state(conn, path, cancelled):
                  qualified_saved_pairings=qualified, invalid_saved_pairings=len(pairs) - qualified,
                  unpaired_results=sum(r['hash'] not in pairs for r in output),
                  orphaned_pairings=len(orphans), orphaned_pairs=orphans, results=output,
+                 review_associations=sum(bool(r.get('review_association')) and not r['saved_pair'] for r in output),
                  database_path=str(path) if path else None,
                  database_identity=hashlib.sha256(os.path.normcase(str(path or ':memory:')).encode()).hexdigest()[:16],
                  warnings=[])
@@ -422,6 +430,10 @@ def save_pair(result_hash, salary_hash, *, db_path=None, confirm_date=False, can
         _verify(s, cancelled)
         _check(cancelled)
         with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            from analysis_salary_reviews import latest
+            if automatic and result_hash in latest(conn):
+                raise ValueError('Recorded manual salary choice needs explicit review before qualification.')
             old = conn.execute('SELECT salary_hash FROM analysis_salary_pairs WHERE result_hash=?', (result_hash,)).fetchone()
             if old:
                 if old[0] != salary_hash:
@@ -545,7 +557,9 @@ def import_folders(results_folder, salary_folder='', *, username='', db_path=Non
                     result['errors'].append(f'{path.name}: {exc}')
             sources = _sources(conn)
             paired = {row[0] for row in conn.execute('SELECT result_hash FROM analysis_salary_pairs')}
-            for source in (s for s in sources if s['kind'] == 'results' and s['hash'] not in paired):
+            from analysis_salary_reviews import latest
+            pending_reviews = latest(conn)
+            for source in (s for s in sources if s['kind'] == 'results' and s['hash'] not in paired and s['hash'] not in pending_reviews):
                 _check(cancelled)
                 compatible = [s for s in sources if s['kind'] == 'salary' and qualify_pair(source, s)['compatible']]
                 if len(compatible) == 1 and qualify_pair(source, compatible[0])['automatic']:
@@ -604,6 +618,9 @@ def report_lines(conn=None, *, state=None):
         if row.get('date_correction'):
             correction=row['date_correction']
             lines.append(f"- Corrected contest date: {row['name']}; {', '.join(correction['original_dates']) or 'unknown'} → {correction['corrected_date']}; reason: {correction['reason']}. Original source preserved.")
+        elif row.get('review_association') and not row['saved_pair']:
+            review = row['review_association']
+            lines.append(f"- Needs review: {row['name']}; manual salary revision {review['salary_hash'][:12]}; no qualified pairing. {review['qualification_reason']}")
         elif row['status']=='NO_COMPATIBLE_MATCH':
             correctable=[c['name'] for c in row['candidates'] if c.get('date_correctable')]
             lines.append(f"- Unpaired: {row['name']}; "+('date correction requires review: '+', '.join(correctable) if correctable else 'no salary revision covers every observed player/role on the recorded date; see rejected candidates in Review Salary Matches.'))

@@ -1,13 +1,14 @@
 from test_environment import install
 install()
 import copy
+import faulthandler
 import threading
 import time
 import unittest
 from unittest.mock import patch
 from PyQt5 import QtCore, QtWidgets
 from main_window import MainWindow
-from csv_loading import CsvLoadController, CsvLoadWorker, detect_sport, detect_mode
+from csv_loading import CsvLoadController, CsvLoadWorker, CsvLoadProgressDialog, detect_sport, detect_mode
 
 
 def players(position='WR'):
@@ -20,6 +21,11 @@ class CsvLoadingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def setUp(self):
+        # Diagnose platform-specific Qt waits without extending or weakening tests.
+        faulthandler.dump_traceback_later(60, repeat=True)
+        self.addCleanup(faulthandler.cancel_dump_traceback_later)
 
     def window(self):
         w=MainWindow()
@@ -44,6 +50,33 @@ class CsvLoadingTests(unittest.TestCase):
             ps[0]['FlexProjection']=12
             return {'total':len(ps),'sleeper_state':'ok','usage_state':'ok'}
         return context
+
+    def test_progress_updates_do_not_dispatch_queued_retirement(self):
+        w=self.window();dialog=CsvLoadProgressDialog(w)
+        self.addCleanup(lambda:dialog.done(QtWidgets.QDialog.Accepted))
+        dialog.show();self.app.processEvents()
+        dialog.setValue(1)
+        dispatched=[]
+        QtCore.QTimer.singleShot(0,lambda:dispatched.append('retirement'))
+        dialog.setLabelText('Preparing <synthetic> CSV')
+        dialog.setValue(50)
+        self.assertEqual(dispatched,[])
+        self.assertEqual(dialog.bar.value(),50)
+        self.assertEqual(dialog.label.textFormat(),QtCore.Qt.PlainText)
+        self.assertEqual(dialog.windowModality(),QtCore.Qt.WindowModal)
+        self.app.processEvents();self.assertEqual(dispatched,['retirement'])
+
+    def test_progress_cancel_stays_visible_until_controller_retires(self):
+        w=self.window();dialog=CsvLoadProgressDialog(w);requests=[]
+        self.addCleanup(lambda:dialog.done(QtWidgets.QDialog.Accepted))
+        dialog.canceled.connect(lambda:requests.append('cancel'))
+        dialog.show();self.app.processEvents()
+        dialog.cancel_button.click();self.assertTrue(dialog.isVisible())
+        dialog.reject();self.assertTrue(dialog.isVisible())
+        dialog.close();self.assertTrue(dialog.isVisible())
+        self.assertEqual(requests,['cancel']*3)
+        dialog.done(QtWidgets.QDialog.Accepted)
+        self.assertFalse(dialog.isVisible());self.assertEqual(len(requests),3)
 
     def test_successful_new_csv_clears_old_explicit_library_but_failure_retains_it(self):
         w=self.window();w._candidate_library='previous-slate.sdlib';w._candidate_library_allow_partial=True

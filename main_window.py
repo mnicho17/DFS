@@ -4575,13 +4575,21 @@ class ResultsLearningDialog(QtWidgets.QDialog):
                 return
             from analysis_imports_ui import SalaryMatchesDialog, CombinedImportWorker
             dialog = SalaryMatchesDialog(self, db_path=self.db_path, state=result['state'], result_hash=result_hash)
-            if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selection:
-                self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip(), db_path=self.db_path, refresh_history=True), self._on_combined_import_finished)
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                if dialog.review_selection:
+                    self._start_background_import(CombinedImportWorker(salary_review=dialog.review_selection, db_path=self.db_path), self._on_combined_import_finished)
+                elif dialog.selection:
+                    self._start_background_import(CombinedImportWorker(pair=dialog.selection, username=self.username_edit.text().strip(), db_path=self.db_path, refresh_history=True), self._on_combined_import_finished)
         self._start_background_import(worker, ready)
 
     def _on_combined_import_finished(self, result) -> None:
         from analysis_imports_ui import import_summary
         message = import_summary(result)
+        if result.get('review_only'):
+            self.import_status_label.setText(message)
+            self.import_status_label.setVisible(True)
+            QtWidgets.QMessageBox.information(self, 'Salary review', message)
+            return
         self.history_refresh.watch.accept_result(result)
         if result.get('username_history'):
             from history_refresh_ui import refresh_summary
