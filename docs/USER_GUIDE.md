@@ -2667,3 +2667,12 @@ Existing missing-date confirmation and supported filename-date correction still
 apply. Recording a review is not a way to override mismatched IDs, roles, dates,
 games or changed source files. Saved qualified pairings retain their existing
 protection against replacement.
+
+
+### Grouped salary-match review
+
+In **Results & Learning > Review Salary Matches**, the group selector collects pending contests that point to the same review revision, date and roster format. The same salary revision remains available for multiple contests. Grouping is navigation only: each result keeps its own qualified pairing or unresolved review, and there is no bulk qualification.
+
+**Next** explains the appropriate action. **Inspect proposed revision** shows a unique review candidate without saving or confirming anything. Equally plausible revisions remain a choice for individual inspection; recorded manual choices remain the review target. Conflicts distinguish missing players, explicit ID or name conflicts, roster roles, ambiguous identities, source access/integrity, dates, formats and games. Identity coverage stays unknown when an earlier check prevented it. Issue examples are bounded; counts describe observations across contests and may repeat the same identity.
+
+A proposed date correction opens the existing date-review controls and still requires a reason and explicit confirmation. Filenames are context; parsed source contents and exact identities decide compatibility. Changing groups clears draft confirmations and reasons. Compatible Save, Record as Needs review, date corrections, cancellation and changed-source checks keep their existing safeguards. Opening or filtering this review never changes source files, saved associations, forecasts or lineup behavior.

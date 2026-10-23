@@ -351,6 +351,13 @@ def _pairing_state(conn, path, cancelled):
     identity_indexes = {s['hash']: _salary_identity_index(s) for s in salaries
                         if not verification[s['hash']]}
 
+    review_id_indexes = {}
+    for salary in salaries:
+        index = {}
+        if not verification[salary['hash']]:
+            for player in salary['manifest']['players']:index.setdefault(player['id'], []).append(player)
+        review_id_indexes[salary['hash']] = index
+
     def candidate(result, salary):
         _check(cancelled)
         reason = verification[result['hash']] or verification[salary['hash']]
@@ -358,7 +365,10 @@ def _pairing_state(conn, path, cancelled):
             result, salary, _identity_index=identity_indexes[salary['hash']])
         from analysis_date_corrections import candidate as date_candidate
         correctable=not reason and not q['compatible'] and date_candidate(result,salary,identity_indexes.get(salary['hash']))
-        return dict(hash=salary['hash'], name=salary['name'], compatible=q['compatible'],date_correctable=bool(correctable),
+        from salary_match_review import candidate_details
+        review_details = candidate_details(result, salary, q, identity_indexes.get(salary['hash'], {}),
+            source_problem=reason, date_correctable=correctable, id_index=review_id_indexes[salary['hash']])
+        return dict(review_details=review_details, hash=salary['hash'], name=salary['name'], compatible=q['compatible'],date_correctable=bool(correctable),
                     automatic=q['automatic'], reason=q['reason'], matched=q.get('matched',0), observed=q.get('observed',len(result['manifest']['observed'])), identity_checked=q.get('identity_checked',False), dates=salary['manifest'].get('dates',[]),
                     format=salary['manifest'].get('format'), games=salary['manifest'].get('games',[]),
                     player_roles=len(salary['manifest'].get('players',[])), imported_at=salary['created_at'],
@@ -386,7 +396,7 @@ def _pairing_state(conn, path, cancelled):
         entries, unreadable = manifest.get('entries'), manifest.get('unreadable', 0)
         readable = max(0, entries - unreadable) if entries is not None else None
         output.append(dict(hash=result['hash'], name=result['name'], salary_hash=saved_hash,
-                           dates=manifest['dates'],date_correction=result.get('date_correction'),
+                           dates=manifest['dates'],format=manifest.get('format'),date_correction=result.get('date_correction'),
                            status=status, saved_pair=saved, review_association=review, candidates=candidates, entries=entries,
                            unreadable=unreadable, readable=readable,
                            readable_pct=100.0 * readable / entries if entries else None))
