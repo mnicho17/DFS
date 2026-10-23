@@ -86,7 +86,7 @@ class MaintenanceInteractionTests(unittest.TestCase):
             self.assertFalse(c._automatic)
             self.wait(lambda:not c.busy)
         self.assertFalse(c.watch.paused,c.text)
-        self.assertNotIn('need retry',c.text)
+        self.assertIn('0 errors need retry/review',c.text)
         with closing(_connect(c.db_path)) as conn:
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM calibration_capture_evidence').fetchone()[0],0)
 
