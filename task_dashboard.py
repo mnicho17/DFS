@@ -1,6 +1,7 @@
 """Shared, nonmodal task visibility. Worker signals never touch widgets directly."""
 import time
 from PyQt5 import QtCore, QtWidgets
+from task_attention import ATTENTION_STATES, needs_attention, result_reason, guidance
 
 
 class TaskHub(QtCore.QObject):
@@ -49,6 +50,15 @@ class TaskHub(QtCore.QObject):
             row['cancel'] = None
             self.update(key, 'Stop requested; waiting for checkpoint and worker retirement.')
             callback()
+
+    def mark_reviewed(self, key):
+        row = self.rows.get(key)
+        if not row or not needs_attention(row):
+            return False
+        row['attention_reviewed'] = True
+        row['log'] = (row['log'] + ['Notification marked reviewed; recorded outcome and unfinished work are unchanged.'])[-100:]
+        self.changed.emit()
+        return True
 
     def watch(self, title, worker, thread, cancel=None, formatter=None):
         binding = WorkerTask(self, title, cancel, formatter)
@@ -103,6 +113,11 @@ class WorkerTask(QtCore.QObject):
             text = str(result)
             if text.startswith('Search stopped:'):
                 state = 'Failed'
+        if isinstance(result, dict):
+            reason = result_reason(result)
+            self.hub.rows[self.key]['attention_reason'] = reason
+            if state in ATTENTION_STATES and reason and reason not in text:
+                self.hub.update(self.key, reason)
         self.outcome = state
         self.hub.update(self.key, text + ' · Retiring worker…')
 
@@ -151,16 +166,25 @@ def install_dashboard(window, layout):
     dock = QtWidgets.QDockWidget('Task dashboard', window)
     dock.setObjectName('taskDashboard')
     dock.setAllowedAreas(QtCore.Qt.LeftDockWidgetArea | QtCore.Qt.RightDockWidgetArea)
-    dock.setWidget(task_panel(hub, dock, compact=True))
+    panel = task_panel(hub, dock, compact=True)
+    dock.setWidget(panel)
     window.addDockWidget(QtCore.Qt.RightDockWidgetArea, dock)
     window.resizeDocks([dock],[420],QtCore.Qt.Horizontal)
     dock.topLevelChanged.connect(lambda floating: dock.resize(440,720) if floating else None)
     dock.hide()
-    button.clicked.connect(lambda: dock.setVisible(not dock.isVisible()))
+    def show_dashboard():
+        showing = not dock.isVisible()
+        dock.setVisible(showing)
+        if showing:panel.focus_attention()
+    button.clicked.connect(show_dashboard)
     def summary_refresh():
         active = sum(r['ended'] is None and r['state']!='Queued' for r in hub.rows.values())
         queued = sum(r['ended'] is None and r['state']=='Queued' for r in hub.rows.values())
-        attention = sum(r['state'] in ('Failed', 'Needs review', 'Incomplete', 'Paused / partial') for r in hub.rows.values())
+        flagged = [r for r in hub.rows.values() if needs_attention(r)]
+        attention = len(flagged)
+        summary.setToolTip('\n\n'.join(r['title'] + ' — ' + r['state'] + '\n' + guidance(r)['reason'] + '\nNext: ' + guidance(r)['next_step'] for r in flagged[:5])
+                           or 'No unreviewed task notifications. Open Tasks for recorded outcomes.')
+        button.setToolTip('Open the flagged task and its next step.' if attention else 'Open current tasks and recorded outcomes.')
         summary.setText(f'Tasks: {active} underway · {queued} queued · {attention} need attention' if hub.rows else 'Tasks: idle')
     hub.changed.connect(summary_refresh)
     window.task_dashboard = dock
@@ -193,6 +217,11 @@ def task_panel(hub, parent, compact=False):
     details.setReadOnly(True)
     details.setPlaceholderText('Select a task above to see recent progress messages.')
     details.setObjectName('taskText')
+    next_step = QtWidgets.QLabel()
+    next_step.setObjectName('taskNextAction')
+    next_step.setTextFormat(QtCore.Qt.PlainText)
+    next_step.setWordWrap(True)
+    box.addWidget(next_step)
     details.setMinimumHeight(65)
     run = QtWidgets.QPushButton('Run now')
     run.setObjectName('taskRunNow')
@@ -216,6 +245,29 @@ def task_panel(hub, parent, compact=False):
     actions.addWidget(run)
     actions.addWidget(stop)
     box.addLayout(actions)
+    review_actions = QtWidgets.QHBoxLayout()
+    open_review = QtWidgets.QPushButton('Open review')
+    open_review.setObjectName('taskOpenReview')
+    acknowledge = QtWidgets.QPushButton('Mark reviewed')
+    acknowledge.setObjectName('taskMarkReviewed')
+    acknowledge.setToolTip('Clear this notification only. The original failure or partial outcome stays visible; no work is retried or marked successful.')
+    review_actions.addWidget(open_review)
+    review_actions.addWidget(acknowledge)
+    box.addLayout(review_actions)
+
+    def review_callback(target):
+        owner = hub.parent()
+        if owner is None:return None
+        if target == 'history':return getattr(owner, 'on_results_learning', None)
+        if target == 'readiness':return getattr(owner, 'on_slate_readiness', None)
+        if target == 'backup' and hasattr(owner, 'idle_backup'):
+            from idle_backup_ui import open_backups
+            return lambda: open_backups(owner)
+        if target == 'preparation' and hasattr(owner, 'idle_preparation'):
+            from preparation_status_ui import open_preparation_status
+            return lambda: open_preparation_status(owner)
+        return None
+
 
     def selected():
         item = table.item(table.currentRow(), 0)
@@ -226,6 +278,18 @@ def task_panel(hub, parent, compact=False):
         queue = get_queue()
         run.setEnabled(bool(queue and any(j['task'] == selected() for j in queue.pending.values())))
         stop.setEnabled(bool(row and row['cancel']))
+        info = guidance(row or {})
+        flagged = bool(row and row['state'] in ATTENTION_STATES)
+        reviewed = bool(row and row.get('attention_reviewed'))
+        next_step.setText(('Notification reviewed; recorded ' + row['state'] + ' outcome remains.\n' if reviewed else '')
+            + ('Why: ' + info['reason'] + '\nNext: ' + info['next_step'] if flagged else
+               'Select a task needing attention to see its reason and next step.'))
+        next_step.setVisible(flagged)
+        callback = review_callback(info['target'])
+        open_review.setText({'history':'Results & Learning…', 'readiness':'Slate Readiness…',
+                            'backup':'Backups…', 'preparation':'Preparation…'}.get(info['target'], 'Open review'))
+        open_review.setEnabled(callable(callback))
+        acknowledge.setEnabled(bool(row and needs_attention(row)))
         text = '\n'.join(row['log']) if row else ''
         if details.toPlainText() != text:
             details.setPlainText(text)
@@ -257,9 +321,9 @@ def task_panel(hub, parent, compact=False):
             elapsed = int((r['ended'] if r['ended'] is not None else now) - r['started'])
             age = int(now-r['updated'])
             update = f'{age}s ago' + (' · no recent update' if age >= 60 and r['ended'] is None and r['state']!='Queued' else '')
-            values = [r['title'], r['state'], f'{elapsed//60}m {elapsed%60}s', update, r['detail']]
+            values = [r['title'], r['state'] + (' · reviewed' if r.get('attention_reviewed') else ''), f'{elapsed//60}m {elapsed%60}s', update, r['detail']]
             if compact:
-                values[0]=f"{r['title']}\n{r['state']} | {elapsed//60}m {elapsed%60}s | {update}\n{r['detail']}"
+                values[0]=f"{r['title']}\n{values[1]} | {elapsed//60}m {elapsed%60}s | {update}\n{r['detail']}"
             for j, value in enumerate(values):
                 item = QtWidgets.QTableWidgetItem(value)
                 item.setToolTip(value)
@@ -271,6 +335,22 @@ def task_panel(hub, parent, compact=False):
         if compact:table.resizeRowsToContents()
         del blocker
         selection()
+
+    def focus_attention():
+        refresh()
+        for index in range(table.rowCount()):
+            key = table.item(index, 0).data(QtCore.Qt.UserRole)
+            if needs_attention(hub.rows[key]):
+                table.setCurrentCell(index, 0)
+                table.scrollToItem(table.item(index, 0))
+                return
+    body.focus_attention = focus_attention
+
+    def open_selected_review():
+        callback = review_callback(guidance(hub.rows.get(selected(), {}))['target'])
+        if callable(callback):callback()
+    open_review.clicked.connect(open_selected_review)
+    acknowledge.clicked.connect(lambda: hub.mark_reviewed(selected()))
 
     class Receiver(QtCore.QObject):
         @QtCore.pyqtSlot()
