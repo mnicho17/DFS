@@ -147,7 +147,8 @@ def catalog(conn, import_id, folder, cancelled=lambda: False):
             for row in p['players']:
                 player = lookup.get(row['name'])
                 if (not player or row['game'] != game_identity(player) or
-                        row['position'] != player.get('Position') or row['role'] != forecast_group(player)):
+                        row['position'] != player.get('Position') or row['role'] != forecast_group(player) or
+                        ('team' in row and row['team'] != str(player.get('Team') or '').upper())):
                     raise ValueError('Captured player/game identity differs from the exact snapshot.')
             covered = sum(r['name'] in scores for r in p['players'])
             if not covered:

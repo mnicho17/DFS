@@ -65,6 +65,11 @@ def _metrics(rows):
         selected = [r for r in rows if isinstance(r.get(q), (int, float)) and math.isfinite(r[q])]
         result['quantile_coverage'][q] = dict(player_games=len(selected),
             at_or_below_pct=100 * mean(r['actual'] <= r[q] for r in selected) if selected else None)
+    from scoring_interactions import valid_zero
+    zeros = [r for r in rows if valid_zero(r, r['scenarios'])]
+    result['zero_scores'] = dict(player_games=len(zeros),
+        sim_pct=100*mean(r['zero_count']/r['scenarios'] for r in zeros) if zeros else None,
+        actual_pct=100*mean(r['actual']==0 for r in zeros) if zeros else None)
     return result
 
 
@@ -108,6 +113,8 @@ def summarize(rows):
             # No player/user names; expose QB game evidence without pooling models.
             qb_games=[dict(game=game, **_metrics(group)) for game, group in sorted(by_game.items())]
                 if axis == 'position' and label == 'QB' else []))
+    from scoring_interactions import summarize_interactions
+    result['interactions'] = summarize_interactions(kept)
     return result
 
 
@@ -134,8 +141,20 @@ def report_lines(summary):
         quantiles = ', '.join(q + '=' + (f"{v['at_or_below_pct']:.1f}% (n={v['player_games']})"
             if v['at_or_below_pct'] is not None else 'unavailable') for q, v in p['quantile_coverage'].items())
         lines.append(f"- {group['kind']} / model {group['model'][:12]} / {group['axis']}: {group['label']}; {p['games']} games, {p['player_games']} player-games. At/below {quantiles}. Equal-game below/inside/above p10-p90: {g['below_p10_pct']:.1f}/{g['inside_p10_p90_pct']:.1f}/{g['above_p90_pct']:.1f}%; mean-score MAE {g['mean_score_mae']:.2f}; actual-minus-mean bias {g['actual_minus_mean_bias']:+.2f}; range width {g['mean_p10_p90_width']:.2f}; interval score {g['mean_p10_p90_interval_score']:.2f}.")
+        z = p['zero_scores']
+        if z['player_games']:
+            lines.append(f"  Exact zero scores: {z['player_games']} player-games; actual {z['actual_pct']:.1f}%; SIM {z['sim_pct']:.1f}% (player weighted, same covered outcomes).")
+        else:
+            lines.append('  Exact zero scores: unavailable in these legacy captures; quantiles cannot reconstruct zero frequency.')
         for game in group['qb_games']:
             lines.append(f"  QB game {game['game']}: {game['player_games']} player-games; actual-minus-mean bias {game['actual_minus_mean_bias']:+.2f}; below/inside/above p10-p90 {game['below_p10_pct']:.1f}/{game['inside_p10_p90_pct']:.1f}/{game['above_p90_pct']:.1f}%; interval score {game['mean_p10_p90_interval_score']:.2f}.")
+    if not summary.get('interactions'):
+        lines.append('- Joint specialist outcomes: unavailable; no same-capture qualified pair statistics.')
+    for pair in summary.get('interactions', []):
+        c = pair['mean_sim_correlation']
+        correlation = 'unavailable (constant outcomes)' if c is None else f"{c:+.3f} ({pair['correlation_pairs']} nonconstant pairs; pair weighted)"
+        lines.append(f"- Joint outcomes / {pair['kind']} / model {pair['model'][:12]} / {pair['label']}: {pair['games']} games; {pair['pair_games']} pair-games. Equal-game both >0 actual/SIM {pair['actual_both_positive_pct']:.1f}/{pair['sim_both_positive_pct']:.1f}%; both exactly zero {pair['actual_both_zero_pct']:.1f}/{pair['sim_both_zero_pct']:.1f}%; mean SIM correlation {correlation}.")
+    lines.append('- Joint statistics require both observed players from the same exact pregame capture. Above zero is not a top-finish threshold. Correlation is descriptive, not evidence of causation; legacy interactions remain unavailable. No defaults are changed.')
     lines.append('- Interval score is range width plus 10 points per point missed below p10 or above p90; lower is better. Compare it on the same qualified outcomes alongside coverage and bias. Saved quantiles do not contain enough information to reconstruct CRPS.')
     lines.append('- Games, not duplicated entries or Captain multipliers, define evidence units. Within-game outcomes are correlated; no independence between players or accuracy guarantee is implied. Missing legacy p25/p75 stay unavailable. No weights, forecasts or compute settings are updated.')
     return lines

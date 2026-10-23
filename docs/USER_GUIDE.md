@@ -2165,6 +2165,30 @@ In Results & Learning, use **Review SIM Builds** after saving a qualified result
 
 This association affects scoring-distribution validation only. It preserves the automatic forecast snapshot and does not establish that the selected build was submitted. Qualification requires the exact historical salary/player pool, scheduled games, immutable source hashes, and completion before the earliest kickoff. A changed or invalid saved choice produces an unavailable comparison; it never silently substitutes another build. Selecting a different qualifying capture replaces the association. Previewing or canceling makes no saved changes.
 
+### Exact zero scores and specialist interactions
+
+Completed NFL SIM captures now retain exact base-player zero-score counts and
+same-game K/DST pair summaries from the outcomes already drawn. Negative DST
+scores are not zeros; small nonzero scores are not rounded to zero. Captain
+multipliers do not create additional player observations. Capture adds no draws
+and changes no forecasts, scoring, ranking, portfolio rules or defaults.
+
+Results & Learning calibration reports compare actual versus simulated zero
+frequency by recorded position and role. Joint summaries show both scores above
+zero, both exactly zero, and simulated Pearson correlation, separated by same or
+opposing team and partner position. Above zero does not mean a winning score.
+Both actual players must qualify in the same exact pregame capture, model and
+format. Repeated contests do not add independent games. Joint event rates give
+each game equal weight; mean correlation is pair weighted and excludes constant
+outcomes, whose correlation is undefined.
+
+Old captures remain readable: missing zero or joint statistics stay unavailable,
+and quantiles cannot reconstruct them. Missing/ambiguous game or team identities
+withhold pairs. Interaction capture is bounded to 20,000 pairs and 20 million pair-scenarios;
+exceeding either bound withholds all pair statistics while preserving player summaries. Incomplete
+or invalid simulations produce no completed capture. This is report-only evidence
+for future calibration, not automatic tuning or proof of predictive accuracy.
+
 ### Ownership and salary-band compatibility
 
 The sampled opponent-field report checks whether verified Showdown Captain/FLEX ownership percentages imply an average salary compatible with the requested salary-band mix. Exact slot ownership determines average salary by summing each player's Captain salary times Captain ownership plus FLEX salary times FLEX ownership. The integer band targets provide lower and upper bounds for that average.
