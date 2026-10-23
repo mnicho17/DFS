@@ -2,6 +2,7 @@
 from collections import defaultdict
 import datetime as dt
 import json
+import math
 import statistics
 
 
@@ -134,6 +135,26 @@ def matched_summary(contests, feature, comparator):
 
 
 
+
+def slate_sensitivity(gaps):
+    """Describe matched slate-block gaps; never an interval estimate or policy."""
+    n=len(gaps)
+    total=math.fsum(gaps)
+    omitted=[(total-gap)/(n-1) for gap in gaps] if n>1 else []
+    return dict(blocks=n,lower=sum(g<0 for g in gaps),equal=sum(g==0 for g in gaps),
+        higher=sum(g>0 for g in gaps),omit_one_min=min(omitted) if omitted else None,
+        omit_one_max=max(omitted) if omitted else None)
+
+
+def sensitivity_text(result):
+    s=result['slate_sensitivity']
+    counts=f"{s['lower']}/{s['equal']}/{s['higher']}"
+    if s['omit_one_min'] is None:return counts+'; unavailable'
+    text=f"{counts}; {s['omit_one_min']:+.1f}..{s['omit_one_max']:+.1f}"
+    if s['omit_one_min']<0<s['omit_one_max']:text+=' (changes sign)'
+    return text
+
+
 def captain_defense_rate(contest, cohort, position):
     """Joint counts cannot be reconstructed from legacy marginal percentages."""
     if contest.get('version')!=3:return None
@@ -156,13 +177,14 @@ def captain_defense_report(scope):
     lines=['', 'Opposing FLEX defense within Captain position — equal slate weight',
         '- Compares the share using an opposing FLEX defense within the same recorded Captain position. Each field/cohort pair uses the same contests. Position denominators can differ between comparisons; this is not a controlled experiment or a causal effect.',
         '- Legacy summaries cannot supply joint counts. Reconcile Historical Coverage once, or use summaries produced during subsequent normal reconciliation. Missing/inconsistent counts and absent position coverage stay unavailable. Earlier broad comparisons remain readable.',
-        '| Captain | Rank cohort | Field with opposing DST | Cohort with opposing DST | Cohort − field (pp) | Slate blocks / sources | Captain-position source rows field / cohort | Excluded identity / cohort / legacy / conflicting source |',
-        '|---|---|---:|---:|---:|---:|---:|---:|']
+        '| Captain | Rank cohort | Field with opposing DST | Cohort with opposing DST | Cohort − field (pp) | Slate blocks / sources | Captain-position source rows field / cohort | Excluded identity / cohort / legacy / conflicting source | Lower/equal/higher blocks; omit-one gap range (pp) |',
+        '|---|---|---:|---:|---:|---:|---:|---:|---|']
     for position in ('QB','RB','WR','TE','K','DST'):
         for key,label in (('top1','Rank cutoff 1%'),('top5','Rank cutoff 5%'),('rank1','Rank 1')):
             r=field_comparison(scope['contests'],'',key,captain_position=position)
             cells=(f"{r['field']:.1f}% | {r['comparator']:.1f}% | {r['gap']:+.1f}" if r['slates'] else 'unavailable | unavailable | unavailable')
-            lines.append(f"| {position} | {label} | {cells} | {r['slates']} / {r['contests']} | {r['field_rows']:,} / {r['comparator_rows']:,} | {r['excluded_identity']} / {r['excluded_cohort']} / {r['excluded_legacy']} / {r['excluded_conflicting_sources']} |")
+            lines.append(f"| {position} | {label} | {cells} | {r['slates']} / {r['contests']} | {r['field_rows']:,} / {r['comparator_rows']:,} | {r['excluded_identity']} / {r['excluded_cohort']} / {r['excluded_legacy']} / {r['excluded_conflicting_sources']} | {sensitivity_text(r)} |")
+    lines.append('- Sensitivity counts slate blocks with cohort usage below/equal/above the field. The range omits one whole contributing block at a time; it is unavailable below two blocks. It is not a confidence interval, significance test, independence claim or tuning rule.')
     lines.append('- Source rows include duplicate EntryIds; rank cutoffs include ties and do not certify full fields or payouts. Formats/presets can share games; sample counts must not be added. No Captain locks, limits, forecasts or model defaults are changed.')
     return lines
 
@@ -203,7 +225,8 @@ def field_comparison(contests, feature, comparator, *, captain_position=None):
         field.append(statistics.mean(measured(c,'field') for c in block['contests']))
         other.append(statistics.mean(measured(c,comparator) for c in block['contests']))
     included = [c for b in blocks for c in b['contests']]
-    return dict(slates=len(blocks),contests=len(included),excluded_identity=excluded+missing_source,
+    sensitivity=slate_sensitivity([b-a for a,b in zip(field,other)])
+    return dict(slate_sensitivity=sensitivity,slates=len(blocks),contests=len(included),excluded_identity=excluded+missing_source,
         excluded_cohort=len(current)-len(paired),excluded_legacy=legacy,
         excluded_conflicting_sources=conflicts,repeated_source_copies=repeated,
         field=statistics.mean(field) if field else None,
@@ -222,8 +245,8 @@ def field_report_lines(scope):
         '- Uses all contributing contests in this format and entry-preset scope, including contests you did not enter. Each comparison uses the same contests for the field and rank cohort.',
         '- Contests with overlapping games on the same recorded date form one slate block. Average contest rates within each block, then weight blocks equally; these blocks are not a claim of statistical independence.',
         '- Formats and entry presets can share games; do not add their sample counts. Rates describe mapped source rows, including duplicate EntryIds. Rank cutoffs include ties; missing ranks and partial fields can affect the cohort. Rank-1 rows are not verified wins, profit or a construction advantage.',
-        '| Construction | Rank cohort | Field | Cohort | Cohort − field (pp) | Slate blocks / sources | Mapped source rows field / cohort | Excluded identity / cohort / legacy / conflicting source |',
-        '|---|---|---:|---:|---:|---:|---:|---:|']
+        '| Construction | Rank cohort | Field | Cohort | Cohort − field (pp) | Slate blocks / sources | Mapped source rows field / cohort | Excluded identity / cohort / legacy / conflicting source | Lower/equal/higher blocks; omit-one gap range (pp) |',
+        '|---|---|---:|---:|---:|---:|---:|---:|---|']
     repeats=0
     for feature in features:
         for key,label in (('top1','Rank cutoff 1%'),('top5','Rank cutoff 5%'),('rank1','Rank 1')):
@@ -231,7 +254,8 @@ def field_report_lines(scope):
             repeats=max(repeats,r['repeated_source_copies'])
             cells=(f"{r['field']:.1f}% | {r['comparator']:.1f}% | {r['gap']:+.1f}" if r['slates']
                 else 'unavailable | unavailable | unavailable')
-            lines.append(f"| {feature} | {label} | {cells} | {r['slates']} / {r['contests']} | {r['field_rows']:,} / {r['comparator_rows']:,} | {r['excluded_identity']} / {r['excluded_cohort']} / {r['excluded_legacy']} / {r['excluded_conflicting_sources']} |")
+            lines.append(f"| {feature} | {label} | {cells} | {r['slates']} / {r['contests']} | {r['field_rows']:,} / {r['comparator_rows']:,} | {r['excluded_identity']} / {r['excluded_cohort']} / {r['excluded_legacy']} / {r['excluded_conflicting_sources']} | {sensitivity_text(r)} |")
+    lines.append('- Sensitivity uses matched contributing blocks only: lower/equal/higher refers to cohort minus field usage. Omitting one whole block gives the reported range; fewer than two blocks is unavailable. This is not a confidence interval or statistical significance test.')
     lines.append(f'- Identical repeated source receipts omitted: {repeats}. Differences are descriptive frequencies, not finish probabilities, payout estimates or tuning recommendations. No generation limits or model defaults are changed.')
     return lines
 

@@ -2749,3 +2749,21 @@ gaps. Source rows can contain duplicate EntryIds; rank cutoffs include ties and
 do not certify complete fields, official wins, payouts or a causal effect.
 Position comparisons may have different contributing contests. No Captain locks,
 limits, projections, SIM settings, ranking or generation defaults are changed.
+
+
+### Slate sensitivity in construction comparisons
+
+Field/top-finisher and within-Captain-position tables now show how many matched
+slate blocks have lower, equal or higher cohort usage than the field, followed by
+the minimum and maximum average gap when one whole contributing block is omitted.
+A range spanning negative and positive values is labeled **changes sign**. A
+positive overall gap can coexist with lower usage in most blocks when a single
+slate dominates the average.
+
+Contests sharing an overlapping-game/date block are omitted together. Duplicate
+sources, conflicting receipts, missing identities and unavailable cohorts retain
+the existing exclusions; neither source-row counts nor individual entries become
+independent observations. Fewer than two blocks gives an unavailable omit-one
+range. These are descriptive sensitivity checks, not confidence intervals,
+significance tests, win probabilities, causal effects or automatic tuning rules.
+They reuse existing summaries and add no CSV scan, background task or option.
