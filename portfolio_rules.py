@@ -1145,7 +1145,7 @@ def select_portfolio(
         remaining.append(outgoing)
 
     standard_refinement_finished = False
-    for pass_index in range(refinement_passes):
+    for _ in range(refinement_passes):
         if refinement_stop_callback and refinement_stop_callback():
             refinement_stop_reason = "time budget or cancellation"
             break
@@ -1154,9 +1154,12 @@ def select_portfolio(
         if not movable or not remaining:
             refinement_stop_reason = "no movable alternatives"
             break
+        # A preserved feasibility portfolio can need many quality swaps. Start
+        # duplication-only polishing after the bounded quality scan has no
+        # improvement, rather than after an arbitrary number of passes. The
+        # caller's pass limit and stop callback still bound both phases.
         duplication_focus = bool(
-            refinement_polish_duplication
-            and (standard_refinement_finished or pass_index >= 3)
+            refinement_polish_duplication and standard_refinement_finished
         )
         if duplication_focus:
             outgoing_pool = sorted(
