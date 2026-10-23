@@ -8,7 +8,7 @@ import math
 import re
 
 
-VERSION = 2
+VERSION = 3
 
 
 def positive_integer(value):
@@ -90,16 +90,19 @@ class FieldRows:
                     'Kicker/defense slots: ' + str(sum(p['position'] in ('K', 'DST') for _, p in players)),
                     'Kickers: ' + str(sum(p['position']=='K' for _, p in players)),
                     'Defenses: ' + str(sum(p['position']=='DST' for _, p in players))]
+        captain_defense = None
         if self.kind == 'showdown':
             captain = next(p for role, p in players if role == 'CPT')
+            opposing = any(role!='CPT' and p['position']=='DST' and p['team']!=captain['team'] for role,p in players)
             features += ['Captain position: ' + captain['position'],
                          f"Captain team split: {teams[captain['team']]}–{6-teams[captain['team']]}",
-                         'Captain with opposing FLEX defense: ' + ('yes' if any(role!='CPT' and p['position']=='DST' and p['team']!=captain['team'] for role,p in players) else 'no')]
+                         'Captain with opposing FLEX defense: ' + ('yes' if opposing else 'no')]
+            captain_defense = captain['position']+(' with' if opposing else ' without')
         else:
             qb = next(p for role, p in players if role == 'QB')
             features += ['QB same-team WR/TE: ' + str(sum(p['team']==qb['team'] and p['position'] in ('WR','TE') for _, p in players)),
                          'FLEX position: ' + next(p['position'] for role,p in players if role=='FLEX')]
-        return 'supported_rows', (salary, features)
+        return 'supported_rows', (salary, features, captain_defense)
 
     def add(self, text, *, rank=None, username=''):
         self.counts['entry_rows'] += 1
@@ -131,8 +134,10 @@ class FieldRows:
             if resolved:
                 group['counts']['salary_sum'] += resolved[0]
                 group['features'].update(resolved[1])
+                if resolved[2]:
+                    group.setdefault('captain_defense',Counter())[resolved[2]] += 1
         if resolved:
-            salary, features = resolved
+            salary, features, _ = resolved
             self.counts[self.kind + '_supported_rows'] += 1
             self.counts['salary_sum'] += salary
             self.features.update(features)
@@ -143,7 +148,7 @@ class FieldRows:
                     features=dict(self.features) if scan_complete else {},
                     rank_size=self.rank_size, rank_basis=self.rank_basis,
                     username_limit_exceeded=self.user_limit,
-                    cohorts={k:dict(counts=dict(v['counts']),features=dict(v['features'])) for k,v in self.cohorts.items()} if scan_complete else {},
+                    cohorts={k:dict(counts=dict(v['counts']),features=dict(v['features']),captain_defense=dict(v.get('captain_defense',{}))) for k,v in self.cohorts.items()} if scan_complete else {},
                     basis='source rows including duplicate EntryIds; exact salary roles/IDs; no export fallback; not unique entries or complete-field evidence')
 
 
@@ -170,7 +175,7 @@ def summarize(saved, pairings, username='', *, observations=None):
                    candidates[0]['hash'] if not pair.get('salary_hash') and len(candidates)==1 and candidates[0]['automatic'] else None)
         payload = result.get('field_row_summary') or {}
         if (not salary.get('qualified') or current != salary.get('revision_hash') or
-                not payload.get('scan_complete') or payload.get('version') not in (1, VERSION)):
+                not payload.get('scan_complete') or payload.get('version') not in (1, 2, VERSION)):
             excluded += 1
             continue
         if source in sources:

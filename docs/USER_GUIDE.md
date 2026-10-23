@@ -2724,3 +2724,28 @@ Rank cutoffs include ties. Formats and presets may share games, so their samples
 must not be added. Frequencies can reflect other construction differences and do
 not establish a causal edge. No exposure limits, projections, SIM defaults,
 rankings or lineup-generation settings are changed.
+
+
+### Opposing defense within Captain positions
+
+The historical report now compares opposing FLEX defense usage separately for
+QB, RB, WR, TE, K and DST Captains, using the same contributing contests for the
+field and each 1%, 5% or rank-1 cohort. Each percentage uses that Captain position's
+mapped source rows as its denominator, not all lineups. As elsewhere, contest
+rates are averaged within overlapping-game/date blocks and blocks have equal
+weight; formats and entry presets remain separate.
+
+Normal historical reconciliation now records the necessary joint counts. Older
+summaries remain readable for the earlier broad comparisons but cannot supply
+this conditional analysis. Use the existing **Reconcile Historical Coverage**
+action once, or wait for subsequent normal reconciliation, to populate them.
+The report does not rerun imports or reconstruct joint counts from marginal
+percentages. Missing, inconsistent or absent-position coverage stays unavailable;
+a complete position cohort with no opposing defenses is a genuine zero.
+
+This separates Captain-position mix from the broad frequency comparison, but
+salary, player choice, games and other construction differences can still explain
+gaps. Source rows can contain duplicate EntryIds; rank cutoffs include ties and
+do not certify complete fields, official wins, payouts or a causal effect.
+Position comparisons may have different contributing contests. No Captain locks,
+limits, projections, SIM settings, ranking or generation defaults are changed.
