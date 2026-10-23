@@ -150,6 +150,12 @@ class ObjectiveParityTests(unittest.TestCase):
         if method:
             value['build_report'] = value['build_report'].replace(f' via {method}', '')
         for stage in value['stages']:
+            # New observational capture fields have dedicated exact-count tests.
+            # Retain every original distribution mean/quantile, candidate metric,
+            # selection, export and report field in the frozen comparison.
+            for row in (stage['report'].get('player_distributions') or {}).get('players', []):
+                for field in ('zero_count', 'team', 'interactions'):
+                    row.pop(field, None)
             stage['candidates'].sort()
             stage['scored'].sort(key=lambda row: row['signature'])
             (stage['report'].get('projection_coverage') or {}).pop('defense_forecasts', None)
