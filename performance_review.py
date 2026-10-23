@@ -334,6 +334,8 @@ def review_report(conn,username=''):
     lines += snapshot_report(conn,username)
     from distribution_validation import validation_report
     lines += validation_report(conn)
+    from calibration_capture_discovery import report_lines as calibration_capture_report
+    lines += calibration_capture_report(conn)
     return lines
 
 

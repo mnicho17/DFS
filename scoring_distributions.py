@@ -76,7 +76,11 @@ def save_distribution(report,input_id,folder=None):
 def load_distribution(path):
     path=Path(path)
     if path.stat().st_size>5*1024*1024:raise ValueError('Distribution file exceeds limit')
-    value=json.loads(path.read_text(encoding='utf-8'))
+    return validate_distribution(json.loads(path.read_text(encoding='utf-8')))
+
+
+def validate_distribution(value):
+    """Shared integrity checks for detached, already bounded file reads."""
     if not isinstance(value,dict) or not isinstance(value.get('payload'),dict):raise ValueError('Invalid distribution record')
     p=value['payload']
     if p.get('schema')!=1 or p.get('status')!='complete' or value.get('capture_id')!=fingerprint(p):raise ValueError('Distribution integrity mismatch')

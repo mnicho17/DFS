@@ -19,7 +19,7 @@ def stamp(path):
             s.st_dev, s.st_ino]
 
 
-def inputs(worker, *, sources_only=False):
+def inputs(worker, *, sources_only=False, include_calibration=True):
     from analysis_imports import _check
     rows, watched = [], []
     roots = [Path(p).resolve() for p in (worker.results_folder, worker.salary_folder) if p]
@@ -47,13 +47,20 @@ def inputs(worker, *, sources_only=False):
             dirs.sort()
             for name in sorted(names):
                 rows.append(stamp(Path(folder, name)))
+    # A new/deleted/changed pregame capture must reach calibration discovery even
+    # when the original results and salary CSVs are unchanged. Include these in
+    # both stability checks so evidence arriving during work is retried.
+    from calibration_capture_discovery import evidence_files
+    if include_calibration:
+        for relative, metadata in evidence_files(Path(worker.db_path).resolve().parent, worker.cancelled.is_set).items():
+            rows.append(['calibration/' + relative, metadata])
     code = hashlib.sha256()
     for path in sorted(Path(__file__).parent.glob('*.py')):
         if not path.name.startswith('test_'):
             code.update(path.name.encode())
             code.update(path.read_bytes())
     packaged = stamp(Path(sys.executable)) if getattr(sys, 'frozen', False) else None
-    payload = [VERSION, worker.username, list(map(str, roots)), sorted(rows), code.hexdigest(), packaged]
+    payload = [VERSION, worker.username, list(map(str, roots)), sorted(rows, key=lambda row: json.dumps(row)), code.hexdigest(), packaged]
     return hashlib.sha256(json.dumps(payload).encode()).hexdigest(), watched[:4096]
 
 
@@ -82,16 +89,16 @@ def cache_path(worker):
     return Path(str(Path(worker.db_path).resolve()) + '.refresh-complete.json')
 
 
-def read(worker, fingerprint):
+def read(worker, fingerprint, *, sources_only=False):
     try:
         path = cache_path(worker)
         if path.stat().st_size > 1024 * 1024:
             return None
         record = json.loads(path.read_text(encoding='utf-8'))
-        if record['inputs'] == fingerprint and record['database'] == database(worker):
+        if record['history_inputs' if sources_only else 'inputs'] == fingerprint and record['database'] == database(worker):
             result = record['result']
             if isinstance(result, dict):
-                return dict(result, unchanged_checkpoint=True)
+                return dict(result, **({'calibration_only': True} if sources_only else {'unchanged_checkpoint': True}))
     except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
         pass
     return None
@@ -113,7 +120,8 @@ def save(worker, fingerprint, result, source_fingerprint=None):
                ('unpaired', 'duplicates_skipped')}
     summary.update(results_imported=0, salaries_imported=0, pairs_added=0,
                    errors=[], cancelled=False, watch_paths=result.get('watch_paths', []))
-    record = dict(inputs=after, database=database(worker), result=summary)
+    record = dict(inputs=after, history_inputs=inputs(worker, include_calibration=False)[0],
+                  database=database(worker), result=summary)
     import tempfile
     target = cache_path(worker)
     temporary = None
