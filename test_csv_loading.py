@@ -1,6 +1,7 @@
 from test_environment import install
 install()
 import copy
+import faulthandler
 import threading
 import time
 import unittest
@@ -20,6 +21,11 @@ class CsvLoadingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+    def setUp(self):
+        # Diagnose platform-specific Qt waits without extending or weakening tests.
+        faulthandler.dump_traceback_later(60, repeat=True)
+        self.addCleanup(faulthandler.cancel_dump_traceback_later)
 
     def window(self):
         w=MainWindow()
