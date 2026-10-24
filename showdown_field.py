@@ -87,12 +87,17 @@ def _sample_field(pool, count, *, salary_cap=50000, seed=0, cancel_callback=None
             j = rng.choices(available, weights=[fweights[i] for i in available], k=1)[0]
             flex.append(j); available.remove(j)
         subtotal = cals[c]+sum(salaries[i] for i in flex)
-        def legal_band(j):
+        # The Captain and first four FLEX teams are fixed for this proposal.
+        # Keep the original salary arithmetic, available order and RNG calls.
+        partial_teams = {teams[i] for i in [c]+flex}
+        finishers = []
+        for j in available:
             unused = (salary_cap-subtotal-salaries[j])/salary_cap
-            if unused < 0 or unused > .15 or len({teams[i] for i in [c]+flex+[j]}) != 2:
-                return None
-            return next(i for i,(edge,_) in enumerate(BANDS) if unused <= edge)
-        finishers = [j for j in available if legal_band(j) == band_target]
+            if unused < 0 or unused > .15 or len(partial_teams | {teams[j]}) != 2:
+                continue
+            band = next(i for i,(edge,_) in enumerate(BANDS) if unused <= edge)
+            if band == band_target:
+                finishers.append(j)
         if finishers:
             flex.append(rng.choices(finishers,weights=[fweights[j] for j in finishers],k=1)[0])
         else:
