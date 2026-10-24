@@ -72,3 +72,21 @@ class StorageAuditUiTests(unittest.TestCase):
             self.assertTrue(any(row['title']=='Legacy cache archive' and 'Freed: 1 working copies' in row['detail'] for row in w.tasks.rows.values()))
             d.copy_report();self.assertIn('Freed: 1 working copies',self.app.clipboard().text())
             d.reject();d.deleteLater()
+
+    def test_invalid_legacy_archive_keeps_source_and_retires_with_review_details(self):
+        import sqlite3
+        from test_legacy_scenario_archive import legacy
+        w,root=self.setup_window();cache=root/'cache';backup=root/'backup';cache.mkdir();backup.mkdir()
+        path=legacy(cache)
+        with sqlite3.connect(path) as con:con.execute("UPDATE meta SET value=? WHERE key='digest'",('0'*64,))
+        con.close();before=path.read_bytes()
+        roots=[dict(path=cache,role='scenario'),dict(path=root/'result.csv',role='sources'),dict(path=backup,role='backup')]
+        with patch('storage_audit_ui.configured_roots',return_value=roots),patch.object(w.idle_backup,'destination',return_value=str(backup)):
+            d=StorageAuditDialog(w);self.wait(d);d.archive();self.wait(d)
+            row=next(row for row in reversed(list(w.tasks.rows.values())) if row['title']=='Legacy cache archive')
+            self.assertEqual(row['state'],'Needs review');self.assertIsNotNone(row['ended'])
+            self.assertIn('1 error reported.',row['attention_reason'])
+            self.assertIn(path.name,row['attention_reason']);self.assertIsNone(w.background_queue.active)
+            self.assertFalse(w.tasks.bindings);self.assertEqual(path.read_bytes(),before)
+            self.assertFalse(list(backup.rglob('*.sqlite')))
+            d.reject();d.deleteLater()

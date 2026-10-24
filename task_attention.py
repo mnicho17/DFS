@@ -7,15 +7,26 @@ def needs_attention(row):
                 and not row.get('attention_reviewed'))
 
 
+def _error_items(value):
+    """Workers report either bounded messages or an error count."""
+    if isinstance(value, int):
+        return [f"{value:,} {'error' if value == 1 else 'errors'} reported."] if value else []
+    if isinstance(value, (list, tuple)):
+        return value[:5]
+    return [value] if value else []
+
+
 def result_reason(result):
     notes = []
     for key in ('error', 'pause_reason'):
         if result.get(key):notes.append(str(result[key]))
-    errors = result.get('errors') or []
-    if isinstance(errors, str):errors = [errors]
-    notes.extend(str(error) for error in errors[:5])
+    errors = result.get('errors')
+    notes.extend(str(error) for error in _error_items(errors))
+    archive = result.get('archive')
+    if isinstance(errors, int) and errors and isinstance(archive, dict):
+        notes.extend(str(message) for message in _error_items(archive.get('messages')))
     history = result.get('username_history') or {}
-    for error in history.get('errors', [])[:5]:
+    for error in _error_items(history.get('errors')):
         notes.append(str(error.get('name', 'History')) + ': ' + str(error.get('error', 'Needs review'))
                      if isinstance(error, dict) else str(error))
     if result.get('unpaired'):
@@ -37,7 +48,7 @@ def guidance(row):
               'preparation' if any(word in title for word in ('preparation', 'screening', 'library')) else None)
     original = str(row.get('attention_reason') or row.get('detail') or 'The recorded attempt needs review.')
     reason = '\n'.join(original.splitlines()[:3])[:240]
-    if reason != original:reason += '… (full message below)'
+    if reason != original:reason += 'â€¦ (full message below)'
     if target == 'history':
         action = 'Open Results & Learning. Review Salary Matches for unpaired files, or History Overview for refresh errors and Retry/Resume. A Needs review association does not qualify conflicting evidence.'
     elif target == 'backup':
