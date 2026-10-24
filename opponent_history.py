@@ -124,8 +124,35 @@ def _stage_report(path, report, key, success_basis, success_size, cancelled, pro
         ai._check(cancelled)
 
 
+def _refresh_concentration_receipt(db_path,key,result,salary,cancelled):
+    """Backfill a small report-only receipt once; never rebuild entry/slot rows."""
+    from historical_concentration import CACHE_KEY,cached_receipt,VERSION as RECEIPT_VERSION
+    with closing(_connect(db_path,True)) as conn:
+        conn.execute('BEGIN')
+        row=conn.execute('SELECT audit_json FROM opponent_contests WHERE contest_key=? AND result_hash=? AND salary_hash=? AND version=?',
+                         (key,result['hash'],salary['hash'],VERSION)).fetchone()
+        if not row:return
+        try:
+            audit=json.loads(row[0])
+        except (TypeError,ValueError):return
+        if not isinstance(audit,dict):return
+        receipt=audit.get(CACHE_KEY)
+        if isinstance(receipt,dict) and type(receipt.get('version')) is int and receipt['version']==RECEIPT_VERSION:return
+        audit[CACHE_KEY]=cached_receipt(conn,key,audit,cancelled=cancelled)
+    ai._check(cancelled)
+    with closing(_connect(db_path)) as conn,conn:
+        conn.execute('BEGIN IMMEDIATE')
+        pair=conn.execute('SELECT salary_hash FROM analysis_salary_pairs WHERE result_hash=?',(result['hash'],)).fetchone()
+        if not pair or pair[0]!=salary['hash']:raise ValueError('Salary association changed; concentration receipt was not saved.')
+        ai._verify(result,cancelled);ai._verify(salary,cancelled)
+        conn.execute('UPDATE opponent_contests SET audit_json=? WHERE contest_key=? AND result_hash=? AND salary_hash=? AND version=? AND audit_json=?',
+            (json.dumps(audit),key,result['hash'],salary['hash'],VERSION,row[0]))
+        ai._check(cancelled)
+
+
 def index_contest(db_path, result_hash, cancelled=lambda: False, progress=lambda text: None):
     # Refreshes re-verify immutable evidence, but need not rebuild unchanged rows.
+    cached=None
     with closing(_connect(db_path,True)) as conn:
         conn.execute('BEGIN')
         if conn.execute("SELECT 1 FROM sqlite_master WHERE name='opponent_contests'").fetchone():
@@ -141,7 +168,10 @@ def index_contest(db_path, result_hash, cancelled=lambda: False, progress=lambda
                     if not qualification['compatible']:raise ValueError(qualification['reason'])
                     counts=conn.execute('SELECT COUNT(*),COUNT(DISTINCT user_key) FROM opponent_entries WHERE contest_key=?',(old[0],)).fetchone()
                     ai._check(cancelled)
-                    return dict(contest_key=old[0],entries=counts[0],users=counts[1],unchanged=True)
+                    cached=dict(contest_key=old[0],entries=counts[0],users=counts[1],unchanged=True)
+    if cached:
+        _refresh_concentration_receipt(db_path,cached['contest_key'],result,salary,cancelled)
+        return cached
     report = analyze_saved_contest(db_path, result_hash, cancelled, progress, capture_entries=True)
     evidence = report['history_evidence']
     result, salary = evidence['result'], evidence['salary']
@@ -157,6 +187,8 @@ def index_contest(db_path, result_hash, cancelled=lambda: False, progress=lambda
     success_basis='supplied complete field' if complete else 'observed entries; completeness unverified' if observed_ranked else None
     success_size=field_size if complete else len(entry_ids) if observed_ranked else None
     count=len(report['history_entries']);user_count=len(report['portfolios'])
+    from historical_concentration import CACHE_KEY,build_receipt
+    report['audit'][CACHE_KEY]=build_receipt(report['audit'],report['portfolios'],cancelled=cancelled)
     record=(key,'draftkings',external,result_hash,salary['hash'],result['name'],report['format'],min(dates) if dates else None,max(dates) if dates else None,field_size,int(complete),VERSION,json.dumps(report['audit']))
     # Prepare outside the user's write transaction. Temporary batches avoid a
     # second in-memory copy of millions of roster slots.

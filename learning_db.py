@@ -1116,6 +1116,8 @@ def generate_learning_report(*, db_path: Optional[str] = None, username: str = "
             saved_evidence = load_saved(path, conn=conn)
             from historical_contest_comparison import personal_observations
             observations = personal_observations(conn, username)
+            from historical_concentration import observations as concentration_observations
+            observations['concentration'] = concentration_observations(conn)
             field_evidence = summarize(saved_evidence, pairings, username, observations=observations)
         finally:
             conn.execute('RELEASE learning_evidence_report')

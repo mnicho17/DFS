@@ -188,7 +188,10 @@ def summarize(saved, pairings, username='', *, observations=None):
             continue
         preset = payload.get('entry_preset') or _infer_field_preset(pair.get('name',''))
         scope = scopes.setdefault((kind,preset),dict(format=kind,preset=preset,sources=0,counts=Counter(),features=Counter(),cohorts={},cohort_sources=Counter(),rank_bases=Counter(),old_sources=0,user_limits=0,contests=[]))
-        scope['contests'].append(contest_record(data,pair,payload,username,observations))
+        record=contest_record(data,pair,payload,username,observations)
+        from historical_concentration import attach
+        attach(record,data,observations.get('concentration',{}))
+        scope['contests'].append(record)
         scope['sources'] += 1
         scope['counts'].update(payload['counts'])
         scope['features'].update(payload['features'])
@@ -233,6 +236,8 @@ def report_lines(saved, summary):
             [('blank_roster_rows','blank'),('malformed_roster_rows','malformed'),('unknown_identity_rows','unknown/ambiguous identity'),('invalid_team_rows','invalid team split'),('over_cap_rows','over $50,000')]))
         for scope in sorted(summary['scopes'],key=lambda s:(s['format'],s['preset'])):
             lines += ['',f"{scope['format'].title()} / {scope['preset']} — {scope['sources']} sources (preset inferred from recorded names)"]
+            from historical_concentration import report_lines as concentration_report_lines
+            lines.extend(concentration_report_lines(scope))
             supported = scope['counts']['supported_rows']
             if supported:
                 lines.append(f"- Supported source rows: {supported:,}/{scope['counts']['entry_rows']:,}; average salary ${scope['counts']['salary_sum']/supported:,.0f}.")

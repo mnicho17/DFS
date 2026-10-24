@@ -2767,3 +2767,32 @@ independent observations. Fewer than two blocks gives an unavailable omit-one
 range. These are descriptive sensitivity checks, not confidence intervals,
 significance tests, win probabilities, causal effects or automatic tuning rules.
 They reuse existing summaries and add no CSV scan, background task or option.
+
+
+### Evidence coverage and lineup concentration
+
+Results & Learning places a per-source evidence panel alongside each format and
+entry-preset construction summary. It separates mapped source rows from accepted
+unique EntryIds, readable rosters, and salary-matched entries. Validated duplicate
+row removals and conflicting EntryId exclusions are shown explicitly.
+
+The panel reads small concentration receipts saved during normal history indexing.
+Existing indexed contests receive a one-time receipt backfill from cached entrant
+statistics when that existing indexing task next runs; entry/slot rows and CSV
+analyses are not rebuilt. Viewing the report never performs that backfill.
+It adds no CSV scan, entry/slot-table scan, database migration, background job or
+option. Only receipts for the current verified result/salary revision and format
+are displayed. Missing, older, inconsistent or bounded-out statistics explain why
+concentration is unavailable; existing construction comparisons remain readable.
+
+Entrant/lineup groups count a lineup separately for each entrant. Repeats are
+additional entries using that entrant's same readable lineup. Shared entries use
+a lineup also found under another entrant. These counts overlap, are not globally
+unique lineups, and do not make legitimate repeated entries invalid. Cached
+concentration describes the whole source, not top finishers or individual Captains.
+
+The panel shows recorded game/date overlap-block coverage and explains when fewer
+than two blocks prevents a cross-slate conclusion. This is descriptive evidence,
+not a significance test or a tuning rule. Construction tables retain their source
+row denominators; no limits, forecasts, SIM, ownership, rankings or lineup-generation
+behavior change.
