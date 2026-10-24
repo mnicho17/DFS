@@ -199,6 +199,14 @@ class ControlledIndexTests(unittest.TestCase):
         self.assertEqual(first['groups']['top1'],{})
         f.change(f'DELETE FROM {cc.TABLE}');index_contest(f.db,f.source['hash'])
         self.assertEqual(self.receipt(f),first)
+    def test_incomplete_metadata_never_borrows_from_identical_complete_signature_group(self):
+        f=self.fixture();f.change('UPDATE opponent_entries SET metadata_complete=0 WHERE entry_id IN (?,?,?)',('1000','1001','1002'))
+        key=f.query('SELECT contest_key FROM opponent_contests')[0][0]
+        with closing(sqlite3.connect(f.db)) as conn:
+            r=cc.from_index(conn,key,f.salary['manifest']['players'],100,100)
+        self.assertTrue(r['complete']);self.assertEqual(sum(v[0] for v in r['groups']['field'].values()),97)
+        self.assertEqual(r['groups']['top1'],{})
+
     def test_named_display_cap_does_not_limit_aggregate_evidence(self):
         records=[contest(f'source{i:03d}') for i in range(101)]
         r=cc.comparison(records,'RB','opposing_dst','top1');self.assertEqual(r['sources'],101)
