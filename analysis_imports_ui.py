@@ -106,14 +106,6 @@ class CombinedImportWorker(QtCore.QObject):
                     result['cancelled'] = True
                 except Exception as exc:
                     result['errors'].append('Calibration captures need retry: ' + str(exc))
-            if not result['cancelled'] and (any(result.get(key) for key in ('results_imported','salaries_imported','pairs_added'))
-                    or result.get('calibration_discovery', {}).get('changed')):
-                from learning_db import generate_learning_report
-                try:
-                    self.progress.emit(0, 0, 'Refreshing the saved-results report…')
-                    result['report'] = generate_learning_report(username=self.username, db_path=self.db_path)
-                except Exception as exc:
-                    result['errors'].append('Files saved; Refresh Report can retry: ' + str(exc))
             result['cancelled'] = bool(result.get('cancelled') or self.cancelled.is_set())
             if result['cancelled']:
                 result.pop('report', None)
@@ -126,8 +118,18 @@ class CombinedImportWorker(QtCore.QObject):
                     result['cancelled'] = True
                 except Exception as exc:
                     result['errors'].append('Username history needs retry: ' + str(exc))
+            result['cancelled'] = bool(result.get('cancelled') or self.cancelled.is_set())
             if result['cancelled']:
                 result.pop('report', None)
+            # Deliver the report after indexing so newly saved report receipts are visible.
+            if not result['cancelled'] and (any(result.get(key) for key in ('results_imported','salaries_imported','pairs_added'))
+                    or result.get('calibration_discovery', {}).get('changed')):
+                from learning_db import generate_learning_report
+                try:
+                    self.progress.emit(0, 0, 'Refreshing the saved-results report…')
+                    result['report'] = generate_learning_report(username=self.username, db_path=self.db_path)
+                except Exception as exc:
+                    result['errors'].append('Files saved; Refresh Report can retry: ' + str(exc))
             # Duplicate sources do not rerun personal forecast analysis.
             if checkpoint is not None:
                 try:
