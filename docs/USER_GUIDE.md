@@ -2785,6 +2785,52 @@ significance tests, win probabilities, causal effects or automatic tuning rules.
 They reuse existing summaries and add no CSV scan, background task or option.
 
 
+### Controlled Showdown construction review
+
+Results & Learning now compares opposing FLEX defense usage and combined K/DST
+slot counts (at least two or three, including Captain when applicable) within the
+same exact historical Captain ID,
+total-salary band and Captain-team split. Position-group tables compare the field
+with the recorded 1% and 5% rank-cutoff cohorts. The named-Captain detail shows
+which source/Captain combinations contribute to the 1% comparison.
+
+Both sides use the field's weights over common strata within each contest.
+Contest rates are averaged within recorded game/date overlap blocks, then blocks
+are weighted equally. Salary bands are below $40,000, $40,000–44,999,
+$45,000–47,499, $47,500–48,999 and $49,000–50,000. Lower-salary entries remain
+included. Matching does not establish causality, an advantage or win probability.
+
+The new view uses accepted unique EntryIds from the existing field-history index.
+Identical duplicate rows have already been removed and conflicting entry copies
+excluded there. Matched/eligible field and cohort counts disclose how much data
+survives matching. Missing strata are excluded, never zero-filled. Repeats count
+additional accepted entries sharing the exact Captain/FLEX lineup in that matched
+stratum/cohort; legitimate repeated entries remain valid and share game outcomes.
+Counts are summed over contributing sources and are distinct from the equal-block
+weights used for percentages. The earlier construction tables keep their original
+source-row denominators, including duplicate EntryIds.
+
+Normal field-history indexing saves a bounded, versioned report receipt alongside
+its existing index. The panel reports supported/accepted entries and missing-rank
+counts before matching. Older indexes receive it once from saved normalized entries
+and salary-bound slots, without CSV reanalysis or rebuilding those rows. Grouped backfill retains every
+accepted entry's weight while reusing validated lineup metadata. Source,
+salary revision, metadata, rank-cutoff and cancellation checks remain enforced;
+an interrupted or bounded-out scan cannot publish partial controlled totals.
+The learning report reads only receipts and never starts preparation, migrates
+storage or rescans entry/slot tables. Missing, older or inconsistent receipts explain
+why controlled evidence is unavailable until normal indexing supplies it.
+
+Rank cutoffs include ties and use supplied field size when available, otherwise
+observed accepted-entry counts; they do not certify complete-field percentiles,
+wins or payouts. Missing ranks are outside rank cohorts. Slate direction counts
+and omit-one-block ranges show sensitivity, not confidence intervals. Named detail
+shows at most 100 groups in recorded-date/source/ID order, while aggregate tables
+use all matched groups. Formats and presets can share games. Exact player choices,
+other game conditions and selection effects remain uncontrolled. No generation,
+ranking, projection, ownership, SIM, exposure or model defaults change.
+
+
 ### Evidence coverage and lineup concentration
 
 Results & Learning places a per-source evidence panel alongside each format and

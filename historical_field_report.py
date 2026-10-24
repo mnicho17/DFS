@@ -191,6 +191,8 @@ def summarize(saved, pairings, username='', *, observations=None):
         record=contest_record(data,pair,payload,username,observations)
         from historical_concentration import attach
         attach(record,data,observations.get('concentration',{}))
+        from controlled_construction import attach as attach_controls
+        attach_controls(record,data,observations.get('controls',{}))
         scope['contests'].append(record)
         scope['sources'] += 1
         scope['counts'].update(payload['counts'])
@@ -238,6 +240,8 @@ def report_lines(saved, summary):
             lines += ['',f"{scope['format'].title()} / {scope['preset']} — {scope['sources']} sources (preset inferred from recorded names)"]
             from historical_concentration import report_lines as concentration_report_lines
             lines.extend(concentration_report_lines(scope))
+            from controlled_construction import report_lines as controlled_report_lines
+            lines.extend(controlled_report_lines(scope))
             supported = scope['counts']['supported_rows']
             if supported:
                 lines.append(f"- Supported source rows: {supported:,}/{scope['counts']['entry_rows']:,}; average salary ${scope['counts']['salary_sum']/supported:,.0f}.")

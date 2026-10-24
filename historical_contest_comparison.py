@@ -207,7 +207,7 @@ def field_comparison(contests, feature, comparator, *, captain_position=None):
         if not contest.get('source'):
             missing_source += 1
             continue
-        encoded = json.dumps(contest, sort_keys=True)
+        encoded = json.dumps({k:v for k,v in contest.items() if k!='controls'}, sort_keys=True)
         copies[contest['source']][encoded] = contest
     repeated = len(contests)-missing_source-sum(len(v) for v in copies.values())
     conflicts = sum(len(v)>1 for v in copies.values())

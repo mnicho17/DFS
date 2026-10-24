@@ -48,6 +48,9 @@ def ensure_tables(conn):
         profile_id INTEGER PRIMARY KEY, cutoff TEXT NOT NULL, format TEXT NOT NULL,
         username_filter TEXT NOT NULL, version INTEGER NOT NULL, evidence_json TEXT NOT NULL,
         profile_json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)''',
+        '''CREATE TABLE IF NOT EXISTS opponent_construction_receipts (
+        contest_key TEXT PRIMARY KEY REFERENCES opponent_contests(contest_key) ON DELETE CASCADE,
+        version INTEGER NOT NULL, payload_json TEXT NOT NULL)''',
         'CREATE INDEX IF NOT EXISTS opponent_entries_user ON opponent_entries(user_key,contest_key)',
         'CREATE INDEX IF NOT EXISTS opponent_entries_identity ON opponent_entries(entry_id,contest_key)',
         'CREATE INDEX IF NOT EXISTS opponent_stats_user ON opponent_user_contest_stats(user_key,contest_key)',
@@ -90,6 +93,8 @@ def _metadata(slots, lookup):
 def _stage_report(path, report, key, success_basis, success_size, cancelled, progress):
     """Bounded normalized-row batches; this database is never user-visible."""
     lookup=_lookup(report['history_evidence']['players']);top=Counter()
+    from controlled_construction import Builder
+    controls=Builder(report['history_evidence']['players'],len(report['history_entries']),report['supplied_field_size']) if report['format']=='showdown' else None
     with closing(sqlite3.connect(path)) as stage,stage:
         stage.execute('CREATE TABLE entries(contest_key TEXT,entry_id TEXT PRIMARY KEY,user_key TEXT,rank INTEGER,points REAL,signature_json TEXT,metadata_complete INTEGER)')
         stage.execute('CREATE TABLE slots(contest_key TEXT,entry_id TEXT,ordinal INTEGER,role TEXT,original_label TEXT,player_id TEXT,player_name TEXT,position TEXT,team TEXT,salary INTEGER)')
@@ -101,6 +106,7 @@ def _stage_report(path, report, key, success_basis, success_size, cancelled, pro
             for entry in raw[offset:offset+1000]:
                 user='dk:'+entry['username_key'];metadata=_metadata(entry['slots'],lookup)
                 known=bool(metadata) and all(p for _,_,p in metadata)
+                if controls:controls.add(metadata,entry['rank'],bool(entry['signature']) and known)
                 entries.append((key,entry['entry_id'],user,entry['rank'],entry['points'],json.dumps(entry['signature']) if entry['signature'] else None,int(known)))
                 for ordinal,(label,role,p) in enumerate(metadata):
                     slots.append((key,entry['entry_id'],ordinal,role,label,*(p.get(f) if p else None for f in ('id','name','position','team','salary'))))
@@ -122,6 +128,12 @@ def _stage_report(path, report, key, success_basis, success_size, cancelled, pro
             stage.executemany('INSERT INTO stats VALUES(?,?,?,?,?,?,?)',stats)
             stage.commit()
         ai._check(cancelled)
+
+        if controls:
+            payload=controls.payload()
+            payload.update(source_hash=report['history_evidence']['result']['hash'],salary_hash=report['history_evidence']['salary']['hash'])
+            return payload
+        return None
 
 
 def _refresh_concentration_receipt(db_path,key,result,salary,cancelled):
@@ -150,6 +162,36 @@ def _refresh_concentration_receipt(db_path,key,result,salary,cancelled):
         ai._check(cancelled)
 
 
+def _refresh_controlled_receipt(db_path,key,result,salary,cancelled):
+    """One-time report backfill from normalized rows; no CSV reanalysis."""
+    from controlled_construction import TABLE,VERSION as CONTROL_VERSION,from_index
+    if salary['manifest'].get('format')!='showdown':return
+    with closing(_connect(db_path,True)) as conn:
+        conn.execute('BEGIN')
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE name=?",(TABLE,)).fetchone():
+            if conn.execute(f'SELECT 1 FROM {TABLE} WHERE contest_key=? AND version=?',(key,CONTROL_VERSION)).fetchone():return
+        row=conn.execute('SELECT audit_json,field_size FROM opponent_contests WHERE contest_key=? AND result_hash=? AND salary_hash=? AND version=?',
+                         (key,result['hash'],salary['hash'],VERSION)).fetchone()
+        if not row:return
+        audit=json.loads(row[0]);accepted=audit.get('accepted_entries')
+        conn.set_progress_handler(lambda:int(cancelled()),10000)
+        try:
+            payload=from_index(conn,key,salary['manifest']['players'],accepted,row[1],cancelled)
+            payload.update(source_hash=result['hash'],salary_hash=salary['hash'])
+        except sqlite3.OperationalError:ai._check(cancelled);raise
+        finally:conn.set_progress_handler(None,0)
+    ai._check(cancelled)
+    with closing(_connect(db_path)) as conn,conn:
+        conn.execute('BEGIN IMMEDIATE');ensure_tables(conn)
+        pair=conn.execute('SELECT salary_hash FROM analysis_salary_pairs WHERE result_hash=?',(result['hash'],)).fetchone()
+        current=conn.execute('SELECT audit_json,field_size FROM opponent_contests WHERE contest_key=? AND result_hash=? AND salary_hash=? AND version=?',
+                             (key,result['hash'],salary['hash'],VERSION)).fetchone()
+        if not pair or pair[0]!=salary['hash'] or current!=row:raise ValueError('Indexed source or salary association changed; controlled receipt was not saved.')
+        ai._verify(result,cancelled);ai._verify(salary,cancelled)
+        conn.execute(f'INSERT OR IGNORE INTO {TABLE} VALUES(?,?,?)',(key,CONTROL_VERSION,json.dumps(payload)))
+        ai._check(cancelled)
+
+
 def index_contest(db_path, result_hash, cancelled=lambda: False, progress=lambda text: None):
     # Refreshes re-verify immutable evidence, but need not rebuild unchanged rows.
     cached=None
@@ -171,6 +213,7 @@ def index_contest(db_path, result_hash, cancelled=lambda: False, progress=lambda
                     cached=dict(contest_key=old[0],entries=counts[0],users=counts[1],unchanged=True)
     if cached:
         _refresh_concentration_receipt(db_path,cached['contest_key'],result,salary,cancelled)
+        _refresh_controlled_receipt(db_path,cached['contest_key'],result,salary,cancelled)
         return cached
     report = analyze_saved_contest(db_path, result_hash, cancelled, progress, capture_entries=True)
     evidence = report['history_evidence']
@@ -194,7 +237,7 @@ def index_contest(db_path, result_hash, cancelled=lambda: False, progress=lambda
     # second in-memory copy of millions of roster slots.
     with tempfile.TemporaryDirectory(prefix='dfs-field-stage-') as directory:
         staged=Path(directory)/'prepared.sqlite'
-        _stage_report(staged,report,key,success_basis,success_size,cancelled,progress)
+        controlled=_stage_report(staged,report,key,success_basis,success_size,cancelled,progress)
         del report,evidence,entry_ids
         ai._check(cancelled);progress(f'Publishing verified contest: {count:,} entries, {user_count:,} users…')
         with closing(_connect(db_path)) as conn,conn:
@@ -215,6 +258,9 @@ def index_contest(db_path, result_hash, cancelled=lambda: False, progress=lambda
                 conn.execute('INSERT INTO opponent_users SELECT * FROM field_stage.users WHERE 1 ON CONFLICT(user_key) DO UPDATE SET username=excluded.username')
                 for target,table in (('opponent_entries','entries'),('opponent_entry_slots','slots'),('opponent_user_contest_stats','stats')):
                     conn.execute('INSERT INTO '+target+' SELECT * FROM field_stage.'+table)
+                if controlled is not None:
+                    from controlled_construction import TABLE,VERSION as CONTROL_VERSION
+                    conn.execute(f'INSERT INTO {TABLE} VALUES(?,?,?)',(key,CONTROL_VERSION,json.dumps(controlled)))
                 ai._verify(result,cancelled);ai._verify(salary,cancelled);ai._check(cancelled)
             except sqlite3.OperationalError:
                 ai._check(cancelled);raise
