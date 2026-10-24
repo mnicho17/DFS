@@ -1,0 +1,54 @@
+{
+  "baseline": "708aa1511859aa5edeb9b89fc92e386a9663e497",
+  "source_sha256": "477e7a8e7213d23dd59b5f50bc0ad0d6bae3a554a4b95f0f3c240ba771e9e8d6",
+  "basis": "Synthetic distinct-roster selection only; not full-build or real-slate timing",
+  "candidates": 600,
+  "requested": 100,
+  "scenarios": 500,
+  "field": 100,
+  "seed": 90210,
+  "trials": [
+    {
+      "trial": 0,
+      "mode": "before",
+      "seconds": 3.501864399993792,
+      "sha256": "13a9450048f841bd813cc46436a54f1a164027c102d390a086ad910a07ee5c4f"
+    },
+    {
+      "trial": 0,
+      "mode": "after",
+      "seconds": 2.8350106000434607,
+      "sha256": "13a9450048f841bd813cc46436a54f1a164027c102d390a086ad910a07ee5c4f"
+    },
+    {
+      "trial": 1,
+      "mode": "after",
+      "seconds": 3.062427300028503,
+      "sha256": "13a9450048f841bd813cc46436a54f1a164027c102d390a086ad910a07ee5c4f"
+    },
+    {
+      "trial": 1,
+      "mode": "before",
+      "seconds": 3.26610039989464,
+      "sha256": "13a9450048f841bd813cc46436a54f1a164027c102d390a086ad910a07ee5c4f"
+    },
+    {
+      "trial": 2,
+      "mode": "before",
+      "seconds": 3.6351584000512958,
+      "sha256": "13a9450048f841bd813cc46436a54f1a164027c102d390a086ad910a07ee5c4f"
+    },
+    {
+      "trial": 2,
+      "mode": "after",
+      "seconds": 3.2971414000494406,
+      "sha256": "13a9450048f841bd813cc46436a54f1a164027c102d390a086ad910a07ee5c4f"
+    }
+  ],
+  "exact_order_and_report_equal": true,
+  "median_seconds": {
+    "before": 3.501864399993792,
+    "after": 3.062427300028503
+  },
+  "limitations": "Selection-only timing; no refinement, generation or simulation included. Structured report listings are normalized and derived display text/timing excluded from parity hashes. Synthetic fixtures and local hardware/load; no model quality claim."
+}
