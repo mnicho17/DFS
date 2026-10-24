@@ -1,0 +1,248 @@
+{
+  "baseline": "ae1698e00681f102299897f9cb6baddcb21cc160",
+  "source_sha256": "89dee008cdd86e5805144521f655e9b71fa13ed1f808aaeb32bc50462a06c6f3",
+  "basis": "Synthetic distinct-roster selection only; not full-build or real-slate timing",
+  "workloads": [
+    {
+      "scenarios": 100,
+      "candidates": 600,
+      "requested": 20,
+      "trials": [
+        {
+          "scenarios": 100,
+          "requested": 20,
+          "trial": 0,
+          "mode": "before",
+          "seconds": 0.3011840999824926,
+          "sha256": "e64b6d61b9176645572ace9a77d50d748f2c3823d44264c2ab974d7732d3fa56"
+        },
+        {
+          "scenarios": 100,
+          "requested": 20,
+          "trial": 0,
+          "mode": "after",
+          "seconds": 0.2650409999769181,
+          "sha256": "e64b6d61b9176645572ace9a77d50d748f2c3823d44264c2ab974d7732d3fa56"
+        },
+        {
+          "scenarios": 100,
+          "requested": 20,
+          "trial": 1,
+          "mode": "after",
+          "seconds": 0.31511179998051375,
+          "sha256": "e64b6d61b9176645572ace9a77d50d748f2c3823d44264c2ab974d7732d3fa56"
+        },
+        {
+          "scenarios": 100,
+          "requested": 20,
+          "trial": 1,
+          "mode": "before",
+          "seconds": 0.3353353999555111,
+          "sha256": "e64b6d61b9176645572ace9a77d50d748f2c3823d44264c2ab974d7732d3fa56"
+        },
+        {
+          "scenarios": 100,
+          "requested": 20,
+          "trial": 2,
+          "mode": "before",
+          "seconds": 0.3108442999655381,
+          "sha256": "e64b6d61b9176645572ace9a77d50d748f2c3823d44264c2ab974d7732d3fa56"
+        },
+        {
+          "scenarios": 100,
+          "requested": 20,
+          "trial": 2,
+          "mode": "after",
+          "seconds": 0.2991537000052631,
+          "sha256": "e64b6d61b9176645572ace9a77d50d748f2c3823d44264c2ab974d7732d3fa56"
+        }
+      ],
+      "exact_order_and_report_equal": true,
+      "median_seconds": {
+        "before": 0.3108442999655381,
+        "after": 0.2991537000052631
+      }
+    },
+    {
+      "scenarios": 100,
+      "candidates": 600,
+      "requested": 150,
+      "trials": [
+        {
+          "scenarios": 100,
+          "requested": 150,
+          "trial": 0,
+          "mode": "before",
+          "seconds": 1.9054263000143692,
+          "sha256": "6c011d24461a660334a2bb13eac618a884221ea4be69f129fa0b6b36b1a0632a"
+        },
+        {
+          "scenarios": 100,
+          "requested": 150,
+          "trial": 0,
+          "mode": "after",
+          "seconds": 1.674411499989219,
+          "sha256": "6c011d24461a660334a2bb13eac618a884221ea4be69f129fa0b6b36b1a0632a"
+        },
+        {
+          "scenarios": 100,
+          "requested": 150,
+          "trial": 1,
+          "mode": "after",
+          "seconds": 1.5863970000064,
+          "sha256": "6c011d24461a660334a2bb13eac618a884221ea4be69f129fa0b6b36b1a0632a"
+        },
+        {
+          "scenarios": 100,
+          "requested": 150,
+          "trial": 1,
+          "mode": "before",
+          "seconds": 1.804242999991402,
+          "sha256": "6c011d24461a660334a2bb13eac618a884221ea4be69f129fa0b6b36b1a0632a"
+        },
+        {
+          "scenarios": 100,
+          "requested": 150,
+          "trial": 2,
+          "mode": "before",
+          "seconds": 1.7284780000336468,
+          "sha256": "6c011d24461a660334a2bb13eac618a884221ea4be69f129fa0b6b36b1a0632a"
+        },
+        {
+          "scenarios": 100,
+          "requested": 150,
+          "trial": 2,
+          "mode": "after",
+          "seconds": 1.581967799924314,
+          "sha256": "6c011d24461a660334a2bb13eac618a884221ea4be69f129fa0b6b36b1a0632a"
+        }
+      ],
+      "exact_order_and_report_equal": true,
+      "median_seconds": {
+        "before": 1.804242999991402,
+        "after": 1.5863970000064
+      }
+    },
+    {
+      "scenarios": 500,
+      "candidates": 600,
+      "requested": 20,
+      "trials": [
+        {
+          "scenarios": 500,
+          "requested": 20,
+          "trial": 0,
+          "mode": "before",
+          "seconds": 0.6941901999525726,
+          "sha256": "49af72f2125e111aa675ee84479c119553d91e7e5dc33ad1f0a1f9a169990abd"
+        },
+        {
+          "scenarios": 500,
+          "requested": 20,
+          "trial": 0,
+          "mode": "after",
+          "seconds": 0.6059792999876663,
+          "sha256": "49af72f2125e111aa675ee84479c119553d91e7e5dc33ad1f0a1f9a169990abd"
+        },
+        {
+          "scenarios": 500,
+          "requested": 20,
+          "trial": 1,
+          "mode": "after",
+          "seconds": 0.5850992000196129,
+          "sha256": "49af72f2125e111aa675ee84479c119553d91e7e5dc33ad1f0a1f9a169990abd"
+        },
+        {
+          "scenarios": 500,
+          "requested": 20,
+          "trial": 1,
+          "mode": "before",
+          "seconds": 0.7006740000797436,
+          "sha256": "49af72f2125e111aa675ee84479c119553d91e7e5dc33ad1f0a1f9a169990abd"
+        },
+        {
+          "scenarios": 500,
+          "requested": 20,
+          "trial": 2,
+          "mode": "before",
+          "seconds": 0.6976969999959692,
+          "sha256": "49af72f2125e111aa675ee84479c119553d91e7e5dc33ad1f0a1f9a169990abd"
+        },
+        {
+          "scenarios": 500,
+          "requested": 20,
+          "trial": 2,
+          "mode": "after",
+          "seconds": 0.6172166001051664,
+          "sha256": "49af72f2125e111aa675ee84479c119553d91e7e5dc33ad1f0a1f9a169990abd"
+        }
+      ],
+      "exact_order_and_report_equal": true,
+      "median_seconds": {
+        "before": 0.6976969999959692,
+        "after": 0.6059792999876663
+      }
+    },
+    {
+      "scenarios": 500,
+      "candidates": 600,
+      "requested": 150,
+      "trials": [
+        {
+          "scenarios": 500,
+          "requested": 150,
+          "trial": 0,
+          "mode": "before",
+          "seconds": 3.960479899891652,
+          "sha256": "480a22af00730e7fad8caf6f6db93640d9142d6ae50afefa68c1987836aacd26"
+        },
+        {
+          "scenarios": 500,
+          "requested": 150,
+          "trial": 0,
+          "mode": "after",
+          "seconds": 3.2823685000184923,
+          "sha256": "480a22af00730e7fad8caf6f6db93640d9142d6ae50afefa68c1987836aacd26"
+        },
+        {
+          "scenarios": 500,
+          "requested": 150,
+          "trial": 1,
+          "mode": "after",
+          "seconds": 3.570103400037624,
+          "sha256": "480a22af00730e7fad8caf6f6db93640d9142d6ae50afefa68c1987836aacd26"
+        },
+        {
+          "scenarios": 500,
+          "requested": 150,
+          "trial": 1,
+          "mode": "before",
+          "seconds": 3.94237480009906,
+          "sha256": "480a22af00730e7fad8caf6f6db93640d9142d6ae50afefa68c1987836aacd26"
+        },
+        {
+          "scenarios": 500,
+          "requested": 150,
+          "trial": 2,
+          "mode": "before",
+          "seconds": 3.9953745000530034,
+          "sha256": "480a22af00730e7fad8caf6f6db93640d9142d6ae50afefa68c1987836aacd26"
+        },
+        {
+          "scenarios": 500,
+          "requested": 150,
+          "trial": 2,
+          "mode": "after",
+          "seconds": 3.268952599959448,
+          "sha256": "480a22af00730e7fad8caf6f6db93640d9142d6ae50afefa68c1987836aacd26"
+        }
+      ],
+      "exact_order_and_report_equal": true,
+      "median_seconds": {
+        "before": 3.960479899891652,
+        "after": 3.2823685000184923
+      }
+    }
+  ],
+  "limitations": "Three alternating trials per workload; timed selection only, no refinement. Structured report listing order normalized; derived text and timing excluded. Local hardware/load affect timings. No quality claim."
+}
