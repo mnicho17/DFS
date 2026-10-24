@@ -130,6 +130,9 @@ class CombinedImportWorker(QtCore.QObject):
                     result['report'] = generate_learning_report(username=self.username, db_path=self.db_path)
                 except Exception as exc:
                     result['errors'].append('Files saved; Refresh Report can retry: ' + str(exc))
+            result['cancelled'] = bool(result.get('cancelled') or self.cancelled.is_set())
+            if result['cancelled']:
+                result.pop('report', None)
             # Duplicate sources do not rerun personal forecast analysis.
             if checkpoint is not None:
                 try:
