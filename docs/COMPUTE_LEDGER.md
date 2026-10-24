@@ -132,3 +132,12 @@ external benchmark memory metric differs from the ledger's sampled memory.
 The disabled path retains inexpensive integer counters and decorator dispatch.
 Results and final validation counts are recorded in the review PR and benchmark
 report; timings are observations, not an improvement claim.
+
+
+## Candidate metric execution
+
+Showdown candidate updates now resolve scenario-wide rank thresholds once and
+update the original hit sets directly. Metric formulas, samples and selection
+policy stay unchanged. See [candidate metric measurements](SHOWDOWN_CANDIDATE_METRICS.md)
+for exact baseline regression coverage, benchmark scope and reproducible commands.
+This is a measured execution improvement, not adaptive budget allocation.
