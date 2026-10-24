@@ -301,6 +301,7 @@ def capture(db_path,selection,*,history_root=None,cancelled=lambda:False,progres
             actual['conflict_source_hashes']=compared
             if (data.get('actual_score_evidence') or {}).get('cross_contest_conflicts'):blockers.append('cross_contest_actual_score_conflict')
         observed=observed_entries(rows,pool,kind,cancelled)
+        explanation=dict(archive=dict(status='not_requested'));archive=None;matches=[]
         restricted=dict(rules=restrictions(),provenance=None,label='Snapshot-local restricted optimum')
         requested=bool(selection.get('snapshot_digest') or selection.get('archive_id'))
         gate=dict(status='not_requested' if not requested else 'unavailable_evidence',blockers=[])
@@ -311,7 +312,6 @@ def capture(db_path,selection,*,history_root=None,cancelled=lambda:False,progres
             elif data.get('snapshot_resolution') and data['snapshot_resolution']['snapshot_digest']!=selection.get('snapshot_digest'):
                 gate['blockers']=['saved_snapshot_resolution_preserved']
             else:
-                archive=None
                 if selection.get('archive_id'):
                     archive=next((a for a in data['build_evidence'] if a['archive_id']==selection['archive_id']),None)
                     matches=reader.archives.get(selection['archive_id'],[])
@@ -327,13 +327,21 @@ def capture(db_path,selection,*,history_root=None,cancelled=lambda:False,progres
                 if archive:restricted['label']='Selected generated-build/snapshot comparison; submission not established'
                 if not gate['blockers']:
                     gate=dict(status='unsupported_rules' if restricted['rules']['blockers'] else 'ready',blockers=restricted['rules']['blockers'])
+        if selection.get('archive_id'):
+            explanation['archive']=dict(status='unavailable_evidence',reason='qualified_exact_archive_and_salary_required')
+            if not blockers and gate['status'] in ('ready','unsupported_rules') and archive:
+                from build_explanations import archive_receipt
+                try:
+                    explanation['archive']=archive_receipt(matches,chosen,pool,kind,cancelled)
+                except (ValueError,TypeError,KeyError):
+                    explanation['archive']=dict(status='unavailable_evidence',reason='invalid_exact_archive_occurrences')
         blockers=sorted(set(blockers))
         if blockers and requested:gate=dict(status='unavailable_evidence',blockers=blockers+gate['blockers'])
         progress('Revalidating immutable capture receipts and inventories')
         reader.revalidate();check(cancelled)
         return Frozen.freeze(dict(version=1,format=kind,pool=pool,rules=RULES,rules_digest=be.digest(RULES),scale=SCALE,
             universe_digest=be.digest(pool),gates=dict(supplied=dict(status='unavailable_evidence' if blockers else 'ready',blockers=blockers),snapshot=gate),
-            restricted=restricted,observed=observed,actual_coverage=actual,
+            restricted=restricted,observed=observed,actual_coverage=actual,build_explanation_evidence=explanation,
             salary_coverage=dict(source_hash=salary.get('revision_hash'),rows_read=actual['role_rows'],
                 rows_expected=len(by_hash.get(salary.get('revision_hash'),{}).get('manifest',{}).get('players',[])),athletes=len(pool)),
             contest_pool_completeness=dict(status='unverified',reason='No independent archived original-platform membership evidence exists'),

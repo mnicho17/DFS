@@ -68,6 +68,7 @@ class HindsightWidget(QtWidgets.QWidget):
         self.lineups=QtWidgets.QTableWidget();self.lineups.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         inner.addWidget(self.overview,1);inner.addWidget(self.lineups,1);self.tabs.addTab(overview,'Scores and witnesses')
         self.evidence=QtWidgets.QPlainTextEdit();self.evidence.setReadOnly(True);self.tabs.addTab(self.evidence,'Evidence and rules')
+        self.explanation=QtWidgets.QPlainTextEdit();self.explanation.setReadOnly(True);self.tabs.addTab(self.explanation,'Build explanation')
         row=QtWidgets.QHBoxLayout();self.private=QtWidgets.QCheckBox('Include player names and roster witnesses (private)')
         self.copy_button=QtWidgets.QPushButton('Copy Summary');self.copy_button.setEnabled(False)
         row.addWidget(self.private);row.addWidget(self.copy_button);layout.addLayout(row)
@@ -146,6 +147,8 @@ class HindsightWidget(QtWidgets.QWidget):
             f"Highest reported tie: {o['highest_tied_entries']} entries, {o['highest_tied_unique_valid_rosters']} distinct validated roster witnesses.",
             f"Highest reported total exactly reconstructed: {o['highest_exact_validated']}.",
             'Score/scope discrepancies: '+(', '.join(gaps['issues']) if gaps['issues'] else 'None detected.')]
+        from build_explanations import lines as explanation_lines
+        self.explanation.setPlainText('\n'.join(explanation_lines(d.get('build_explanation'),c['pool'],True)))
         self.overview.setPlainText('\n\n'.join(text));rows=[]
         for scope in ('supplied','snapshot'):
             for r in d['scopes'][scope]['lineups']:rows.append([scope,float(r['points']),r['salary'],
