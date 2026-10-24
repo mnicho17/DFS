@@ -258,20 +258,27 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         outcomes, ranked = replay.frame(scenario, compute_frame, scripts)
         profile.scenario_io_seconds+=max(0,time.perf_counter()-access_started-(profile.outcomes_seconds+profile.opponents_seconds-before))
         candidate_started=time.perf_counter()
-        top1, top5, cash, bust = [ranked[int(q * (len(ranked) - 1))] for q in (0.99, 0.95, 0.8, 0.4)]
+        # These thresholds are shared by every candidate in this scenario.
+        field_count = len(ranked)
+        top1, top5, cash, bust = [ranked[int(q * (field_count - 1))] for q in (0.99, 0.95, 0.8, 0.4)]
+        top2 = ranked[int(.98 * (field_count - 1))]
+        winner = ranked[-1]
         for i, lineup in enumerate(candidates):
             score = (_score_compiled_roster(compiled_candidates[i], outcomes)
                      if compiled_candidates is not None else showdown_score(lineup, outcomes))
             scores[i].append(score)
-            pct = bisect.bisect_right(ranked, score) / len(ranked)
+            pct = bisect.bisect_right(ranked, score) / field_count
             sums[i] += pct
-            for group, threshold in zip(hits, (top1, top5, ranked[-1])):
-                if score >= threshold:
-                    group[i].add(scenario)
-            top_twos[i] += score >= ranked[int(.98 * (len(ranked) - 1))]
+            if score >= top1:
+                hits[0][i].add(scenario)
+            if score >= top5:
+                hits[1][i].add(scenario)
+            if score >= winner:
+                hits[2][i].add(scenario)
+            top_twos[i] += score >= top2
             cashes[i] += score >= cash if not payout_profile else 0
             busts[i] += score < bust
-            value = 16.0 if score >= ranked[-1] else 6.0 + (pct - .99) * 200 if score >= top1 else 1.5 + (pct - .95) * 75 if score >= top5 else .2 if score >= cash else -1.0
+            value = 16.0 if score >= winner else 6.0 + (pct - .99) * 200 if score >= top1 else 1.5 + (pct - .95) * 75 if score >= top5 else .2 if score >= cash else -1.0
             if payout_profile:
                 payout = sampled_payout(ranked, score, payout_profile)
                 payout_sums[i] += payout

@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "basis": "Synthetic metric-loop load test with repeated legal fixture rosters; not candidate quality or whole-build evidence",
+  "baseline": "08a44adec231bec4c2a9166872e50d65fc50b856",
+  "source_sha256": "b998b6b2898d7f0290b132285425d123bf8ea68ec8703e745a3b2638fb575473",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "scenarios": 1000,
+  "candidates": 2000,
+  "distinct_fixture_rosters": 50,
+  "field": 100,
+  "seed": 90210,
+  "repeats": 3,
+  "exact_results_equal": true,
+  "production_data_untouched": true,
+  "trials": [
+    {
+      "trial": 0,
+      "mode": "before",
+      "seconds": 6.421965199988335,
+      "sha256": "467f268c4371dfd71b96bc1948606b803136da83df74b50765094503490e503f",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.0735124999191612,
+          "cache_lookup_seconds": 0.0005603000754490495,
+          "outcomes_seconds": 1.1213847999460995,
+          "opponents_seconds": 0.08608000038657337,
+          "scenario_io_seconds": 0.0038763987831771374,
+          "candidates_seconds": 4.699269302422181,
+          "cache_finish_seconds": 1.9900035113096237e-05,
+          "result_assembly_seconds": 0.2839506999589503,
+          "other_seconds": 0.002402798389084637,
+          "total_seconds": 6.271056699915789
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 2000,
+        "field_count": 100,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 0,
+      "mode": "after",
+      "seconds": 5.433603000012226,
+      "sha256": "467f268c4371dfd71b96bc1948606b803136da83df74b50765094503490e503f",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.06797930004540831,
+          "cache_lookup_seconds": 0.0005929999751970172,
+          "outcomes_seconds": 1.071245998609811,
+          "opponents_seconds": 0.0831255983794108,
+          "scenario_io_seconds": 0.003461002022959292,
+          "candidates_seconds": 3.752713000285439,
+          "cache_finish_seconds": 1.2899981811642647e-05,
+          "result_assembly_seconds": 0.29606299998704344,
+          "other_seconds": 0.002359400736168027,
+          "total_seconds": 5.277553200023249
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 2000,
+        "field_count": 100,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "after",
+      "seconds": 5.509142099996097,
+      "sha256": "467f268c4371dfd71b96bc1948606b803136da83df74b50765094503490e503f",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.07019420003052801,
+          "cache_lookup_seconds": 0.0005906999576836824,
+          "outcomes_seconds": 1.1005915988935158,
+          "opponents_seconds": 0.08427250012755394,
+          "scenario_io_seconds": 0.00358189910184592,
+          "candidates_seconds": 3.8004974995274097,
+          "cache_finish_seconds": 1.3499986380338669e-05,
+          "result_assembly_seconds": 0.2905583999818191,
+          "other_seconds": 0.002310502459295094,
+          "total_seconds": 5.3526108000660315
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 2000,
+        "field_count": 100,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "before",
+      "seconds": 6.478439799975604,
+      "sha256": "467f268c4371dfd71b96bc1948606b803136da83df74b50765094503490e503f",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.10120910010300577,
+          "cache_lookup_seconds": 0.0006974000716581941,
+          "outcomes_seconds": 1.1087302018422633,
+          "opponents_seconds": 0.08605189912486821,
+          "scenario_io_seconds": 0.0036129006184637547,
+          "candidates_seconds": 4.725915298331529,
+          "cache_finish_seconds": 1.2600095942616463e-05,
+          "result_assembly_seconds": 0.2873917000833899,
+          "other_seconds": 0.0023442998062819242,
+          "total_seconds": 6.315965400077403
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 2000,
+        "field_count": 100,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "before",
+      "seconds": 6.55782970006112,
+      "sha256": "467f268c4371dfd71b96bc1948606b803136da83df74b50765094503490e503f",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.06851870007812977,
+          "cache_lookup_seconds": 0.0010062999790534377,
+          "outcomes_seconds": 1.1334497010102496,
+          "opponents_seconds": 0.08760069764684886,
+          "scenario_io_seconds": 0.003738700062967837,
+          "candidates_seconds": 4.825497599202208,
+          "cache_finish_seconds": 9.199953638017178e-06,
+          "result_assembly_seconds": 0.28006969997659326,
+          "other_seconds": 0.0022936020977795124,
+          "total_seconds": 6.4021842000074685
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 2000,
+        "field_count": 100,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "after",
+      "seconds": 5.548240500036627,
+      "sha256": "467f268c4371dfd71b96bc1948606b803136da83df74b50765094503490e503f",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.07811779994517565,
+          "cache_lookup_seconds": 0.000582600012421608,
+          "outcomes_seconds": 1.1037404977250844,
+          "opponents_seconds": 0.08562010223977268,
+          "scenario_io_seconds": 0.0037642973475158215,
+          "candidates_seconds": 3.83602500136476,
+          "cache_finish_seconds": 1.0199961252510548e-05,
+          "result_assembly_seconds": 0.2777228000340983,
+          "other_seconds": 0.002378601348027587,
+          "total_seconds": 5.387961899978109
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 2000,
+        "field_count": 100,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    }
+  ],
+  "median_seconds": {
+    "before": 6.478439799975604,
+    "after": 5.509142099996097
+  },
+  "median_candidate_seconds": {
+    "before": 4.725915298331529,
+    "after": 3.8004974995274097
+  },
+  "limitations": "Alternating before/after order, uncached simulation, synthetic fallback ownership and local hardware/load. Setup/scoring/result assembly included; generation, portfolio selection and independent audit excluded. Baseline file executes against shared current dependencies; this isolates the metric-loop execution change, not a complete historical checkout."
+}
