@@ -173,7 +173,9 @@ def calculate(capture, *, seconds=DEFAULT_SECONDS,tie_limit=DEFAULT_TIES,cancell
         if d['observed'].get('highest_exact_validated'):
             delta=a['score_units']-d['observed']['highest_units']
             if delta>=0:gaps['observed_units']=delta
-    return Frozen.freeze(dict(version=1,capture=d,scopes=scopes,gaps=gaps,cancelled=bool(cancelled()),
+    from build_explanations import explain
+    review=explain(d,scopes,cancelled) if not cancelled() else None
+    return Frozen.freeze(dict(version=1,capture=d,scopes=scopes,gaps=gaps,cancelled=bool(cancelled()),build_explanation=review,
         timing=dict(seconds=time.perf_counter()-started,budget_seconds=seconds,tie_limit=tie_limit),
         numerical_policy=dict(scale=SCALE,base_decimal_places=4,max_absolute_base=10000,zero_gaps=True),scope=SCOPE))
 
@@ -193,6 +195,8 @@ def summary(report,private=False):
             names={p['key']:p['name'] for p in c['pool']}
             for row in r['lineups']:
                 lines.append(' | '.join(s['role']+' '+names[s['key']] for s in row['roster']))
-    lines+=['No pipeline-stage explanation, prediction, payout, submission or live-strategy inference.',
+    from build_explanations import lines as explanation_lines
+    lines+=explanation_lines(d.get('build_explanation'),c['pool'],private)
+    lines+=['No inferred pipeline rejection stage, prediction, payout, submission or live-strategy inference.',
             'Portfolio percentages, uniqueness, retained rows and effective recovery policies are not evaluated here.']
     return '\n'.join(lines)

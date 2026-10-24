@@ -1696,7 +1696,7 @@ Neither section identifies an original or submitted build.
 Downstream labels describe evidence prerequisites and require fresh verification.
 Portfolio Risk is available in its separate tab. Hindsight (RL-07A) independently
 requalifies exact salary/actual evidence; the legacy full-ladder prerequisite above
-is not solver readiness. RL-07B generation explanation remains future work. Missing
+is not solver readiness. RL-07B provides recorded local checks and exact generated-output membership; full pipeline-stage tracing remains future work. Missing
 actual scores can block hindsight while leaving generated-portfolio evidence
 available for risk review. Generated archives never identify the submitted
 build, and alone do not establish compute phase timings. Unknown evidence stays
@@ -1869,8 +1869,12 @@ frozen; later disk changes require another capture.
 **Copy Summary** is aggregate-only by default. Explicit private detail adds names
 and roster witnesses. No report file, live pool, saved bank, submission export,
 candidate library or learning update is created. This feature provides no payout,
-prediction or strategy advice. **RL-07B generation explanation is unimplemented**:
-an optimum does not explain where a lineup disappeared from generation or selection.
+prediction or strategy advice. **Build explanation (RL-07B first slice)** checks returned witness examples against
+supported frozen local rules and shows exact presence/absence and occurrence counts
+in an explicitly selected qualified generated archive. Default copies remain aggregate;
+private detail includes names and conflicts. Missing/unsupported evidence is unavailable.
+An absent output does not establish a generation, screening, validation or selection
+rejection reason; full pipeline-stage tracing remains unimplemented.
 See [Hindsight Solver](HINDSIGHT_SOLVER.md) for evidence, numerical and resource limits.
 
 ## Results plus username: automatic snapshot comparisons

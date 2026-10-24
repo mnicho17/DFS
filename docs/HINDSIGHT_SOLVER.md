@@ -1,9 +1,9 @@
 # Hindsight Solver (RL-07A)
 
 Results & Learning > Hindsight provides two actual-point benchmarks and a separate
-observed-entry summary. It is read-only and retrospective. RL-07B generation
-explanation remains unimplemented: this feature cannot explain which pipeline
-stage excluded a lineup or what was predictable before kickoff.
+observed-entry summary. It is read-only and retrospective. The first RL-07B slice adds recorded snapshot checks and exact generated-output
+membership for returned witnesses. Full pipeline-stage rejection tracing remains
+unimplemented; this feature cannot establish what was predictable before kickoff.
 
 ## Scope and independent evidence gates
 
@@ -200,3 +200,37 @@ and [Showdown overview](https://support.draftkings.com/dk/en-us/game-style-showd
 These pages do not prove private historical pool membership or rules. The
 [PuLP migration guide](https://coin-or.github.io/pulp/guides/how_to_migrate_to_v4.html)
 explains the 3.x status distinction; this slice retains `PuLP>=3.2,<4`.
+
+## Recorded build explanation (RL-07B first slice)
+
+The **Build explanation** tab reuses the same frozen capture and completed solver
+report. For each returned supplied-pool optimum, snapshot-local optimum and distinct
+highest-reported roster witness, it checks supported recorded local restrictions
+and, when explicitly selected, exact membership in a freshly qualified generated
+archive. Witness examples are limited by the existing tie/display bounds; they do
+not enumerate every optimal roster or every observed entry.
+
+Local checks list all applicable conflicts: recorded salary cap, required/excluded
+athletes with exact Captain/FLEX scope, and supported required/never-together groups.
+A pass covers these supported snapshot rules only. Unsupported or missing rules
+stay unavailable; portfolio percentages, retained entries, uniqueness, recovery and
+unrecorded production filters are not reconstructed.
+
+Archive membership validates every saved occurrence against the exact qualified
+snapshot and supplied historical salary identities, preserving Captain assignment
+and repeated outputs. Classic equivalent legal FLEX assignments match the same
+athlete set. Conflicting archive copies, contradictory explicit IDs, a different
+snapshot revision, invalid rosters or unavailable qualification withhold membership.
+These extra checks do not weaken or replace any existing RL-05A/RL-07A gate and do
+not disable an otherwise valid actual-point benchmark.
+
+**Absent from generated outputs does not identify a rejection stage.** Candidate
+generation, screening, independent validation and portfolio-selection decisions
+remain explicitly not recorded per witness. Presence proves only inclusion in the
+selected saved generated outputs; submission is unestablished. No current inputs,
+new candidate generation, SIM, learning, CSV rescans, database writes or new worker
+are used for explanation. Existing cancellation and final byte revalidation apply.
+
+Default Copy Summary includes aggregate check/membership counts and limitations.
+The existing private checkbox adds roster names and detailed local conflicts.
+Older frozen reports remain readable with explanations marked unavailable.
