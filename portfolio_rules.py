@@ -683,7 +683,11 @@ def select_portfolio(
             values = meta["scenario_values"]
 
             if values:
-                total_value = sum(max(0.0, float(value)) for value in values.values())
+                # This copied candidate evidence stays fixed during selection.
+                # Compute lazily so unused evidence keeps its original handling.
+                if "total_scenario_value" not in meta:
+                    meta["total_scenario_value"] = sum(max(0.0, float(value)) for value in values.values())
+                total_value = meta["total_scenario_value"]
                 value_ratio = sum(
                     max(0.0, float(value)) / (1.0 + sim_value_counts[scenario])
                     for scenario, value in values.items()
