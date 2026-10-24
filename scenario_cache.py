@@ -135,8 +135,11 @@ class ScenarioReplay:
             raise ValueError('Cached player or field coverage mismatch')
         if any(not isinstance(v, (int,float)) or not math.isfinite(v) for v in outcomes.values()):
             raise ValueError('Invalid cached player score')
-        if any(not math.isfinite(v) for v in ranked) or any(a>b for a,b in zip(ranked,ranked[1:])):
-            raise ValueError('Invalid cached opponent scores')
+        previous = -math.inf
+        for value in ranked:
+            if not math.isfinite(value) or value < previous:
+                raise ValueError('Invalid cached opponent scores')
+            previous = value
         if not isinstance(scripts,dict) or any(not isinstance(v,int) or v<0 for v in scripts.values()):
             raise ValueError('Invalid cached script counts')
         return outcomes, ranked, scripts
