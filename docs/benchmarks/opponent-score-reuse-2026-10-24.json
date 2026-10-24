@@ -1,0 +1,562 @@
+{
+  "basis": "Synthetic full simulation comparison, original compiled opponent scoring versus exact ordered-roster reuse; no whole-build or real-slate speedup claim",
+  "scenarios": 1000,
+  "field": 5000,
+  "candidates": 50,
+  "seed": 90210,
+  "alternating_order": true,
+  "exact_results_equal": true,
+  "production_data_untouched": true,
+  "median_seconds": {
+    "before": {
+      "uncached": 8.989785999991,
+      "cold": 10.402401200029999,
+      "warm": 5.161420100019313
+    },
+    "after": {
+      "uncached": 8.34400529996492,
+      "cold": 9.565148699912243,
+      "warm": 5.087065499974415
+    }
+  },
+  "trials": [
+    {
+      "trial": 0,
+      "mode": "before",
+      "cache_mode": "uncached",
+      "seconds": 8.987267799908295,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.485047099995427,
+          "cache_lookup_seconds": 0.03274649998638779,
+          "outcomes_seconds": 1.1443149015540257,
+          "opponents_seconds": 4.94893930060789,
+          "scenario_io_seconds": 0.05542560131289065,
+          "candidates_seconds": 0.14830459910444915,
+          "cache_finish_seconds": 1.550000160932541e-05,
+          "result_assembly_seconds": 0.15264179999940097,
+          "other_seconds": 0.017215697444044054,
+          "total_seconds": 8.984651000006124
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 0,
+      "mode": "before",
+      "cache_mode": "cold",
+      "seconds": 10.356624300009571,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.5255504999076948,
+          "cache_lookup_seconds": 0.1164953000843525,
+          "outcomes_seconds": 1.1206284994259477,
+          "opponents_seconds": 4.865207100054249,
+          "scenario_io_seconds": 1.3938634995138273,
+          "candidates_seconds": 0.15200300014112145,
+          "cache_finish_seconds": 0.02411640004720539,
+          "result_assembly_seconds": 0.1390051000053063,
+          "other_seconds": 0.01683570072054863,
+          "total_seconds": 10.353705099900253
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "saved"
+      }
+    },
+    {
+      "trial": 0,
+      "mode": "before",
+      "cache_mode": "warm",
+      "seconds": 5.189762800000608,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.491646599955857,
+          "cache_lookup_seconds": 1.321616300032474,
+          "outcomes_seconds": 0,
+          "opponents_seconds": 0,
+          "scenario_io_seconds": 1.0724007007665932,
+          "candidates_seconds": 0.13845269905868918,
+          "cache_finish_seconds": 0.005893700057640672,
+          "result_assembly_seconds": 0.14323449996300042,
+          "other_seconds": 0.014190700137987733,
+          "total_seconds": 5.187435199972242
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 1000,
+        "cache_status": "reused"
+      }
+    },
+    {
+      "trial": 0,
+      "mode": "after",
+      "cache_mode": "uncached",
+      "seconds": 8.121904999949038,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.5718577000079677,
+          "cache_lookup_seconds": 0.03427429997827858,
+          "outcomes_seconds": 1.1068001015810296,
+          "opponents_seconds": 4.029302801354788,
+          "scenario_io_seconds": 0.07205729919951409,
+          "candidates_seconds": 0.14527249871753156,
+          "cache_finish_seconds": 4.640000406652689e-05,
+          "result_assembly_seconds": 0.1432629000628367,
+          "other_seconds": 0.016348199103958905,
+          "total_seconds": 8.119222200009972
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 0,
+      "mode": "after",
+      "cache_mode": "cold",
+      "seconds": 9.583147200057283,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.5450870000058785,
+          "cache_lookup_seconds": 0.11562779999803752,
+          "outcomes_seconds": 1.1166677010478452,
+          "opponents_seconds": 4.075918199378066,
+          "scenario_io_seconds": 1.3838047987082973,
+          "candidates_seconds": 0.15000479924492538,
+          "cache_finish_seconds": 0.02452970005106181,
+          "result_assembly_seconds": 0.15127110003959388,
+          "other_seconds": 0.017465101554989815,
+          "total_seconds": 9.580376200028695
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "saved"
+      }
+    },
+    {
+      "trial": 0,
+      "mode": "after",
+      "cache_mode": "warm",
+      "seconds": 5.214164100005291,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.6410123000387102,
+          "cache_lookup_seconds": 1.2048104000277817,
+          "outcomes_seconds": 0,
+          "opponents_seconds": 0,
+          "scenario_io_seconds": 1.0647057992173359,
+          "candidates_seconds": 0.13968400296289474,
+          "cache_finish_seconds": 0.005463199922814965,
+          "result_assembly_seconds": 0.1417607000330463,
+          "other_seconds": 0.014043297851458192,
+          "total_seconds": 5.211479700054042
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 1000,
+        "cache_status": "reused"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "after",
+      "cache_mode": "uncached",
+      "seconds": 8.34400529996492,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.671680000028573,
+          "cache_lookup_seconds": 0.03176380007062107,
+          "outcomes_seconds": 1.1173330987803638,
+          "opponents_seconds": 4.141309799742885,
+          "scenario_io_seconds": 0.06686310097575188,
+          "candidates_seconds": 0.14908819796983153,
+          "cache_finish_seconds": 9.399955160915852e-06,
+          "result_assembly_seconds": 0.14633160002995282,
+          "other_seconds": 0.016829202533699572,
+          "total_seconds": 8.34120820008684
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "after",
+      "cache_mode": "cold",
+      "seconds": 9.565148699912243,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.477176700020209,
+          "cache_lookup_seconds": 0.11373240000102669,
+          "outcomes_seconds": 1.1395863987272605,
+          "opponents_seconds": 4.123851803247817,
+          "scenario_io_seconds": 1.371559297433123,
+          "candidates_seconds": 0.15212149953003973,
+          "cache_finish_seconds": 0.025852999999187887,
+          "result_assembly_seconds": 0.14178169996012002,
+          "other_seconds": 0.01690290099941194,
+          "total_seconds": 9.562565699918196
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "saved"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "after",
+      "cache_mode": "warm",
+      "seconds": 5.040637700003572,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.451422000071034,
+          "cache_lookup_seconds": 1.2430731999920681,
+          "outcomes_seconds": 0,
+          "opponents_seconds": 0,
+          "scenario_io_seconds": 1.0452914009802043,
+          "candidates_seconds": 0.13807809713762254,
+          "cache_finish_seconds": 0.005734300008043647,
+          "result_assembly_seconds": 0.14149860001634806,
+          "other_seconds": 0.013568601803854108,
+          "total_seconds": 5.038666200009175
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 1000,
+        "cache_status": "reused"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "before",
+      "cache_mode": "uncached",
+      "seconds": 8.989785999991,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.5517086000181735,
+          "cache_lookup_seconds": 0.03337650001049042,
+          "outcomes_seconds": 1.141206499072723,
+          "opponents_seconds": 4.883683401392773,
+          "scenario_io_seconds": 0.06772550160530955,
+          "candidates_seconds": 0.14945009909570217,
+          "cache_finish_seconds": 1.009996049106121e-05,
+          "result_assembly_seconds": 0.1430338000645861,
+          "other_seconds": 0.017092798836529255,
+          "total_seconds": 8.987287300056778
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "before",
+      "cache_mode": "cold",
+      "seconds": 10.544141999911517,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.6195770000340417,
+          "cache_lookup_seconds": 0.11587510001845658,
+          "outcomes_seconds": 1.132445401046425,
+          "opponents_seconds": 4.921725800842978,
+          "scenario_io_seconds": 1.397312096436508,
+          "candidates_seconds": 0.15425800171215087,
+          "cache_finish_seconds": 0.0212846000213176,
+          "result_assembly_seconds": 0.16169700003229082,
+          "other_seconds": 0.017125199898146093,
+          "total_seconds": 10.541300200042315
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "saved"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "before",
+      "cache_mode": "warm",
+      "seconds": 5.085684399935417,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.5037428000941873,
+          "cache_lookup_seconds": 1.209588500089012,
+          "outcomes_seconds": 0,
+          "opponents_seconds": 0,
+          "scenario_io_seconds": 1.0703631992219016,
+          "candidates_seconds": 0.1416036990704015,
+          "cache_finish_seconds": 0.005704600014723837,
+          "result_assembly_seconds": 0.13853200001176447,
+          "other_seconds": 0.014142301515676081,
+          "total_seconds": 5.083677100017667
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 1000,
+        "cache_status": "reused"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "before",
+      "cache_mode": "uncached",
+      "seconds": 9.199903200031258,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.5829507999587804,
+          "cache_lookup_seconds": 0.053918999969027936,
+          "outcomes_seconds": 1.1327016010181978,
+          "opponents_seconds": 5.041310497676022,
+          "scenario_io_seconds": 0.07061960059218109,
+          "candidates_seconds": 0.1514730992494151,
+          "cache_finish_seconds": 1.98000343516469e-05,
+          "result_assembly_seconds": 0.1451562000438571,
+          "other_seconds": 0.017159801442176104,
+          "total_seconds": 9.19531039998401
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "before",
+      "cache_mode": "cold",
+      "seconds": 10.402401200029999,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.580253600026481,
+          "cache_lookup_seconds": 0.1160389999859035,
+          "outcomes_seconds": 1.115440302179195,
+          "opponents_seconds": 4.8674838988808915,
+          "scenario_io_seconds": 1.384566999040544,
+          "candidates_seconds": 0.15276140021160245,
+          "cache_finish_seconds": 0.023712800000794232,
+          "result_assembly_seconds": 0.14258430001791567,
+          "other_seconds": 0.016983399633318186,
+          "total_seconds": 10.399825699976645
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "saved"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "before",
+      "cache_mode": "warm",
+      "seconds": 5.161420100019313,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.5431877000955865,
+          "cache_lookup_seconds": 1.2349985999753699,
+          "outcomes_seconds": 0,
+          "opponents_seconds": 0,
+          "scenario_io_seconds": 1.084402498905547,
+          "candidates_seconds": 0.1437420016154647,
+          "cache_finish_seconds": 0.005847399937920272,
+          "result_assembly_seconds": 0.1331670000217855,
+          "other_seconds": 0.014063399517908692,
+          "total_seconds": 5.1594086000695825
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 1000,
+        "cache_status": "reused"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "after",
+      "cache_mode": "uncached",
+      "seconds": 8.481548400013708,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.867328599910252,
+          "cache_lookup_seconds": 0.031085100024938583,
+          "outcomes_seconds": 1.1125977016054094,
+          "opponents_seconds": 4.097498897346668,
+          "scenario_io_seconds": 0.06142570206429809,
+          "candidates_seconds": 0.1470474018715322,
+          "cache_finish_seconds": 1.1999974958598614e-05,
+          "result_assembly_seconds": 0.14448210003320128,
+          "other_seconds": 0.01645689713768661,
+          "total_seconds": 8.477934399968944
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "after",
+      "cache_mode": "cold",
+      "seconds": 9.56496370001696,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.499992899945937,
+          "cache_lookup_seconds": 0.12798660004045814,
+          "outcomes_seconds": 1.1273266003699973,
+          "opponents_seconds": 4.1060126008233055,
+          "scenario_io_seconds": 1.3709056989755481,
+          "candidates_seconds": 0.15066109993495047,
+          "cache_finish_seconds": 0.02302849991247058,
+          "result_assembly_seconds": 0.13932180008850992,
+          "other_seconds": 0.01700859994161874,
+          "total_seconds": 9.562244400032796
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 0,
+        "cache_status": "saved"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "after",
+      "cache_mode": "warm",
+      "seconds": 5.087065499974415,
+      "sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+      "profile": {
+        "timings": {
+          "setup_seconds": 2.5244225000496954,
+          "cache_lookup_seconds": 1.2132415999658406,
+          "outcomes_seconds": 0,
+          "opponents_seconds": 0,
+          "scenario_io_seconds": 1.0510922976536676,
+          "candidates_seconds": 0.13921180088073015,
+          "cache_finish_seconds": 0.00594140007160604,
+          "result_assembly_seconds": 0.13737760006915778,
+          "other_seconds": 0.013828401337377727,
+          "total_seconds": 5.085115600028075
+        },
+        "requested_scenarios": 1000,
+        "completed_scenarios": 1000,
+        "candidate_count": 50,
+        "field_count": 5000,
+        "reused_scenarios": 1000,
+        "cache_status": "reused"
+      }
+    }
+  ],
+  "limitations": "Three alternating before/after trials, fixed uncached/cold/warm order per mode, synthetic fallback ownership and local hardware/load. Includes setup, full cache checks, frame I/O and candidate scoring. Independent audit and selection excluded. Both modes use compiled scoring; primary call-site defaults unchanged.",
+  "reference_base": "1096cfe8b0e63a373699b261a16fc4cbe27c4104",
+  "score_only_prototype": {
+    "basis": "Synthetic opponent-score-only prototype, 1,000 scenarios and 5,000 opponents; constant synthetic outcomes",
+    "unique_per_bank": [
+      4996,
+      3176,
+      3213
+    ],
+    "trials": [
+      {
+        "trial": 0,
+        "mode": "before",
+        "seconds": 5.139125699992292,
+        "sha256": "69b76472d4403719afd439d596495b956f61e3f98cbd6c71efba889400311599"
+      },
+      {
+        "trial": 0,
+        "mode": "after",
+        "seconds": 4.4961403999477625,
+        "sha256": "69b76472d4403719afd439d596495b956f61e3f98cbd6c71efba889400311599"
+      },
+      {
+        "trial": 1,
+        "mode": "after",
+        "seconds": 4.487904499983415,
+        "sha256": "69b76472d4403719afd439d596495b956f61e3f98cbd6c71efba889400311599"
+      },
+      {
+        "trial": 1,
+        "mode": "before",
+        "seconds": 5.20460679999087,
+        "sha256": "69b76472d4403719afd439d596495b956f61e3f98cbd6c71efba889400311599"
+      },
+      {
+        "trial": 2,
+        "mode": "before",
+        "seconds": 5.394533599959686,
+        "sha256": "69b76472d4403719afd439d596495b956f61e3f98cbd6c71efba889400311599"
+      },
+      {
+        "trial": 2,
+        "mode": "after",
+        "seconds": 4.696094200015068,
+        "sha256": "69b76472d4403719afd439d596495b956f61e3f98cbd6c71efba889400311599"
+      }
+    ],
+    "median_seconds": {
+      "before": 5.20460679999087,
+      "after": 4.4961403999477625
+    }
+  }
+}
