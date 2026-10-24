@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "basis": "Synthetic uncached Showdown simulation; production defaults unchanged",
+  "scenarios": 1000,
+  "field": 5000,
+  "candidates": 50,
+  "repeats": 3,
+  "seed": 90210,
+  "exact_results_equal": true,
+  "production_cache_untouched": true,
+  "median_seconds": {
+    "False": 14.186349200084805,
+    "True": 8.34705009998288
+  },
+  "trials": [
+    [
+      {
+        "compiled": false,
+        "wall_seconds": 13.930263999965973,
+        "result_sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+        "profile": {
+          "timings": {
+            "setup_seconds": 2.372375899925828,
+            "cache_lookup_seconds": 0.02952570002526045,
+            "outcomes_seconds": 1.0469311001943424,
+            "opponents_seconds": 10.07860779890325,
+            "scenario_io_seconds": 0.05970259988680482,
+            "candidates_seconds": 0.19176089949905872,
+            "cache_finish_seconds": 1.6600009985268116e-05,
+            "result_assembly_seconds": 0.1327553999144584,
+            "other_seconds": 0.01692960155196488,
+            "total_seconds": 13.928605599910952
+          },
+          "requested_scenarios": 1000,
+          "completed_scenarios": 1000,
+          "candidate_count": 50,
+          "field_count": 5000,
+          "reused_scenarios": 0,
+          "cache_status": "disabled"
+        }
+      },
+      {
+        "compiled": true,
+        "wall_seconds": 8.224509899970144,
+        "result_sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+        "profile": {
+          "timings": {
+            "setup_seconds": 2.2842921999981627,
+            "cache_lookup_seconds": 0.029040800058282912,
+            "outcomes_seconds": 1.0287820025114343,
+            "opponents_seconds": 4.509099099203013,
+            "scenario_io_seconds": 0.07800519978627563,
+            "candidates_seconds": 0.13739020086359233,
+            "cache_finish_seconds": 1.4299992471933365e-05,
+            "result_assembly_seconds": 0.14022479997947812,
+            "other_seconds": 0.01594389765523374,
+            "total_seconds": 8.222792500047944
+          },
+          "requested_scenarios": 1000,
+          "completed_scenarios": 1000,
+          "candidate_count": 50,
+          "field_count": 5000,
+          "reused_scenarios": 0,
+          "cache_status": "disabled"
+        }
+      }
+    ],
+    [
+      {
+        "compiled": false,
+        "wall_seconds": 14.1942031000508,
+        "result_sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+        "profile": {
+          "timings": {
+            "setup_seconds": 2.3465745999710634,
+            "cache_lookup_seconds": 0.041085500037297606,
+            "outcomes_seconds": 1.0719425993738696,
+            "opponents_seconds": 10.297697901376523,
+            "scenario_io_seconds": 0.08507450018078089,
+            "candidates_seconds": 0.19951039948500693,
+            "cache_finish_seconds": 1.3399985618889332e-05,
+            "result_assembly_seconds": 0.13169820001348853,
+            "other_seconds": 0.018166999565437436,
+            "total_seconds": 14.191764099989086
+          },
+          "requested_scenarios": 1000,
+          "completed_scenarios": 1000,
+          "candidate_count": 50,
+          "field_count": 5000,
+          "reused_scenarios": 0,
+          "cache_status": "disabled"
+        }
+      },
+      {
+        "compiled": true,
+        "wall_seconds": 8.370786500046961,
+        "result_sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+        "profile": {
+          "timings": {
+            "setup_seconds": 2.3801946999737993,
+            "cache_lookup_seconds": 0.03017109993379563,
+            "outcomes_seconds": 1.0315935988910496,
+            "opponents_seconds": 4.550711500342004,
+            "scenario_io_seconds": 0.07772880140691996,
+            "candidates_seconds": 0.1390507014002651,
+            "cache_finish_seconds": 7.79994297772646e-06,
+            "result_assembly_seconds": 0.14319329999852926,
+            "other_seconds": 0.01579819805920124,
+            "total_seconds": 8.368449699948542
+          },
+          "requested_scenarios": 1000,
+          "completed_scenarios": 1000,
+          "candidate_count": 50,
+          "field_count": 5000,
+          "reused_scenarios": 0,
+          "cache_status": "disabled"
+        }
+      }
+    ],
+    [
+      {
+        "compiled": false,
+        "wall_seconds": 14.186349200084805,
+        "result_sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+        "profile": {
+          "timings": {
+            "setup_seconds": 2.6495376001112163,
+            "cache_lookup_seconds": 0.0358310000738129,
+            "outcomes_seconds": 1.0471180012682453,
+            "opponents_seconds": 10.009306398336776,
+            "scenario_io_seconds": 0.0855788002954796,
+            "candidates_seconds": 0.19184229953680187,
+            "cache_finish_seconds": 9.399955160915852e-06,
+            "result_assembly_seconds": 0.14681070006918162,
+            "other_seconds": 0.018055500462651253,
+            "total_seconds": 14.184089700109325
+          },
+          "requested_scenarios": 1000,
+          "completed_scenarios": 1000,
+          "candidate_count": 50,
+          "field_count": 5000,
+          "reused_scenarios": 0,
+          "cache_status": "disabled"
+        }
+      },
+      {
+        "compiled": true,
+        "wall_seconds": 8.34705009998288,
+        "result_sha256": "21b829732a26a5bdd79dbc8dcab26e66e44725ab111e24790d1f212a913fe258",
+        "profile": {
+          "timings": {
+            "setup_seconds": 2.3408606000011787,
+            "cache_lookup_seconds": 0.031203499995172024,
+            "outcomes_seconds": 1.0456126008648425,
+            "opponents_seconds": 4.563384800683707,
+            "scenario_io_seconds": 0.0774389011785388,
+            "candidates_seconds": 0.13612429902423173,
+            "cache_finish_seconds": 1.309998333454132e-05,
+            "result_assembly_seconds": 0.1343462000368163,
+            "other_seconds": 0.015919698285870254,
+            "total_seconds": 8.344903700053692
+          },
+          "requested_scenarios": 1000,
+          "completed_scenarios": 1000,
+          "candidate_count": 50,
+          "field_count": 5000,
+          "reused_scenarios": 0,
+          "cache_status": "disabled"
+        }
+      }
+    ]
+  ],
+  "limitations": "Fixed legacy/compiled ordering, synthetic players and local hardware/load. Not a whole-build or real-slate speedup claim.",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]"
+}

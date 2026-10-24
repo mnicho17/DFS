@@ -126,7 +126,7 @@ class RankingAuditEfficiencyTests(unittest.TestCase):
         text = '\n'.join(format_stability(dict(status='incomplete', reason='audit sample did not finish', scenarios=1978)))
         self.assertIn('1,978/2,000', text); self.assertNotIn('diagnostic cap', text)
 
-    def test_only_held_out_showdown_audit_enables_precompiled_scoring(self):
+    def test_all_deep_showdown_simulation_stages_enable_precompiled_scoring(self):
         import showdown_simulation
         from main_window import LineupBuildWorker, _deep_shortlist
         players = _showdown_players()
@@ -146,7 +146,7 @@ class RankingAuditEfficiencyTests(unittest.TestCase):
                 patch('showdown_simulation.simulate_showdown', wraps=showdown_simulation.simulate_showdown) as simulate:
             result = showdown_simulation.run_deep_showdown(worker, _deep_shortlist)
         calls = simulate.call_args_list
-        self.assertEqual([call.kwargs.get('precompiled_rosters', False) for call in calls], [False, False, True])
+        self.assertEqual([call.kwargs.get('precompiled_rosters', False) for call in calls], [True, True, True])
         self.assertEqual(calls[-1].kwargs['scenarios'], 2000); self.assertEqual(calls[-1].kwargs['seed'], 481516)
         self.assertEqual(result['sim_report']['deep_build']['ranking_audit']['status'], 'completed')
         self.assertEqual(worker.library_candidates, before)

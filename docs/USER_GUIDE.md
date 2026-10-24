@@ -2543,6 +2543,40 @@ Warming captures the current NFL Deep + SIM snapshot on the UI thread when it ma
 Each warming attempt has a ten-minute cooperative allowance (and still respects the captured Deep time allowance), with three attempts and thirty minutes total before Retry/Resume is required. Errors requiring attention stop automatic retries. After an abrupt termination, the interrupted attempt's reserved allowance is charged conservatively. Cooperative yields retain elapsed usage without consuming a completed-attempt count. Explicit Retry/Resume grants another bounded allowance while retaining candidate work. Matching completed receipts are skipped while their cache artifact remains present; a missing artifact queues warming again. Production cache integrity is always verified when Generate reuses it. Storage stays subject to the existing 512 MiB per-artifact and 2 GiB store limits. When a new recording needs room, bounded maintenance retires eligible old scenario caches, preserving active jobs and unknown files. Verified replay refreshes recency. Candidate libraries, historical results, salary sources, saved evidence and backups are excluded. There is no 30-day age-based deletion policy. Copy Last Build Report shows reclaimed space and any maintenance limit.
 
 
+### Primary Deep Showdown scoring efficiency
+
+Deep Showdown screening and independent validation use the same precompiled roster
+scorer already used by the held-out ranking audit. It resolves player lookup keys
+once, retaining the original Captain/FLEX assignment, FLEX order and floating-point
+summation order. Roster legality and historical-profile qualification still run
+before scoring. Opponent sampling, outcome draws, metrics, payout/tie calculations,
+shortlisting, selection rules and ranking evidence are unchanged for a completed
+fixed sample. The standalone simulation default and Classic path are unchanged.
+
+Existing time budgets, scenario counts, cancellation checks and replay integrity
+remain intact. A faster time-limited run may complete more scenarios before its
+existing deadline; this does not promise identical portfolios between differently
+stopped samples or a particular end-to-end runtime.
+
+The October 24, 2026 synthetic uncached comparison used 50 candidates, 5,000
+opponents and 1,000 scenarios, repeated three times. Median simulation time was
+14.19 seconds with the reference scorer and 8.35 seconds precompiled, about 41%
+less in that workload. Numerical metrics, hit sets and scenario values matched
+exactly. Hardware/load and fixed run ordering affect timings; this is not a
+real-slate, historical-return or whole-build speedup claim. Cache replay remains
+subject to every existing exact-input and complete-frame check.
+
+Reproduce from the source checkout with:
+
+```text
+python scripts/benchmark_primary_scoring.py --scenarios 1000 --field 5000 --candidates 50 --repeats 3 --output primary-scoring.json
+```
+
+The benchmark uses temporary folders, disables scenario replay for both paths and
+never touches the live cache. The output must not already exist.
+[Raw profiles and exact result digests](benchmarks/primary-showdown-scoring-2026-10-24.json)
+use `False` for reference and `True` for precompiled scoring.
+
 ### Explaining scenario-cache misses
 
 Build reports compare fingerprint components with up to twelve recent recorded cache receipts for the same exact player-ID/game-date slate, choosing the comparison with the fewest changed components. They can identify forecast-related player fields, availability/roles, ownership, other player inputs, opponent fields, seed/count, context/history settings, app/model and runtime/codec differences. These are differences from a recorded comparison, not proof that it was the cache you intended to reuse. Old caches may have no diagnostic receipt yet.
