@@ -26,6 +26,31 @@ class TaskAttentionTests(unittest.TestCase):
         worker.finished.emit(result);thread.finished.emit()
         return binding.key,worker
 
+    def test_error_counts_strings_and_message_sequences_have_bounded_reasons(self):
+        from task_attention import result_reason
+        for errors,want in ((0,''),(None,''),(1,'1 error reported.'),(3,'3 errors reported.'),
+                            ('Disk unavailable','Disk unavailable'),
+                            (['First','Second'],'First\nSecond'),(('First','Second'),'First\nSecond')):
+            with self.subTest(errors=errors):self.assertEqual(result_reason(dict(errors=errors)),want)
+        self.assertEqual(result_reason(dict(errors=list(range(8)))),'0\n1\n2\n3\n4')
+        self.assertEqual(result_reason(dict(username_history=dict(errors=2))),'2 errors reported.')
+        self.assertEqual(result_reason(dict(username_history=dict(errors='History unavailable'))),'History unavailable')
+        self.assertEqual(result_reason(dict(username_history=dict(errors=[dict(name='Contest',error='Conflict')]))),'Contest: Conflict')
+
+    def test_counted_archive_errors_keep_details_and_retire_for_review(self):
+        owner,hub=self.hub()
+        result=dict(errors=2,archive=dict(messages=['First validation conflict','Second validation conflict']))
+        key,worker=self.completed(hub,result,'Legacy cache archive')
+        row=hub.rows[key]
+        self.assertEqual(row['state'],'Needs review');self.assertIsNotNone(row['ended'])
+        self.assertIsNone(row['cancel']);self.assertFalse(hub.bindings)
+        self.assertTrue(needs_attention(row));self.assertFalse(worker.stop.is_set())
+        self.assertIn('2 errors reported.',row['attention_reason'])
+        self.assertIn('First validation conflict',row['attention_reason'])
+        self.assertIn('Second validation conflict',row['attention_reason'])
+        key,_=self.completed(hub,dict(errors=0),'Read-only storage audit')
+        self.assertEqual(hub.rows[key]['state'],'Completed')
+
     def test_review_clears_only_notification_and_never_changes_failure_or_cancels_work(self):
         owner,hub=self.hub();key=hub.start('Screening',Mock())
         hub.finish(key,'Failed','Source changed; checkpoint withheld')
