@@ -1,0 +1,86 @@
+{
+  "trials": [
+    [
+      {
+        "mode": "before",
+        "seconds": 2.4043554000090808,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      },
+      {
+        "mode": "after",
+        "seconds": 1.9670530000003055,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      }
+    ],
+    [
+      {
+        "mode": "after",
+        "seconds": 1.9640444000251591,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      },
+      {
+        "mode": "before",
+        "seconds": 2.372842099983245,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      }
+    ],
+    [
+      {
+        "mode": "before",
+        "seconds": 2.370728199952282,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      },
+      {
+        "mode": "after",
+        "seconds": 1.9754732000874355,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      }
+    ],
+    [
+      {
+        "mode": "after",
+        "seconds": 1.9918474999722093,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      },
+      {
+        "mode": "before",
+        "seconds": 2.315335000050254,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      }
+    ],
+    [
+      {
+        "mode": "before",
+        "seconds": 2.249751300085336,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      },
+      {
+        "mode": "after",
+        "seconds": 2.0196802000282332,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      }
+    ],
+    [
+      {
+        "mode": "after",
+        "seconds": 2.2110194999258965,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      },
+      {
+        "mode": "before",
+        "seconds": 2.551681900047697,
+        "sha256": "1a1292f07dd9903546d80eb214c659b38231c3e0f6b9a46bd252fffd95fcf522"
+      }
+    ]
+  ],
+  "median_seconds": {
+    "before": 2.3717851499677636,
+    "after": 1.9836603500298224
+  },
+  "exact_results_equal": true,
+  "basis": "Synthetic field setup only; no whole-build or real-slate speedup claim",
+  "seed": 90211,
+  "field_count": 5000,
+  "source_base": "1096cfe8b0e63a373699b261a16fc4cbe27c4104",
+  "limitations": "Six alternating before/after trials in one process; synthetic uncalibrated ownership fixture, local load and hardware. No production cache or history writes."
+}
