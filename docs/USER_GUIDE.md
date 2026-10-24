@@ -2577,6 +2577,54 @@ Historical sources, databases, evidence, backups and expensive prepared librarie
 A 30-day modification-age flag is informational. It does not establish last use, contest age, obsolescence, archival safety or permission to remove files. This feature does not delete, move, archive, alter backup policy, or change the existing cache recycler. Review provenance and restore coverage before adding broader retention rules.
 
 
+### Scenario storage blockers and recovery navigation
+
+Build preparation shows **Scenario replay — last build** and, when present,
+**Scenario replay — last Smart preparation** from recorded outcomes. A recorded
+storage-limit failure is labeled **Storage blocked (recorded)** with **Review cache
+storage** as its selected action. These are historical receipts, not a scan of
+current free space or proof that the currently loaded slate matches a cache.
+Opening Build preparation does not inspect cache files or run cleanup.
+
+Load slate also shows **Review cache storage** below the selected slate's details
+when its saved scenario-warming outcome reports this storage blocker. Opening
+storage review closes the picker without selecting/loading a CSV or retrying
+preparation. The button disappears for successful newer outcomes and empty or
+changed selections. Older warming receipts can use their recorded storage-limit
+message; unrelated errors do not trigger this guidance.
+
+The action opens the existing read-only storage audit. **Archive and free legacy
+cache space** remains a separate explicit action: it uses the configured backup
+folder and validates a recoverable copy before retiring a working legacy file.
+History, salary sources, saved evidence, candidate libraries, unknown files and
+current-format scenario caches retain their existing protections. No archive,
+removal, backup-folder change, retry or budget increase occurs from viewing this
+guidance. After resolving storage, explicitly Retry / Resume or Generate to run
+the existing fresh input/integrity checks. Warming task messages include this path.
+
+A reproducible source-checkout benchmark is available as:
+
+```text
+python scripts/benchmark_scenario_replay.py --scenarios 1000 --field 5000 --candidates 50 --repeats 3 --output replay-benchmark.json
+```
+
+All benchmark caches are temporary. The fixed synthetic Showdown workload compares
+uncached, cold-cache and warm-cache runs, requires every requested scenario and
+opponent, verifies complete replay, and compares exact hexadecimal floating-point
+metrics, hit sets and score distributions. It retains normal opponent sampling,
+replay verification and candidate scoring. It does not benchmark an entire Deep
+build, independent ranking, portfolio selection, or historical strategy quality.
+The output path must not already exist.
+
+The October 24, 2026 measurement used 50 candidates, 5,000 opponents and 1,000
+scenarios over three repetitions. Median simulation times were 13.71 seconds
+uncached, 15.12 seconds cold (including saving), and 4.76 seconds warm: about 65%
+less time than uncached in this synthetic workload. Fixed run ordering, OS cache,
+hardware and load affect timings. This is not a promised real-slate or whole-build
+speedup. [Raw benchmark receipts](benchmarks/scenario-replay-2026-10-24.json)
+retain the per-run profiles and exact result digests. Replay identity, integrity,
+512 MiB artifact and 2 GiB store limits remain unchanged.
+
 ### Archive and free legacy cache space
 
 Backups → Storage audit offers **Archive and free legacy cache space**. Scanning stays read-only. This separate action waits for manual work, appears in the task dashboard and uses the configured backup folder. It validates every original legacy frame, digest and native-byte-order score, publishes a verified byte-for-byte recovery archive, then checks the source and recovery bytes again before removing that working copy. The result shows verified copies, files skipped, validation failures and working bytes freed.

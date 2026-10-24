@@ -103,6 +103,8 @@ def warm(catalog,receipt,state,row,path,snapshot,scope,cancelled,progress,*,retr
         record.pop('reserved_seconds',None)
         record['seconds']=prior_seconds+max(0,time.monotonic()-started)
         cache=outcome.get('cache') or {}
+        from scenario_recovery_guidance import storage_blocked
+        record['cache_storage_blocked']=storage_blocked(cache)
         record.update(cache_status=cache.get('status','not recorded'),cache_id=cache.get('cache_id'),
                       reused_scenarios=cache.get('reused_scenarios',0),requested_scenarios=cache.get('requested_scenarios',0))
         if cancelled():

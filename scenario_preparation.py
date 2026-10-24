@@ -39,6 +39,8 @@ def scenario_preparation_result(path, snapshot, *, seconds, cancelled=lambda:Fal
     reason=str(cache.get('reason') or 'No cache outcome reason recorded.')
     message=(f'Scenario preparation finished; validation cache {status}. {reason} Matching completed scenarios can be reused by Deep; '
              'no prepared portfolio was submitted or applied to the current output table.')
+    from scenario_recovery_guidance import storage_blocked,GUIDANCE
+    if storage_blocked(cache):message+=' '+GUIDANCE
     complete=status in ('saved','reused') and cache.get('requested_scenarios',0)>0
     state='Completed' if complete else 'Paused' if time.monotonic()>=deadline else 'Needs attention'
     return dict(state=state,message=message,cache=dict(cache))

@@ -76,6 +76,15 @@ def preparation_rows(w,view=None):
         (text or 'Choose source folders and refresh in Results and Learning.')
         + ('\n' + watch.message if watch else '')
         + '\nA recorded refresh is not proof the folders or source files are unchanged now. Historical-field qualification is checked separately.', 'Results and Learning')
+    from scenario_recovery_guidance import cache_row, warming_row
+    last=getattr(w,'last_sim_report',{}) or {}
+    cache=last.get('scenario_cache') if last else ((getattr(w,'last_build_diagnostic',{}) or {}).get('sim') or {}).get('scenario_cache')
+    row=cache_row(cache,'Last build')
+    if row:add('scenario-cache','Scenario replay — last build',row['state'],row['detail'],row['action'])
+    discovery=getattr(w,'slate_discovery',None)
+    warming=(getattr(discovery,'result',{}) or {}).get('scenario_preparation')
+    row=warming_row(warming)
+    if row:add('scenario-warming','Scenario replay — last Smart preparation',row['state'],row['detail'],row['action'])
     library = (getattr(w, 'last_sim_report', {}) or {}).get('candidate_library') or {}
     if library:
         add('previous', 'Previous build (historical)', 'Previous build evidence',
@@ -266,6 +275,9 @@ class PreparationStatusDialog(QtWidgets.QDialog):
             w.tabs_workspace_controls.setCurrentIndex(0)
         elif key == 'field':
             w.on_prepare_showdown_history()
+        elif key in ('scenario-cache','scenario-warming'):
+            from storage_audit_ui import open_storage_audit
+            open_storage_audit(w)
         elif key == 'backup':
             from idle_backup_ui import open_backups
             open_backups(w)

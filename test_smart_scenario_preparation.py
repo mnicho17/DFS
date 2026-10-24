@@ -136,3 +136,29 @@ class SmartScenarioTests(unittest.TestCase):
         with patch('candidate_library.code_id',return_value='new-build'):
             self.assertTrue(pending(self.state,self.snapshot))
         self.assertTrue(pending(self.state,self.snapshot,retry=True))
+
+    def test_storage_blocker_is_recorded_and_reset_without_changing_retry_policy(self):
+        blocked=dict(state='Needs attention',message='Cache storage limit reached',cache=dict(status='not saved',reason='Cache storage limit reached'))
+        with patch('scenario_preparation.scenario_preparation_result',return_value=blocked):result=self.run_warm()
+        self.assertTrue(result['scenario_preparation']['cache_storage_blocked'])
+        self.assertFalse(pending(self.state,self.snapshot))
+        self.assertEqual(load(self.receipt)['scenario_preparation']['cache_status'],'not saved')
+        other=dict(state='Needs attention',message='Busy cache',cache=dict(status='not saved',reason='Another job is recording scenarios'))
+        with patch('scenario_preparation.scenario_preparation_result',return_value=other):result=self.run_warm(retry=True)
+        self.assertFalse(result['scenario_preparation']['cache_storage_blocked'])
+        self.assertEqual(result['scenario_preparation']['attempts'],1)
+        self.assertEqual(self.library.read_text(),'retained')
+
+    def test_real_storage_blocker_explains_verified_archive_action_without_cleanup(self):
+        import os
+        from PyQt5 import QtWidgets
+        from candidate_library import run_search
+        from scenario_preparation import scenario_preparation_result
+        app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+        snapshot=create_snapshot(_showdown_players(),dict(sport='NFL',contest_kind='showdown',salary_strategy='Flexible',requested_lineups=1,nfl_sim_scenarios=2500,deep_compute=dict(minutes=1,field=20,screening=250,shortlist=4)),{})
+        before=copy.deepcopy(snapshot);library=self.root/'blocked.dfslib';run_search(library,snapshot,candidate_limit=4,seconds=1)
+        with patch.dict(os.environ,{'DFS_OPTIMIZER_DATA_DIR':str(self.root)}),patch('scenario_cache.STORE_LIMIT',0),patch('legacy_scenario_archive.validate_and_archive') as archive:
+            result=scenario_preparation_result(library,snapshot,seconds=60)
+        archive.assert_not_called();self.assertEqual(result['state'],'Needs attention')
+        self.assertIn('Review cache storage',result['message']);self.assertIn('verifies a recoverable copy',result['message'])
+        self.assertEqual(result['cache']['status'],'not saved');self.assertEqual(snapshot,before)
