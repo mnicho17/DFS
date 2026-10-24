@@ -51,6 +51,26 @@ def _score_compiled_roster(roster, outcomes):
     return 1.5 * outcomes[captain] + sum(outcomes[key] for key in flex)
 
 
+def _compile_score_bank(bank):
+    # Only exact ordered rosters share arithmetic; preserve every occurrence.
+    unique, positions, lookup = [], [], {}
+    for lineup in bank:
+        roster = _compile_score_roster(lineup)
+        position = lookup.get(roster)
+        if position is None:
+            position = len(unique)
+            lookup[roster] = position
+            unique.append(roster)
+        positions.append(position)
+    return unique, positions
+
+
+def _score_compiled_bank(bank, outcomes):
+    unique, positions = bank
+    values = [_score_compiled_roster(roster, outcomes) for roster in unique]
+    return sorted(values[position] for position in positions)
+
+
 def validate_showdown_lineup(lineup, players, salary_cap):
     roster = [lineup.get("Captain") or {}] + list(lineup.get("Flex") or [])
     keys = {player_key(p) for p in roster}
@@ -195,7 +215,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     banks = [field] + [[bank_rng.choice(field) for _ in field] for _ in range(2)]
     field_counts = Counter(showdown_signature(lu) for lu in field)
     compiled_candidates = [_compile_score_roster(lu) for lu in candidates] if precompiled_rosters else None
-    compiled_banks = [[_compile_score_roster(lu) for lu in bank] for bank in banks] if precompiled_rosters else None
+    compiled_banks = [_compile_score_bank(bank) for bank in banks] if precompiled_rosters else None
     scores = [array("f") for _ in candidates]
     hits = [[set() for _ in candidates] for _ in range(3)]
     sums = [0.0] * len(candidates)
@@ -228,7 +248,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
             profile.outcomes_seconds+=time.perf_counter()-drawn
             opponent_started=time.perf_counter()
             if compiled_banks is not None:
-                ranked = sorted(_score_compiled_roster(roster, outcomes) for roster in compiled_banks[scenario % 3])
+                ranked = _score_compiled_bank(compiled_banks[scenario % 3], outcomes)
             else:
                 ranked = sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
             profile.opponents_seconds+=time.perf_counter()-opponent_started
