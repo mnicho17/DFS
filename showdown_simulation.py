@@ -455,7 +455,7 @@ def run_deep_showdown(worker, shortlist_fn):
         else:
             coarse = simulate_showdown(retained + lineups, players, scenario_cache=getattr(worker,"scenario_cache",False), **field_options,
             scenarios=min(options["screening"], max(250, worker.sim_scenarios)),
-            field_lineup_count=min(1600, options["field"] or 1200), salary_cap=worker.salary_cap, seed=73129,
+            field_lineup_count=min(1600, options["field"] or 1200), salary_cap=worker.salary_cap, seed=73129, precompiled_rosters=True,
             cancel_callback=lambda: stop(start + limit * screening_fraction),
             progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 2 of 4 - " + c))
         deep["screening_scenarios"] = coarse["report"]["scenarios"]
@@ -482,7 +482,7 @@ def run_deep_showdown(worker, shortlist_fn):
             validation_end = deadline - min(60, limit * .20)
             if not stop(validation_end):
                 validated = simulate_showdown(short, players, scenario_cache=getattr(worker,"scenario_cache",False), **field_options, scenarios=max(2500, worker.sim_scenarios),
-                    field_lineup_count=options["field"] or 2700, salary_cap=worker.salary_cap, seed=90210, capture_distributions=True,
+                    field_lineup_count=options["field"] or 2700, salary_cap=worker.salary_cap, seed=90210, capture_distributions=True, precompiled_rosters=True,
                     cancel_callback=lambda: stop(validation_end),
                     progress_callback=lambda a,b,c: worker.progress.emit(a,b,"Phase 3 of 4 - " + c))
                 if validated["report"]["scenarios"]:
