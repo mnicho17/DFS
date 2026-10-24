@@ -203,6 +203,8 @@ class SlatePicker(QtWidgets.QDialog):
         self.details.setMaximumHeight(190)
         self.details.setAccessibleName('Selected slate preparation details')
         layout.addWidget(self.details)
+        self.cache_storage=QtWidgets.QPushButton('Review cache storage');self.cache_storage.setObjectName('slateCacheStorage')
+        self.cache_storage.clicked.connect(self.review_cache_storage);self.cache_storage.setVisible(False);layout.addWidget(self.cache_storage)
         self.status = QtWidgets.QLabel()
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -268,11 +270,21 @@ class SlatePicker(QtWidgets.QDialog):
             self.details.setPlainText(text)
             if digest==getattr(self,'_details_digest',None):
                 self.details.verticalScrollBar().setValue(scroll)
+        from scenario_recovery_guidance import warming_blocked
+        self.cache_storage.setVisible(bool(row and warming_blocked((row.get('preparation') or {}).get('scenario_preparation'))))
         self._details_digest=digest
         pending=self.controller.retry_request
         queued=bool(row and pending and pending['digest']==row['digest'])
         self.resume_button.setEnabled(bool(row and row['sport']=='NFL' and
             self.controller.thread is None and not self.controller.closed and not queued))
+
+    def review_cache_storage(self):
+        from scenario_recovery_guidance import warming_blocked
+        row=self.selected()
+        if not row or not warming_blocked((row.get('preparation') or {}).get('scenario_preparation')):return
+        self.reject()  # Reviewing storage does not select/load a salary CSV.
+        from storage_audit_ui import open_storage_audit
+        open_storage_audit(self.controller.owner)
 
     def resume_selected(self):
         row=self.selected()
@@ -325,6 +337,8 @@ def preparation_details(row, controller):
     timings=timing_text(p.get('phase_timings'))
     reuse=ownership_text(p.get('ownership_reuse'))
     warming=p.get('scenario_preparation') or {}
+    from scenario_recovery_guidance import warming_blocked,GUIDANCE
+    if warming_blocked(warming):reason+='\nScenario warming: storage blocked (recorded). '+GUIDANCE
     warming_text=(f"Recorded {warming.get('state','Not recorded')}; {warming.get('scope','setup not recorded')}; attempts {warming.get('attempts',0)}/3; {warming.get('seconds',0)/60:.1f}/30 minutes used. "+str(warming.get('message','')) if warming else 'Queued after candidate preparation when Smart preparation runs; current inputs will still be checked during Generate.')
     return (f"{row['label']} | {row['sport']} {row['kind'].title()} | {row.get('date') or 'Date unknown'}\n"
             f"Status: {status}\nProgress: {progress} | {time_text}\nOwnership: {ownership}\n"
