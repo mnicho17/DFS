@@ -1,0 +1,159 @@
+{
+  "baseline": "b93853f5ce3e6b70b5466ddf67d9f7ad2b58123f",
+  "source_sha256": "1bff42966e4084d1118c47cfc762fc0262ed138c8a739b51441a933e2a197912",
+  "scope": "Synthetic 36-player fixture, fixed seed 90211, 2000 default or 5000 specialist opponents. Sampler-only timings, not whole builds or historical quality evidence.",
+  "exact_order_diagnostics_and_rng_equal": true,
+  "inputs_unchanged": true,
+  "trials": [
+    {
+      "case": "default",
+      "count": 2000,
+      "repeat": 0,
+      "mode": "before",
+      "seconds": 3.321106299990788,
+      "rosters": "de7d7911ce81c61dadda9b70811ede46124684bad89af0cfda0f71cf7f43a4ad",
+      "diagnostic": "fb229afc98b84a6f1fe94ef6f98a8ec2e40ed8a2f88fa81a4cbc558578197764",
+      "rng": "eca1799674a95efbdd4c96fd576a7ab7138fb76039b8d5740f0ea8b1a905b368",
+      "returned": 2000
+    },
+    {
+      "case": "default",
+      "count": 2000,
+      "repeat": 0,
+      "mode": "after",
+      "seconds": 2.4373704999452457,
+      "rosters": "de7d7911ce81c61dadda9b70811ede46124684bad89af0cfda0f71cf7f43a4ad",
+      "diagnostic": "fb229afc98b84a6f1fe94ef6f98a8ec2e40ed8a2f88fa81a4cbc558578197764",
+      "rng": "eca1799674a95efbdd4c96fd576a7ab7138fb76039b8d5740f0ea8b1a905b368",
+      "returned": 2000
+    },
+    {
+      "case": "default",
+      "count": 2000,
+      "repeat": 1,
+      "mode": "after",
+      "seconds": 2.4931822000071406,
+      "rosters": "de7d7911ce81c61dadda9b70811ede46124684bad89af0cfda0f71cf7f43a4ad",
+      "diagnostic": "fb229afc98b84a6f1fe94ef6f98a8ec2e40ed8a2f88fa81a4cbc558578197764",
+      "rng": "eca1799674a95efbdd4c96fd576a7ab7138fb76039b8d5740f0ea8b1a905b368",
+      "returned": 2000
+    },
+    {
+      "case": "default",
+      "count": 2000,
+      "repeat": 1,
+      "mode": "before",
+      "seconds": 3.6780834000092,
+      "rosters": "de7d7911ce81c61dadda9b70811ede46124684bad89af0cfda0f71cf7f43a4ad",
+      "diagnostic": "fb229afc98b84a6f1fe94ef6f98a8ec2e40ed8a2f88fa81a4cbc558578197764",
+      "rng": "eca1799674a95efbdd4c96fd576a7ab7138fb76039b8d5740f0ea8b1a905b368",
+      "returned": 2000
+    },
+    {
+      "case": "default",
+      "count": 2000,
+      "repeat": 2,
+      "mode": "before",
+      "seconds": 3.58392849995289,
+      "rosters": "de7d7911ce81c61dadda9b70811ede46124684bad89af0cfda0f71cf7f43a4ad",
+      "diagnostic": "fb229afc98b84a6f1fe94ef6f98a8ec2e40ed8a2f88fa81a4cbc558578197764",
+      "rng": "eca1799674a95efbdd4c96fd576a7ab7138fb76039b8d5740f0ea8b1a905b368",
+      "returned": 2000
+    },
+    {
+      "case": "default",
+      "count": 2000,
+      "repeat": 2,
+      "mode": "after",
+      "seconds": 2.5407999999588355,
+      "rosters": "de7d7911ce81c61dadda9b70811ede46124684bad89af0cfda0f71cf7f43a4ad",
+      "diagnostic": "fb229afc98b84a6f1fe94ef6f98a8ec2e40ed8a2f88fa81a4cbc558578197764",
+      "rng": "eca1799674a95efbdd4c96fd576a7ab7138fb76039b8d5740f0ea8b1a905b368",
+      "returned": 2000
+    },
+    {
+      "case": "specialists",
+      "count": 5000,
+      "repeat": 0,
+      "mode": "before",
+      "seconds": 8.982200299971737,
+      "rosters": "6623d4d96e362398addc5a7d442bcab736f2ba6d34225c507c674a34177b798c",
+      "diagnostic": "ab54e50c90b04dea3934b5429cf8823db2b2b75953a7f4adbcda35a54c16eb8a",
+      "rng": "5f2343a41b0f4f11a46d0a515aac465154db9a3f091a4b73d37a32f472ee697d",
+      "returned": 5000
+    },
+    {
+      "case": "specialists",
+      "count": 5000,
+      "repeat": 0,
+      "mode": "after",
+      "seconds": 6.445917800068855,
+      "rosters": "6623d4d96e362398addc5a7d442bcab736f2ba6d34225c507c674a34177b798c",
+      "diagnostic": "ab54e50c90b04dea3934b5429cf8823db2b2b75953a7f4adbcda35a54c16eb8a",
+      "rng": "5f2343a41b0f4f11a46d0a515aac465154db9a3f091a4b73d37a32f472ee697d",
+      "returned": 5000
+    },
+    {
+      "case": "specialists",
+      "count": 5000,
+      "repeat": 1,
+      "mode": "after",
+      "seconds": 6.532718900009058,
+      "rosters": "6623d4d96e362398addc5a7d442bcab736f2ba6d34225c507c674a34177b798c",
+      "diagnostic": "ab54e50c90b04dea3934b5429cf8823db2b2b75953a7f4adbcda35a54c16eb8a",
+      "rng": "5f2343a41b0f4f11a46d0a515aac465154db9a3f091a4b73d37a32f472ee697d",
+      "returned": 5000
+    },
+    {
+      "case": "specialists",
+      "count": 5000,
+      "repeat": 1,
+      "mode": "before",
+      "seconds": 9.450134600047022,
+      "rosters": "6623d4d96e362398addc5a7d442bcab736f2ba6d34225c507c674a34177b798c",
+      "diagnostic": "ab54e50c90b04dea3934b5429cf8823db2b2b75953a7f4adbcda35a54c16eb8a",
+      "rng": "5f2343a41b0f4f11a46d0a515aac465154db9a3f091a4b73d37a32f472ee697d",
+      "returned": 5000
+    },
+    {
+      "case": "specialists",
+      "count": 5000,
+      "repeat": 2,
+      "mode": "before",
+      "seconds": 9.455362899927422,
+      "rosters": "6623d4d96e362398addc5a7d442bcab736f2ba6d34225c507c674a34177b798c",
+      "diagnostic": "ab54e50c90b04dea3934b5429cf8823db2b2b75953a7f4adbcda35a54c16eb8a",
+      "rng": "5f2343a41b0f4f11a46d0a515aac465154db9a3f091a4b73d37a32f472ee697d",
+      "returned": 5000
+    },
+    {
+      "case": "specialists",
+      "count": 5000,
+      "repeat": 2,
+      "mode": "after",
+      "seconds": 6.919025199953467,
+      "rosters": "6623d4d96e362398addc5a7d442bcab736f2ba6d34225c507c674a34177b798c",
+      "diagnostic": "ab54e50c90b04dea3934b5429cf8823db2b2b75953a7f4adbcda35a54c16eb8a",
+      "rng": "5f2343a41b0f4f11a46d0a515aac465154db9a3f091a4b73d37a32f472ee697d",
+      "returned": 5000
+    }
+  ],
+  "summary": [
+    {
+      "case": "default",
+      "requested": 2000,
+      "medians": {
+        "before": 3.58392849995289,
+        "after": 2.4931822000071406
+      }
+    },
+    {
+      "case": "specialists",
+      "requested": 5000,
+      "medians": {
+        "before": 9.450134600047022,
+        "after": 6.532718900009058
+      }
+    }
+  ]
+}
