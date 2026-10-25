@@ -102,10 +102,16 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
             actual = Counter()
             for row,weight in zip(features,fitted):actual[row[category]]+=weight
             total = sum(actual.values())
+            # The observed totals are fixed during this category's update.
+            # Reuse each label's multiplier while keeping proposal arithmetic,
+            # accumulation order and normalization exactly as before.
+            factors={}
+            for label in actual:
+                desired = targets[category].get(label, 0)
+                ratio = (desired+.005)/(actual[label]/total+.005)
+                factors[label] = max(.5,min(2,ratio**.5))
             for i,row in enumerate(features):
-                desired = targets[category].get(row[category], 0)
-                ratio = (desired+.005)/(actual[row[category]]/total+.005)
-                fitted[i] *= max(.5,min(2,ratio**.5))
+                fitted[i] *= factors[row[category]]
             scale = sum(fitted)/len(fitted)
             fitted = [weight/scale for weight in fitted]
     for category in CATEGORIES:
