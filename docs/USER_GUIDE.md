@@ -328,6 +328,8 @@ Deep Build shows Explore, Screen, Validate, and Select/Refine. When a contest pr
 
 To share a complete performance snapshot, open **Settings** and choose **Copy Last Build Report**. The report includes the build-space count, eligible and omitted pool sizes, candidate budget, generated and selected counts, Generate/SIM/Select timing, strategy settings, portfolio rules, preset fit, and aggregate warnings. For NFL SIM Edge, the budget separates optimizer candidates from additional field-shaped and scenario-built candidates. Deep reports also show the coarse shortlist, independent validation count, top-candidate agreement between the two SIM passes, portfolio swaps, and time-budget status. The report identifies the slowest phase so a performance problem can be isolated without guessing.
 
+Completed Showdown Deep builds also attempt a bounded candidate-space diagnostic after generation, simulation and selection finish. When enumeration completes, the report shows an upper bound under the captured pool, Captain/FLEX locks, fades, salary range and two-team rule, plus how many observed candidates belong to that space. Exposure, groups, style correlations and other rules can reduce it further. This is not proof that a portfolio is feasible or that search exhausted every legal roster, and it does not change search limits. Larger spaces, cancellation, unsupported inputs or the one-second allowance can leave the numeric bound unavailable. Older saved reports do not borrow this observation from a later build.
+
 
 
 ![Build History comparing two aggregate NFL Classic runs](images/build-history.png){compact}

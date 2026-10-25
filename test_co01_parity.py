@@ -118,6 +118,15 @@ class ObjectiveParityTests(unittest.TestCase):
                 f"- {r.get('stage', 'Check')}: {r.get('state', 'Unknown')} — {r.get('detail', '')}"
                 for r in preparation)
             value['build_report'] = value['build_report'].replace(block, '')
+        # Candidate-space observations are additive, aggregate reporting after
+        # selection. Remove only their exact rendered lines from the older
+        # receipt; keep every candidate, score, selection and export comparison.
+        from showdown_space_diagnostic import lines as candidate_space_lines
+        space = value['diagnostic'].pop('candidate_space', None)
+        observations = set(candidate_space_lines(space))
+        if observations:
+            value['build_report'] = '\n'.join(line for line in value['build_report'].split('\n')
+                if line not in observations)
         report = value['portfolio_report']
         # Only additive safety reporting is excluded from the older fixture.
         report.pop('showdown_policy', None)
