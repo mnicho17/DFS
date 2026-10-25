@@ -112,12 +112,12 @@ class PairingStateTests(PairingFixture):
 
     def test_save_refreshes_status_and_report(self):
         row = self.seed()['results'][0]
-        self.assertIn('Results awaiting a salary match: 1', self.report())
+        self.assertIn('Unpaired cataloged results: 1', self.report())
         self.save(row)
         state = imports.pairing_state(self.db)
         self.assertEqual(state['results'][0]['status'], 'PAIRED')
         self.assertEqual(state['qualified_saved_pairings'], 1)
-        self.assertIn('Results awaiting a salary match: 0', self.report())
+        self.assertIn('Unpaired cataloged results: 0', self.report())
 
     def test_three_results_share_one_salary(self):
         for row in self.seed(count=3)['results']:
@@ -133,13 +133,13 @@ class PairingStateTests(PairingFixture):
         state = imports.pairing_state(self.db)
         self.assertEqual((state['results_cataloged'], state['saved_pairings'], state['unpaired_results']), (24, 16, 8))
         self.assertEqual(sum(r['status'] == 'READY_TO_PAIR' for r in state['results']), 8)
-        self.assertIn('Results awaiting a salary match: 8', self.report())
+        self.assertIn('Unpaired cataloged results: 8', self.report())
         for row in rows[16:]:
             self.save(row)
         state = imports.pairing_state(self.db)
         self.assertEqual((state['results_cataloged'], state['saved_pairings'], state['unpaired_results']), (24, 24, 0))
         self.assertEqual(state['warnings'], [])
-        self.assertIn('Results awaiting a salary match: 0', self.report())
+        self.assertIn('Unpaired cataloged results: 0', self.report())
 
     def test_changed_snapshot_invalid_pair_stays_persisted(self):
         self.save(self.seed()['results'][0])
@@ -184,7 +184,7 @@ class PairingStateTests(PairingFixture):
         self.assertEqual((state['orphaned_pairings'], state['invalid_saved_pairings']), (1, 1))
         self.assertTrue(state['warnings'])
         self.assertIn('Pairing counts need review', self.report())
-        self.assertNotIn('Results awaiting a salary match: -1', self.report())
+        self.assertNotIn('Unpaired cataloged results: -1', self.report())
         self.assertEqual(self.dump(), before)
 
     def test_orphan_salary_is_invalid_with_saved_revision(self):
@@ -303,7 +303,7 @@ class PairingDialogTests(PairingFixture):
         self.seed()
         with patch.object(imports, 'qualify_pair', return_value=dict(compatible=False, automatic=False, reason='Roster format differs.')):
             dialog = self.dialog()
-        self.assertIn('Status: NO_COMPATIBLE_MATCH', dialog.details.toPlainText())
+        self.assertIn('Status: Salary data not available', dialog.details.toPlainText())
         self.assertIn('Roster format differs.', dialog.details.toPlainText())
 
     def test_report_and_dialog_use_same_backend_state(self):
@@ -342,13 +342,13 @@ class PairingDialogTests(PairingFixture):
             self.assertIsNone(parent._import_thread)
         parent.refresh_report()
         wait_report()
-        self.assertIn('Results awaiting a salary match: 1', parent.report.toPlainText())
+        self.assertIn('Unpaired cataloged results: 1', parent.report.toPlainText())
         worker = CombinedImportWorker(pair=(row['hash'], row['candidates'][0]['hash'], True), db_path=parent.db_path)
         worker.finished.connect(parent._on_combined_import_finished)
         with patch.object(QtWidgets.QMessageBox, 'information'):
             worker.run()
         wait_report()
-        self.assertIn('Results awaiting a salary match: 0', parent.report.toPlainText())
+        self.assertIn('Unpaired cataloged results: 0', parent.report.toPlainText())
         with patch.dict(os.environ, {'DFS_OPTIMIZER_DATA_DIR': str(self.root / 'wrong-profile')}):
             parent.refresh_report()
             wait_report()
@@ -362,7 +362,7 @@ class PairingDialogTests(PairingFixture):
                     time.sleep(.005)
                 self.assertIsNone(parent._import_thread)
             self.assertEqual(factory.call_args.kwargs['db_path'], str(self.db))
-        self.assertIn('Results awaiting a salary match: 0', parent.report.toPlainText())
+        self.assertIn('Unpaired cataloged results: 0', parent.report.toPlainText())
         self.assertFalse((self.root / 'wrong-profile').exists())
 
 

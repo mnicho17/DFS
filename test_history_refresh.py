@@ -98,7 +98,9 @@ class HistoryRefreshTests(unittest.TestCase):
         result = self.run_worker(self.worker(f))
         self.assertEqual(result['unpaired'], 1)
         self.assertEqual(result['username_history']['contests'], [])
-        self.assertIn('1 results need salary matching', refresh_summary(result))
+        self.assertIn('Salary data not available for 1 result file', refresh_summary(result))
+        self.assertEqual(result['salary_unavailable'],1)
+        self.assertEqual(result['salary_review_needed'],0)
 
     def test_cancel_before_indexing_does_not_start_history(self):
         f = self.fixture()
