@@ -72,7 +72,10 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
                 if not isinstance(multiplier,(int,float)) or not math.isfinite(multiplier) or multiplier<=0:
                     raise ValueError('Invalid experimental ownership draw multiplier.')
                 values[i]*=multiplier
-    proposals,features = [],[]
+    proposals=[]
+    # One column per category keeps proposal order without retaining a label
+    # dictionary for every proposal. Columns are private to this call.
+    features={category:[] for category in CATEGORIES}
     for attempt in range(max(200, count*100)):
         if attempt%100==0 and cancelled():
             return field
@@ -86,7 +89,9 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
         if _cpt_salary(pool[c])+sum(_salary(p) for p in flex)>salary_cap or len({p['Team'] for p in [pool[c]]+flex})!=2:
             continue
         entry = ShowdownLineup(pool[c], flex)
-        proposals.append(entry);features.append(labels(entry, salary_cap))
+        proposals.append(entry)
+        for category,label in labels(entry,salary_cap).items():
+            features[category].append(label)
         if len(proposals)>=max(500, count*20):
             break
     field.diagnostic['proposals'] = len(proposals)
@@ -98,9 +103,9 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
     for _ in range(12):
         if cancelled():
             return field
-        for category in CATEGORIES:
+        for category,column in features.items():
             actual = Counter()
-            for row,weight in zip(features,fitted):actual[row[category]]+=weight
+            for label,weight in zip(column,fitted):actual[label]+=weight
             total = sum(actual.values())
             # The observed totals are fixed during this category's update.
             # Reuse each label's multiplier while keeping proposal arithmetic,
@@ -110,12 +115,12 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
                 desired = targets[category].get(label, 0)
                 ratio = (desired+.005)/(actual[label]/total+.005)
                 factors[label] = max(.5,min(2,ratio**.5))
-            for i,row in enumerate(features):
-                fitted[i] *= factors[row[category]]
+            for i,label in enumerate(column):
+                fitted[i] *= factors[label]
             scale = sum(fitted)/len(fitted)
             fitted = [weight/scale for weight in fitted]
-    for category in CATEGORIES:
-        available = {row[category] for row in features}
+    for category,column in features.items():
+        available = set(column)
         missing = {label:weight for label,weight in targets[category].items() if weight and label not in available}
         if missing:field.diagnostic['unavailable_targets'][category]=missing
     if cancelled():return field
