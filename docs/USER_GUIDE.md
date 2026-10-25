@@ -1284,6 +1284,8 @@ Use **Review Salary Matches** when several revisions qualify or the results lack
 
 One historical salary slate may be reused for multiple compatible contest result files. Three results paired with one salary count as three saved pairings and one salary snapshot. With 24 cataloged results and 16 saved pairs, exactly eight remain unpaired even if all eight have compatible candidates. Saving a pair updates the report immediately; Refresh Report and reopening Review Salary Matches show the same counts. Invalid and orphaned saved pairs are flagged separately.
 
+If no compatible salary revision is available, review shows **Salary data not available**. A history refresh completes without an attention alert when this is the only limitation. Original results stay saved; salary-dependent analysis and historical qualification stay unavailable. Standings are not used to invent missing prices, Captain/FLEX identities or a complete eligible pool. Importing a real matching salary file later rechecks the association through the existing validators. Compatible matches awaiting confirmation, supported date corrections, recorded Needs review associations, unreadable results and source/import errors still require review.
+
 Review shows readable rosters as a count and percentage of total entries, plus the unreadable count; unreadable rows remain excluded. Rejected unrelated candidates are behind the optional diagnostics view for a correctly paired result. Salary files with multiple game dates currently remain unpaired. A pairing establishes coverage of readable observed rosters, not a complete eligible pool, a hindsight optimum or contest payouts.
 
 ![Review explicit contest salary matches](images/salary-matches.png)

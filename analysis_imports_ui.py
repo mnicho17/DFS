@@ -5,6 +5,7 @@ import traceback
 from PyQt5 import QtCore, QtWidgets
 
 from analysis_imports import import_folders, pairing_state, save_pair, ImportCancelled
+from salary_availability import label as salary_label, summary as salary_summary
 
 
 class CombinedImportWorker(QtCore.QObject):
@@ -260,7 +261,7 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         for row in self.rows:
             best = max(row['candidates'], key=lambda c:c.get('matched',0), default={})
             coverage = (f" — best observed coverage {best['matched']}/{best['observed']}" if best.get('observed') and best.get('identity_checked') else '')
-            self.results.addItem(row['name'] + ' [' + row['hash'][:12] + '] — ' + ('Needs review (manual choice recorded)' if row['status']=='NEEDS_REVIEW_ASSOCIATION' else row['status']) + coverage, row)
+            self.results.addItem(row['name'] + ' [' + row['hash'][:12] + '] — ' + salary_label(row) + coverage, row)
         layout.addWidget(self.results)
         self.correct_date=SalaryReviewCheckBox('Review a contest-date correction (preserves the original file)')
         layout.addWidget(self.correct_date)
@@ -325,7 +326,7 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
         self.results.clear()
         for row in self.rows:
             if allowed is None or row['hash'] in allowed:
-                self.results.addItem(row['name'] + ' [' + row['hash'][:12] + '] — ' + row['status'], row)
+                self.results.addItem(row['name'] + ' [' + row['hash'][:12] + '] — ' + salary_label(row), row)
         for index in range(self.results.count()):
             if self.results.itemData(index)['hash'] == selected:self.results.setCurrentIndex(index);break
         del blocker
@@ -362,7 +363,8 @@ class SalaryMatchesDialog(QtWidgets.QDialog):
             self.buttons.button(QtWidgets.QDialogButtonBox.Save).setEnabled(False)
             self._candidate_changed()
             return
-        notes = [f"Status: {row['status']}", 'Result file: ' + row['name']]
+        notes = [f"Status: {salary_label(row)}", 'Result file: ' + row['name']]
+        if row.get('source_problem'):notes.append(row['source_problem'])
         notes.append('Recorded dates: '+(', '.join(row.get('dates',[])) or 'unknown'))
         review = row.get('review_association')
         if review and not row['saved_pair']:
@@ -478,7 +480,7 @@ def import_summary(result):
              f"Your result entries added: {result.get('personal_results_added', 0):,}",
              f"New contest salary matches: {result.get('pairs_added', 0):,}"]
     if result.get('unpaired'):
-        lines.append(f"{result['unpaired']:,} results need review. Use Review Salary Matches.")
+        lines.append(salary_summary(result))
     if result.get('pairs_added'):
         lines.append('Analyze Saved Results applies saved salary matches to construction reports.')
     if result.get('analysis_message'):
