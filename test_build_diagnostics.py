@@ -46,11 +46,17 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertIn('not recorded for this build',format_build_report(old))
         owner=SimpleNamespace(_snapshot_replay=True,last_csv_load_timing=dict(total=999),
                               last_ownership_reuse=dict(status='reused',seconds=888))
-        record=create_build_diagnostic(context=dict(preparation_audit=capture_build_audit(owner)),timing_report={})
+        audit=capture_build_audit(owner)
+        # Timestamp digits may contain the sentinel values; only timings matter.
+        audit['captured_at']='2026-10-25T01:57:22.999888+00:00'
+        self.assertEqual(audit['csv_timings'],{})
+        self.assertEqual(audit['ownership'],{})
+        record=create_build_diagnostic(context=dict(preparation_audit=audit),timing_report={})
         text=format_build_report(record)
         self.assertIn('Snapshot replay',text)
-        self.assertNotIn('999',text)
-        self.assertNotIn('888',text)
+        self.assertIn(audit['captured_at'],text)
+        self.assertNotIn('CSV load total: 999.00 s',text)
+        self.assertNotIn('Ownership: 888.00 s',text)
 
     def test_preparation_audit_rejects_unknown_fields_and_nonfinite_durations(self):
         from preparation_audit import clean_build_audit

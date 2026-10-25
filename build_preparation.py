@@ -38,7 +38,7 @@ def discover_libraries(known, folder, players, kind, salary_cap, *, cancelled=la
     Exact-slate completed hints precede remembered paths; folder scan is bounded to 48 entries.
     Every yielded path still needs full validation/loading under current rules.
     """
-    from candidate_library import slate_id
+    from candidate_library import slate_id, _candidate_code_compatibility, CandidateCodeMismatch
     from build_snapshots import validate_snapshot
     deadline = time.monotonic() + seconds
     if cancelled() or time.monotonic()>=deadline:
@@ -120,12 +120,18 @@ def discover_libraries(known, folder, players, kind, salary_cap, *, cancelled=la
                 if meta.get('slate_id') != slate_id(players, kind) or snapshot['inputs']['recipe']['contest_kind'] != kind:
                     audit('different_slate')
                     continue
+                # Skip known incompatible headers before they consume one of
+                # the bounded full-loader attempts. Loading rechecks this gate.
+                _candidate_code_compatibility(dict(meta, snapshot=snapshot), kind)
             audit('matched')
             progress('Checking reusable library: ' + path.name)
             yield str(path)
+        except CandidateCodeMismatch as exc:
+            audit('rejected_model')
+            progress('Library skipped: ' + path.name + ' — ' + str(exc))
         except (ValueError, OSError, sqlite3.Error, KeyError, TypeError) as exc:
             audit('incompatible_or_unreadable')
-            progress('Library skipped: ' + path.name + ' — ' + str(exc))
+            progress('Library skipped: ' + path.name + ' â€” ' + str(exc))
 
 
 def automatic_library_inputs(window):

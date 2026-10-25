@@ -234,9 +234,12 @@ def run_search(path, snapshot, *, seconds=3600, cancelled=lambda:False, progress
     progress(f'Search paused/completed: {count:,} unique candidates saved. Load the library and build to simulate current outcomes.')
     return count
 
-@instrument_library
-def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Cap', rules=None):
-    meta=metadata(path)
+class CandidateCodeMismatch(ValueError):
+    """The existing code/model gate rejected candidate evidence."""
+
+
+def _candidate_code_compatibility(meta, kind):
+    """Shared metadata preflight; full loading still validates every roster."""
     current_code=code_id()
     portable_classic = (kind == 'classic' and
         meta['snapshot']['inputs']['recipe']['contest_kind'] == 'classic' and
@@ -246,7 +249,14 @@ def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Ca
     compatible_model=bool(meta.get('generation_model_id') and meta['generation_model_id']==preparation_model_id())
     if not portable_classic and ((meta.get('generation_model_id') is not None and not compatible_model) or
             (meta.get('code_id') != current_code and not compatible_model)):
-        raise ValueError('This library uses different app code. Use the original version, or start a new library.')
+        raise CandidateCodeMismatch('This library uses different app code. Use the original version, or start a new library.')
+    return current_code, compatible_model
+
+
+@instrument_library
+def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Cap', rules=None):
+    meta=metadata(path)
+    current_code, compatible_model = _candidate_code_compatibility(meta, kind)
     if slate_id(players,kind) != meta['slate_id']:
         raise ValueError('Candidate library belongs to a different player slate or contest type. Load the matching slate first.')
     current=apply_qb_eligibility(copy.deepcopy(players))
