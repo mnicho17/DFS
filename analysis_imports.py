@@ -397,7 +397,7 @@ def _pairing_state(conn, path, cancelled):
         readable = max(0, entries - unreadable) if entries is not None else None
         output.append(dict(hash=result['hash'], name=result['name'], salary_hash=saved_hash,
                            dates=manifest['dates'],format=manifest.get('format'),date_correction=result.get('date_correction'),
-                           status=status, saved_pair=saved, review_association=review, candidates=candidates, entries=entries,
+                           status=status, source_problem=verification[result['hash']], saved_pair=saved, review_association=review, candidates=candidates, entries=entries,
                            unreadable=unreadable, readable=readable,
                            readable_pct=100.0 * readable / entries if entries else None))
     orphans = [dict(result_hash=r, salary_hash=s) for r, s in pairs.items()
@@ -569,9 +569,13 @@ def import_folders(results_folder, salary_folder='', *, username='', db_path=Non
             paired = {row[0] for row in conn.execute('SELECT result_hash FROM analysis_salary_pairs')}
             from analysis_salary_reviews import latest
             pending_reviews = latest(conn)
+            from analysis_date_corrections import candidate as date_candidate
+            available_matches = {}
             for source in (s for s in sources if s['kind'] == 'results' and s['hash'] not in paired and s['hash'] not in pending_reviews):
                 _check(cancelled)
                 compatible = [s for s in sources if s['kind'] == 'salary' and qualify_pair(source, s)['compatible']]
+                available_matches[source['hash']] = bool(compatible) or any(
+                    date_candidate(source,salary) for salary in sources if salary['kind']=='salary')
                 if len(compatible) == 1 and qualify_pair(source, compatible[0])['automatic']:
                     try:
                         progress(0, 0, 'Validating salary match: ' + source['name'])
@@ -580,7 +584,23 @@ def import_folders(results_folder, salary_folder='', *, username='', db_path=Non
                         raise
                     except Exception as exc:
                         result['errors'].append(str(exc))
-            result['unpaired'] = conn.execute("SELECT COUNT(*) FROM analysis_sources s WHERE kind='results' AND NOT EXISTS(SELECT 1 FROM analysis_salary_pairs p WHERE p.result_hash=s.hash)").fetchone()[0]
+            remaining={row[0] for row in conn.execute("SELECT s.hash FROM analysis_sources s WHERE kind='results' AND NOT EXISTS(SELECT 1 FROM analysis_salary_pairs p WHERE p.result_hash=s.hash)")}
+            result.update(unpaired=len(remaining),salary_unavailable=0,salary_review_needed=0)
+            by_hash={source['hash']:source for source in sources}
+            for digest in sorted(remaining):
+                _check(cancelled)
+                manifest=by_hash.get(digest,{}).get('manifest',{})
+                if (digest in pending_reviews or available_matches.get(digest,True)
+                        or manifest.get('unreadable') or not manifest.get('format')):
+                    result['salary_review_needed']+=1
+                    continue
+                try:
+                    _verify(by_hash[digest],cancelled)
+                except (OSError,ValueError) as exc:
+                    result['errors'].append(str(exc))
+                    result['salary_review_needed']+=1
+                else:
+                    result['salary_unavailable']+=1
         except ImportCancelled:
             result['cancelled'] = True
     return result
@@ -621,8 +641,12 @@ def report_lines(conn=None, *, state=None):
     lines = ['', 'Saved salary / results sources',
              f"- Results cataloged: {state['results_cataloged']}; salary snapshots: {state['salary_snapshots']}; contest pairings: {state['saved_pairings']}.",
              f"- Qualified saved pairings: {state['qualified_saved_pairings']}; Invalid saved pairings: {state['invalid_saved_pairings']}."]
-    label = 'Unpaired cataloged results' if state['warnings'] else 'Results awaiting a salary match'
-    lines.append(f"- {label}: {state['unpaired_results']}. Compatible candidates are not saved pairings. Use Review Salary Matches.")
+    from salary_availability import label as salary_label,summary as salary_summary
+    unavailable=sum(salary_label(row)=='Salary data not available' for row in state['results'])
+    lines.append(f"- Unpaired cataloged results: {state['unpaired_results']}. Compatible candidates are not saved pairings.")
+    availability=salary_summary(dict(unpaired=state['unpaired_results'],salary_unavailable=unavailable,
+        salary_review_needed=state['unpaired_results']-unavailable))
+    if availability:lines.append('- '+availability)
     lines.append('- Each salary snapshot may serve multiple contests; pairing one result never consumes the salary file.')
     for row in state['results']:
         if row.get('date_correction'):
@@ -633,7 +657,8 @@ def report_lines(conn=None, *, state=None):
             lines.append(f"- Needs review: {row['name']}; manual salary revision {review['salary_hash'][:12]}; no qualified pairing. {review['qualification_reason']}")
         elif row['status']=='NO_COMPATIBLE_MATCH':
             correctable=[c['name'] for c in row['candidates'] if c.get('date_correctable')]
-            lines.append(f"- Unpaired: {row['name']}; "+('date correction requires review: '+', '.join(correctable) if correctable else 'no salary revision covers every observed player/role on the recorded date; see rejected candidates in Review Salary Matches.'))
+            lines.append(f"- {salary_label(row)}: {row['name']}; "+('date correction requires review: '+', '.join(correctable) if correctable else
+                row.get('source_problem') or 'no compatible salary revision is available. Original results remain saved.'))
     lines.extend('- WARNING: ' + warning for warning in state['warnings'])
     lines.extend([f"- Pairing database identity: {state['database_identity']}.",
                   '- Pairing validates observed roster identities and source revisions; full eligible-pool coverage and payouts remain unverified.'])

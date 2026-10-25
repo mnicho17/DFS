@@ -29,8 +29,9 @@ def result_reason(result):
     for error in _error_items(history.get('errors')):
         notes.append(str(error.get('name', 'History')) + ': ' + str(error.get('error', 'Needs review'))
                      if isinstance(error, dict) else str(error))
-    if result.get('unpaired'):
-        notes.append(f"{result['unpaired']} result files still need a salary match; one salary revision can serve multiple contests.")
+    from salary_availability import summary
+    availability=summary(result)
+    if availability:notes.append(availability)
     if result.get('changed_sources'):
         notes.append('Changed source revisions need review; existing saved associations were preserved.')
     if 'requested' in result and len(result.get('lineups') or []) < result['requested']:

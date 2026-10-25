@@ -75,7 +75,7 @@ def database(worker):
         tables = {row[0] for row in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'")}
         for table in ('analysis_sources', 'analysis_salary_pairs',
-                      'historical_imports', 'opponent_contests', 'analysis_date_corrections'):
+                      'historical_imports', 'opponent_contests', 'analysis_date_corrections', 'analysis_salary_reviews'):
             if table in tables:
                 rows = sorted(json.dumps(list(row), default=str) for row in
                               conn.execute('SELECT * FROM ' + table))
@@ -117,7 +117,7 @@ def save(worker, fingerprint, result, source_fingerprint=None):
         return
     # Only counters and watcher paths are retained; no reports or source contents.
     summary = {key: result.get(key, 0) for key in
-               ('unpaired', 'duplicates_skipped')}
+               ('unpaired', 'duplicates_skipped', 'salary_unavailable', 'salary_review_needed')}
     summary.update(results_imported=0, salaries_imported=0, pairs_added=0,
                    errors=[], cancelled=False, watch_paths=result.get('watch_paths', []))
     record = dict(inputs=after, history_inputs=inputs(worker, include_calibration=False)[0],

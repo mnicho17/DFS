@@ -4,10 +4,12 @@ from analysis_imports_ui import CombinedImportWorker
 
 
 def refresh_summary(result):
+    from salary_availability import summary
+    salary_status=summary(result)
     if result.get('unchanged_checkpoint'):
         return ('History unchanged; completed imports and indexes reused.\n'
                 'Checked file metadata and database revision; no source hashing or indexing needed.\n'
-                f"{result.get('unpaired', 0)} results still need salary matching.")
+                + salary_status)
     if result.get('calibration_only') and not result.get('errors') and not result.get('cancelled'):
         data = result.get('calibration_discovery', {})
         return ('History sources unchanged; imports and username indexes reused.\n'
@@ -25,7 +27,7 @@ def refresh_summary(result):
              f"{result.get('duplicates_skipped', 0)} identical files skipped."
              f"\n{len(added)} newly indexed contests ({sum(row.get('entries', 0) for row in added):,} entries); "
              f"{len(contests)-len(added)} unchanged contests verified."
-             f"\n{result.get('unpaired', 0)} results need salary matching; {len(errors)} errors need retry/review.")
+             f"\n{salary_status}\n{len(errors)} errors need retry/review.")
     if result.get('cancelled') and not history:
         text += '\nUsername indexing was interrupted or not started; refresh again to inspect completed work.'
     if errors:

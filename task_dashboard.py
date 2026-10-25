@@ -2,6 +2,7 @@
 import time
 from PyQt5 import QtCore, QtWidgets
 from task_attention import ATTENTION_STATES, needs_attention, result_reason, guidance
+from salary_availability import review_count as salary_review_count, summary as salary_summary
 
 
 class TaskHub(QtCore.QObject):
@@ -101,7 +102,7 @@ class WorkerTask(QtCore.QObject):
                 state = 'Paused / partial'
             elif 'requested' in result and len(result.get('lineups') or []) < result['requested']:
                 state = 'Incomplete'
-            elif result.get('errors') or result.get('unpaired') or result.get('changed_sources') or result.get('username_history', {}).get('errors'):
+            elif result.get('errors') or salary_review_count(result) or result.get('changed_sources') or result.get('username_history', {}).get('errors'):
                 state = 'Needs review'
             elif result.get('no_work'):
                 state = 'No current work'
@@ -115,6 +116,8 @@ class WorkerTask(QtCore.QObject):
                 state = 'Failed'
         if isinstance(result, dict):
             reason = result_reason(result)
+            availability=salary_summary(result)
+            if availability and availability not in text:text += '\n'+availability
             self.hub.rows[self.key]['attention_reason'] = reason
             if state in ATTENTION_STATES and reason and reason not in text:
                 self.hub.update(self.key, reason)
