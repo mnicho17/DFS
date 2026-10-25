@@ -41,6 +41,28 @@ class SmartPreparationTests(unittest.TestCase):
     def run_job(self,**kw):
         return prepare_one(self.db,self.folder,self.output,kw.pop('cancelled',lambda:False),lambda text:None,now=self.today,seconds=.1,**kw)
 
+    def test_transient_receipt_lock_keeps_preparation_and_checkpoint_resume_working(self):
+        import os
+        original=os.replace
+        denied=[]
+        def replace(source,target):
+            if Path(target).parent.name=='discovered' and not denied:
+                denied.append(str(target))
+                error=PermissionError('Synthetic receipt sharing denial')
+                error.winerror=5
+                raise error
+            return original(source,target)
+        with patch('smart_preparation.os.replace',side_effect=replace),patch('smart_preparation.time.sleep'):
+            first=self.run_job()
+        self.assertEqual(len(denied),1)
+        self.assertEqual(first['state'],'Queued')
+        second=self.run_job()
+        self.assertEqual(second['state'],'Queued')
+        self.assertTrue(second['checkpoint_reused'])
+        self.assertGreaterEqual(second['count'],first['count'])
+        self.assertEqual(self.estimate.call_count,1)
+        self.assertEqual(list((self.output/'discovered').glob('*.tmp')),[])
+
     def test_real_library_partial_checkpoint_resumes_without_repeating_ownership(self):
         from candidate_library import metadata
         result=self.run_job()
