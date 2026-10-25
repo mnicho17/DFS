@@ -21,6 +21,31 @@ def labels(lineup, cap=50000):
                 '$201–700' if unused<=700 else '$701–1,200' if unused<=1200 else 'over $1,200'}
 
 
+
+class _ProposalMetadata:
+    """Call-local immutable player values for already validated two-team pools."""
+    def __init__(self,pool):
+        self.salaries=tuple(_salary(p) for p in pool)
+        self.captain_salaries=tuple(_cpt_salary(p) for p in pool)
+        self.positions=tuple(p['Position'] for p in pool)
+        self.team_flags=tuple(p['Team']==pool[0]['Team'] for p in pool)
+        self.qbs=tuple(p=='QB' for p in self.positions)
+        self.specialists=tuple(p in ('K','DST') for p in self.positions)
+
+    def labels(self,captain,flex,flex_salary,cap):
+        indices=(captain,*flex)
+        first_team=sum(self.team_flags[i] for i in indices)
+        other_team=6-first_team
+        unused=cap-self.captain_salaries[captain]-flex_salary
+        return {'Team split':('6' if first_team in (0,6) else
+                    '–'.join(map(str,sorted((first_team,other_team),reverse=True)))),
+                'Captain position':self.positions[captain],
+                'Quarterbacks':str(sum(self.qbs[i] for i in indices)),
+                'Kicker/defense slots':str(sum(self.specialists[i] for i in indices)),
+                'Salary left':'over cap' if unused<0 else '$0–200' if unused<=200 else
+                    '$201–700' if unused<=700 else '$701–1,200' if unused<=1200 else 'over $1,200'}
+
+
 def distributions(entries, cap=50000):
     counts = {category:Counter() for category in CATEGORIES}
     for entry in entries:
@@ -72,6 +97,7 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
                 if not isinstance(multiplier,(int,float)) or not math.isfinite(multiplier) or multiplier<=0:
                     raise ValueError('Invalid experimental ownership draw multiplier.')
                 values[i]*=multiplier
+    metadata=_ProposalMetadata(pool)
     proposals=[]
     # One column per category keeps proposal order without retaining a label
     # dictionary for every proposal. Columns are private to this call.
@@ -82,15 +108,16 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
         field.diagnostic['attempts'] = attempt+1
         c = rng.choices(captains, weights=[cw[i] for i in captains])[0]
         available = [i for i in range(len(pool)) if i!=c]
-        flex = []
+        flex = [];flex_indices=[]
         for _ in range(5):
             i = rng.choices(available, weights=[fw[j] for j in available])[0]
-            available.remove(i);flex.append(pool[i])
-        if _cpt_salary(pool[c])+sum(_salary(p) for p in flex)>salary_cap or len({p['Team'] for p in [pool[c]]+flex})!=2:
+            available.remove(i);flex.append(pool[i]);flex_indices.append(i)
+        flex_salary=sum(metadata.salaries[i] for i in flex_indices)
+        if metadata.captain_salaries[c]+flex_salary>salary_cap or len({p['Team'] for p in [pool[c]]+flex})!=2:
             continue
         entry = ShowdownLineup(pool[c], flex)
         proposals.append(entry)
-        for category,label in labels(entry,salary_cap).items():
+        for category,label in metadata.labels(c,flex_indices,flex_salary,salary_cap).items():
             features[category].append(label)
         if len(proposals)>=max(500, count*20):
             break
