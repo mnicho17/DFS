@@ -23,7 +23,19 @@ def save(path, value):
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as handle:
             json.dump(value, handle, allow_nan=False)
-        os.replace(temporary, path)
+        # Windows scanners/readers can briefly deny replacement after the writer
+        # has closed. Keep the complete temporary file and retry only known
+        # sharing/access errors; never delete the previous receipt to make room.
+        delays=iter((.05,.1,.2,.4,.8,1.6))
+        while True:
+            try:
+                os.replace(temporary, path)
+                break
+            except OSError as exc:
+                if getattr(exc,'winerror',None) not in (5,32,33):raise
+                delay=next(delays,None)
+                if delay is None:raise
+                time.sleep(delay)
     finally:
         if os.path.exists(temporary): os.unlink(temporary)
 
