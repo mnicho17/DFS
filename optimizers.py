@@ -1110,6 +1110,7 @@ class ShowdownOptimizer:
         used_flex: Dict[str, int] = {}
         used_signatures: set[Tuple[str, Tuple[str, ...]]] = set(excluded_signatures or [])
         out: List[Dict[str, Any]] = []
+        feasible_cache = {}
 
         own_s = _own_sign(self.own_mode)
         w_cpt = self.own_weight * 1.35 * own_s
@@ -1251,40 +1252,50 @@ class ShowdownOptimizer:
                     return None
 
             while len(flex) < 5:
-                slots_after_pick = 4 - len(flex)
-                feasible: List[Dict[str, Any]] = []
-                raw_scores: List[float] = []
-                cheapest_options = sorted((flex_salary[id(p)], player_key[id(p)]) for p in available)
-                richest_options = (list(reversed(cheapest_options[-slots_after_pick - 1:]))
-                                   if self.minimum_salary > 0 else ())
-                for player in available:
-                    salary = flex_salary[id(player)]
-                    if salary > cap_left:
-                        continue
-                    candidate_key = player_key[id(player)]
-                    cheapest_others = [
-                        other_salary for other_salary, other_key in cheapest_options
-                        if other_key != candidate_key
-                    ][:slots_after_pick]
-                    if slots_after_pick and (
-                        len(cheapest_others) < slots_after_pick
-                        or sum(cheapest_others) > cap_left - salary
-                    ):
-                        continue
-                    if self.minimum_salary > 0:
-                        richest_others = [other_salary for other_salary, other_key in richest_options
-                                          if other_key != candidate_key][:slots_after_pick]
-                        possible_salary = self.salary_cap - cap_left + salary + sum(richest_others)
-                        if possible_salary < self.minimum_salary - 1e-9:
+                # Keep ordered prefixes: raw score summation and RNG draws
+                # must match the original path exactly. Caps remain fixed until
+                # an output is accepted, when this bounded cache is cleared.
+                state = (captain_key, tuple(player_key[id(p)] for p in flex))
+                cached = feasible_cache.get(state)
+                if cached is None:
+                    slots_after_pick = 4 - len(flex)
+                    feasible: List[Dict[str, Any]] = []
+                    raw_scores: List[float] = []
+                    cheapest_options = sorted((flex_salary[id(p)], player_key[id(p)]) for p in available)
+                    richest_options = (list(reversed(cheapest_options[-slots_after_pick - 1:]))
+                                       if self.minimum_salary > 0 else ())
+                    for player in available:
+                        salary = flex_salary[id(player)]
+                        if salary > cap_left:
                             continue
-                    raw = flex_score(player)
-                    raw += 0.10 * (flex_score(player) / max(salary, 1.0)) * 1000.0
-                    raw += style * sum(
-                        pair_score(player, chosen)
-                        for chosen in [captain] + flex
-                    )
-                    feasible.append(player)
-                    raw_scores.append(raw)
+                        candidate_key = player_key[id(player)]
+                        cheapest_others = [
+                            other_salary for other_salary, other_key in cheapest_options
+                            if other_key != candidate_key
+                        ][:slots_after_pick]
+                        if slots_after_pick and (
+                            len(cheapest_others) < slots_after_pick
+                            or sum(cheapest_others) > cap_left - salary
+                        ):
+                            continue
+                        if self.minimum_salary > 0:
+                            richest_others = [other_salary for other_salary, other_key in richest_options
+                                              if other_key != candidate_key][:slots_after_pick]
+                            possible_salary = self.salary_cap - cap_left + salary + sum(richest_others)
+                            if possible_salary < self.minimum_salary - 1e-9:
+                                continue
+                        raw = flex_score(player)
+                        raw += 0.10 * (flex_score(player) / max(salary, 1.0)) * 1000.0
+                        raw += style * sum(
+                            pair_score(player, chosen)
+                            for chosen in [captain] + flex
+                        )
+                        feasible.append(player)
+                        raw_scores.append(raw)
+                    if len(feasible_cache) < 512:
+                        feasible_cache[state] = (feasible, raw_scores)
+                else:
+                    feasible, raw_scores = cached
                 if not feasible:
                     return None
 
@@ -1353,6 +1364,7 @@ class ShowdownOptimizer:
 
             candidates.sort(key=lambda item: item[0], reverse=True)
             _, captain, flex, signature = candidates[0]
+            feasible_cache.clear()
             used_signatures.add(signature)
             captain_key = player_key[id(captain)]
             used_cpt[captain_key] = used_cpt.get(captain_key, 0) + 1

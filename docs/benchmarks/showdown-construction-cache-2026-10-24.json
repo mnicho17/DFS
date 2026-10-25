@@ -1,0 +1,382 @@
+{
+  "baseline": "4eab227090a2ac401e2cb1622927f2edf4d9b3ed",
+  "source_sha256": "f113f322acd63f6747afce8f46ebcda2d5fdbb77a56fc6fe0469967b99944abd",
+  "basis": "Synthetic 36-player fixture, five Captain locks, Near Cap, seed 35764, twelve requested rows. Late case excludes up to 100 original fixture outputs; not real-slate or whole-build timing",
+  "trials": [
+    {
+      "style": "Strategic",
+      "excluded": 0,
+      "repeat": 0,
+      "mode": "before",
+      "seconds": 0.5328002000460401,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 0,
+      "repeat": 0,
+      "mode": "after",
+      "seconds": 0.41211829998064786,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 0,
+      "repeat": 1,
+      "mode": "after",
+      "seconds": 0.423840600065887,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 0,
+      "repeat": 1,
+      "mode": "before",
+      "seconds": 0.524475600104779,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 0,
+      "repeat": 2,
+      "mode": "before",
+      "seconds": 0.5363550999900326,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 0,
+      "repeat": 2,
+      "mode": "after",
+      "seconds": 0.43338049994781613,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 100,
+      "repeat": 0,
+      "mode": "before",
+      "seconds": 0.7666338999988511,
+      "returned": 12,
+      "sha256": "2ab442da7204c60685d63d44037843f3b24c3d8096c550a975385513d3425ed3"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 100,
+      "repeat": 0,
+      "mode": "after",
+      "seconds": 0.5647873999550939,
+      "returned": 12,
+      "sha256": "2ab442da7204c60685d63d44037843f3b24c3d8096c550a975385513d3425ed3"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 100,
+      "repeat": 1,
+      "mode": "after",
+      "seconds": 0.586156600038521,
+      "returned": 12,
+      "sha256": "2ab442da7204c60685d63d44037843f3b24c3d8096c550a975385513d3425ed3"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 100,
+      "repeat": 1,
+      "mode": "before",
+      "seconds": 0.7518218000186607,
+      "returned": 12,
+      "sha256": "2ab442da7204c60685d63d44037843f3b24c3d8096c550a975385513d3425ed3"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 100,
+      "repeat": 2,
+      "mode": "before",
+      "seconds": 0.7739560999907553,
+      "returned": 12,
+      "sha256": "2ab442da7204c60685d63d44037843f3b24c3d8096c550a975385513d3425ed3"
+    },
+    {
+      "style": "Strategic",
+      "excluded": 100,
+      "repeat": 2,
+      "mode": "after",
+      "seconds": 0.5679381000809371,
+      "returned": 12,
+      "sha256": "2ab442da7204c60685d63d44037843f3b24c3d8096c550a975385513d3425ed3"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 0,
+      "repeat": 0,
+      "mode": "before",
+      "seconds": 0.518786899978295,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 0,
+      "repeat": 0,
+      "mode": "after",
+      "seconds": 0.3968784000026062,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 0,
+      "repeat": 1,
+      "mode": "after",
+      "seconds": 0.4103301999857649,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 0,
+      "repeat": 1,
+      "mode": "before",
+      "seconds": 0.5321659001056105,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 0,
+      "repeat": 2,
+      "mode": "before",
+      "seconds": 0.5033817000221461,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 0,
+      "repeat": 2,
+      "mode": "after",
+      "seconds": 0.4050107999937609,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 100,
+      "repeat": 0,
+      "mode": "before",
+      "seconds": 0.7670372000429779,
+      "returned": 12,
+      "sha256": "f5597fcb0b9e9d6aadab5253aff5b7f6f4934b032c34f465752a3ee11027a017"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 100,
+      "repeat": 0,
+      "mode": "after",
+      "seconds": 0.5507209000643343,
+      "returned": 12,
+      "sha256": "f5597fcb0b9e9d6aadab5253aff5b7f6f4934b032c34f465752a3ee11027a017"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 100,
+      "repeat": 1,
+      "mode": "after",
+      "seconds": 0.5346207999391481,
+      "returned": 12,
+      "sha256": "f5597fcb0b9e9d6aadab5253aff5b7f6f4934b032c34f465752a3ee11027a017"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 100,
+      "repeat": 1,
+      "mode": "before",
+      "seconds": 0.7249185000546277,
+      "returned": 12,
+      "sha256": "f5597fcb0b9e9d6aadab5253aff5b7f6f4934b032c34f465752a3ee11027a017"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 100,
+      "repeat": 2,
+      "mode": "before",
+      "seconds": 0.7624282999895513,
+      "returned": 12,
+      "sha256": "f5597fcb0b9e9d6aadab5253aff5b7f6f4934b032c34f465752a3ee11027a017"
+    },
+    {
+      "style": "Balanced",
+      "excluded": 100,
+      "repeat": 2,
+      "mode": "after",
+      "seconds": 0.5532936999807134,
+      "returned": 12,
+      "sha256": "f5597fcb0b9e9d6aadab5253aff5b7f6f4934b032c34f465752a3ee11027a017"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 0,
+      "repeat": 0,
+      "mode": "before",
+      "seconds": 0.46691820002160966,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 0,
+      "repeat": 0,
+      "mode": "after",
+      "seconds": 0.35240849992260337,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 0,
+      "repeat": 1,
+      "mode": "after",
+      "seconds": 0.34501829999499023,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 0,
+      "repeat": 1,
+      "mode": "before",
+      "seconds": 0.4579900000244379,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 0,
+      "repeat": 2,
+      "mode": "before",
+      "seconds": 0.4535823999904096,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 0,
+      "repeat": 2,
+      "mode": "after",
+      "seconds": 0.34113620000425726,
+      "returned": 12,
+      "sha256": "a9b7654449ba9577ebdb1f4c43f5dfbc27273e47f157a8a8ff318ad4b4cbeb4d"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 100,
+      "repeat": 0,
+      "mode": "before",
+      "seconds": 0.7037701000226662,
+      "returned": 12,
+      "sha256": "ce0be8009a1bfa1e4706cc7a6f8a899f766ac33ab63314a6939cff82ea60bcbd"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 100,
+      "repeat": 0,
+      "mode": "after",
+      "seconds": 0.4900561000686139,
+      "returned": 12,
+      "sha256": "ce0be8009a1bfa1e4706cc7a6f8a899f766ac33ab63314a6939cff82ea60bcbd"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 100,
+      "repeat": 1,
+      "mode": "after",
+      "seconds": 0.48098079999908805,
+      "returned": 12,
+      "sha256": "ce0be8009a1bfa1e4706cc7a6f8a899f766ac33ab63314a6939cff82ea60bcbd"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 100,
+      "repeat": 1,
+      "mode": "before",
+      "seconds": 0.6901914000045508,
+      "returned": 12,
+      "sha256": "ce0be8009a1bfa1e4706cc7a6f8a899f766ac33ab63314a6939cff82ea60bcbd"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 100,
+      "repeat": 2,
+      "mode": "before",
+      "seconds": 0.6957735000178218,
+      "returned": 12,
+      "sha256": "ce0be8009a1bfa1e4706cc7a6f8a899f766ac33ab63314a6939cff82ea60bcbd"
+    },
+    {
+      "style": "Randomized",
+      "excluded": 100,
+      "repeat": 2,
+      "mode": "after",
+      "seconds": 0.49086919997353107,
+      "returned": 12,
+      "sha256": "ce0be8009a1bfa1e4706cc7a6f8a899f766ac33ab63314a6939cff82ea60bcbd"
+    }
+  ],
+  "summary": [
+    {
+      "style": "Strategic",
+      "previous_bank": false,
+      "medians": {
+        "before": 0.5328002000460401,
+        "after": 0.423840600065887
+      }
+    },
+    {
+      "style": "Strategic",
+      "previous_bank": true,
+      "medians": {
+        "before": 0.7666338999988511,
+        "after": 0.5679381000809371
+      }
+    },
+    {
+      "style": "Balanced",
+      "previous_bank": false,
+      "medians": {
+        "before": 0.518786899978295,
+        "after": 0.4050107999937609
+      }
+    },
+    {
+      "style": "Balanced",
+      "previous_bank": true,
+      "medians": {
+        "before": 0.7624282999895513,
+        "after": 0.5507209000643343
+      }
+    },
+    {
+      "style": "Randomized",
+      "previous_bank": false,
+      "medians": {
+        "before": 0.4579900000244379,
+        "after": 0.34501829999499023
+      }
+    },
+    {
+      "style": "Randomized",
+      "previous_bank": true,
+      "medians": {
+        "before": 0.6957735000178218,
+        "after": 0.4900561000686139
+      }
+    }
+  ],
+  "exact_order_and_rng_equal": true
+}
