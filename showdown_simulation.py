@@ -599,6 +599,19 @@ def run_deep_showdown(worker, shortlist_fn):
         candidate_target=budget, optimizer_candidate_target=budget, candidate_count=generated,
         selected_count=len(selected["lineups"]), requested_count=worker.num_lineups,
         sim_scenarios=worker.sim_scenarios, build_pool_size=len(players), role_pool_applied=False)
+    # Observe only after all timed generation, SIM, ranking and selection finish.
+    # This report cannot alter their budgets, candidates or selected portfolio.
+    from showdown_space_diagnostic import observe
+    diagnostic_start=time.perf_counter()
+    try:
+        space=observe(players,bank.keys(),salary_cap=worker.salary_cap,
+            minimum_salary=salary_floor(worker.salary_cap,worker.salary_strategy),target=budget,
+            cancelled=worker._cancel_event.is_set)
+    except Exception:
+        space=dict(status='unavailable')
+    sim_report['deep_build']['candidate_space']=space
+    timing['candidate_space_seconds']=time.perf_counter()-diagnostic_start
+    timing['total_seconds']+=timing['candidate_space_seconds']
     return {"kind": "showdown", "sport": "NFL", "lineups": selected["lineups"],
         "requested": worker.num_lineups, "cancelled": worker._cancel_event.is_set(),
         "portfolio_report": selected["report"], "candidate_count": generated,

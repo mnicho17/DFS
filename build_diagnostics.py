@@ -321,6 +321,7 @@ def create_build_diagnostic(
     contest_profile = dict(settings.get("contest_profile") or sim.get("contest_profile") or {})
     from preparation_audit import clean_build_audit
     from simulation_profiling import clean as clean_simulation_profile
+    from showdown_space_diagnostic import clean as clean_candidate_space
     diagnostic = {
         "schema_version": 4,
         "preparation_audit": clean_build_audit(context.get("preparation_audit")),
@@ -334,6 +335,7 @@ def create_build_diagnostic(
         "ranking_audit": dict((sim.get('deep_build') or {}).get('ranking_audit') or {}),
         "ranking_bank": dict((sim.get('deep_build') or {}).get('ranking_bank') or {}),
         "screening_audit": dict((sim.get('deep_build') or {}).get('screening_audit') or {}),
+        "candidate_space": clean_candidate_space((sim.get('deep_build') or {}).get('candidate_space')),
         "field_diagnostic": dict(sim.get('field_diagnostic') or {}),
         **({"history_use_unscored": dict(sim['history_use_unscored'])} if sim.get('history_use_unscored') else {}),
         "ownership_leverage": dict(sim.get('ownership_leverage') or {}),
@@ -791,6 +793,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
             lines.append(f"- Screening audit saved: {screening['generated']:,} generated; {screening['salary_eligible']:,} salary eligible; {screening['retained']:,} retained; {screening['shortlisted']:,} shortlisted; coarse scoring {screening['screening_status']}. Audit-only file: history/screening-audits/{screening['filename']}.")
         elif screening:
             lines.append('- Screening audit not saved: ' + screening.get('reason', 'Unavailable.'))
+        from showdown_space_diagnostic import lines as candidate_space_lines
+        lines.extend(candidate_space_lines(record.get('candidate_space')))
         salary_filter = record.get('salary_filter') or {}
         if salary_filter:
             lines.append(f"- Showdown salary filter: {salary_filter.get('excluded', 0):,} candidates excluded before screening; minimum ${salary_filter.get('minimum', 0):,.0f}.")
