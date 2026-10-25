@@ -31,6 +31,12 @@ def capture(case):
         target['Captain position'].update(K=.15,DST=.05)
         target['Quarterbacks']={'0':0,'1':.9,'2':.1}
         options.update(seed=29,salary_cap=48000);count=80
+    elif case=='fractional':
+        for i,p in enumerate(players):
+            p['FlexSalary']+=(i%3)*.125
+            p['CptSalary']=p['FlexSalary']*1.5+.0625
+        options.update(seed=413,salary_cap=49999.875);count=80
+    elif case=='single':count=1
     elif case=='weighted':
         options.update(seed=901,draw_weights={(slot,_pkey(p)):.4+(i%7)*.3
             for slot in ('Captain','FLEX') for i,p in enumerate(players)})
@@ -118,7 +124,25 @@ BASELINE = {'default': {'proposals': 'cf8778221cdb9da83273367fd790d6a95fc35029b7
            'returned': 0,
            'cancel_checks': 0,
            'draws': 0,
-           'rng': None}}
+           'rng': None},
+ 'fractional': {'proposals': 'a615af41bbff1f93d7011576440f9c01fb86cb82b34e60bd434542ccd11ec37e',
+                'weights': '4e2dc70b68c4f0c12be05c5f69a1e8ccc6e0e4fbce11ea1d908dd3839aa420d3',
+                'before_draw': '0a856daac20888696199cc06011e7db2ce928c8c8bf1c1b17bf5eefe23c6dce1',
+                'rosters': '836687716531adeec7520f65ed0e3858941f7b9ed760c6c2a9de3c4d5e36b8af',
+                'diagnostic': '9a28c990ec30842b82c9c2544fd7f5b7526dbd90705408dff320a7cdcf973d68',
+                'returned': 80,
+                'cancel_checks': 31,
+                'draws': 9907,
+                'rng': '54f59d0284e39113352bbe32e26e2ac8f5e27483191cb02dfb0c667c6306abac'},
+ 'single': {'proposals': '14e01b506c3dad21654e58d22615b81f17ed4b62163763b3017a14e92265a5b1',
+            'weights': '7a9ef4f82bc70c63f8b088259ef132929f278a9cd3f641115480c7186c18c15f',
+            'before_draw': 'c4d08902716fb7d7f8bf85b5a215d8b6bb0b03dc88139ad5b2e12589b4d8a3f8',
+            'rosters': 'ad21a3bf37e16e0827588ec5a8feaa54e8f0a5879ebd0170d25d8fc8ab7c3d67',
+            'diagnostic': '055e2c023115dcbced7c5b863a227278e2d5aeda39c8e634db316a320f258d1b',
+            'returned': 1,
+            'cancel_checks': 16,
+            'draws': 1201,
+            'rng': 'fe0c5193338f5205a7a22538a3e1b1a6f53554d97bfa728e8519e8cb2e16e5b4'}}
 
 
 class HistoricalFittingFactorsTests(unittest.TestCase):
@@ -135,3 +159,13 @@ class HistoricalFittingFactorsTests(unittest.TestCase):
             with self.subTest(case=case):self.assertEqual(capture(case),BASELINE[case])
     def test_empty_request_keeps_original_diagnostic(self):
         self.assertEqual(capture('empty'),BASELINE['empty'])
+
+
+class HistoricalFeatureColumnsTests(unittest.TestCase):
+    def test_fractional_salary_features_keep_exact_sampling_weights(self):
+        self.assertEqual(capture('fractional'),BASELINE['fractional'])
+    def test_one_opponent_with_many_proposals_keeps_original_result(self):
+        self.assertEqual(capture('single'),BASELINE['single'])
+    def test_feature_data_does_not_leak_between_distinct_pools(self):
+        for case in ('default','specialists','default'):
+            with self.subTest(case=case):self.assertEqual(capture(case),BASELINE[case])
