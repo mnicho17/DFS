@@ -3044,7 +3044,7 @@ from portfolio_insights import build_portfolio_insights
 
 from slate_readiness import audit_slate
 
-from entry_safety import build_entry_safety_report
+from entry_safety import build_entry_safety_report, portfolio_override_allowed
 
 from game_day_safety import build_final_lock_report
 
@@ -5448,6 +5448,7 @@ class EntrySafetyDialog(QtWidgets.QDialog):
         self.report = dict(report or {})
 
         self.repair_requested = False
+        self.portfolio_override_confirmed = False
 
         self.setWindowTitle("Entry Safety")
 
@@ -5557,6 +5558,10 @@ class EntrySafetyDialog(QtWidgets.QDialog):
 
         )
 
+        can_override = portfolio_override_allowed(self.report)
+        if can_override:
+            note_text = ("These saved lineups conflict with your current portfolio rules. "
+                         "You can explicitly export this portfolio without changing the rules or lineups.")
         note = QtWidgets.QLabel(note_text)
 
         note.setWordWrap(True)
@@ -5596,6 +5601,15 @@ class EntrySafetyDialog(QtWidgets.QDialog):
         export_button.setObjectName("confirmSafeExport")
 
         export_button.setEnabled(status != "blocked")
+
+        if can_override:
+            acknowledge = QtWidgets.QCheckBox("I accept the portfolio-rule violations for this export.")
+            acknowledge.setObjectName("acknowledgePortfolioExport")
+            def acknowledge_override(checked):
+                self.portfolio_override_confirmed = bool(checked)
+                export_button.setEnabled(bool(checked))
+            acknowledge.toggled.connect(acknowledge_override)
+            layout.addWidget(acknowledge)
 
         buttons.accepted.connect(self.accept)
 
@@ -17139,6 +17153,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
             return False
 
+        if report.get('status') == 'blocked':
+            return (result == QtWidgets.QDialog.Accepted
+                    and portfolio_override_allowed(report)
+                    and dialog.portfolio_override_confirmed)
         return result == QtWidgets.QDialog.Accepted
 
 
