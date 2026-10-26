@@ -117,7 +117,7 @@ def active_showdown_players(players):
     return pool
 
 
-def generate_showdown_field(players, count, *, salary_cap=50000, seed=0, cancel_callback=None, model='salary-bands-v1', history_profile=None):
+def generate_showdown_field(players, count, *, salary_cap=50000, seed=0, cancel_callback=None, model='salary-bands-v1', history_profile=None, reuse_field=False):
     if model == 'legacy':
         return _generate_showdown_field_legacy(players, count, salary_cap=salary_cap, seed=seed, cancel_callback=cancel_callback)
     if model not in ('salary-bands-v1', 'historical-blend-v1'):
@@ -127,9 +127,34 @@ def generate_showdown_field(players, count, *, salary_cap=50000, seed=0, cancel_
     if model == 'historical-blend-v1':
         from showdown_history_field import sample_field as history_sample, validate_profile
         validate_profile(history_profile, pool)
-        return history_sample(pool, count, history_profile, salary_cap=salary_cap, seed=seed,
-                              cancelled=cancel_callback or (lambda: False))
-    return sample_field(pool, count, salary_cap=salary_cap, seed=seed, cancel_callback=cancel_callback)
+    from opponent_field_cache import identity, get, put
+    key = identity(pool, count, salary_cap, seed, model, history_profile) if reuse_field else None
+    saved = get(key)
+    if saved is not None:
+        if not cancel_callback or not cancel_callback():
+            return saved
+        # Preserve the sampler's cancellation result rather than returning a
+        # complete cached field after cancellation was requested.
+        if model == 'historical-blend-v1':
+            return history_sample(pool, count, history_profile, salary_cap=salary_cap, seed=seed,
+                                  cancelled=lambda: True)
+        return sample_field(pool, count, salary_cap=salary_cap, seed=seed,
+                            cancel_callback=lambda: True)
+    cancelled = False
+    def stop():
+        nonlocal cancelled
+        stopped = bool(cancel_callback and cancel_callback())
+        cancelled = cancelled or stopped
+        return stopped
+    if model == 'historical-blend-v1':
+        field = history_sample(pool, count, history_profile, salary_cap=salary_cap, seed=seed,
+                               cancelled=stop if cancel_callback else (lambda: False))
+    else:
+        field = sample_field(pool, count, salary_cap=salary_cap, seed=seed,
+                             cancel_callback=stop if cancel_callback else None)
+    if not cancelled:
+        put(key, field, count)
+    return field
 
 
 def _generate_showdown_field_legacy(players, count, *, salary_cap=50000, seed=0, cancel_callback=None):
@@ -188,7 +213,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         validate_showdown_lineup(lineup, pool, salary_cap)
     field_pool = active_showdown_players(opponent_players) if opponent_players is not None else pool
     if diagnostic_field is None:
-        field = generate_showdown_field(field_pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback, model=field_model, history_profile=history_profile)
+        field = generate_showdown_field(field_pool, field_lineup_count, salary_cap=salary_cap, seed=seed + 1, cancel_callback=cancel_callback, model=field_model, history_profile=history_profile, reuse_field=scenario_cache)
     else:
         # Explicit comparison only. Canonicalize to the supplied frozen pool so
         # an ID-matching field cannot inject different salaries or forecasts.
