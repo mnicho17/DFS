@@ -483,3 +483,11 @@ def format_entry_safety_report(report: Mapping[str, Any]) -> str:
             lines.append(f"  Next: {check.get('action')}")
     lines.extend(["", "Entry Safety is report-only. It never changes a lineup or setting."])
     return "\n".join(lines)
+
+
+def portfolio_override_allowed(report: Mapping[str, Any]) -> bool:
+    """Only portfolio preferences may be explicitly waived for this export."""
+    blocks = [check for check in report.get('checks') or [] if check.get('status') == 'block']
+    return (report.get('status') == 'blocked' and bool(blocks)
+            and report.get('blockers') == len(blocks)
+            and all(check.get('key') == 'portfolio_rules' for check in blocks))
