@@ -1,0 +1,22 @@
+{
+  "reverse": {
+    "proposals": "e67b5d3ea56646a28ede46cee54ddf9d9c46abcdf2f35142125f45712d6e7815",
+    "weights": "82e2d03e09a0b9bd9e41e31ce5549a4c3864e2d2b4702d0bcdffe869fa176c15",
+    "rosters": "111dc57d422e5f707e2587fdeb1659a2504712b09536908279a2ed984cc3f5ea",
+    "diagnostic": "a6289d99cedd0513d633251d5b510b068a21e7d1c11f5434bdddba0b3f09c8ab",
+    "rng": "2a1e9f3a407d586196b13979959c29525565e34f1b394f83a306e651faa3d96a",
+    "draws": 7411,
+    "cancel_checks": 27,
+    "returned": 60
+  },
+  "fallback": {
+    "proposals": "aa9082e8760a46fad56b326dc4ea6f0496ab5bcf714ee4e3ade42ac1d237bbd7",
+    "weights": "c6d936cc2b783cd0d6cd2f1dbe1fa83e0b2802a97b62ee7377c81ffd95bafc54",
+    "rosters": "f3198cf3d67677d2e9dcf593ef3089266e172e8e9a418783673fb2fdf2597625",
+    "diagnostic": "8bb0f7ce87f470f091e6c8962ce06c4234cd49c92b207e524a8aefff5ae9b81a",
+    "rng": "ddd868a5ca80dbd84b1fcd3fb5080db105f73d8f74b0f580401b604a370b4645",
+    "draws": 7267,
+    "cancel_checks": 27,
+    "returned": 60
+  }
+}

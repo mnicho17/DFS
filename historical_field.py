@@ -138,6 +138,10 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
     field.diagnostic['proposals'] = len(proposals)
     if not proposals or cancelled():
         return field
+    # Labels and their first-occurrence order are fixed across fitting passes.
+    # Seed ordinary dictionaries in that order; add every proposal weight in
+    # the original sequence, preserving the exact totals and factor arithmetic.
+    feature_labels={category:tuple(dict.fromkeys(column)) for category,column in features.items()}
     fitted = [1.0]*len(proposals)
     # A fixed number of tempered fitting passes bounds runtime and avoids hard
     # zeroing a legal construction merely because it was absent from history.
@@ -145,7 +149,7 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
         if cancelled():
             return field
         for category,column in features.items():
-            actual = Counter()
+            actual = dict.fromkeys(feature_labels[category],0)
             for label,weight in zip(column,fitted):actual[label]+=weight
             total = sum(actual.values())
             # The observed totals are fixed during this category's update.
