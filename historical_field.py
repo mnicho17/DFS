@@ -1,11 +1,13 @@
 """Opt-in construction sampler. Never used by the default SIM/build path."""
 from collections import Counter
+from itertools import accumulate
 import math
 import random
 from optimizers import ShowdownLineup, _pkey, _salary, _cpt_salary, _showdown_cpt_own, _showdown_flex_own
 from showdown_field import OpponentField
 
 MODEL = 'historical-construction-experiment-v1'
+FIRST_FLEX_CACHE_MAX_PLAYERS = 128
 CATEGORIES = ('Team split', 'Captain position', 'Quarterbacks', 'Kicker/defense slots', 'Salary left')
 
 
@@ -97,6 +99,11 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
                 if not isinstance(multiplier,(int,float)) or not math.isfinite(multiplier) or multiplier<=0:
                     raise ValueError('Invalid experimental ownership draw multiplier.')
                 values[i]*=multiplier
+    # Match random.choices' ordered accumulation once for fixed Captain weights.
+    # First-FLEX weights depend only on the Captain. Cache those lazily for
+    # ordinary pools; larger inputs retain bounded linear setup/storage.
+    captain_cumulative=tuple(accumulate(cw[i] for i in captains))
+    first_flex_cumulative={}
     metadata=_ProposalMetadata(pool)
     proposals=[]
     # One column per category keeps proposal order without retaining a label
@@ -106,11 +113,18 @@ def sample_history_field(pool, count, priors, *, salary_cap=50000, seed=0, cance
         if attempt%100==0 and cancelled():
             return field
         field.diagnostic['attempts'] = attempt+1
-        c = rng.choices(captains, weights=[cw[i] for i in captains])[0]
+        c = rng.choices(captains, cum_weights=captain_cumulative)[0]
         available = [i for i in range(len(pool)) if i!=c]
         flex = [];flex_indices=[]
         for _ in range(5):
-            i = rng.choices(available, weights=[fw[j] for j in available])[0]
+            if not flex and len(pool)<=FIRST_FLEX_CACHE_MAX_PLAYERS:
+                cumulative=first_flex_cumulative.get(c)
+                if cumulative is None:
+                    cumulative=tuple(accumulate(fw[j] for j in available))
+                    first_flex_cumulative[c]=cumulative
+                i = rng.choices(available, cum_weights=cumulative)[0]
+            else:
+                i = rng.choices(available, weights=[fw[j] for j in available])[0]
             available.remove(i);flex.append(pool[i]);flex_indices.append(i)
         flex_salary=sum(metadata.salaries[i] for i in flex_indices)
         if metadata.captain_salaries[c]+flex_salary>salary_cap or len({p['Team'] for p in [pool[c]]+flex})!=2:
