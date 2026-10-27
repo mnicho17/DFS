@@ -286,6 +286,10 @@ def render_overview(report):
                     if v['winner'] is not None:lines.append(f"{scope} / {LABELS[metric]}: cohort {v['winner']:.2f}; peer median {v['peer']:.2f}; {v['slates']} slates.")
             for scope,v in check['outcomes'].items():lines.append(f"{scope} later rank-cutoff outcome: cohort {v['cohort_rate']:.2%}; matched peers {v['peer_rate']:.2%}; {v['slates']} slates.")
             if not check['outcomes']:lines.append('Insufficient matching peer support; later outcome comparison unavailable.')
+    if followup:
+        if report.get('evaluation_windows'):lines += ['', 'Evaluation windows (gaps are not evaluated): '+ '; '.join(a+' through '+b for a,b in report['evaluation_windows'])]
+        from historical_pattern_checks import render_checks
+        lines += ['',render_checks(report)]
     if report['excluded']:lines+=['','Excluded contests:']+[r['name']+': '+r['reason'] for r in report['excluded']]
     return '\n'.join(lines)
 
