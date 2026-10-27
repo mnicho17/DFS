@@ -73,9 +73,13 @@ def summarize(contests):
     return result
 
 
-def review_history(db_path,cancelled=lambda:False,progress=lambda text:None,*,username='',preset=''):
+def review_history(db_path,cancelled=lambda:False,progress=lambda text:None,*,username='',preset='',_outcomes=False):
     from opponent_analysis import username_key
     from learning_db import _infer_field_preset
+    collector=contest_rows;aggregate=summarize
+    if _outcomes:
+        from construction_outcomes import contest_outcomes,summarize_outcomes
+        collector=contest_outcomes;aggregate=summarize_outcomes
     contests=[];excluded=[];verified={};manifests={}
     with closing(_connect(db_path,True)) as conn:
         conn.execute('BEGIN')
@@ -101,10 +105,13 @@ def review_history(db_path,cancelled=lambda:False,progress=lambda text:None,*,us
                 if len(manifest['dates'])!=1 or len(manifest['games'])!=1 or start!=end or end!=manifest['dates'][0]:raise ValueError('Exact single-game date is unresolved.')
                 audit=json.loads(audit);accepted=audit.get('accepted_entries')
                 if type(accepted) is not int or audit.get('conflicting_entry_ids_excluded')!=0:raise ValueError('Entry identity conflicts or invalid indexing receipt.')
-                values=contest_rows(conn,key,manifest['players'],accepted,size,'dk:'+username_key(username) if username.strip() else '',cancelled)
+                values=collector(conn,key,manifest['players'],accepted,size,'dk:'+username_key(username) if username.strip() else '',cancelled)
                 contests.append(dict(name=name,source=r,salary_source=s,date=end,game=[end,manifest['games'][0]],preset=band,complete_field=bool(complete),**values))
             except ai.ImportCancelled:raise
             except Exception as exc:
+                if _outcomes:
+                    from portfolio_pattern_audit import PatternAuditLimit
+                    if isinstance(exc,PatternAuditLimit):raise
                 ai._check(cancelled);excluded.append(dict(name=name,reason=str(exc)))
         conn.set_progress_handler(None,0)
     # Recheck current associations and immutable sources before publishing a report.
@@ -114,8 +121,8 @@ def review_history(db_path,cancelled=lambda:False,progress=lambda text:None,*,us
             if current.get(c['source'])!=c['salary_source']:raise ValueError('Salary association changed during review; rerun.')
     for source in verified.values():ai._verify(source,cancelled)
     ai._check(cancelled)
-    return dict(contests=contests,excluded=excluded,summary=summarize(contests),username=username,
-        preset=preset,by_preset={p:summarize([c for c in contests if c['preset']==p]) for p in sorted({c['preset'] for c in contests})})
+    return dict(contests=contests,excluded=excluded,summary=aggregate(contests),username=username,
+        preset=preset,by_preset={p:aggregate([c for c in contests if c['preset']==p]) for p in sorted({c['preset'] for c in contests})})
 
 
 def render(report):

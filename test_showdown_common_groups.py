@@ -92,4 +92,32 @@ class CommonGroupTests(unittest.TestCase):
         with patch('showdown_group_review.review_history',return_value={'partial':True}):worker.run()
         self.assertEqual(received,[]);self.assertEqual(done,[True])
 
+    def test_outcome_worker_uses_readonly_outcome_review_without_username_selection(self):
+        worker=ReviewWorker('unused','Winner','150-Max',outcomes=True);received=[]
+        worker.result.connect(received.append)
+        with patch('construction_outcomes.review_outcomes',return_value={'outcomes':True}) as review:
+            worker.run()
+        self.assertEqual(received,[{'outcomes':True}])
+        self.assertEqual(review.call_args.kwargs,{'preset':'150-Max'})
+    def test_outcome_menu_is_explicit_and_cancellation_suppresses_result(self):
+        dialog=CommonGroupsDialog(players(),[],'unused.sqlite')
+        self.assertEqual(len(dialog.review.menu().actions()),2);self.assertIsNone(dialog._thread)
+        dialog.close()
+        worker=ReviewWorker('unused','','',outcomes=True);worker.stop.set();received=[]
+        worker.result.connect(received.append)
+        with patch('construction_outcomes.review_outcomes',return_value={'partial':True}):worker.run()
+        self.assertEqual(received,[])
+
+    def test_completed_outcome_review_uses_matching_renderer_without_enabling_rules(self):
+        dialog=CommonGroupsDialog(players(),[],'unused.sqlite')
+        with patch('construction_outcomes.review_outcomes',return_value={'outcomes':True}), patch('construction_outcomes.render',return_value='Matched outcome report') as renderer:
+            dialog.start(outcomes=True);deadline=time.monotonic()+3
+            while dialog._thread is not None and time.monotonic()<deadline:
+                self.app.processEvents();time.sleep(.005)
+            self.assertIsNone(dialog._thread)
+            self.assertEqual(dialog.report.toPlainText(),'Matched outcome report')
+            renderer.assert_called_once_with({'outcomes':True})
+            self.assertEqual(dialog.selected(),set())
+        dialog.close()
+
 if __name__=='__main__':unittest.main()
