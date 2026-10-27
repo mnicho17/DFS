@@ -75,7 +75,20 @@ class ExploreUsersWidget(QtWidgets.QWidget):
         contest = QtWidgets.QPushButton('Inspect one contest…'); contest.clicked.connect(owner.open_opponent_portfolios)
         advanced = QtWidgets.QPushButton('Advanced history / field qualification…'); advanced.clicked.connect(self.advanced)
         copy = QtWidgets.QPushButton('Copy displayed analysis'); copy.clicked.connect(lambda:QtWidgets.QApplication.clipboard().setText(self.report.toPlainText()))
-        actions.addWidget(contest); actions.addWidget(advanced); actions.addWidget(copy); box.addLayout(actions)
+        winners = QtWidgets.QPushButton('Contest winners — all entries…'); winners.setObjectName('reviewWinnerPortfolios'); winners.clicked.connect(self.open_winners)
+        actions.addWidget(contest); actions.addWidget(winners); actions.addWidget(advanced); actions.addWidget(copy); box.addLayout(actions)
+
+    def open_winners(self):
+        owner=self.owner
+        if owner._import_thread is not None or owner.history_refresh.busy:
+            self.status.setText('Finish or stop the active history task before reviewing winner portfolios.')
+            return
+        from winner_portfolio_ui import WinnerPortfoliosDialog
+        owner.history_refresh.report_started()
+        try:
+            dialog=WinnerPortfoliosDialog(owner.db_path,self,self.format.currentData())
+            dialog.exec_()
+        finally:owner.history_refresh.report_finished()
 
     def select_user(self, item):
         self.username.setText(self.table.item(item.row(), 0).text())
