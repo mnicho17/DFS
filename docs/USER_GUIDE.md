@@ -2972,3 +2972,13 @@ it does not mean enabling a restriction improves results. Top-1%/5% are supplied
 or observed rank cutoffs, not proof of complete-field coverage or profitability.
 Rank-one ties count; missing ranks and unresolved identities are excluded, never
 losses. The review never enables a group or changes any forecast or build rule.
+
+The same verified scan also reports fixed checks requiring **5 and 10 observed
+entries per side** in every matched stratum. Each threshold recalculates primary
+and conditional overlap separately, including its supported games and omit-one
+ranges. Stronger thresholds can remove an apparent pattern or reverse its sign;
+they cannot borrow counts from the main comparison, another metric or another
+entry-limit group. Older reports without the checks remain unavailable. These
+counts include legitimate repeated lineup entries and do not establish
+independent users, statistical significance or causal rule benefits. No extra
+scan, background task, generation setting or manual threshold control is added.

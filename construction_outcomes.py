@@ -8,6 +8,7 @@ from showdown_group_review import flags
 
 ENDPOINTS=('top1','top5','rank1')
 MIN_SIDE=5
+SUPPORT_MINIMUMS=(5,10)
 RULE_METRICS=('two_kickers_pct','two_defenses_pct','two_quarterbacks_pct','qb_opposing_dst_pct')
 METRICS=BASE_METRICS+RULE_METRICS[:3]
 RULE_INDICES=tuple(METRICS.index(metric) for metric in RULE_METRICS)
@@ -77,13 +78,15 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled):
                 raise PatternAuditLimit('Outcome comparison-cell bound reached; no partial report published.')
     if reads!=accepted:raise ValueError('Outcome entry count differs from the indexed receipt.')
     ai._check(cancelled)
-    return dict(accepted=accepted,unknown=unknown,missing_rank=missing,rank_basis=builder.basis,matched=contrast(cells),other_rules_fixed=contrast(conditional,metrics=RULE_METRICS))
+    checks={str(n):dict(matched=contrast(cells,n),other_rules_fixed=contrast(conditional,n,metrics=RULE_METRICS)) for n in SUPPORT_MINIMUMS}
+    return dict(accepted=accepted,unknown=unknown,missing_rank=missing,rank_basis=builder.basis,matched=checks['5']['matched'],other_rules_fixed=checks['5']['other_rules_fixed'],support_checks=checks)
 
 
-def _game_summary(contests,metric,comparison):
+def _game_summary(contests,metric,comparison,minimum=None):
     games=defaultdict(list)
     for c in contests:
-        row=c.get(comparison,{}).get(metric)
+        source=c if minimum is None else c.get('support_checks',{}).get(str(minimum),{})
+        row=source.get(comparison,{}).get(metric)
         if row and row['strata']:games[tuple(c['game'])].append(row['difference_pp'])
     values={e:[statistics.mean(r[e] for r in rows) for _,rows in sorted(games.items())] for e in ENDPOINTS}
     return dict(games=len(games),game_differences=[dict(game=list(game),difference_pp={e:statistics.mean(r[e] for r in rows) for e in ENDPOINTS}) for game,rows in sorted(games.items())],
@@ -95,6 +98,8 @@ def _game_summary(contests,metric,comparison):
 def summarize_outcomes(contests):
     result={m:_game_summary(contests,m,'matched') for m in METRICS}
     for metric in RULE_METRICS:result[metric]['other_rules_fixed']=_game_summary(contests,metric,'other_rules_fixed')
+    for metric,row in result.items():
+        row['support_checks']={str(n):dict(matched=_game_summary(contests,metric,'matched',n),**({'other_rules_fixed':_game_summary(contests,metric,'other_rules_fixed',n)} if metric in RULE_METRICS else {})) for n in SUPPORT_MINIMUMS}
     return result
 
 
@@ -114,6 +119,7 @@ def render(report):
         'At least five ranked, resolved entries on each side per stratum. Overlap weights n0*n1/(n0+n1); contests averaged within games, then games equally.',
         'Supplied/observed rank cutoffs; complete field unverified. All rank-one ties count. Missing ranks and unresolved rosters are excluded, never losses.',
         'These are descriptive associations, not causal effects, profitability or rule recommendations. No generation settings change.']
+    lines.append('Fixed sensitivity checks require at least five and ten observed entries on each side per comparison stratum, from the same verified scan. Counts include legitimate repeated lineups; they are not independent users or a significance test. Missing older support checks remain unavailable.')
     lines.append('Individual grouping comparisons also hold the other three grouping flags fixed. Unsupported combinations remain unavailable; they are not inferred from the primary comparison.')
     for preset,summary in report['by_preset'].items():
         lines+=['',preset or 'Unknown entry limit']
@@ -127,9 +133,22 @@ def render(report):
                     lines.append(f"    {endpoint}: {value:+.3f} pp; {counts}; omit-one {r['omit_one_range']}" if value is not None else f'    {endpoint}: unavailable (no common support)')
                 for game in detail.get('game_differences',[]):
                     lines.append('    '+ ' / '.join(game['game'])+': '+', '.join(f"{e} {v:+.3f} pp" for e,v in game['difference_pp'].items()))
+            lines.append('  Fixed per-side support checks:')
+            for n in SUPPORT_MINIMUMS:
+                checks=row.get('support_checks',{}).get(str(n))
+                if checks is None:
+                    lines.append(f'    {n} entries per side: unavailable (no saved support check)');continue
+                for mode,detail in checks.items():
+                    lines.append(f"    {n} entries per side / {mode}: {detail['games']} games")
+                    for e,v in detail['endpoints'].items():
+                        gap=v['difference_pp'];text='unavailable' if gap is None else f'{gap:+.3f} pp'
+                        lines.append(f"      {e}: {text}; higher/lower/equal {v['higher_games']}/{v['lower_games']}/{v['equal_games']}; omit-one {v['omit_one_range']}")
     lines+=['','Contest coverage (matched entries differ by feature):']
     for c in report['contests']:
         lines.append(f"{c['name']}: {c['accepted']} entries; {c['unknown']} unresolved; {c['missing_rank']} missing ranks; "+'; '.join(f"{m}: {v['strata']} strata / {v['entries']} matched" for m,v in c['matched'].items()))
         for metric,v in c.get('other_rules_fixed',{}).items():lines.append(f"  Other grouping flags fixed — {metric}: {v['strata']} strata / {v['entries']} matched")
+        for n,checks in c.get('support_checks',{}).items():
+            for mode,metrics in checks.items():
+                lines.append(f'  {n} per side / {mode}: '+ '; '.join(f"{m}: {v['strata']} strata / {v['entries']} matched" for m,v in metrics.items()))
     lines+=['Excluded: '+c['name']+': '+c['reason'] for c in report['excluded']]
     return '\n'.join(lines)
