@@ -110,7 +110,7 @@ class PortfolioPatternAuditTests(unittest.TestCase):
             for metric in METRICS:
                 p['metrics'].pop(metric);p['peer_medians'].pop(metric);p['metric_peer_users'].pop(metric)
         for metric in METRICS:self.assertIsNone(comparisons(r)['showdown / Unclassified']['metrics'][metric]['winner'])
-        self.assertIn('CONTEST WINNERS',render_overview(r))
+        self.assertIn('CONTEST WINNERS',render_overview(r));self.assertIn('need not add to 100%',render_overview(r))
 
     def test_matching_explicit_ids_preserve_identical_copy_weights(self):
         f=self.fixture();f.change("UPDATE opponent_entry_slots SET original_label='A (1100)' WHERE role='CPT'")

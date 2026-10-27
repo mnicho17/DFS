@@ -273,6 +273,7 @@ def render_overview(report):
         f"Complete-field receipts: {sum(c['complete_field'] for c in contests)}/{len(contests)}. All available entries are retained; unseen entries are unknown."]
     audits=[c['peer_pattern_audit'] for c in contests if c.get('peer_pattern_audit') is not None]
     if audits:lines += [f"Peer construction audit: {sum(a['entries'] for a in audits):,} peer entries read; {sum(a['unknown_entries'] for a in audits):,} unresolved rows; {sum(a['excluded_users'] for a in audits):,} peer portfolios withheld in full. Team splits use majority-team first; QB/DST checks include all Captain and FLEX slots."]
+    lines += ['Peer medians are calculated separately for each metric; team-split peer columns need not add to 100% and are not a joint field distribution.']
     if followup:
         lines += [f"Evaluation starts {report['followup_from']}. For each contest, selection uses only strictly earlier calendar dates: at least 3 ranked salary slates and a top-rank-cutoff finish on at least 2. Format, known entry-limit preset and exact observed entry count must match. Same-slate contests count once; unknown ranks do not qualify.",
             'The cutoff is ceil(supplied field size / 100), otherwise ceil(observed accepted entries / 100); this is not a verified full-field percentile. Every later observed entry is retained regardless of winning. Unclassified entry-limit presets do not qualify.',
