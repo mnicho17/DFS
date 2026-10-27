@@ -44,6 +44,11 @@ class GroupReviewTests(unittest.TestCase):
         f=self.fixture();Path(f.salary['snapshot']).write_bytes(Path(f.salary['snapshot']).read_bytes()+b'\n')
         report=review_history(f.db)
         self.assertEqual(report['contests'],[]);self.assertEqual(len(report['excluded']),1)
+    def test_unindexed_history_has_an_actionable_message(self):
+        f=SourceFixture();self.addCleanup(f.close)
+        with self.assertRaisesRegex(ValueError,'Index mapped results'):
+            review_history(f.db)
+
     def test_cancellation_is_not_a_partial_report(self):
         f=self.fixture()
         with self.assertRaises(ai.ImportCancelled):review_history(f.db,cancelled=lambda:True)

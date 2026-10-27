@@ -79,6 +79,9 @@ def review_history(db_path,cancelled=lambda:False,progress=lambda text:None,*,us
     contests=[];excluded=[];verified={};manifests={}
     with closing(_connect(db_path,True)) as conn:
         conn.execute('BEGIN')
+        tables={r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if not {'analysis_sources','analysis_salary_pairs','opponent_contests','opponent_entries','opponent_entry_slots'}<=tables:
+            raise ValueError('Index mapped results in Data and Learning before reviewing grouping trends.')
         conn.set_progress_handler(lambda:int(cancelled()),10000)
         sources={s['hash']:s for s in ai._sources(conn)}
         pairs=dict(conn.execute('SELECT result_hash,salary_hash FROM analysis_salary_pairs'))
@@ -112,7 +115,7 @@ def review_history(db_path,cancelled=lambda:False,progress=lambda text:None,*,us
     for source in verified.values():ai._verify(source,cancelled)
     ai._check(cancelled)
     return dict(contests=contests,excluded=excluded,summary=summarize(contests),username=username,
-        by_preset={p:summarize([c for c in contests if c['preset']==p]) for p in sorted({c['preset'] for c in contests})})
+        preset=preset,by_preset={p:summarize([c for c in contests if c['preset']==p]) for p in sorted({c['preset'] for c in contests})})
 
 
 def render(report):
@@ -121,6 +124,7 @@ def render(report):
     lines=[f"SHOWDOWN GROUPING REVIEW — {len(contests)} verified indexed contests; {len({tuple(c['game']) for c in contests})} games",'Presence of a construction, not a recommendation to block it. Recorded standings only; time spent in first place is not recorded.',
         'Top 1% / 5% use supplied field-size rank cutoffs when available, otherwise observed accepted-entry count. Export completeness is unverified unless explicitly recorded; these are descriptive rank-cutoff cohorts, not ROI or causal effects.',
         f"Unknown construction entries excluded: {sum(c['unknown'] for c in contests):,}; missing-rank entries excluded from comparisons: {sum(c['missing_rank'] for c in contests):,}."]
+    lines.append('Scope: '+(report.get('preset') or 'all recorded entry limits')+'; username comparison: '+(report.get('username') or 'none'))
     if contests:lines.append(f"Dates: {min(c['date'] for c in contests)} through {max(c['date'] for c in contests)}; complete-field receipts: {sum(c['complete_field'] for c in contests)}/{len(contests)}.")
     for heading,summary in [('All selected contests',report['summary']),*[(p,s) for p,s in report['by_preset'].items()]]:
         lines+=['',heading]
