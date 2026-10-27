@@ -81,4 +81,10 @@ class HistoricalSeriesTests(unittest.TestCase):
             index=d.mode.findData('prior_series');self.assertGreaterEqual(index,0);d.mode.setCurrentIndex(index)
             self.assertFalse(d.followup_from.isHidden());self.assertIsNone(d._thread)
 
+    def test_unindexed_history_has_an_actionable_message(self):
+        helper=fixtures.PriorPortfolioFollowupTests('test_invalid_evaluation_range_and_cancellation');self.addCleanup(helper.doCleanups)
+        f=helper.fixture()
+        with self.assertRaisesRegex(ValueError,'Index mapped results in Data and Learning first'):
+            self.review(f)
+
 if __name__=='__main__':unittest.main()

@@ -36,6 +36,8 @@ def combine_followups(reports):
 def _inventory(db_path):
     with closing(_connect(db_path,True)) as conn:
         conn.execute('BEGIN')
+        tables={r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if not {'opponent_contests','analysis_sources','analysis_salary_pairs'}<=tables:raise ValueError('Index mapped results in Data and Learning first.')
         data=[]
         for table,order in (('opponent_contests','contest_key'),('analysis_sources','hash'),('analysis_salary_pairs','result_hash')):
             data.append(conn.execute('SELECT * FROM '+table+' ORDER BY '+order).fetchall())
