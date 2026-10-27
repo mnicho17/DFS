@@ -60,4 +60,18 @@ class WinnerPortfolioUiTests(unittest.TestCase):
             self.assertIn('active history task',owner.history_explore.status.text())
         finally:owner._import_thread=None
 
+    def test_followup_mode_is_explicit_and_switching_modes_does_not_start_work(self):
+        f=self.fixture()
+        with patch('winner_portfolio_ui.review_winners',side_effect=AssertionError('No automatic work')):
+            d=WinnerPortfoliosDialog(f.db);self.addCleanup(d.close)
+            self.assertEqual(d.mode.currentData(),'winners');self.assertTrue(d.followup_from.isHidden())
+            d.mode.setCurrentIndex(d.mode.findData('prior_qualified'))
+            self.assertFalse(d.followup_from.isHidden());self.assertIsNone(d._thread)
+    def test_followup_worker_passes_captured_mode_and_evaluation_date(self):
+        worker=WinnerWorker('unused','2026-09-22','showdown','2026-09-01','prior_qualified','2026-09-20');seen=[]
+        worker.result.connect(seen.append)
+        with patch('winner_portfolio_ui.review_winners',return_value={'completed':True}) as run:worker.run()
+        self.assertEqual(run.call_args.kwargs['review_mode'],'prior_qualified')
+        self.assertEqual(run.call_args.kwargs['followup_from'],'2026-09-20');self.assertEqual(seen,[{'completed':True}])
+
 if __name__=='__main__':unittest.main()
