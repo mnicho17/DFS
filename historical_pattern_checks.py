@@ -1,10 +1,11 @@
 """Descriptive cross-slate checks; no strategy selection or model inputs."""
 from collections import defaultdict
 import json,math,statistics
+from portfolio_pattern_audit import METRICS as PATTERN_METRICS
 
 MIN_SLATES=5
 MIN_USERS_PER_SLATE=10
-METRICS=('player_pool','captain_pool','repeated_pct','mean_shared_players','mean_salary','double_qb_pct','double_k_pct','double_dst_pct')
+METRICS=('player_pool','captain_pool','repeated_pct','mean_shared_players','mean_salary','double_qb_pct','double_k_pct','double_dst_pct')+PATTERN_METRICS
 
 
 def pattern_checks(report,minimum_peers=5):
@@ -19,7 +20,7 @@ def pattern_checks(report,minimum_peers=5):
         for metric in METRICS:
             pairs=[]
             for p in contest['winners']:
-                if p['peer_users']<minimum_peers:continue
+                if p.get('metric_peer_users',{}).get(metric,p['peer_users'])<minimum_peers:continue
                 a=p['metrics'].get(metric);b=p['peer_medians'].get(metric)
                 if type(a) not in (int,float) or type(b) not in (int,float) or not math.isfinite(a) or not math.isfinite(b):continue
                 pairs.append((a,b));users[scope][metric][key].add(p['user_key'])

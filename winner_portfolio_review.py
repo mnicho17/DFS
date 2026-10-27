@@ -8,8 +8,11 @@ from opponent_history import _connect,VERSION
 from opponent_analysis import username_key
 from controlled_construction import Builder
 from showdown_group_review import flags,FEATURES
+from portfolio_pattern_audit import audit_peers,PatternAuditLimit,METRICS as PATTERN_METRICS,LABELS as PATTERN_LABELS
 
 LABELS=dict(player_pool='Players used',captain_pool='Captains used',repeated_pct='Repeated lineups (%)',mean_shared_players='Average shared players between lineups',mean_salary='Average salary ($)',double_qb_pct='Two-quarterback lineups (%)',double_k_pct='Two-kicker lineups (%)',double_dst_pct='Two-defense lineups (%)')
+
+LABELS.update(PATTERN_LABELS)
 
 MAX_WINNER_ENTRIES=300000
 MAX_HISTORY_RECORDS=1000000
@@ -18,7 +21,7 @@ MAX_FOLLOWUP_USERS=100000
 class ReviewLimitError(ValueError):
     pass
 
-METRICS=('player_pool','captain_pool','repeated_pct','mean_shared_players','mean_salary','double_qb_pct','double_k_pct','double_dst_pct')
+METRICS=('player_pool','captain_pool','repeated_pct','mean_shared_players','mean_salary','double_qb_pct','double_k_pct','double_dst_pct')+PATTERN_METRICS
 
 
 def _rate(table,label):
@@ -89,6 +92,7 @@ def _portfolio(conn,key,user,players,kind,cancelled):
     metrics=dict(player_pool=len(total) if known else None,captain_pool=len(captains) if kind=='showdown' and known else None,repeated_pct=100*(known-len(signatures))/known if known else None,
         mean_shared_players=sum(v*(v-1)//2 for v in total.values())/(known*(known-1)//2) if known>1 else None,mean_salary=salary_sum/known if known else None,
         double_qb_pct=_rate([dict(label=k,entries=v) for k,v in shapes['Quarterbacks'].items()],lambda k:int(k)>=2),double_k_pct=_rate([dict(label=k,entries=v) for k,v in shapes['Kickers'].items()],lambda k:int(k)>=2),double_dst_pct=_rate([dict(label=k,entries=v) for k,v in shapes['Defenses'].items()],lambda k:int(k)>=2))
+    metrics.update({metric:100*value/known if kind=='showdown' and known else None for metric,value in zip(PATTERN_METRICS,(shapes['Team split'].get('5–1',0),shapes['Team split'].get('4–2',0),shapes['Team split'].get('3–3',0),patterns.get('qb_dst',0),patterns.get('all_four',0)))})
     return dict(best_rank=min((r[1] for r in entries if type(r[1]) is int and 0<r[1]<=2**53-1),default=None),entries=len(entries),known=known,unknown=len(entries)-known,ranked=ranked,winning_entries=wins,winning_lineups=list(winning.values()),unique_lineups=len(signatures),metrics=metrics,
         exposures=[dict(name=display[k],team=k[1],position=k[2],total=n,captain=captains[k],flex=flex_counts[k],denominator=known) for k,n in sorted(total.items(),key=lambda item:(-item[1],item[0]))],
         constructions={k:dict(sorted(v.items())) for k,v in shapes.items()},patterns=dict(patterns),other_patterns=dict(other_patterns),other_known=other_known)
@@ -162,8 +166,20 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
                         metric=_peer(p)
                         if metric is not None and (not followup or (type(best) is int and 0<best<=2**53-1 and preset!='Unclassified' and prior['ranked_slates']>=3)):
                             peer_key=(n,prior['ranked_slates']) if followup else n
-                            peers[peer_key].append((metric,bool(type(best) is int and 0<best<=(cutoff_size+99)//100)))
+                            peers[peer_key].append((metric,bool(type(best) is int and 0<best<=(cutoff_size+99)//100),user))
                 if observed!=accepted or (not followup and set(stats)!=set(winners)):raise ValueError('Entrant coverage disagrees with the accepted-entry receipt.')
+                audit_summary=None
+                if kind=='showdown' and stats:
+                    needed={(p['entries'],prior_stats[u]['ranked_slates']) if followup else p['entries'] for u,p in stats.items()}
+                    wanted={v[2]:(k[0] if followup else k) for k in needed for v in peers[k]}
+                    audited=audit_peers(conn,key,manifest['players'],wanted,cancelled,progress)
+                    audit_summary=dict(users=len(audited),entries=sum(a['entries'] for a in audited.values()),unknown_entries=sum(a['unknown'] for a in audited.values()),excluded_users=sum(a['unknown']>0 for a in audited.values()))
+                    for k in needed:
+                        checked=[]
+                        for metric,top,user in peers[k]:
+                            if audited[user]['unknown']:continue
+                            metric.update(audited[user]['metrics']);checked.append((metric,top,user))
+                        peers[k]=checked
                 profiles=[]
                 for portfolio_index,user in enumerate(sorted(stats),1):
                     if portfolio_index==1 or portfolio_index%25==0:progress(f"Reviewing {portfolio_index}/{len(stats)} portfolios: {name}; {used_entries:,} entries reviewed across this attempt.")
@@ -175,14 +191,14 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
                     eligible_peers=peers[peer_key] if profile['known']==profile['entries']==profile['ranked'] else []
                     medians={metric:statistics.median(v[0][metric] for v in eligible_peers if v[0][metric] is not None) if any(v[0][metric] is not None for v in eligible_peers) else None for metric in METRICS}
                     extra=dict(prior_record=prior_stats[user],prior_qualified=True,current_top_cutoff=bool(type(p['best_rank']) is int and 0<p['best_rank']<=(cutoff_size+99)//100) if profile['ranked']==profile['entries'] else None,peer_top_rate=statistics.mean(v[1] for v in eligible_peers) if eligible_peers else None) if followup else {}
-                    profiles.append(dict(username=p['username'],user_key=user,peer_users=len(eligible_peers),peer_medians=medians,**profile,**extra))
+                    profiles.append(dict(username=p['username'],user_key=user,peer_users=len(eligible_peers),metric_peer_users={m:sum(v[0][m] is not None for v in eligible_peers) for m in METRICS},peer_medians=medians,**profile,**extra))
                 history_rows+=len(pending_history)
                 if history_rows>MAX_HISTORY_RECORDS:raise ReviewLimitError('History row bound reached; narrow the history or evaluation range.')
                 for user,d,sl,best,n in pending_history:histories[user].append((d,sl,best,n))
                 receipt=dict(contest_key=key,name=name,date=end,format=kind,preset=preset,slate=list(slate),accepted=accepted,complete_field=bool(complete),rank_basis='supplied field size' if type(size) is int and size>0 else 'observed accepted-entry count; completeness unverified',source=r,salary_source=s)
                 evidence.append(receipt)
-                if evaluate:results.append(dict(**receipt,winners=profiles))
-            except (ai.ImportCancelled,ReviewLimitError):raise
+                if evaluate:results.append(dict(**receipt,winners=profiles,peer_pattern_audit=audit_summary))
+            except (ai.ImportCancelled,ReviewLimitError,PatternAuditLimit):raise
             except Exception as exc:
                 ai._check(cancelled);excluded.append(dict(name=name,reason=str(exc)))
         conn.set_progress_handler(None,0)
@@ -212,7 +228,7 @@ def prior_record(records,cutoff,kind):
     return dict(observed_slates=len(prior),ranked_slates=len(ranked),rank1_slates=len(wins),top_cutoff_slates=len(top),repeat_observed_top_cohort=len(ranked)>=3 and len(top)>=2)
 
 
-def comparisons(report):
+def comparisons(report,minimum_peers=1):
     buckets=defaultdict(list)
     for c in report['contests']:buckets[(c['format'],c['preset'])].append(c)
     output={}
@@ -221,7 +237,7 @@ def comparisons(report):
         for metric in METRICS:
             slates=defaultdict(list);pairs=0
             for c in contests:
-                values=[(p['metrics'][metric],p['peer_medians'][metric]) for p in c['winners'] if p['metrics'][metric] is not None and p['peer_medians'][metric] is not None]
+                values=[(p['metrics'][metric],p['peer_medians'][metric]) for p in c['winners'] if p['metrics'].get(metric) is not None and p['peer_medians'].get(metric) is not None and p.get('metric_peer_users',{}).get(metric,p['peer_users'])>=minimum_peers]
                 if values:
                     slates[json.dumps(c['slate'])].append((statistics.mean(v[0] for v in values),statistics.mean(v[1] for v in values)));pairs+=len(values)
             rows=[(statistics.mean(v[0] for v in values),statistics.mean(v[1] for v in values)) for values in slates.values()]
@@ -246,7 +262,7 @@ def followup_outcomes(report):
 def peer_support_check(report,minimum):
     if type(minimum) is not int or minimum<1:raise ValueError('Minimum peer support must be a positive integer.')
     view=dict(report,contests=[dict(c,winners=[p for p in c['winners'] if p['peer_users']>=minimum]) for c in report['contests']])
-    return dict(profiles=sum(len(c['winners']) for c in view['contests']),comparisons=comparisons(view),outcomes=followup_outcomes(view))
+    return dict(profiles=sum(len(c['winners']) for c in view['contests']),comparisons=comparisons(view,minimum),outcomes=followup_outcomes(view))
 
 
 def render_overview(report):
@@ -255,6 +271,8 @@ def render_overview(report):
     lines=['EARLIER REPEAT FINISHES — LATER OBSERVED PORTFOLIOS' if followup else 'CONTEST WINNERS — ENTIRE OBSERVED PORTFOLIOS',f"History scope: {report['since']} through {report['through']}; format {report['format'] or 'all'}.",f"Verified evaluation contests: {len(contests)}; {cohort} entrant/contest profiles: {len(profiles)}; distinct usernames: {len({p['user_key'] for p in profiles})}.",
         f"Observed entries in those portfolios: {sum(p['entries'] for p in profiles):,}; resolved: {sum(p['known'] for p in profiles):,}; unknown: {sum(p['unknown'] for p in profiles):,}.",
         f"Complete-field receipts: {sum(c['complete_field'] for c in contests)}/{len(contests)}. All available entries are retained; unseen entries are unknown."]
+    audits=[c['peer_pattern_audit'] for c in contests if c.get('peer_pattern_audit') is not None]
+    if audits:lines += [f"Peer construction audit: {sum(a['entries'] for a in audits):,} peer entries read; {sum(a['unknown_entries'] for a in audits):,} unresolved rows; {sum(a['excluded_users'] for a in audits):,} peer portfolios withheld in full. Team splits use majority-team first; QB/DST checks include all Captain and FLEX slots."]
     if followup:
         lines += [f"Evaluation starts {report['followup_from']}. For each contest, selection uses only strictly earlier calendar dates: at least 3 ranked salary slates and a top-rank-cutoff finish on at least 2. Format, known entry-limit preset and exact observed entry count must match. Same-slate contests count once; unknown ranks do not qualify.",
             'The cutoff is ceil(supplied field size / 100), otherwise ceil(observed accepted entries / 100); this is not a verified full-field percentile. Every later observed entry is retained regardless of winning. Unclassified entry-limit presets do not qualify.',
@@ -273,7 +291,7 @@ def render_overview(report):
         if not outcomes:lines.append('No complete exact-match peer comparisons available; outcomes are unknown.')
     if followup:
         lines += ['','Peer support and sensitivity (fixed checks, not automatic cohort/rule changes):',
-            'Peer users can be reused across profiles. Profile counts are not independent games. Matching prior slate counts does not match the exact earlier contests, field strength or entry fees.']
+            'Peer support is metric-specific; new construction comparisons require every peer entry to resolve against the exact historical salary catalog. Peer users can be reused across profiles. Profile counts are not independent games. Matching prior slate counts does not match the exact earlier contests, field strength or entry fees.']
         for c in contests:
             pools=[p['peer_users'] for p in c['winners'] if p['peer_users']]
             lines.append(c['name']+f": {len(pools)}/{len(c['winners'])} profiles matched; median peer pool {statistics.median(pools) if pools else 'unavailable'}.")
@@ -281,7 +299,7 @@ def render_overview(report):
             check=peer_support_check(report,minimum)
             lines.append(f"Requiring at least {minimum} peers: {check['profiles']} profiles.")
             for scope,data in check['comparisons'].items():
-                for metric in ('player_pool','captain_pool','repeated_pct','double_qb_pct','double_k_pct','double_dst_pct'):
+                for metric in ('player_pool','captain_pool','repeated_pct','double_qb_pct','double_k_pct','double_dst_pct')+PATTERN_METRICS:
                     v=data['metrics'][metric]
                     if v['winner'] is not None:lines.append(f"{scope} / {LABELS[metric]}: cohort {v['winner']:.2f}; peer median {v['peer']:.2f}; {v['slates']} slates.")
             for scope,v in check['outcomes'].items():lines.append(f"{scope} later rank-cutoff outcome: cohort {v['cohort_rate']:.2%}; matched peers {v['peer_rate']:.2%}; {v['slates']} slates.")
@@ -306,7 +324,8 @@ def render_winner(contest,profile):
         lines += [f"Selected before this contest: {prior['ranked_slates']} earlier ranked salary slates, {prior['top_cutoff_slates']} top-cutoff slates, same format / {contest['preset']} / exactly {profile['entries']} entries. Peers also match the number of earlier ranked slates.",f"Later observed top-cutoff finish: {profile['current_top_cutoff']}; peer rate: {profile['peer_top_rate'] if profile['peer_top_rate'] is not None else 'unavailable'}."]
     for metric,value in profile['metrics'].items():
         peer=profile['peer_medians'][metric]
-        lines.append(f"{LABELS[metric]}: {format(value,'.2f') if value is not None else 'unavailable'}; peer median: {format(peer,'.2f') if peer is not None else 'unavailable'}")
+        support=profile.get('metric_peer_users',{}).get(metric,profile['peer_users'])
+        lines.append(f"{LABELS[metric]}: {format(value,'.2f') if value is not None else 'unavailable'}; peer median: {format(peer,'.2f') if peer is not None else 'unavailable'}; matched peers {support}")
     lines+=['','Construction across the entire resolved portfolio:']
     for category,values in profile['constructions'].items():lines.append(category+': '+'; '.join(f'{k}: {v}/{n}' for k,v in values.items()))
     if contest['format']=='showdown':
