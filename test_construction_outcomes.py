@@ -3,8 +3,8 @@ install()
 import unittest
 from unittest.mock import patch
 from contextlib import closing
-from construction_outcomes import contrast,contest_outcomes,review_outcomes,render,summarize_outcomes
-from portfolio_pattern_audit import METRICS,PatternAuditLimit
+from construction_outcomes import contrast,contest_outcomes,review_outcomes,render,summarize_outcomes,METRICS
+from portfolio_pattern_audit import PatternAuditLimit
 import test_portfolio_pattern_audit as patterns
 from test_portfolio_risk_evidence import logical_db,source_bytes
 from opponent_history import _connect
@@ -83,5 +83,71 @@ class OutcomeTests(unittest.TestCase):
         from pathlib import Path
         f=self.fixture();p=Path(f.salary['snapshot']);p.write_bytes(p.read_bytes()+b'\n')
         r=review_outcomes(f.db);self.assertEqual(r['contests'],[]);self.assertEqual(len(r['excluded']),1)
+
+    def grouping_fixture(self):
+        import copy
+        from test_hindsight_solver import athletes
+        from test_hindsight_evidence import SourceFixture
+        from test_opponent_history import results
+        from opponent_history import index_contest
+        pool=athletes()
+        for p,pos in zip(pool,['QB','QB','K','K','DST','DST','WR','RB']):p['position']=pos
+        for name in ('I','J'):
+            n=len(pool);p=copy.deepcopy(pool[6]);p.update(key=str(100+n),name=name)
+            p['roles']['FLEX']['id']=str(100+n);p['roles']['CPT']['id']=str(1100+n);pool.append(p)
+        # With one QB, both construction groups finish first; with two QBs,
+        # neither does. The kicker groups have different QB composition.
+        def edit(rows):
+            results()(rows);h=rows[0]
+            for n,row in enumerate(rows[1:101]):
+                lineup=('G A C D E H' if n<45 else 'G A C E H I' if n<50 else 'G A B C D H' if n<55 else 'G A B C H I').split()
+                row[h.index('Lineup')]='CPT '+lineup[0]+' '+' '.join('FLEX '+x for x in lineup[1:])
+                row[h.index('Rank')]='1' if n<50 else '51'
+        f=SourceFixture(pool=pool,edit_results=edit);self.addCleanup(f.close);index_contest(f.db,f.source['hash']);return f
+    def test_other_grouping_conditions_remove_kicker_qb_composition_confound(self):
+        f=self.grouping_fixture();r=self.calculate(f)
+        self.assertAlmostEqual(r['matched']['two_kickers_pct']['difference_pp']['rank1'],80)
+        fixed=r['other_rules_fixed']['two_kickers_pct']
+        self.assertEqual(fixed['strata'],2);self.assertEqual(fixed['entries'],100)
+        self.assertAlmostEqual(fixed['difference_pp']['rank1'],0)
+        self.assertEqual(r['other_rules_fixed']['two_quarterbacks_pct']['difference_pp']['rank1'],-100)
+    def test_missing_conditional_overlap_cannot_borrow_primary_support(self):
+        f=self.grouping_fixture()
+        f.change("UPDATE opponent_entry_slots SET original_label='G (1101)' WHERE entry_id='1045' AND role='CPT'")
+        r=self.calculate(f)
+        self.assertEqual(r['unknown'],1)
+        self.assertEqual(r['matched']['two_kickers_pct']['entries'],99)
+        self.assertEqual(r['other_rules_fixed']['two_kickers_pct']['entries'],50)
+        self.assertEqual(r['other_rules_fixed']['two_kickers_pct']['strata'],1)
+        self.assertEqual(r['other_rules_fixed']['two_defenses_pct']['difference_pp']['top1'],None)
+    def test_features_include_two_defenses_without_a_quarterback(self):
+        from construction_outcomes import outcome_features
+        from portfolio_pattern_audit import features,METRICS as PEER_METRICS
+        def slot(i,pos,team):return ('x','CPT' if i==0 else 'FLEX',dict(position=pos,team=team))
+        slots=[slot(i,pos,team) for i,(pos,team) in enumerate([('WR','A'),('K','A'),('K','B'),('DST','A'),('DST','B'),('RB','B')])]
+        value=outcome_features(slots)
+        self.assertEqual(value[:5],features(slots));self.assertEqual(value[3],0)
+        self.assertEqual(value[5:],(1,1,0));self.assertEqual(len(PEER_METRICS),5)
+    def test_conditional_cell_budget_aborts_whole_report(self):
+        f=self.grouping_fixture()
+        with patch('construction_outcomes.MAX_CELLS',0):
+            with self.assertRaisesRegex(PatternAuditLimit,'cell bound'):review_outcomes(f.db)
+    def test_older_reports_have_unknown_conditional_support(self):
+        row={m:dict(strata=1,difference_pp={e:1 for e in ('top1','top5','rank1')}) for m in METRICS}
+        r=summarize_outcomes([dict(game=['date','game'],matched=row)])
+        fixed=r['two_kickers_pct']['other_rules_fixed']
+        self.assertEqual(fixed['games'],0);self.assertIsNone(fixed['endpoints']['top1']['difference_pp'])
+    def test_game_direction_counts_and_rows_preserve_no_overlap(self):
+        def contest(game,value,supported=True):
+            return dict(game=['date',game],matched={m:dict(strata=int(supported),difference_pp={e:value for e in ('top1','top5','rank1')}) for m in METRICS})
+        r=summarize_outcomes([contest('A',2),contest('A',0),contest('B',-2),contest('C',0),contest('D',100,False)])['two_kickers_pct']
+        endpoint=r['endpoints']['top1']
+        self.assertEqual((endpoint['higher_games'],endpoint['lower_games'],endpoint['equal_games']),(1,1,1))
+        self.assertEqual(r['games'],3);self.assertEqual(len(r['game_differences']),3)
+        self.assertAlmostEqual(endpoint['difference_pp'],-1/3)
+    def test_render_identifies_primary_and_conditional_support(self):
+        f=self.grouping_fixture();r=review_outcomes(f.db);text=render(r)
+        self.assertIn('Two or more kickers',text);self.assertIn('Other three grouping conditions also fixed',text)
+        self.assertIn('higher/lower/equal',text);self.assertIn('Other grouping flags fixed',text)
 
 if __name__=='__main__':unittest.main()
