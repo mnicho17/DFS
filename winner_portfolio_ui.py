@@ -15,7 +15,10 @@ class WinnerWorker(QtCore.QObject):
     def run(self):
         try:
             path,through,kind,since,review_mode,followup_from=self.args
-            result=review_winners(path,through,self.stop.is_set,self.progress.emit,contest_format=kind,since=since,review_mode=review_mode,followup_from=followup_from)
+            if review_mode=='prior_series':
+                from historical_series_review import review_series
+                result=review_series(path,through,self.stop.is_set,self.progress.emit,contest_format=kind,since=since,followup_from=followup_from)
+            else:result=review_winners(path,through,self.stop.is_set,self.progress.emit,contest_format=kind,since=since,review_mode=review_mode,followup_from=followup_from)
             if not self.stop.is_set():self.result.emit(result)
         except Exception as exc:
             if not self.stop.is_set():self.error.emit(str(exc))
@@ -30,7 +33,7 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
         note=QtWidgets.QLabel('Review all entries of contest winners, or later portfolios of users with repeated earlier strong finishes. Winning once is not proof of repeatable skill. Peer comparisons use exactly the same observed entry count; nothing changes your rules or models.')
         note.setWordWrap(True);layout.addWidget(note)
         mode_row=QtWidgets.QHBoxLayout();mode_row.addWidget(QtWidgets.QLabel('Review'))
-        self.mode=QtWidgets.QComboBox();self.mode.addItem('Contest winners — all entries','winners');self.mode.addItem('Earlier repeat finishes — later portfolios','prior_qualified');mode_row.addWidget(self.mode)
+        self.mode=QtWidgets.QComboBox();self.mode.addItem('Contest winners — all entries','winners');self.mode.addItem('Earlier repeat finishes — later portfolios','prior_qualified');self.mode.addItem('Across more games — bounded batches','prior_series');mode_row.addWidget(self.mode)
         self.followup_label=QtWidgets.QLabel('Evaluate from');mode_row.addWidget(self.followup_label)
         self.followup_from=QtWidgets.QDateEdit(QtCore.QDate.currentDate().addDays(-7));self.followup_from.setCalendarPopup(True);self.followup_from.setDisplayFormat('yyyy-MM-dd');mode_row.addWidget(self.followup_from);mode_row.addStretch();layout.addLayout(mode_row)
         self.mode.currentIndexChanged.connect(self.mode_changed)
@@ -53,7 +56,7 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
         buttons=QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close);buttons.rejected.connect(self.reject)
         copy=buttons.addButton('Copy displayed review',QtWidgets.QDialogButtonBox.ActionRole);copy.clicked.connect(lambda:QtWidgets.QApplication.clipboard().setText(self.report.toPlainText()));layout.addWidget(buttons);self.mode_changed()
     def mode_changed(self):
-        followup=self.mode.currentData()=='prior_qualified'
+        followup=self.mode.currentData()!='winners'
         self.followup_label.setVisible(followup);self.followup_from.setVisible(followup)
     def start(self):
         if self._thread is not None:return
