@@ -165,7 +165,8 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
                             peers[peer_key].append((metric,bool(type(best) is int and 0<best<=(cutoff_size+99)//100)))
                 if observed!=accepted or (not followup and set(stats)!=set(winners)):raise ValueError('Entrant coverage disagrees with the accepted-entry receipt.')
                 profiles=[]
-                for user in sorted(stats):
+                for portfolio_index,user in enumerate(sorted(stats),1):
+                    if portfolio_index==1 or portfolio_index%25==0:progress(f"Reviewing {portfolio_index}/{len(stats)} portfolios: {name}; {used_entries:,} entries reviewed across this attempt.")
                     used_entries+=stats[user]['entries']
                     if used_entries>MAX_WINNER_ENTRIES:raise ReviewLimitError('Portfolio entry review bound reached; narrow the evaluation date range.')
                     profile=_portfolio(conn,key,user,manifest['players'],kind,cancelled);p=stats[user]
@@ -189,7 +190,8 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
         current=dict(conn.execute('SELECT result_hash,salary_hash FROM analysis_salary_pairs'))
         for c in evidence:
             if current.get(c['source'])!=c['salary_source']:raise ValueError('Salary association changed during review; rerun.')
-    for source in verified.values():ai._verify(source,cancelled)
+    for source_index,source in enumerate(verified.values(),1):
+        ai._check(cancelled);progress(f"Final source verification {source_index}/{len(verified)}: {source['name']}");ai._verify(source,cancelled)
     if not followup:
         for contest in results:
             for profile in contest['winners']:
@@ -240,6 +242,13 @@ def followup_outcomes(report):
     return output
 
 
+
+def peer_support_check(report,minimum):
+    if type(minimum) is not int or minimum<1:raise ValueError('Minimum peer support must be a positive integer.')
+    view=dict(report,contests=[dict(c,winners=[p for p in c['winners'] if p['peer_users']>=minimum]) for c in report['contests']])
+    return dict(profiles=sum(len(c['winners']) for c in view['contests']),comparisons=comparisons(view),outcomes=followup_outcomes(view))
+
+
 def render_overview(report):
     contests=report['contests'];profiles=[p for c in contests for p in c['winners']];followup=report.get('review_mode')=='prior_qualified'
     cohort='earlier-history cohort' if followup else 'winner'
@@ -262,6 +271,21 @@ def render_overview(report):
         outcomes=followup_outcomes(report)
         for scope,v in outcomes.items():lines.append(f"{scope}: cohort {v['cohort_rate']:.2%}; matched peers {v['peer_rate']:.2%}; {v['slates']} slates / {v['matched_profiles']} profiles.")
         if not outcomes:lines.append('No complete exact-match peer comparisons available; outcomes are unknown.')
+    if followup:
+        lines += ['','Peer support and sensitivity (fixed checks, not automatic cohort/rule changes):',
+            'Peer users can be reused across profiles. Profile counts are not independent games. Matching prior slate counts does not match the exact earlier contests, field strength or entry fees.']
+        for c in contests:
+            pools=[p['peer_users'] for p in c['winners'] if p['peer_users']]
+            lines.append(c['name']+f": {len(pools)}/{len(c['winners'])} profiles matched; median peer pool {statistics.median(pools) if pools else 'unavailable'}.")
+        for minimum in (5,10):
+            check=peer_support_check(report,minimum)
+            lines.append(f"Requiring at least {minimum} peers: {check['profiles']} profiles.")
+            for scope,data in check['comparisons'].items():
+                for metric in ('player_pool','captain_pool','repeated_pct','double_qb_pct','double_k_pct','double_dst_pct'):
+                    v=data['metrics'][metric]
+                    if v['winner'] is not None:lines.append(f"{scope} / {LABELS[metric]}: cohort {v['winner']:.2f}; peer median {v['peer']:.2f}; {v['slates']} slates.")
+            for scope,v in check['outcomes'].items():lines.append(f"{scope} later rank-cutoff outcome: cohort {v['cohort_rate']:.2%}; matched peers {v['peer_rate']:.2%}; {v['slates']} slates.")
+            if not check['outcomes']:lines.append('Insufficient matching peer support; later outcome comparison unavailable.')
     if report['excluded']:lines+=['','Excluded contests:']+[r['name']+': '+r['reason'] for r in report['excluded']]
     return '\n'.join(lines)
 

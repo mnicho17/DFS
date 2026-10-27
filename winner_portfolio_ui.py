@@ -77,10 +77,12 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
         if self._closing:super().reject()
     def load_result(self,result):
         self.data=result;self.tree.clear()
+        followup=result.get('review_mode')=='prior_qualified'
+        self.tree.headerItem().setText(5,'Prior top-cutoff slates' if followup else 'Prior rank-1 slates')
         for ci,c in enumerate(result['contests']):
             parent=QtWidgets.QTreeWidgetItem([c['date']+' '+c['name'],str(c['accepted']),'',str(sum(p['winning_entries'] for p in c['winners']))]);parent.setData(0,QtCore.Qt.UserRole,(ci,None));self.tree.addTopLevelItem(parent)
             for pi,p in enumerate(c['winners']):
-                item=QtWidgets.QTreeWidgetItem([p['username'],str(p['entries']),str(p['known']),str(p['winning_entries']),str(p['metrics']['captain_pool']) if p['metrics']['captain_pool'] is not None else '—',str(p['prior_record']['rank1_slates']),str(p['peer_users'])]);item.setData(0,QtCore.Qt.UserRole,(ci,pi));parent.addChild(item)
+                item=QtWidgets.QTreeWidgetItem([p['username'],str(p['entries']),str(p['known']),str(p['winning_entries']),str(p['metrics']['captain_pool']) if p['metrics']['captain_pool'] is not None else '—',str(p['prior_record']['top_cutoff_slates'] if followup else p['prior_record']['rank1_slates']),str(p['peer_users'])]);item.setData(0,QtCore.Qt.UserRole,(ci,pi));parent.addChild(item)
         self.tree.resizeColumnToContents(0);self.report.setPlainText(render_overview(result));self.filter_rows()
         self.status.setText(f"Completed: {len(result['contests'])} verified contests; {sum(len(c['winners']) for c in result['contests'])} selected entrant profiles; {len(result['excluded'])} excluded contests. Select an entrant to inspect all their observed entries.")
     def show_selected(self,item,previous=None):

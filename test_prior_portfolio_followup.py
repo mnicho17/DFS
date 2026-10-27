@@ -8,7 +8,7 @@ from opponent_history import index_contest
 from test_hindsight_evidence import SourceFixture
 from test_opponent_history import results
 from test_portfolio_risk_evidence import logical_db,source_bytes
-from winner_portfolio_review import review_winners,render_overview,render_winner,followup_outcomes,ReviewLimitError
+from winner_portfolio_review import review_winners,render_overview,render_winner,followup_outcomes,ReviewLimitError,peer_support_check
 
 class PriorPortfolioFollowupTests(unittest.TestCase):
     def fixture(self):
@@ -111,5 +111,20 @@ class PriorPortfolioFollowupTests(unittest.TestCase):
         v=followup_outcomes(dict(contests=[a,a,b]))['showdown / 150-Max']
         self.assertEqual(v['cohort_rate'],.5);self.assertEqual(v['peer_rate'],.5);self.assertEqual(v['slates'],2)
 
-if __name__=='__main__':unittest.main()
+    def test_peer_support_sensitivity_is_fixed_and_does_not_mutate_the_report(self):
+        f=self.history();self.day(f,'2026-09-04',4,loses=True);r=self.review(f)
+        before=json.dumps(r,sort_keys=True);check=peer_support_check(r,5)
+        self.assertEqual(check['profiles'],0);self.assertEqual(check['outcomes'],{})
+        self.assertEqual(before,json.dumps(r,sort_keys=True))
+        text=render_overview(r);self.assertIn('at least 5 peers: 0 profiles',text);self.assertIn('at least 10 peers: 0 profiles',text)
+        self.assertIn('comparison unavailable',text)
+    def test_peer_support_threshold_rejects_invalid_values(self):
+        for value in (0,-1,True,1.5):
+            with self.subTest(value=value),self.assertRaises(ValueError):peer_support_check({'contests':[]},value)
+    def test_review_reports_portfolio_and_final_verification_progress(self):
+        f=self.history();self.day(f,'2026-09-04',4,loses=True);messages=[]
+        review_winners(f.db,'2026-09-04',progress=messages.append,review_mode='prior_qualified',followup_from='2026-09-04')
+        self.assertTrue(any('Reviewing 1/1 portfolios' in s for s in messages))
+        self.assertTrue(any('Final source verification' in s for s in messages))
 
+if __name__=='__main__':unittest.main()
