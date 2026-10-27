@@ -8434,6 +8434,11 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         portfolio_grid.addWidget(self.lbl_portfolio_groups, 2, 3)
 
+        common_groups = QtWidgets.QPushButton("Showdown groups / trends…")
+        common_groups.setObjectName("commonShowdownGroups")
+        common_groups.clicked.connect(self.open_common_showdown_groups)
+        portfolio_grid.addWidget(common_groups, 3, 3)
+
         portfolio_grid.setColumnStretch(4, 1)
 
         self.tabs_workspace_controls.addTab(portfolio_panel, "Portfolio Rules")
@@ -11131,6 +11136,28 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.status.showMessage(f"Cleared minimum exposure for {len(rows)} players.", 4000)
 
 
+
+    def open_common_showdown_groups(self) -> None:
+        from showdown_common_groups import catalog, apply
+        from showdown_common_groups_ui import CommonGroupsDialog
+        from data_paths import history_source_paths
+        if self._current_sport() != 'NFL' or self._contest_mode() != 'showdown':
+            self.status.showMessage('Load an NFL Showdown slate to use common groups.', 5000)
+            return
+        try:
+            options = catalog(self.players)
+            dialog = CommonGroupsDialog(self.players, self.portfolio_groups, history_source_paths()[0], self)
+            if dialog.exec_() != QtWidgets.QDialog.Accepted:
+                return
+            if catalog(self.players) != options:
+                self.status.showMessage('The slate changed. Reopen common groups before applying.', 5000)
+                return
+            self.portfolio_groups = apply(self.players, self.portfolio_groups, dialog.selected())
+            self.lbl_portfolio_groups.setText(f'Groups: {len(self.portfolio_groups)}')
+            self.lbl_portfolio_groups.setToolTip('\n'.join(g.get('label', '') for g in self.portfolio_groups))
+            self.status.showMessage('Applied common Showdown groups. Saved lineups are unchanged.', 5000)
+        except ValueError as exc:
+            self.status.showMessage(str(exc), 6000)
 
     def add_portfolio_group(self, group_type: str) -> None:
 
