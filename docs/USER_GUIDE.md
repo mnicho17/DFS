@@ -2948,3 +2948,27 @@ than two blocks prevents a cross-slate conclusion. This is descriptive evidence,
 not a significance test or a tuning rule. Construction tables retain their source
 row denominators; no limits, forecasts, SIM, ownership, rankings or lineup-generation
 behavior change.
+
+## Historical Showdown grouping finish rates
+
+With an NFL Showdown slate loaded, open **Portfolio Rules → Showdown groups /
+trends… → Review saved contest trends → Finish rates matched by Captain and
+salary**. This explicit read-only review checks existing indexed results and
+qualified salary sources. It can take several minutes for a large history and
+can be stopped without publishing partial findings.
+
+The report compares team splits, QB/opposing DST, double kickers, double defenses,
+double quarterbacks, and the combination of all four restrictions. Each grouping
+also has a second comparison with the other three grouping conditions held fixed,
+in addition to the exact Captain, salary band and contest. At least five resolved,
+ranked entries on each side are required in each comparison stratum. Primary and
+conditional coverage can differ; missing common support remains unavailable.
+
+Game-by-game differences, higher/lower/equal game counts and omit-one-game ranges
+show whether an average depends on a single game. Contests are averaged within
+games, then games equally, with recorded entry limits shown separately. A positive
+difference means the construction's presence had a higher observed finish rate;
+it does not mean enabling a restriction improves results. Top-1%/5% are supplied
+or observed rank cutoffs, not proof of complete-field coverage or profitability.
+Rank-one ties count; missing ranks and unresolved identities are excluded, never
+losses. The review never enables a group or changes any forecast or build rule.
