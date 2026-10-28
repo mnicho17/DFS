@@ -150,4 +150,54 @@ class OutcomeTests(unittest.TestCase):
         self.assertIn('Two or more kickers',text);self.assertIn('Other three grouping conditions also fixed',text)
         self.assertIn('higher/lower/equal',text);self.assertIn('Other grouping flags fixed',text)
 
+    def test_stricter_support_can_reverse_primary_association(self):
+        cells={('small',0):[[5,0,0,0],[5,5,5,5]],('large',0):[[10,2,2,2],[10,0,0,0]]}
+        loose=contrast(cells,5)[METRICS[0]];strict=contrast(cells,10)[METRICS[0]]
+        self.assertAlmostEqual(loose['difference_pp']['top1'],20)
+        self.assertAlmostEqual(strict['difference_pp']['top1'],-20)
+        self.assertEqual((loose['entries'],strict['entries']),(30,20))
+    def test_ten_entry_conditional_support_cannot_borrow_primary_overlap(self):
+        f=self.grouping_fixture();r=self.calculate(f)
+        self.assertEqual(r['matched'],r['support_checks']['5']['matched'])
+        self.assertEqual(r['other_rules_fixed'],r['support_checks']['5']['other_rules_fixed'])
+        five=r['support_checks']['5']['other_rules_fixed']['two_kickers_pct']
+        ten=r['support_checks']['10']['other_rules_fixed']['two_kickers_pct']
+        self.assertEqual(five['strata'],2);self.assertEqual(ten['strata'],0)
+        self.assertIsNone(ten['difference_pp']['top1'])
+        self.assertEqual(r['support_checks']['10']['matched']['two_kickers_pct']['entries'],100)
+    def test_support_checks_share_one_verified_slot_scan(self):
+        f=self.grouping_fixture();key=f.query('SELECT contest_key FROM opponent_contests')[0][0];queries=[]
+        with closing(_connect(f.db,True)) as c:
+            c.set_trace_callback(queries.append)
+            contest_outcomes(c,key,f.salary['manifest']['players'],100,100,'',lambda:False)
+        self.assertEqual(sum('FROM opponent_entry_slots ' in q for q in queries),1)
+    def test_missing_rank_does_not_fill_stricter_support(self):
+        f=self.grouping_fixture();f.change("UPDATE opponent_entries SET rank=NULL WHERE CAST(entry_id AS INTEGER)<1041")
+        r=self.calculate(f)
+        self.assertEqual(r['missing_rank'],41);self.assertEqual(r['unknown'],0)
+        self.assertEqual(r['support_checks']['5']['matched']['two_kickers_pct']['entries'],59)
+        self.assertEqual(r['support_checks']['10']['matched']['two_kickers_pct']['strata'],0)
+        self.assertIsNone(r['support_checks']['10']['matched']['two_kickers_pct']['difference_pp']['rank1'])
+    def test_missing_older_support_checks_are_unknown_not_inferred(self):
+        row={m:dict(strata=1,difference_pp={e:1 for e in ('top1','top5','rank1')}) for m in METRICS}
+        report=summarize_outcomes([dict(game=['date','game'],matched=row,other_rules_fixed=row)])
+        metric=report['two_kickers_pct']
+        self.assertEqual(metric['games'],1)
+        for n in ('5','10'):
+            for mode,value in metric['support_checks'][n].items():
+                self.assertEqual(value['games'],0);self.assertIsNone(value['endpoints']['top1']['difference_pp'])
+    def test_fixed_threshold_summaries_keep_metric_and_mode_support_separate(self):
+        def rows(strata,value):return {m:dict(strata=strata,difference_pp={e:value for e in ('top1','top5','rank1')}) for m in METRICS}
+        contest=dict(game=['d','A'],matched=rows(1,2),support_checks={'5':dict(matched=rows(1,2),other_rules_fixed=rows(1,1)),'10':dict(matched=rows(1,-2),other_rules_fixed=rows(0,99))})
+        del contest['support_checks']['10']['matched']['two_defenses_pct']
+        r=summarize_outcomes([contest])
+        self.assertEqual(r['two_kickers_pct']['support_checks']['10']['matched']['endpoints']['top1']['difference_pp'],-2)
+        self.assertEqual(r['two_kickers_pct']['support_checks']['10']['other_rules_fixed']['games'],0)
+        self.assertEqual(r['two_defenses_pct']['support_checks']['10']['matched']['games'],0)
+        self.assertEqual(r['two_kickers_pct']['support_checks']['5']['other_rules_fixed']['endpoints']['top1']['difference_pp'],1)
+    def test_render_explains_entry_support_not_independent_users(self):
+        f=self.grouping_fixture();r=review_outcomes(f.db);text=render(r)
+        self.assertIn('10 entries per side',text);self.assertIn('not independent users',text)
+        self.assertIn('10 per side / other_rules_fixed',text)
+
 if __name__=='__main__':unittest.main()
