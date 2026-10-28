@@ -2982,3 +2982,28 @@ entry-limit group. Older reports without the checks remain unavailable. These
 counts include legitimate repeated lineup entries and do not establish
 independent users, statistical significance or causal rule benefits. No extra
 scan, background task, generation setting or manual threshold control is added.
+
+### Saved inputs for a fair grouping comparison
+
+The same **Review saved contest trends** menu offers **Saved inputs for a
+grouping comparison**. This read-only inventory checks archived file checksums,
+frozen player/output identities, completed status, finite recorded forecasts,
+and both input and output timestamps before kickoff. It reports missing or
+post-game inputs explicitly. Recorded negative or zero means remain valid; no
+forecast is reconstructed from actual scores or current player information.
+
+Available frozen inputs do not establish a fair with/without trial. The current
+archive format does not verify a shared candidate universe and paired scenario
+provenance. Original contest/salary/outcome associations must also pass fresh
+historical qualification before any outcome comparison. Generated outputs are
+not proof of submission. The inventory never promotes historical qualification,
+changes a rule, imports sources or runs a generation experiment. File/byte limits,
+cancellation and changed evidence prevent publication of a partial readiness
+report. No new background task is added.
+
+The inventory separates completed pre-game captures from complete full-pool
+forecast coverage. It counts recorded and missing forecasts and notes recorded
+fade/ineligibility flags. Missing backup forecasts never become known zeros and
+never cause those players to be removed from the historical universe; recorded
+forecasts for other players remain visible. Full-pool readiness stays unavailable
+when any required recorded mean is missing.
