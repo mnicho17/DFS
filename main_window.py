@@ -8260,6 +8260,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         from idle_backup_ui import open_backups
         settings_menu.addAction('Backups…', lambda:open_backups(self))
+        from candidate_storage import open_storage
+        settings_menu.addAction('Candidate storage…', lambda:open_storage(self))
 
         settings_menu.addSection("Workspace")
 

@@ -194,6 +194,25 @@ class SmartPreparationTests(unittest.TestCase):
         self.assertNotIn('library',self.run_job())
         self.estimate.assert_not_called()
 
+    def test_storage_pause_resumes_after_allocation_increase_without_reset(self):
+        self.output.mkdir()
+        saved=self.output/'existing.bin';saved.write_bytes(b'keep')
+        with patch('smart_preparation.BUDGET',1):
+            first=self.run_job()
+        self.assertEqual(first['state'],'Storage limit')
+        second=self.run_job()
+        self.assertEqual(second['state'],'Queued')
+        self.assertEqual(second['attempt'],first['attempt'])
+        self.assertEqual(saved.read_bytes(),b'keep')
+
+    def test_actual_drive_reserve_blocks_even_with_large_allocation(self):
+        from types import SimpleNamespace
+        with patch('smart_preparation.shutil.disk_usage',return_value=SimpleNamespace(free=1024)),patch('candidate_library.run_search') as search:
+            result=self.run_job()
+        self.assertEqual(result['state'],'Storage limit')
+        self.assertIn('5 GiB',result['pause_reason'])
+        search.assert_not_called()
+
     def test_shared_storage_limit_does_not_delete_existing_data(self):
         self.output.mkdir();existing=self.output/'manual-library';existing.write_bytes(b'keep')
         with patch('smart_preparation.BUDGET',1):result=self.run_job()

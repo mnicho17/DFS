@@ -8,11 +8,13 @@ import json
 from pathlib import Path
 import os
 import tempfile
+import shutil
 import time
 from build_snapshots import create_snapshot, fingerprint
 
 TARGET = 12000
-BUDGET = 8*1024**3
+BUDGET = 64*1024**3
+FREE_RESERVE = 5*1024**3
 CHUNK_SECONDS = 60
 ATTEMPT_SECONDS = 1800
 
@@ -110,7 +112,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 pause_reason='Preparation receipt could not be read; saved files were retained. '+str(exc))
             record_preparation(catalog,result)
             return result
-        if state.get('state') in ('Needs attention','Storage limit') and not retry:
+        if state.get('state') == 'Needs attention' and not retry:
             continue
         state.setdefault('target',TARGET)
         state['source_path']=row['path']
@@ -126,6 +128,17 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
             result['retry_consumed']=retry_consumed
             record_preparation(catalog,result)
             return result
+        from candidate_storage import budget_bytes
+        budget = budget_bytes(BUDGET)
+        def storage_reason():
+            if used() >= budget:
+                return (f'Shared {budget / 1024**3:g} GiB candidate-folder budget reached. '
+                        'Increase Settings > Candidate storage, then Retry/Resume or wait for the next preparation check. '
+                        'No saved files were deleted.')
+            if shutil.disk_usage(output).free <= FREE_RESERVE:
+                return ('Candidate drive has 5 GiB or less free. Free drive space, then Retry/Resume. '
+                        'No saved files were deleted.')
+            return ''
         def used():
             return sum(p.stat().st_size for p in output.rglob('*') if p.is_file())
         try:
@@ -147,8 +160,9 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                 if target_digest and not warming_jobs:return publish('Prepared candidates','none','Candidate target already reached; current-input validation still runs when building.')
                 record_preparation(catalog,summary(state,row['digest'],path))
                 continue
-            if used()>=BUDGET:
-                return publish('Storage limit','storage','Shared 8 GiB candidate-folder budget reached. Free space in that folder, then Retry/Resume. No saved files were deleted.')
+            blocked = storage_reason()
+            if blocked:
+                return publish('Storage limit','storage',blocked)
             if retry:
                 state.update(seconds=0,stagnant=0,attempt=state['attempt']+1)
                 retry_consumed=True
@@ -192,14 +206,14 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
                     return publish('Needs attention','source_changed','Salary file changed during preparation; refresh the list. Incomplete captured work was not saved.')
                 state.update(snapshot=snapshot,ownership=result,source=row['digest'],captured_at=snapshot['created_at'])
             publish('Preparing candidates','none','Ownership captured; preparing a bounded candidate library.')
-            last_check=[0.0];over=[False]
+            last_check=[0.0];over=['']
             remaining=max(0,ATTEMPT_SECONDS-state.get('seconds',0)-(time.monotonic()-started))
             if remaining<=0:
                 raise TimeoutError('30-minute attempt allowance reached while preparing inputs.')
             def stop():
                 if cancelled():return True
                 if time.monotonic()-last_check[0]>=5:
-                    last_check[0]=time.monotonic();over[0]=used()>=BUDGET
+                    last_check[0]=time.monotonic();over[0]=storage_reason()
                 return over[0]
             search_started=time.monotonic()
             try:
@@ -216,7 +230,7 @@ def prepare_one(catalog, folder, output, cancelled, progress, *, now=None, secon
             started=None
             message=f'{count:,}/{TARGET:,} candidates; final SIM and current-input validation run when building.'
             if cancelled():return dict(publish('Paused','yield',pause_reason(),message=message),cancelled=True)
-            if over[0]:return publish('Storage limit','storage','Shared storage budget reached. Free space, then Retry/Resume.',message=message)
+            if over[0]:return publish('Storage limit','storage',over[0],message=message)
             if count>=TARGET:return publish('Prepared candidates','none','Candidate target reached; current-input validation still runs when building.',message=message)
             if state['seconds']>=ATTEMPT_SECONDS:return publish('Needs attention','time_budget','30-minute attempt allowance reached. Retry/Resume grants another bounded attempt.',message=message)
             if stagnant>=3:return publish('Needs attention','no_progress','Three search batches added no candidates. Retry/Resume retries the bounded search; this is not proof the slate is exhausted.',message=message)
