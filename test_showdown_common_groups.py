@@ -101,7 +101,7 @@ class CommonGroupTests(unittest.TestCase):
         self.assertEqual(review.call_args.kwargs,{'preset':'150-Max'})
     def test_outcome_menu_is_explicit_and_cancellation_suppresses_result(self):
         dialog=CommonGroupsDialog(players(),[],'unused.sqlite')
-        self.assertEqual(len(dialog.review.menu().actions()),2);self.assertIsNone(dialog._thread)
+        self.assertEqual(len(dialog.review.menu().actions()),3);self.assertIsNone(dialog._thread)
         dialog.close()
         worker=ReviewWorker('unused','','',outcomes=True);worker.stop.set();received=[]
         worker.result.connect(received.append)
@@ -118,6 +118,26 @@ class CommonGroupTests(unittest.TestCase):
             self.assertEqual(dialog.report.toPlainText(),'Matched outcome report')
             renderer.assert_called_once_with({'outcomes':True})
             self.assertEqual(dialog.selected(),set())
+        dialog.close()
+
+    def test_readiness_worker_uses_archive_inventory_without_running_outcomes(self):
+        worker=ReviewWorker('sample/exports.sqlite','Winner','20-Max',readiness=True);received=[]
+        worker.result.connect(received.append)
+        with patch('grouping_replay_readiness.inspect_archives',return_value={'inventory':True}) as inspect, patch('construction_outcomes.review_outcomes') as outcomes:
+            worker.run()
+        self.assertEqual(received,[{'inventory':True}]);outcomes.assert_not_called()
+        self.assertEqual(str(inspect.call_args.args[0]),'sample')
+        self.assertEqual(inspect.call_args.kwargs,{'preset':'20-Max'})
+    def test_readiness_menu_uses_matching_renderer_and_keeps_rules_unselected(self):
+        dialog=CommonGroupsDialog(players(),[],'unused.sqlite')
+        with patch('grouping_replay_readiness.inspect_archives',return_value={'inventory':True}), patch('grouping_replay_readiness.render',return_value='Frozen input inventory') as renderer:
+            dialog.start(readiness=True);deadline=time.monotonic()+3
+            while dialog._thread is not None and time.monotonic()<deadline:
+                self.app.processEvents();time.sleep(.005)
+            self.assertIsNone(dialog._thread);self.assertEqual(dialog.selected(),set())
+            self.assertEqual(dialog.report.toPlainText(),'Frozen input inventory')
+            self.assertIn('No generation trial',dialog.status.text())
+            renderer.assert_called_once_with({'inventory':True})
         dialog.close()
 
 if __name__=='__main__':unittest.main()
