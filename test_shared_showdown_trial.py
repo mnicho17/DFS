@@ -77,7 +77,7 @@ class SharedTrialTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(),before)
     def test_player_value_byte_and_roster_bounds_prevent_publication(self):
         f,rows,field,path=self.fixture()
-        for limit in ('MAX_VALUES','MAX_BYTES','MAX_CANDIDATES','MAX_FIELD','MAX_PLAYERS'):
+        for limit in ('MAX_VALUES','MAX_BYTES','MAX_CANDIDATES','MAX_FIELD','MAX_PLAYERS','MAX_FRAMES'):
             with self.subTest(limit=limit),patch('shared_showdown_trial.'+limit,1):
                 with self.assertRaises(ValueError):trial.capture_trial(f.snap,rows,field,path,scenarios=2)
                 self.assertFalse(path.exists())
