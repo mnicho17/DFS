@@ -187,7 +187,9 @@ def _candidate_signature(lineup: Any, kind: str) -> Tuple[str, ...]:
     return tuple(keys + ([f"CPT:{player_key(captain)}"] if captain else []))
 
 
-def _group_ok(keys: set[str], groups: Sequence[Dict[str, Any]]) -> bool:
+def _group_ok(keys: set[str], groups: Sequence[Dict[str, Any]], captain_key: str = "") -> bool:
+    if captain_key:
+        keys = keys | {f"CPT:{captain_key}"}
     for group in groups:
         overlap = len(keys.intersection(group["player_keys"]))
         if group["type"] == "at_least_one" and overlap < 1:
@@ -313,7 +315,9 @@ def select_portfolio(
         refinement_polish_duplication = False
     if kind == "showdown":
         # Existing retained entries are user data; filter only new candidates.
-        pool = [lineup for lineup in pool if not _qb_captain_opposing_dst(lineup)]
+        pool = [lineup for lineup in pool if not _qb_captain_opposing_dst(lineup)
+                and _group_ok(_lineup_sets(lineup, kind)[0], normalized["groups"],
+                              player_key(lineup_captain(lineup, kind) or {}))]
     all_lineups = retained + pool
 
     if zero_qb_limit is not None:
@@ -1340,7 +1344,7 @@ def portfolio_report(
                 warnings.append("A retained QB Captain lineup includes the opposing DST; this pairing is blocked for new candidates.")
         team_counts.update(teams)
         game_counts.update(games)
-        if not _group_ok(keys, normalized["groups"]):
+        if not _group_ok(keys, normalized["groups"], player_key(lineup_captain(lineup, kind) or {})):
             group_violations += 1
         captain = lineup_captain(lineup, kind)
         if captain:

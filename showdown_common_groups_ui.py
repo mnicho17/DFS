@@ -35,8 +35,12 @@ class CommonGroupsDialog(QtWidgets.QDialog):
         super().__init__(parent);self.setWindowTitle('Common Showdown Groups & Historical Trends');self.resize(1000,720)
         self.options=catalog(players);self._thread=self._worker=None;self._closing=False;self.db_path=db_path
         layout=QtWidgets.QVBoxLayout(self)
-        note=QtWidgets.QLabel('Choose restrictions for this slate. They cover Captain and FLEX together. All are optional; historical observations never enable a rule automatically. Custom player groups are preserved, including matching custom restrictions you uncheck here.')
+        note=QtWidgets.QLabel('Choose restrictions for this slate. The Captain + opposing DST rule applies only when that player is Captain; the other rules cover both slots. All are optional; historical observations never enable a rule automatically. Custom player groups are preserved, including matching custom restrictions you uncheck here.')
         note.setWordWrap(True);layout.addWidget(note)
+        overlap=QtWidgets.QLabel('Captain + opposing DST also covers QB Captains. No QB with opposing defense additionally covers QBs in FLEX. An existing safety rule already excludes QB Captain + opposing DST from new builds.')
+        overlap.setWordWrap(True);layout.addWidget(overlap)
+        history_note=QtWidgets.QLabel('Historical grouping reports still compare the original four restrictions; the Captain-only toggle is a separate user choice.')
+        history_note.setWordWrap(True);layout.addWidget(history_note)
         selected=selection(players,groups);self.checks={}
         for rule,label in RULES.items():
             check=QtWidgets.QCheckBox(label);check.setObjectName('commonGroup_'+rule)
