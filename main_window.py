@@ -7320,7 +7320,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         root = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
 
         root.setObjectName("workspaceSplitter")
-        root.setHandleWidth(8)
+        root.setHandleWidth(12)
+        root.setChildrenCollapsible(False)
 
         self.workspace_splitter = root
 
@@ -8713,7 +8714,14 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self.tbl_players.cellDoubleClicked.connect(self._edit_player_projection)
 
-        left_layout.addWidget(player_area, 2)
+        results_splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical, self)
+        results_splitter.setObjectName("playerResultsSplitter")
+        results_splitter.setHandleWidth(12)
+        results_splitter.setChildrenCollapsible(False)
+        results_splitter.addWidget(player_area)
+        player_area.setMinimumHeight(120)
+        self.results_splitter = results_splitter
+        left_layout.addWidget(results_splitter, 1)
 
 
 
@@ -8987,7 +8995,10 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        left_layout.addWidget(self.tabs_lineups, 3)
+        self.tabs_lineups.setMinimumHeight(180)
+        results_splitter.addWidget(self.tabs_lineups)
+        results_splitter.setSizes([240, 360])
+        results_splitter.handle(1).setToolTip("Drag up or down to resize the player area and generated results.")
 
         self.tabs_lineups.currentChanged.connect(self._on_lineup_tab_changed)
 
@@ -9010,6 +9021,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         self.lbl_saved = QtWidgets.QLabel("Saved: 0 showdown | 0 classic")
 
         self.lbl_saved.setAlignment(QtCore.Qt.AlignCenter)
+        self.lbl_saved.setWordWrap(True)
 
         right_layout.addWidget(self.lbl_saved)
 
@@ -9100,7 +9112,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self.tbl_saved_sd.verticalHeader().setDefaultSectionSize(27)
 
-        self.tbl_saved_sd.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.tbl_saved_sd.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self.tbl_saved_sd.horizontalHeader().setDefaultSectionSize(150)
 
 
 
@@ -9120,7 +9133,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self.tbl_saved_cl.verticalHeader().setDefaultSectionSize(27)
 
-        self.tbl_saved_cl.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.tbl_saved_cl.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Interactive)
+        self.tbl_saved_cl.horizontalHeader().setDefaultSectionSize(150)
 
 
 
@@ -9143,6 +9157,16 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         right.setVisible(self.action_show_saved_portfolio.isChecked())
 
         root.setSizes([900, 400])
+        root.handle(1).setToolTip("Drag left or right to resize the workspace and saved lineups.")
+        reset_results = saved_more_menu.addAction("Reset results panel layout")
+        reset_results.setObjectName("resetResultsLayoutAction")
+        def reset_results_layout():
+            results_splitter.setSizes([240, 360])
+            root.setSizes([900, 400])
+            for table in (self.tbl_saved_sd, self.tbl_saved_cl):
+                for column in range(table.columnCount()):
+                    table.setColumnWidth(column, 150)
+        reset_results.triggered.connect(reset_results_layout)
 
 
 
@@ -14120,6 +14144,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self._reset_result_sort(kind)
         ownership_menu.addAction('Clear comparisons', clear_review)
 
+        layout.addLayout(bar)
+        bar = QtWidgets.QHBoxLayout()
+
         previous = QtWidgets.QPushButton("Previous 150")
 
         following = QtWidgets.QPushButton("Next 150")
@@ -14146,9 +14173,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         note.setWordWrap(True)
 
-        bar.addWidget(note, 1)
-
         layout.addLayout(bar)
+        layout.addWidget(note)
 
 
 
