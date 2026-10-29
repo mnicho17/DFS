@@ -297,7 +297,7 @@ def iter_candidates(path, players, *, salary_cap=50000, salary_floor=0, rules=No
                 cpt, *flex = [lookup[k] for k in keys]
                 if cpt.get('FadeCpt') or keys[0] in locked or (captains and keys[0] not in captains):
                     continue
-                if any(p.get('FadeFlex') for p in flex) or not locked.issubset(set(keys[1:])) or not _group_ok(set(keys), groups):
+                if any(p.get('FadeFlex') for p in flex) or not locked.issubset(set(keys[1:])) or not _group_ok(set(keys), groups,keys[0]):
                     continue
                 salary = float(cpt['CptSalary']) + sum(float(p['FlexSalary']) for p in flex)
                 if salary_floor <= salary <= cap and len({p['Team'] for p in [cpt, *flex]}) == 2:

@@ -34,6 +34,20 @@ class ShowdownLibraryTests(unittest.TestCase):
         self.path = Path(self.temp.name)/'library.sqlite'
         self.players = players()
 
+    def test_captain_dst_filter_preserves_library_and_same_team_defense(self):
+        from showdown_common_groups import apply
+        self.players[4]['Position']='DST'
+        prepare(self.path,self.players,batch_size=20)
+        before=self.path.read_bytes()
+        all_rows=list(iter_candidates(self.path,self.players))
+        rules={'groups':apply(self.players,[],{'captain_dst'})}
+        rows=list(iter_candidates(self.path,self.players,rules=rules))
+        self.assertLess(len(rows),len(all_rows))
+        self.assertTrue(rows)
+        self.assertTrue(all(not any(p['Position']=='DST' and p['Team']!=row['Captain']['Team'] for p in row['Flex']) for row in rows))
+        self.assertTrue(any(any(p['Position']=='DST' for p in row['Flex']) for row in rows))
+        self.assertEqual(self.path.read_bytes(),before)
+
     def test_complete_library_matches_independent_brute_force(self):
         self.players[0]['FlexSalary'] = 20000
         self.players[0]['CptSalary'] = 30000

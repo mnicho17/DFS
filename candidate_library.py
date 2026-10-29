@@ -271,7 +271,7 @@ def load_candidates(path, players, *, kind, salary_cap, salary_strategy='Near Ca
             if len(keys) != (6 if kind=='showdown' else 9) or len(set(keys)) != len(keys) or any(k not in lookup for k in keys):
                 rejected+=1;continue
             roster=[lookup[k] for k in keys]
-            if any(unavailable(p) or p.get('FadeFlex') for p in roster) or not locked.issubset(set(keys)) or not _group_ok(set(keys),groups):
+            if any(unavailable(p) or p.get('FadeFlex') for p in roster) or not locked.issubset(set(keys)) or not _group_ok(set(keys),groups,keys[0] if kind=="showdown" else ""):
                 rejected+=1;continue
             if kind=='showdown':
                 if roster[0].get('FadeCpt') or (captains and keys[0] not in captains) or keys[0] in locked:

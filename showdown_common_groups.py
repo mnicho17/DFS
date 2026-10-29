@@ -7,6 +7,7 @@ RULES = {
     'defenses': 'At most one defense',
     'quarterbacks': 'At most one quarterback',
     'qb_dst': 'No QB with opposing defense',
+    'captain_dst': 'Block Captain + opposing DST',
 }
 PREFIX = 'Common Showdown: '
 
@@ -49,6 +50,13 @@ def catalog(players):
             raise ValueError('QB opponent metadata conflicts with the slate teams.')
         for dst in sorted((p for p in values if position(p)=='DST' and str(p['Team']).strip().upper()!=team),key=player_key):
             group('qb_dst',[player_key(qb),player_key(dst)],': '+str(qb.get('Name') or player_key(qb))+' / '+str(dst.get('Name') or player_key(dst)))
+    for captain in sorted(values,key=player_key):
+        team=str(captain['Team']).strip().upper()
+        opponent=str(captain.get('Opponent') or '').strip().upper()
+        if opponent and opponent not in teams-{team}:
+            raise ValueError('Captain opponent metadata conflicts with the slate teams.')
+        for dst in sorted((p for p in values if position(p)=='DST' and str(p['Team']).strip().upper()!=team),key=player_key):
+            group('captain_dst',['CPT:'+player_key(captain),player_key(dst)],': '+str(captain.get('Name') or player_key(captain))+' / '+str(dst.get('Name') or player_key(dst)))
     return result
 
 

@@ -3014,3 +3014,10 @@ when any required recorded mean is missing.
 Drag the divider between the player table and **Selected player** to give either side more space. The Selected player panel can expand beyond its initial width; its existing scrollbars keep controls accessible at smaller sizes. Double-click the divider, or choose **Settings → Reset player pane widths**, to restore the starting balance. Neither action changes player tags, rules, or lineups.
 
 Drag the horizontal divider above generated lineups to adjust player/results heights. Saved Portfolio has a wider side divider, draggable column headings, and a wrapping summary. **Saved Portfolio → More → Reset results panel layout** restores the result heights, saved-panel split, and saved-column widths. Sorting/filter controls and page navigation use separate rows.
+
+
+### Captain with opposing defense
+
+In **Common Showdown Groups**, **Block Captain + opposing DST** is off initially. Applying it excludes an opposing defense only when the paired player occupies Captain, for every Captain position. It covers both teams and permits the same-team defense. The broader **No QB with opposing defense** rule also covers QBs in FLEX; the existing new-build QB-Captain safety policy remains in place independently.
+
+The Captain-specific groups travel with the normal rule snapshots and build reports. Candidate-library loading and final candidate selection apply them; saved-portfolio checks report violations without changing saved lineups. A compatible roster library is filtered under current rules. Existing version/input checks and screening identities still apply, so changed restrictions can require refreshed screening. Historical reports continue to describe the original four restrictions, not an evaluated benefit for the new toggle. Strict rules can reduce the available portfolio; they are not relaxed automatically.

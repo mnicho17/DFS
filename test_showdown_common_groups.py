@@ -21,6 +21,60 @@ def players():
 class CommonGroupTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):cls.app=QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    def test_captain_dst_is_role_specific_optional_and_symmetric(self):
+        pool=players();groups=normalize_rules({'groups':common.apply(pool,[],{'captain_dst'})})['groups']
+        for captain,opposing,same in [('AWR','BDST','ADST'),('BTE','ADST','BDST'),('AK','BDST','ADST'),('ADST','BDST','ADST')]:
+            self.assertFalse(_group_ok({captain,opposing},groups,captain))
+            self.assertTrue(_group_ok({captain,same},groups,captain))
+        self.assertTrue(_group_ok({'AWR','BDST','BTE'},groups,'BTE'))
+        self.assertEqual(common.selection(pool,groups),{'captain_dst'})
+        self.assertEqual(common.apply(pool,groups,set()),[])
+        dialog=CommonGroupsDialog(pool,[],'unused.sqlite')
+        self.assertFalse(dialog.checks['captain_dst'].isChecked())
+        dialog.reject()
+
+    def test_captain_dst_selection_saved_audit_and_snapshot_roundtrip(self):
+        from test_showdown_library import players as slate
+        from portfolio_rules import select_portfolio,portfolio_report
+        from build_snapshots import create_snapshot,validate_snapshot
+        pool=slate();pool[4]['Position']='DST';pool[0]['CptProjection']=1000
+        rules={'groups':common.apply(pool,[],{'captain_dst'})}
+        bad={'Captain':pool[0],'Flex':[pool[i] for i in (1,2,4,5,6)]}
+        good={'Captain':pool[5],'Flex':[pool[i] for i in (0,1,2,4,6)]}
+        selected=select_portfolio([bad,good],1,rules=rules,kind='showdown')
+        self.assertEqual(selected['lineups'],[good])
+        warnings=portfolio_report([bad],rules,kind='showdown')['warnings']
+        self.assertTrue(any('player-group' in warning for warning in warnings))
+        self.assertFalse(any('player-group' in warning for warning in portfolio_report([good],rules,kind='showdown')['warnings']))
+        snapshot=create_snapshot(pool,{'contest_kind':'showdown','sport':'NFL'},rules)
+        self.assertEqual(validate_snapshot(snapshot)['inputs']['rules']['groups'],rules['groups'])
+
+    def test_candidate_library_filters_role_rule_without_rewriting_saved_candidates(self):
+        import json,tempfile
+        from pathlib import Path
+        from test_showdown_library import players as slate
+        from candidate_library import initialize,connect,load_candidates,roster_keys
+        from build_snapshots import create_snapshot
+        pool=slate();pool[4]['Position']='DST'
+        bad={'Captain':pool[0],'Flex':[pool[i] for i in (1,2,4,5,6)]}
+        good={'Captain':pool[5],'Flex':[pool[i] for i in (0,1,2,4,6)]}
+        rules={'groups':common.apply(pool,[],{'captain_dst'})}
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'candidates.dfslib'
+            initialize(path,create_snapshot(pool,{'contest_kind':'showdown','sport':'NFL'},{}))
+            with connect(path) as con:
+                for index,row in enumerate((bad,good)):
+                    encoded=json.dumps(roster_keys(row,'showdown'))
+                    con.execute('INSERT INTO candidates VALUES (?,?,?,?,?)',(encoded,encoded,0,'Balanced',index))
+            before=path.read_bytes()
+            all_rows,_=load_candidates(path,pool,kind='showdown',salary_cap=50000)
+            rows,report=load_candidates(path,pool,kind='showdown',salary_cap=50000,rules=rules)
+            self.assertEqual(len(all_rows),2)
+            self.assertEqual(len(rows),1)
+            self.assertEqual(player_key(rows[0]['Captain']),player_key(pool[5]))
+            self.assertEqual(report['rejected'],1)
+            self.assertEqual(path.read_bytes(),before)
+
     def test_all_four_are_optional_and_cover_both_slots(self):
         pool=players();before=copy.deepcopy(pool)
         self.assertEqual(common.apply(pool,[],set()),[])
