@@ -8264,6 +8264,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         settings_menu.addAction('Candidate storage…', lambda:open_storage(self))
 
         settings_menu.addSection("Workspace")
+        reset_player_panes = settings_menu.addAction("Reset player pane widths", lambda:self.player_panes.reset_widths())
+        reset_player_panes.setObjectName("resetPlayerPaneWidthsAction")
 
         self.action_show_build_controls = settings_menu.addAction("Advanced Build Controls")
 
@@ -8534,10 +8536,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
 
-        player_area = QtWidgets.QSplitter(QtCore.Qt.Horizontal, self)
-
-        player_area.setObjectName("playerWorkspaceSplitter")
-        player_area.setHandleWidth(8)
+        from player_panes import PlayerPaneSplitter
+        player_area = PlayerPaneSplitter(self)
+        self.player_panes = player_area
 
         player_area.addWidget(self.tbl_players)
 
@@ -8697,8 +8698,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
         inspector_scroll.setWidgetResizable(True)
         inspector_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
         inspector_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        inspector_scroll.setMinimumWidth(320)
-        inspector_scroll.setMaximumWidth(350)
+        inspector_scroll.setMinimumWidth(220)
         inspector_scroll.setWidget(self.player_inspector)
 
         player_area.addWidget(inspector_scroll)
@@ -8707,7 +8707,7 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         player_area.setStretchFactor(0, 1)
 
-        player_area.setStretchFactor(1, 0)
+        player_area.setStretchFactor(1, 1)
 
         self.tbl_players.itemSelectionChanged.connect(self._update_player_inspector)
 
