@@ -3007,3 +3007,10 @@ fade/ineligibility flags. Missing backup forecasts never become known zeros and
 never cause those players to be removed from the historical universe; recorded
 forecasts for other players remain visible. Full-pool readiness stays unavailable
 when any required recorded mean is missing.
+
+
+### Resizing the player workspace
+
+Drag the divider between the player table and **Selected player** to give either side more space. The Selected player panel can expand beyond its initial width; its existing scrollbars keep controls accessible at smaller sizes. Double-click the divider, or choose **Settings → Reset player pane widths**, to restore the starting balance. Neither action changes player tags, rules, or lineups.
+
+Drag the horizontal divider above generated lineups to adjust player/results heights. Saved Portfolio has a wider side divider, draggable column headings, and a wrapping summary. **Saved Portfolio → More → Reset results panel layout** restores the result heights, saved-panel split, and saved-column widths. Sorting/filter controls and page navigation use separate rows.
