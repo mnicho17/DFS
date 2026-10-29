@@ -3007,3 +3007,27 @@ fade/ineligibility flags. Missing backup forecasts never become known zeros and
 never cause those players to be removed from the historical universe; recorded
 forecasts for other players remain visible. Full-pool readiness stays unavailable
 when any required recorded mean is missing.
+
+### Shared-sample capture groundwork
+
+The research API in `shared_showdown_trial.py` can explicitly capture a supplied
+common candidate universe and opponent field against a frozen pre-game Showdown
+snapshot. It preserves exact roster order, full recorded player/rule inputs and
+scenario outcomes. The seed, simulation implementation and Python/runtime identity
+are recorded, so the opponent bootstrap and candidate scoring can be replayed on
+the same sample. Forecasts are not adjusted and actual contest results are not
+used to create the sample. Frozen QB eligibility must already be recorded.
+
+This API is not called by normal builds and adds no automatic task, setting or
+storage growth. It does not select or repair a feasible portfolio, verify that the
+candidate universe is exhaustive, qualify historical outcomes or establish a
+rule benefit. Candidate variants and their retained/locked/exposure constraints
+still require a separate controlled selection step. Current saved archives are
+not upgraded to replay-ready by this new format.
+
+Captures are bounded, data-only JSON with a content checksum. Existing destination
+files are preserved, including a file created while capture is underway. Cancelled
+or incomplete simulations do not publish a trial. Loading rejects invalid roster
+identities, incomplete/missing/nonfinite scenario values, changed implementation
+or runtime, and oversized artifacts. This is an explicit diagnostic API; no new
+main-page controls or generation defaults are added.
