@@ -3021,3 +3021,10 @@ Drag the horizontal divider above generated lineups to adjust player/results hei
 In **Common Showdown Groups**, **Block Captain + opposing DST** is off initially. Applying it excludes an opposing defense only when the paired player occupies Captain, for every Captain position. It covers both teams and permits the same-team defense. The broader **No QB with opposing defense** rule also covers QBs in FLEX; the existing new-build QB-Captain safety policy remains in place independently.
 
 The Captain-specific groups travel with the normal rule snapshots and build reports. Candidate-library loading and final candidate selection apply them; saved-portfolio checks report violations without changing saved lineups. A compatible roster library is filtered under current rules. Existing version/input checks and screening identities still apply, so changed restrictions can require refreshed screening. Historical reports continue to describe the original four restrictions, not an evaluated benefit for the new toggle. Strict rules can reduce the available portfolio; they are not relaxed automatically.
+
+
+### Active grouping rules and affected saved entries
+
+The Build setup panel shows **Active grouping rules**, including common shortcuts and custom groups. Pair restrictions from one common shortcut share one summary title. When saved entries for the selected contest format conflict with current groups, the summary counts each affected lineup once and offers **Review affected lineups…**. The read-only review identifies entries by their one-based Saved Portfolio order and lists the violated group labels.
+
+This is a grouping check, not a full Entry Safety or slate-membership assessment. It never rewrites saved entries, changes rules, or repairs a portfolio. It refreshes as groups, saved entries, snapshots, and contest views change. Existing build reports and snapshots continue to preserve the actual rules used for a build.
