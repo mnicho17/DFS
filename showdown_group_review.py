@@ -73,13 +73,14 @@ def summarize(contests):
     return result
 
 
-def review_history(db_path,cancelled=lambda:False,progress=lambda text:None,*,username='',preset='',_outcomes=False):
+def review_history(db_path,cancelled=lambda:False,progress=lambda text:None,*,username='',preset='',_outcomes=False,_collector=None,_aggregate=None):
     from opponent_analysis import username_key
     from learning_db import _infer_field_preset
     collector=contest_rows;aggregate=summarize
     if _outcomes:
         from construction_outcomes import contest_outcomes,summarize_outcomes
         collector=contest_outcomes;aggregate=summarize_outcomes
+        collector=_collector or collector;aggregate=_aggregate or aggregate
     contests=[];excluded=[];verified={};manifests={}
     with closing(_connect(db_path,True)) as conn:
         conn.execute('BEGIN')

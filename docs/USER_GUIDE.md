@@ -3021,3 +3021,12 @@ Drag the horizontal divider above generated lineups to adjust player/results hei
 In **Common Showdown Groups**, **Block Captain + opposing DST** is off initially. Applying it excludes an opposing defense only when the paired player occupies Captain, for every Captain position. It covers both teams and permits the same-team defense. The broader **No QB with opposing defense** rule also covers QBs in FLEX; the existing new-build QB-Captain safety policy remains in place independently.
 
 The Captain-specific groups travel with the normal rule snapshots and build reports. Candidate-library loading and final candidate selection apply them; saved-portfolio checks report violations without changing saved lineups. A compatible roster library is filtered under current rules. Existing version/input checks and screening identities still apply, so changed restrictions can require refreshed screening. Historical reports continue to describe the original four restrictions, not an evaluated benefit for the new toggle. Strict rules can reduce the available portfolio; they are not relaxed automatically.
+
+
+### Receiver Captain / QB and specialist-count history
+
+**Common Showdown Groups → Review saved contest trends → Receiver Captain / QB and K/DST counts** runs a cancellable, read-only review through the existing source verification, salary association, explicit slot identity and index-consistency checks. It does not import history or apply a restriction.
+
+The receiver comparison includes only WR/TE Captains and asks whether their own team's QB is in FLEX. Specialist counts include K/DST in both Captain and FLEX. One, two and three-or-more specialists are each compared against zero, excluding other counts from that particular contrast. Zero-specialist comparisons cannot include K/DST Captain strata.
+
+Finish rates compare within contest, exact Captain identity and salary band. Five- and ten-entry per-side support checks are reported separately, with contests averaged within games and games equally weighted. Pooled usage counts include ranked, resolved entries; missing ranks and unresolved identities are excluded rather than counted as failures. The source field may be incomplete; all rank-one ties count. These are associations, not causal effects or profit forecasts. Other construction choices are not held fixed, and winners' full portfolios are not inferred from their rank-one entries. Entry-limit formats remain separate; thin Single Entry samples should not inherit 150-Max conclusions. Existing controls and defaults do not change.

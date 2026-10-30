@@ -75,6 +75,23 @@ class CommonGroupTests(unittest.TestCase):
             self.assertEqual(report['rejected'],1)
             self.assertEqual(path.read_bytes(),before)
 
+    def test_pairing_review_worker_and_renderer_are_explicit_and_readonly(self):
+        worker=ReviewWorker('unused.sqlite','Ignored username','20-Max',pairings=True)
+        received=[];worker.result.connect(received.append)
+        with patch('receiver_specialist_review.review',return_value={'paired':True}) as scan:
+            worker.run()
+        self.assertEqual(received,[{'paired':True}])
+        self.assertEqual(scan.call_args.kwargs,{'preset':'20-Max'})
+        dialog=CommonGroupsDialog(players(),[],'unused.sqlite')
+        self.assertFalse(dialog.selected())
+        with patch('receiver_specialist_review.review',return_value={'paired':True}),patch('receiver_specialist_review.render',return_value='Pairing details'):
+            dialog.start(pairings=True);deadline=time.monotonic()+3
+            while dialog._thread is not None and time.monotonic()<deadline:
+                self.app.processEvents();time.sleep(.005)
+        self.assertEqual(dialog.report.toPlainText(),'Pairing details')
+        self.assertFalse(dialog.selected())
+        dialog.reject()
+
     def test_all_four_are_optional_and_cover_both_slots(self):
         pool=players();before=copy.deepcopy(pool)
         self.assertEqual(common.apply(pool,[],set()),[])
@@ -155,7 +172,7 @@ class CommonGroupTests(unittest.TestCase):
         self.assertEqual(review.call_args.kwargs,{'preset':'150-Max'})
     def test_outcome_menu_is_explicit_and_cancellation_suppresses_result(self):
         dialog=CommonGroupsDialog(players(),[],'unused.sqlite')
-        self.assertEqual(len(dialog.review.menu().actions()),3);self.assertIsNone(dialog._thread)
+        self.assertEqual(len(dialog.review.menu().actions()),4);self.assertIsNone(dialog._thread)
         dialog.close()
         worker=ReviewWorker('unused','','',outcomes=True);worker.stop.set();received=[]
         worker.result.connect(received.append)
