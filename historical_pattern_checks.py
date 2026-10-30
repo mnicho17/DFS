@@ -2,6 +2,7 @@
 from collections import defaultdict
 import json,math,statistics
 from portfolio_pattern_audit import METRICS as PATTERN_METRICS
+from pairing_usage import KEYS as USAGE_KEYS
 
 MIN_SLATES=5
 MIN_USERS_PER_SLATE=10
@@ -17,7 +18,7 @@ def pattern_checks(report,minimum_peers=5):
         scope=contest['format']+' / '+contest['preset'];slate=contest['slate']
         if len(slate)!=3 or slate[0]!=contest['format'] or slate[1]!=contest['date'] or not slate[2]:raise ValueError('Independent salary-slate identity is unresolved.')
         key=json.dumps([slate[0],slate[1],sorted(set(slate[2]))])
-        for metric in METRICS:
+        for metric in METRICS+(USAGE_KEYS if report.get('pairing_usage') else ()):
             pairs=[]
             for p in contest['winners']:
                 if p.get('metric_peer_users',{}).get(metric,p['peer_users'])<minimum_peers:continue
