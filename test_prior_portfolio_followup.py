@@ -158,6 +158,8 @@ class PriorPairingUsageTests(unittest.TestCase):
         for key in ('username','entries','prior_record','winning_entries','peer_users','current_top_cutoff'):
             self.assertEqual(a[key],b[key])
         for key,value in a['metrics'].items():self.assertEqual(value,b['metrics'][key])
+        self.assertTrue(b['pairing_outcomes']['complete'])
+        self.assertEqual(set(b['pairing_outcomes']['support_checks']),{'5','10'})
         self.assertTrue(all(k in b['metrics'] for k in KEYS))
         self.assertAlmostEqual(sum(b['metrics'][k] for k in KEYS[1:]),100)
         self.assertIn('only WR/TE Captain entries',render_overview(new))
@@ -169,6 +171,7 @@ class PriorPairingUsageTests(unittest.TestCase):
         r=review_winners(f.db,'2026-09-04',review_mode='prior_qualified',followup_from='2026-09-04',pairing_usage=True)
         p=r['contests'][0]['winners'][0]
         self.assertTrue(all(p['metrics'][k] is None for k in KEYS));self.assertEqual(p['peer_users'],0)
+        self.assertFalse(p['pairing_outcomes']['complete'])
 
     def test_same_day_history_cannot_qualify_pairing_cohort(self):
         f=self.history(dates=('2026-09-01','2026-09-02','2026-09-04'));self.day(f,'2026-09-04',4)

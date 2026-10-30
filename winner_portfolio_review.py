@@ -57,13 +57,15 @@ def _resolve(slots,lookup,kind,builder):
     return slots if len(athletes)==9 and len(teams)>=2 and '' not in teams and salary<=50000 else None
 
 
-def _portfolio(conn,key,user,players,kind,cancelled,*,pairing_usage=False):
+def _portfolio(conn,key,user,players,kind,cancelled,*,pairing_usage=False,outcome_cutoff=None):
     entries=conn.execute('SELECT entry_id,rank,points,metadata_complete FROM opponent_entries WHERE contest_key=? AND user_key=? ORDER BY entry_id',(key,user)).fetchall()
     lookup=defaultdict(list)
     for p in players:
         for role in p['role'].split('/'):lookup[role,p['id']].append(p)
     builder=Builder(players,len(entries)) if kind=='showdown' else None
     usage=[0]*6
+    from prior_pairing_outcomes import WithinUser
+    finishes=WithinUser(outcome_cutoff) if pairing_usage and outcome_cutoff is not None else None
     total=Counter();captains=Counter();flex_counts=Counter();display={};shapes=defaultdict(Counter);signatures=Counter();winning={};known=0;salary_sum=0;patterns=Counter();other_patterns=Counter();other_known=0;ranked=0;wins=0
     for start in range(0,len(entries),200):
         ai._check(cancelled);block=entries[start:start+200];ids=[r[0] for r in block];slots=defaultdict(list)
@@ -73,6 +75,7 @@ def _portfolio(conn,key,user,players,kind,cancelled,*,pairing_usage=False):
             ai._check(cancelled);is_rank=type(rank) is int and 0<rank<=2**53-1;ranked+=is_rank;wins+=is_rank and rank==1
             row=slots[eid]
             if complete!=1 or _resolve(row,lookup,kind,builder) is None:continue
+            if finishes is not None:finishes.add(row,rank)
             known+=1;cost=sum(p['salary'] for _,_,p in row);salary_sum+=cost
             if pairing_usage:
                 from pairing_usage import counts
@@ -104,7 +107,7 @@ def _portfolio(conn,key,user,players,kind,cancelled,*,pairing_usage=False):
         metrics.update(usage_metrics(usage) if known==len(entries) else dict.fromkeys(USAGE_KEYS))
     return dict(best_rank=min((r[1] for r in entries if type(r[1]) is int and 0<r[1]<=2**53-1),default=None),entries=len(entries),known=known,unknown=len(entries)-known,ranked=ranked,winning_entries=wins,winning_lineups=list(winning.values()),unique_lineups=len(signatures),metrics=metrics,
         exposures=[dict(name=display[k],team=k[1],position=k[2],total=n,captain=captains[k],flex=flex_counts[k],denominator=known) for k,n in sorted(total.items(),key=lambda item:(-item[1],item[0]))],
-        constructions={k:dict(sorted(v.items())) for k,v in shapes.items()},patterns=dict(patterns),other_patterns=dict(other_patterns),other_known=other_known)
+        constructions={k:dict(sorted(v.items())) for k,v in shapes.items()},patterns=dict(patterns),other_patterns=dict(other_patterns),other_known=other_known,**({'pairing_outcomes':finishes.finish(known==len(entries)==ranked)} if finishes is not None else {}))
 
 
 def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:None,*,contest_format='showdown',since='',review_mode='winners',followup_from='',pairing_usage=False):
@@ -198,7 +201,7 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
                     if portfolio_index==1 or portfolio_index%25==0:progress(f"Reviewing {portfolio_index}/{len(stats)} portfolios: {name}; {used_entries:,} entries reviewed across this attempt.")
                     used_entries+=stats[user]['entries']
                     if used_entries>MAX_WINNER_ENTRIES:raise ReviewLimitError('Portfolio entry review bound reached; narrow the evaluation date range.')
-                    profile=_portfolio(conn,key,user,manifest['players'],kind,cancelled,**({'pairing_usage':True} if pairing_usage else {}));p=stats[user]
+                    profile=_portfolio(conn,key,user,manifest['players'],kind,cancelled,**({'pairing_usage':True,'outcome_cutoff':cutoff_size} if pairing_usage and followup else {'pairing_usage':True} if pairing_usage else {}));p=stats[user]
                     if profile['entries']!=p['entries'] or profile['winning_entries']!=winners.get(user,0) or profile['best_rank']!=p['best_rank']:raise ValueError('Selected portfolio coverage changed.')
                     peer_key=(profile['entries'],prior_stats[user]['ranked_slates']) if followup else profile['entries']
                     eligible_peers=peers[peer_key] if profile['known']==profile['entries']==profile['ranked'] else []
@@ -324,6 +327,9 @@ def render_overview(report):
         if report.get('evaluation_windows'):lines += ['', 'Evaluation windows (gaps are not evaluated): '+ '; '.join(a+' through '+b for a,b in report['evaluation_windows'])]
         from historical_pattern_checks import render_checks
         lines += ['',render_checks(report)]
+        if report.get('pairing_usage'):
+            from prior_pairing_outcomes import render as render_pairing_outcomes
+            lines += ['',render_pairing_outcomes(report)]
     if report['excluded']:lines+=['','Excluded contests:']+[r['name']+': '+r['reason'] for r in report['excluded']]
     return '\n'.join(lines)
 
