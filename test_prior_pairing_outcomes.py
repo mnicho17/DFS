@@ -58,3 +58,56 @@ class PriorPairingOutcomeTests(unittest.TestCase):
         self.assertEqual(v['slates'],2);self.assertEqual(v['endpoints']['top1']['difference_pp'],50)
         r['review_mode']='winners'
         with self.assertRaises(ValueError):summarize(r)
+
+    def test_fixed_flags_preserve_supported_primary_contrast(self):
+        a=WithinUser(1000)
+        for _ in range(10):a.add(slots(),1);a.add(slots(False),20)
+        v=a.finish(True)
+        self.assertEqual(v['support_checks'],v['other_groups_fixed'])
+
+    def test_each_changed_group_flag_cannot_borrow_primary_support(self):
+        from showdown_group_review import flags
+        for flag in ('kickers','defenses','quarterbacks','qb_dst'):
+            with self.subTest(flag=flag):
+                row=slots()
+                if flag in ('kickers','defenses'):
+                    for i in (3,4):row[i][2]['position']='K' if flag=='kickers' else 'DST'
+                    if flag=='defenses':row[3][2]['team']=row[4][2]['team']='A'
+                elif flag=='quarterbacks':row[3][2]['position']='QB'
+                else:row[3][2]['position']='DST'
+                self.assertTrue(flags(row)[flag]);self.assertFalse(flags(slots(False))[flag])
+                a=WithinUser(1000)
+                for _ in range(10):a.add(row,1);a.add(slots(False),20)
+                v=a.finish(True)
+                self.assertEqual(v['support_checks']['10']['receiver_captain_same_qb']['strata'],1)
+                self.assertEqual(v['other_groups_fixed']['10']['receiver_captain_same_qb']['strata'],0)
+
+    def test_conditional_strata_do_not_pool_toward_minimum_support(self):
+        a=WithinUser(1000)
+        for q in (True,False):
+            for double in (True,False):
+                row=slots(q)
+                if double:
+                    for i in (3,4):row[i][2]['position']='K'
+                for _ in range(5):a.add(row,1 if q else 20)
+        v=a.finish(True)
+        self.assertEqual(v['support_checks']['10']['receiver_captain_same_qb']['strata'],1)
+        self.assertEqual(v['other_groups_fixed']['10']['receiver_captain_same_qb']['strata'],0)
+        self.assertEqual(v['other_groups_fixed']['5']['receiver_captain_same_qb']['strata'],2)
+        self.assertTrue(all(not v['strata'] for v in a.finish(False)['other_groups_fixed']['5'].values()))
+
+    def test_old_outcome_reports_cannot_claim_fixed_group_evidence(self):
+        a=WithinUser(1000)
+        for _ in range(10):a.add(slots(),1);a.add(slots(False),20)
+        d=a.finish(True);d.pop('other_groups_fixed')
+        r=dict(review_mode='prior_qualified',contests=[dict(format='showdown',preset='150-Max',date='2026-10-01',slate=['showdown','2026-10-01',['A@B']],winners=[dict(pairing_outcomes=d)])])
+        self.assertTrue(summarize(r));self.assertEqual(summarize(r,other_groups_fixed=True),{})
+        self.assertIn('Unavailable',render(r))
+
+    def test_three_specialists_cannot_match_zero_under_all_fixed_flags(self):
+        a=WithinUser(1000);row=slots()
+        for i,pos in ((3,'K'),(4,'K'),(5,'DST')):row[i][2]['position']=pos
+        for _ in range(10):a.add(row,1);a.add(slots(),20)
+        d=a.finish(True)
+        self.assertEqual(d['support_checks']['10']['kd_three_plus_vs_zero']['strata'],1)
+        self.assertEqual(d['other_groups_fixed']['10']['kd_three_plus_vs_zero']['strata'],0)
