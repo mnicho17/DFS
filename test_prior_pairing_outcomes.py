@@ -152,3 +152,53 @@ class PriorPairingOutcomeTests(unittest.TestCase):
         d.pop('one_qb_receiver');self.assertEqual(summarize(r,5,one_qb_receiver=True),{})
         self.assertIn('Exactly one QB',render(r))
         with self.assertRaises(ValueError):summarize(r,other_groups_fixed=True,one_qb_receiver=True)
+
+    def support_report(self,slates=5,users=10):
+        a=WithinUser(1000);opposing=slots();opposing[1][2]['team']='B'
+        for _ in range(10):a.add(slots(),1);a.add(opposing,20)
+        contests=[]
+        for i in range(slates):
+            date=f'2026-10-{i+1:02}'
+            profiles=[dict(user_key='dk:u'+str(j),pairing_outcomes=copy.deepcopy(a.finish(True))) for j in range(users)]
+            contests.append(dict(format='showdown',preset='150-Max',date=date,slate=['showdown',date,['A@B']],winners=profiles))
+        return dict(review_mode='prior_qualified',contests=contests)
+
+    def test_strict_support_needs_five_games_and_preserves_default_results(self):
+        r=self.support_report();before=copy.deepcopy(summarize(r))
+        for mode in ({},{'other_groups_fixed':True},{'one_qb_receiver':True}):
+            v=summarize(r,minimum_users_per_slate=10,**mode)['showdown / 150-Max']['receiver_captain_same_qb']
+            self.assertEqual(v['evidence_status'],'supported descriptive sample')
+            self.assertEqual(v['slates'],5);self.assertEqual(v['excluded_small_slates'],0)
+            self.assertTrue(all(g['distinct_users']==10 for g in v['games']))
+        self.assertEqual(before,summarize(r))
+        r['contests'].pop()
+        v=summarize(r,minimum_users_per_slate=10)['showdown / 150-Max']['receiver_captain_same_qb']
+        self.assertEqual(v['evidence_status'],'insufficient independent games')
+        self.assertIn('independent games 4/5 minimum',render(r))
+
+    def test_same_game_repeat_users_cannot_inflate_distinct_support(self):
+        r=self.support_report(slates=1,users=9);r['contests'].append(copy.deepcopy(r['contests'][0]))
+        v=summarize(r,minimum_users_per_slate=10)['showdown / 150-Max']['receiver_captain_same_qb']
+        self.assertEqual(v['slates'],0);self.assertEqual(v['excluded_small_slates'],1)
+        self.assertIsNone(v['endpoints']['top1']['difference_pp'])
+        self.assertIn('top1: unavailable',render(r))
+
+    def test_strict_support_is_metric_specific_and_requires_known_users(self):
+        r=self.support_report(slates=1)
+        r['contests'][0]['winners'][0]['pairing_outcomes']['one_qb_receiver']['10']['receiver_captain_same_qb']['strata']=0
+        v=summarize(r,one_qb_receiver=True,minimum_users_per_slate=10)['showdown / 150-Max']['receiver_captain_same_qb']
+        self.assertEqual(v['slates'],0)
+        for p in r['contests'][0]['winners']:p.pop('user_key')
+        self.assertEqual(summarize(r,minimum_users_per_slate=10),{})
+
+    def test_strict_support_does_not_pool_formats_or_entry_presets(self):
+        r=self.support_report(slates=1,users=5);other=copy.deepcopy(r['contests'][0]);other['preset']='20-Max'
+        r['contests'].append(other)
+        for scope in summarize(r,minimum_users_per_slate=10).values():self.assertEqual(scope['receiver_captain_same_qb']['slates'],0)
+
+    def test_invalid_strict_support_and_slate_identity_are_rejected(self):
+        r=self.support_report(slates=1)
+        for n in (-1,True,1.5):
+            with self.assertRaises(ValueError):summarize(r,minimum_users_per_slate=n)
+        r['contests'][0]['slate'][1]='2026-09-01'
+        with self.assertRaises(ValueError):summarize(r,minimum_users_per_slate=10)
