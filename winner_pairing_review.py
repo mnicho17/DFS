@@ -41,7 +41,7 @@ class Observer:
                 identity_ok=bool(name and isinstance(user,str) and user=='dk:'+username_key(name))))
             item['entries']+=1;item['winning_entries']+=int(rank==1)
 
-    def observe(self,eid,rank,pattern):
+    def observe(self,eid,rank,pattern,entry_user=None):
         self.field_seen+=1
         user=self.entries.get(eid);item=self.users.get(user)
         if item is not None:

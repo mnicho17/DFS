@@ -43,7 +43,7 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_feat
     if builder.reason:raise ValueError(builder.reason)
     cells=defaultdict(lambda:[[0,0,0,0],[0,0,0,0]]);conditional=defaultdict(lambda:[[0,0,0,0],[0,0,0,0]])
     cache=OrderedDict();unknown=missing=reads=resolutions=slot_reads=0
-    cursor=conn.execute('SELECT entry_id,metadata_complete,rank FROM opponent_entries WHERE contest_key=? ORDER BY entry_id',(key,))
+    cursor=conn.execute('SELECT entry_id,metadata_complete,rank,user_key FROM opponent_entries WHERE contest_key=? ORDER BY entry_id',(key,))
     while block:=cursor.fetchmany(200):
         ai._check(cancelled);reads+=len(block)
         if reads>MAX_ENTRIES:raise PatternAuditLimit('Outcome entry bound exceeded.')
@@ -53,13 +53,13 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_feat
             slot_reads+=1
             if slot_reads>6*MAX_ENTRIES:raise PatternAuditLimit('Outcome slot bound exceeded.')
             if len(raw[eid])<8:raw[eid].append(tuple(row))
-        for eid,complete,rank in block:
+        for eid,complete,rank,entry_user in block:
             ranked=type(rank) is int and 1<=rank<=2**53-1
             if not ranked:missing+=1
             rows=raw[eid];identity=tuple(rows)
             if complete!=1 or [r[0] for r in rows]!=list(range(6)):
                 unknown+=1
-                if _observer is not None:_observer.observe(eid,rank,None)
+                if _observer is not None:_observer.observe(eid,rank,None,entry_user)
                 continue
             if identity not in cache:
                 resolutions+=1
@@ -72,9 +72,9 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_feat
             value=cache[identity]
             if value is None:
                 unknown+=1
-                if _observer is not None:_observer.observe(eid,rank,None)
+                if _observer is not None:_observer.observe(eid,rank,None,entry_user)
                 continue
-            if _observer is not None:_observer.observe(eid,rank,value[1])
+            if _observer is not None:_observer.observe(eid,rank,value[1],entry_user)
             if not ranked:continue
             stratum,pattern=value
             outcomes=(1,int(rank<=(builder.cutoff+99)//100),int(rank<=(builder.cutoff+19)//20),int(rank==1))

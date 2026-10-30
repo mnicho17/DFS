@@ -16,8 +16,8 @@ def features(slots):
 
 
 def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled):
-    from winner_pairing_review import Observer
-    observer=Observer(conn,key,cancelled)
+    from winner_size_matching import SizeMatchedObserver
+    observer=SizeMatchedObserver(conn,key,cancelled)
     result=collect(conn,key,players,accepted,field_size,user,cancelled,_features=features,
                    _metrics=METRICS,_rule_metrics=(),_observed=True,_observer=observer)
     result['winner_portfolios']=observer.finish(accepted)
@@ -39,7 +39,7 @@ def review(db_path,cancelled=lambda:False,progress=lambda text:None,*,preset='')
     from historical_series_review import _inventory
     from showdown_group_review import review_history
     before=_inventory(db_path)
-    winner_entries=[0]
+    winner_entries=[0];peer_entries=[0]
     def bounded_collect(*args):
         from winner_pairing_review import MAX_ENTRIES
         from portfolio_pattern_audit import PatternAuditLimit
@@ -47,6 +47,10 @@ def review(db_path,cancelled=lambda:False,progress=lambda text:None,*,preset='')
         winner_entries[0]+=sum(row['entries'] for row in value['winner_portfolios']['users'])
         if winner_entries[0]>MAX_ENTRIES:
             raise PatternAuditLimit('Whole-review winner portfolio entry bound reached; no partial report published.')
+        from winner_size_matching import MAX_REVIEW_PEER_ENTRIES
+        peer_entries[0]+=value['winner_portfolios']['peer_entries']
+        if peer_entries[0]>MAX_REVIEW_PEER_ENTRIES:
+            raise PatternAuditLimit('Whole-review peer entry bound reached; no partial report published.')
         return value
     result=review_history(db_path,cancelled,progress,preset=preset,_outcomes=True,
                           _collector=bounded_collect,_aggregate=summarize)
@@ -55,6 +59,9 @@ def review(db_path,cancelled=lambda:False,progress=lambda text:None,*,preset='')
     from winner_pairing_review import summarize as portfolios
     result['winner_portfolios_by_preset']={p:portfolios([c for c in result['contests'] if c['preset']==p])
                                           for p in result['by_preset']}
+    from winner_size_matching import summarize as matched,SUPPORT
+    result['size_matched_by_preset']={p:{str(n):matched([c for c in result['contests'] if c['preset']==p],n) for n in SUPPORT}
+                                      for p in result['by_preset']}
     return result
 
 
@@ -93,4 +100,5 @@ def render(report):
         lines.append(f"{c['name']}: {c['accepted']:,} indexed entries; {c['unknown']:,} unresolved; {c['missing_rank']:,} missing rank; {c['rank_basis']}")
     lines+=['Excluded: '+c['name']+': '+c['reason'] for c in report['excluded']]
     from winner_pairing_review import render as render_portfolios
-    return '\n'.join(lines)+render_portfolios(report)
+    from winner_size_matching import render as render_matching
+    return '\n'.join(lines)+render_portfolios(report)+render_matching(report)
