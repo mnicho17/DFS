@@ -15,7 +15,7 @@ def combine_followups(reports):
     if not reports or len(reports)>MAX_BATCHES:raise ReviewLimitError('Choose between 1 and 8 bounded evaluation windows.')
     ordered=sorted(reports,key=lambda r:r['followup_from']);first=ordered[0];contests={};evidence={};excluded={};windows=[]
     for report in ordered:
-        if report.get('review_mode')!='prior_qualified' or report['since']!=first['since'] or report['format']!=first['format']:raise ValueError('Batch history scopes or review modes disagree.')
+        if report.get('review_mode')!='prior_qualified' or report['since']!=first['since'] or report['format']!=first['format'] or bool(report.get('pairing_usage'))!=bool(first.get('pairing_usage')):raise ValueError('Batch history scopes or review modes disagree.')
         start=date.fromisoformat(report['followup_from']).isoformat();end=date.fromisoformat(report['through']).isoformat()
         if start>end or (windows and start<=windows[-1][1]):raise ValueError('Evaluation windows overlap or are invalid.')
         windows.append([start,end])
@@ -44,7 +44,7 @@ def _inventory(db_path):
         return hashlib.sha256(json.dumps(data,sort_keys=True).encode()).hexdigest()
 
 
-def review_series(db_path,through,cancelled=lambda:False,progress=lambda text:None,*,contest_format='showdown',since='',followup_from='',evaluation_windows=None):
+def review_series(db_path,through,cancelled=lambda:False,progress=lambda text:None,*,contest_format='showdown',since='',followup_from='',evaluation_windows=None,pairing_usage=False):
     ai._check(cancelled)
     through=date.fromisoformat(through).isoformat();since=date.fromisoformat(since).isoformat() if since else '0001-01-01';start=date.fromisoformat(followup_from).isoformat()
     if not since<start<=through or contest_format not in ('','showdown','classic'):raise ValueError('Choose valid history and evaluation dates and format.')
@@ -60,7 +60,7 @@ def review_series(db_path,through,cancelled=lambda:False,progress=lambda text:No
     reports=[];entries=profiles=0
     for i,(a,b) in enumerate(windows,1):
         ai._check(cancelled);progress(f'Historical batch {i}/{len(windows)}: {a} through {b}. Each batch retains the existing review limits.')
-        r=review_winners(db_path,b,cancelled,lambda t:progress(f'Batch {i}/{len(windows)} — '+t),contest_format=contest_format,since=since,review_mode='prior_qualified',followup_from=a)
+        r=review_winners(db_path,b,cancelled,lambda t:progress(f'Batch {i}/{len(windows)} — '+t),contest_format=contest_format,since=since,review_mode='prior_qualified',followup_from=a,**({'pairing_usage':True} if pairing_usage else {}))
         reports.append(r);entries+=sum(p['entries'] for c in r['contests'] for p in c['winners']);profiles+=sum(len(c['winners']) for c in r['contests'])
         if entries>MAX_SERIES_ENTRIES or profiles>MAX_SERIES_PROFILES:raise ReviewLimitError('Series limit reached; narrow the evaluation range. No partial series published.')
         if _inventory(db_path)!=initial:raise ValueError('History index or salary mappings changed during the series; wait for indexing to finish and rerun.')

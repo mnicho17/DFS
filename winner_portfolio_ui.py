@@ -17,8 +17,8 @@ class WinnerWorker(QtCore.QObject):
             path,through,kind,since,review_mode,followup_from=self.args
             if review_mode=='prior_series':
                 from historical_series_review import review_series
-                result=review_series(path,through,self.stop.is_set,self.progress.emit,contest_format=kind,since=since,followup_from=followup_from)
-            else:result=review_winners(path,through,self.stop.is_set,self.progress.emit,contest_format=kind,since=since,review_mode=review_mode,followup_from=followup_from)
+                result=review_series(path,through,self.stop.is_set,self.progress.emit,contest_format=kind,since=since,followup_from=followup_from,**({'pairing_usage':True} if kind=='showdown' else {}))
+            else:result=review_winners(path,through,self.stop.is_set,self.progress.emit,contest_format=kind,since=since,review_mode=review_mode,followup_from=followup_from,**({'pairing_usage':True} if kind=='showdown' and review_mode=='prior_qualified' else {}))
             if not self.stop.is_set():self.result.emit(result)
         except Exception as exc:
             if not self.stop.is_set():self.error.emit(str(exc))

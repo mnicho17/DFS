@@ -30,3 +30,6 @@
 - [Version 1.6.0 release notes](releases/v1.6.0.md)
 
 Each tagged Windows release also includes `DFS-Optimizer-User-Guide.pdf` as a downloadable asset.
+
+
+The Showdown **Earlier repeat finishes** and **Across more games** portfolio reviews also report WR/TE Captain with own QB and zero/one/two/three-or-more K/DST usage. Qualification uses strictly earlier calendar dates, at least three ranked salary slates and two earlier top-cutoff finishes, with the existing exact-entry-count and preset matching. All later entries are retained, including losses. A single unresolved roster withholds the entire portfolio's new usage rates. Receiver percentages use WR/TE Captain entries only; K/DST includes Captain and FLEX. Peer support is metric-specific, including the separate five/ten-peer checks. These are descriptive usage differences, not evidence of predictive skill, profit or a grouping-rule benefit. Source, cancellation, batching and consistency safeguards remain unchanged; no model or generation defaults change.
