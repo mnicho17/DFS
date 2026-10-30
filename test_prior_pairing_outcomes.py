@@ -111,3 +111,44 @@ class PriorPairingOutcomeTests(unittest.TestCase):
         d=a.finish(True)
         self.assertEqual(d['support_checks']['10']['kd_three_plus_vs_zero']['strata'],1)
         self.assertEqual(d['other_groups_fixed']['10']['kd_three_plus_vs_zero']['strata'],0)
+
+    def test_one_qb_comparison_rejects_zero_qb_baseline(self):
+        a=WithinUser(1000)
+        for _ in range(10):a.add(slots(),1);a.add(slots(False),20)
+        d=a.finish(True)
+        self.assertEqual(d['other_groups_fixed']['10']['receiver_captain_same_qb']['strata'],1)
+        self.assertEqual(d['one_qb_receiver']['5']['receiver_captain_same_qb']['strata'],0)
+
+    def test_one_qb_compares_own_team_against_opposing_team(self):
+        a=WithinUser(1000);opposing=slots();opposing[1][2]['team']='B'
+        for _ in range(10):a.add(slots(),1);a.add(opposing,20)
+        d=a.finish(True)['one_qb_receiver']['10']['receiver_captain_same_qb']
+        self.assertEqual(d['strata'],1);self.assertEqual(d['entries'],20)
+        self.assertEqual(d['difference_pp']['top1'],100)
+        self.assertEqual(a.finish(True)['one_qb_receiver']['10'].keys(),{'receiver_captain_same_qb'})
+        self.assertEqual(a.finish(False)['one_qb_receiver']['5']['receiver_captain_same_qb']['strata'],0)
+
+    def test_one_qb_does_not_borrow_other_flags_or_captain_support(self):
+        for changed in ('flags','captain','salary','multiple'):
+            with self.subTest(changed=changed):
+                row=slots();row[1][2]['team']='B'
+                if changed=='flags':row[3][2].update(position='DST',team='A')
+                if changed=='captain':row[0][2]['id']='different'
+                if changed=='salary':
+                    for _,_,p in row:p['salary']=8000
+                if changed=='multiple':row[3][2].update(position='QB',team='B')
+                a=WithinUser(1000)
+                for _ in range(10):a.add(slots(),1);a.add(row,20)
+                self.assertEqual(a.finish(True)['one_qb_receiver']['5']['receiver_captain_same_qb']['strata'],0)
+
+    def test_one_qb_legacy_evidence_and_support_stay_unavailable(self):
+        a=WithinUser(1000);opposing=slots();opposing[1][2]['team']='B'
+        for _ in range(5):a.add(slots(),1);a.add(opposing,20)
+        d=a.finish(True)
+        self.assertEqual(d['one_qb_receiver']['5']['receiver_captain_same_qb']['strata'],1)
+        self.assertEqual(d['one_qb_receiver']['10']['receiver_captain_same_qb']['strata'],0)
+        r=dict(review_mode='prior_qualified',contests=[dict(format='showdown',preset='150-Max',date='2026-10-01',slate=['showdown','2026-10-01',['A@B']],winners=[dict(pairing_outcomes=d)])])
+        self.assertTrue(summarize(r,5,one_qb_receiver=True))
+        d.pop('one_qb_receiver');self.assertEqual(summarize(r,5,one_qb_receiver=True),{})
+        self.assertIn('Exactly one QB',render(r))
+        with self.assertRaises(ValueError):summarize(r,other_groups_fixed=True,one_qb_receiver=True)
