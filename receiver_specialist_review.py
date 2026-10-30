@@ -15,8 +15,13 @@ def features(slots):
     return (paired,*(0 if kd==0 else 1 if (kd==n if n<3 else kd>=3) else None for n in (1,2,3)))
 
 
-def contest_outcomes(*args):
-    return collect(*args,_features=features,_metrics=METRICS,_rule_metrics=(),_observed=True)
+def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled):
+    from winner_pairing_review import Observer
+    observer=Observer(conn,key,cancelled)
+    result=collect(conn,key,players,accepted,field_size,user,cancelled,_features=features,
+                   _metrics=METRICS,_rule_metrics=(),_observed=True,_observer=observer)
+    result['winner_portfolios']=observer.finish(accepted)
+    return result
 
 
 def summarize(contests):
@@ -34,10 +39,22 @@ def review(db_path,cancelled=lambda:False,progress=lambda text:None,*,preset='')
     from historical_series_review import _inventory
     from showdown_group_review import review_history
     before=_inventory(db_path)
+    winner_entries=[0]
+    def bounded_collect(*args):
+        from winner_pairing_review import MAX_ENTRIES
+        from portfolio_pattern_audit import PatternAuditLimit
+        value=contest_outcomes(*args)
+        winner_entries[0]+=sum(row['entries'] for row in value['winner_portfolios']['users'])
+        if winner_entries[0]>MAX_ENTRIES:
+            raise PatternAuditLimit('Whole-review winner portfolio entry bound reached; no partial report published.')
+        return value
     result=review_history(db_path,cancelled,progress,preset=preset,_outcomes=True,
-                          _collector=contest_outcomes,_aggregate=summarize)
+                          _collector=bounded_collect,_aggregate=summarize)
     if _inventory(db_path)!=before:raise ValueError('Historical index changed during pairing review; rerun.')
     ai._check(cancelled)
+    from winner_pairing_review import summarize as portfolios
+    result['winner_portfolios_by_preset']={p:portfolios([c for c in result['contests'] if c['preset']==p])
+                                          for p in result['by_preset']}
     return result
 
 
@@ -75,4 +92,5 @@ def render(report):
     for c in report['contests']:
         lines.append(f"{c['name']}: {c['accepted']:,} indexed entries; {c['unknown']:,} unresolved; {c['missing_rank']:,} missing rank; {c['rank_basis']}")
     lines+=['Excluded: '+c['name']+': '+c['reason'] for c in report['excluded']]
-    return '\n'.join(lines)
+    from winner_pairing_review import render as render_portfolios
+    return '\n'.join(lines)+render_portfolios(report)

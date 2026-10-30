@@ -32,7 +32,7 @@ def contrast(cells,minimum=MIN_SIDE,*,metrics=METRICS):
     return out
 
 
-def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_features=None,_metrics=None,_rule_metrics=None,_observed=False):
+def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_features=None,_metrics=None,_rule_metrics=None,_observed=False,_observer=None):
     feature_fn=_features or outcome_features
     metrics=METRICS if _metrics is None else _metrics
     rule_metrics=RULE_METRICS if _rule_metrics is None else _rule_metrics
@@ -57,7 +57,10 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_feat
             ranked=type(rank) is int and 1<=rank<=2**53-1
             if not ranked:missing+=1
             rows=raw[eid];identity=tuple(rows)
-            if complete!=1 or [r[0] for r in rows]!=list(range(6)):unknown+=1;continue
+            if complete!=1 or [r[0] for r in rows]!=list(range(6)):
+                unknown+=1
+                if _observer is not None:_observer.observe(eid,rank,None)
+                continue
             if identity not in cache:
                 resolutions+=1
                 if resolutions>MAX_RESOLUTIONS:raise PatternAuditLimit('Outcome resolution bound reached; narrow the review.')
@@ -67,7 +70,11 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_feat
                 if len(cache)>MAX_CACHE:cache.popitem(last=False)
             else:cache.move_to_end(identity)
             value=cache[identity]
-            if value is None:unknown+=1;continue
+            if value is None:
+                unknown+=1
+                if _observer is not None:_observer.observe(eid,rank,None)
+                continue
+            if _observer is not None:_observer.observe(eid,rank,value[1])
             if not ranked:continue
             stratum,pattern=value
             outcomes=(1,int(rank<=(builder.cutoff+99)//100),int(rank<=(builder.cutoff+19)//20),int(rank==1))
