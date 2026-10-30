@@ -287,6 +287,9 @@ def render_overview(report):
     lines=['EARLIER REPEAT FINISHES — LATER OBSERVED PORTFOLIOS' if followup else 'CONTEST WINNERS — ENTIRE OBSERVED PORTFOLIOS',f"History scope: {report['since']} through {report['through']}; format {report['format'] or 'all'}.",f"Verified evaluation contests: {len(contests)}; {cohort} entrant/contest profiles: {len(profiles)}; distinct usernames: {len({p['user_key'] for p in profiles})}.",
         f"Observed entries in those portfolios: {sum(p['entries'] for p in profiles):,}; resolved: {sum(p['known'] for p in profiles):,}; unknown: {sum(p['unknown'] for p in profiles):,}.",
         f"Complete-field receipts: {sum(c['complete_field'] for c in contests)}/{len(contests)}. All available entries are retained; unseen entries are unknown."]
+    if followup and report.get('pairing_usage'):
+        from prior_pairing_outcomes import render_evidence_summary
+        lines[1:1]=['',render_evidence_summary(report),'','DETAILED EVIDENCE AND METHODS']
     audits=[c['peer_pattern_audit'] for c in contests if c.get('peer_pattern_audit') is not None]
     if audits:lines += [f"Peer construction audit: {sum(a['entries'] for a in audits):,} peer entries read; {sum(a['unknown_entries'] for a in audits):,} unresolved rows; {sum(a['excluded_users'] for a in audits):,} peer portfolios withheld in full. Team splits use majority-team first; QB/DST checks include all Captain and FLEX slots."]
     lines += ['Peer medians are calculated separately for each metric; team-split peer columns need not add to 100% and are not a joint field distribution.']

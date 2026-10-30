@@ -202,3 +202,30 @@ class PriorPairingOutcomeTests(unittest.TestCase):
             with self.assertRaises(ValueError):summarize(r,minimum_users_per_slate=n)
         r['contests'][0]['slate'][1]='2026-09-01'
         with self.assertRaises(ValueError):summarize(r,minimum_users_per_slate=10)
+
+    def test_evidence_summary_flags_thin_games_before_displaying_any_mean(self):
+        from prior_pairing_outcomes import render_evidence_summary
+        r=self.support_report(slates=2)
+        text=render_evidence_summary(r)
+        self.assertIn('insufficient independent games',text);self.assertIn('2/5 games minimum',text)
+        self.assertNotIn('top-cutoff +100.000',text)
+        self.assertIn('structurally unavailable',text)
+
+    def test_evidence_summary_supported_sample_is_descriptive_and_nonmutating(self):
+        from prior_pairing_outcomes import render_evidence_summary
+        r=self.support_report();before=copy.deepcopy(r)
+        text=render_evidence_summary(r)
+        self.assertIn('supported descriptive sample',text);self.assertIn('top-cutoff +100.000 pp',text)
+        self.assertIn('Sample support does not establish significance',text)
+        self.assertEqual(r,before)
+
+    def test_evidence_summary_does_not_invent_missing_legacy_evidence(self):
+        from prior_pairing_outcomes import render_evidence_summary
+        r=self.support_report()
+        for c in r['contests']:
+            for p in c['winners']:p['pairing_outcomes'].pop('one_qb_receiver')
+        text=render_evidence_summary(r)
+        section=text.split('Exactly one QB: own-team versus opposing')[1]
+        self.assertIn('unavailable in saved evidence',section)
+        self.assertNotIn('supported descriptive sample',section)
+        self.assertIn('no evaluated contests',render_evidence_summary(dict(review_mode='prior_qualified',contests=[])))

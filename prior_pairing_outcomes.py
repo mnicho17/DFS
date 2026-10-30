@@ -82,6 +82,39 @@ def summarize(report,minimum=10,*,other_groups_fixed=False,one_qb_receiver=False
     return result
 
 
+def render_evidence_summary(report):
+    """Compact reading aid over unchanged, strictly supported outcome summaries."""
+    lines=['PAIRING EVIDENCE AT A GLANCE',
+        f'Stricter check: 10 entries per side, {MIN_USERS_PER_SLATE} distinct supported users per game, {MIN_INDEPENDENT_SLATES} independent games minimum.',
+        'Descriptive findings only. Sample support does not establish significance, profit or a benefit from changing a rule. Settings are unchanged.']
+    scopes=sorted({c['format']+' / '+c['preset'] for c in report['contests']})
+    if not scopes:lines.append('Unavailable: no evaluated contests.')
+    modes=(('Captain and salary matched',{},'support_checks',METRICS),
+           ('Four grouping flags also fixed',{'other_groups_fixed':True},'other_groups_fixed',METRICS),
+           ('Exactly one QB: own-team versus opposing',{'one_qb_receiver':True},'one_qb_receiver',METRICS[:1]))
+    for label,mode,key,metrics in modes:
+        data=summarize(report,10,minimum_users_per_slate=MIN_USERS_PER_SLATE,**mode)
+        lines.append(label)
+        for scope in scopes:
+            available=any(key in p.get('pairing_outcomes',{}) for c in report['contests'] if c['format']+' / '+c['preset']==scope for p in c['winners'])
+            for metric in metrics:
+                prefix=scope+' / '+LABELS[metric]+': '
+                if not available:lines.append(prefix+'unavailable in saved evidence.');continue
+                if key=='other_groups_fixed' and metric=='kd_three_plus_vs_zero':
+                    lines.append(prefix+'structurally unavailable with all four flags fixed.');continue
+                v=data.get(scope,{}).get(metric)
+                if v is None:
+                    lines.append(prefix+'insufficient independent games (0/'+str(MIN_INDEPENDENT_SLATES)+'); no complete supported comparisons.');continue
+                counts=f"{v['slates']}/{MIN_INDEPENDENT_SLATES} games minimum; {v['user_contests']} user-contests; {v['excluded_small_slates']} small games withheld"
+                if v['slates']<MIN_INDEPENDENT_SLATES:
+                    lines.append(prefix+'insufficient independent games - '+counts+'.');continue
+                d=v['endpoints']['top1'];omit=d['omit_one_range']
+                sensitivity='unavailable' if omit is None else f'{omit[0]:+.3f} to {omit[1]:+.3f} pp'
+                lines.append(prefix+f"supported descriptive sample - {counts}; top-cutoff {d['difference_pp']:+.3f} pp; higher/lower/equal {d['higher']}/{d['lower']}/{d['equal']}; omit-one {sensitivity}.")
+    lines.append('Detailed comparisons, five-entry sensitivity and all finishing endpoints follow below. Different matching methods can use different users and games.')
+    return '\n'.join(lines)
+
+
 def render(report):
     lines=['WITHIN-USER LATER PAIRING FINISH RATES',
         'Earlier-selected users only. Compare entries of the same user within the same contest, exact Captain ID and salary band. Other construction choices are not held fixed.',

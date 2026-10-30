@@ -163,6 +163,9 @@ class PriorPairingUsageTests(unittest.TestCase):
         self.assertTrue(all(k in b['metrics'] for k in KEYS))
         self.assertAlmostEqual(sum(b['metrics'][k] for k in KEYS[1:]),100)
         self.assertIn('only WR/TE Captain entries',render_overview(new))
+        overview=render_overview(new)
+        self.assertLess(overview.index('PAIRING EVIDENCE AT A GLANCE'),overview.index('History scope:'))
+        self.assertEqual(overview.count('PAIRING EVIDENCE AT A GLANCE'),1)
 
     def test_partial_pairing_portfolio_withholds_all_usage(self):
         from pairing_usage import KEYS
