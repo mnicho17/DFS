@@ -9,14 +9,17 @@ class ReviewWorker(QtCore.QObject):
     result=QtCore.pyqtSignal(object)
     error=QtCore.pyqtSignal(str)
     done=QtCore.pyqtSignal()
-    def __init__(self,path,username,preset,outcomes=False,readiness=False):
-        super().__init__();self.args=(path,username,preset);self.outcomes=outcomes;self.readiness=readiness;self.stop=threading.Event()
+    def __init__(self,path,username,preset,outcomes=False,readiness=False,pairings=False):
+        super().__init__();self.args=(path,username,preset);self.outcomes=outcomes;self.readiness=readiness;self.pairings=pairings;self.stop=threading.Event()
     @QtCore.pyqtSlot()
     def run(self):
         from showdown_group_review import review_history
         try:
             path,user,preset=self.args
-            if self.readiness:
+            if self.pairings:
+                from receiver_specialist_review import review
+                result=review(path,self.stop.is_set,self.progress.emit,preset=preset)
+            elif self.readiness:
                 from pathlib import Path
                 from grouping_replay_readiness import inspect_archives
                 result=inspect_archives(Path(path).parent,self.stop.is_set,self.progress.emit,preset=preset)
@@ -57,6 +60,7 @@ class CommonGroupsDialog(QtWidgets.QDialog):
         menu.addAction('Construction usage and top-finish cohorts',lambda:self.start())
         menu.addAction('Finish rates matched by Captain and salary',lambda:self.start(outcomes=True))
         menu.addAction('Saved inputs for a grouping comparison',lambda:self.start(readiness=True))
+        menu.addAction('Receiver Captain / QB and K/DST counts',lambda:self.start(pairings=True))
         self.review.setMenu(menu);row.addWidget(self.review)
         self.cancel_review=QtWidgets.QPushButton('Stop review');self.cancel_review.setEnabled(False);self.cancel_review.clicked.connect(self.cancel);row.addWidget(self.cancel_review)
         layout.addLayout(row)
@@ -67,12 +71,12 @@ class CommonGroupsDialog(QtWidgets.QDialog):
         copy=buttons.addButton('Copy trend report',QtWidgets.QDialogButtonBox.ActionRole);copy.clicked.connect(lambda:QtWidgets.QApplication.clipboard().setText(self.report.toPlainText()))
         buttons.accepted.connect(self.accept);buttons.rejected.connect(self.reject);layout.addWidget(buttons)
     def selected(self):return {key for key,check in self.checks.items() if check.isChecked()}
-    def start(self,outcomes=False,readiness=False):
+    def start(self,outcomes=False,readiness=False,pairings=False):
         if self._thread is not None:return
-        self._pending=None;self._error='';self._review_outcomes=outcomes;self._review_readiness=readiness
+        self._pending=None;self._error='';self._review_outcomes=outcomes;self._review_readiness=readiness;self._review_pairings=pairings
         for widget in (self.review,self.username,self.preset,self.apply_button):widget.setEnabled(False)
         self.cancel_review.setEnabled(True);self.status.setText('Verifying saved sources and reviewing indexed entries…')
-        worker=self._worker=ReviewWorker(self.db_path,self.username.text().strip(),self.preset.currentData(),outcomes=outcomes,readiness=readiness)
+        worker=self._worker=ReviewWorker(self.db_path,self.username.text().strip(),self.preset.currentData(),outcomes=outcomes,readiness=readiness,pairings=pairings)
         thread=self._thread=QtCore.QThread(self);worker.moveToThread(thread)
         thread.started.connect(worker.run);worker.progress.connect(self.status.setText)
         worker.result.connect(self.receive);worker.error.connect(self.receive_error)
@@ -87,7 +91,9 @@ class CommonGroupsDialog(QtWidgets.QDialog):
         if stopped:self.status.setText('Review stopped. No partial findings or rule changes were applied.')
         elif self._pending is None:self.status.setText('Review unavailable: '+self._error)
         else:
-            if self._review_readiness:
+            if self._review_pairings:
+                from receiver_specialist_review import render
+            elif self._review_readiness:
                 from grouping_replay_readiness import render
             elif self._review_outcomes:
                 from construction_outcomes import render

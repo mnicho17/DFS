@@ -32,13 +32,18 @@ def contrast(cells,minimum=MIN_SIDE,*,metrics=METRICS):
     return out
 
 
-def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled):
+def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_features=None,_metrics=None,_rule_metrics=None,_observed=False,_observer=None):
+    feature_fn=_features or outcome_features
+    metrics=METRICS if _metrics is None else _metrics
+    rule_metrics=RULE_METRICS if _rule_metrics is None else _rule_metrics
+    rule_indices=tuple(metrics.index(m) for m in rule_metrics)
+    observed={m:[[0,0,0,0],[0,0,0,0]] for m in metrics}
     if type(accepted) is not int or not 0<accepted<=MAX_ENTRIES:raise PatternAuditLimit('Outcome entry bound exceeded.')
     builder=Builder(players,accepted,field_size)
     if builder.reason:raise ValueError(builder.reason)
     cells=defaultdict(lambda:[[0,0,0,0],[0,0,0,0]]);conditional=defaultdict(lambda:[[0,0,0,0],[0,0,0,0]])
     cache=OrderedDict();unknown=missing=reads=resolutions=slot_reads=0
-    cursor=conn.execute('SELECT entry_id,metadata_complete,rank FROM opponent_entries WHERE contest_key=? ORDER BY entry_id',(key,))
+    cursor=conn.execute('SELECT entry_id,metadata_complete,rank,user_key FROM opponent_entries WHERE contest_key=? ORDER BY entry_id',(key,))
     while block:=cursor.fetchmany(200):
         ai._check(cancelled);reads+=len(block)
         if reads>MAX_ENTRIES:raise PatternAuditLimit('Outcome entry bound exceeded.')
@@ -48,28 +53,39 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled):
             slot_reads+=1
             if slot_reads>6*MAX_ENTRIES:raise PatternAuditLimit('Outcome slot bound exceeded.')
             if len(raw[eid])<8:raw[eid].append(tuple(row))
-        for eid,complete,rank in block:
+        for eid,complete,rank,entry_user in block:
             ranked=type(rank) is int and 1<=rank<=2**53-1
             if not ranked:missing+=1
             rows=raw[eid];identity=tuple(rows)
-            if complete!=1 or [r[0] for r in rows]!=list(range(6)):unknown+=1;continue
+            if complete!=1 or [r[0] for r in rows]!=list(range(6)):
+                unknown+=1
+                if _observer is not None:_observer.observe(eid,rank,None,entry_user)
+                continue
             if identity not in cache:
                 resolutions+=1
                 if resolutions>MAX_RESOLUTIONS:raise PatternAuditLimit('Outcome resolution bound reached; narrow the review.')
                 slots=[(label,role,dict(id=ident,name=name,position=pos,team=team,salary=salary)) for ordinal,role,label,ident,name,pos,team,salary in rows]
                 resolved=builder._resolve(slots)
-                cache[identity]=(tuple(resolved[0].split('|')[:2]),outcome_features(slots)) if resolved else None
+                cache[identity]=(tuple(resolved[0].split('|')[:2]),feature_fn(slots)) if resolved else None
                 if len(cache)>MAX_CACHE:cache.popitem(last=False)
             else:cache.move_to_end(identity)
             value=cache[identity]
-            if value is None:unknown+=1;continue
+            if value is None:
+                unknown+=1
+                if _observer is not None:_observer.observe(eid,rank,None,entry_user)
+                continue
+            if _observer is not None:_observer.observe(eid,rank,value[1],entry_user)
             if not ranked:continue
             stratum,pattern=value
             outcomes=(1,int(rank<=(builder.cutoff+99)//100),int(rank<=(builder.cutoff+19)//20),int(rank==1))
             for i,present in enumerate(pattern):
+                if present is None:continue
+                if present not in (0,1):raise ValueError('Outcome feature is not binary.')
+                if _observed:
+                    for k,n in enumerate(outcomes):observed[metrics[i]][present][k]+=n
                 side=cells[stratum,i][present]
                 for k,n in enumerate(outcomes):side[k]+=n
-            rules=tuple(pattern[i] for i in RULE_INDICES)
+            rules=tuple(pattern[i] for i in rule_indices)
             for i,present in enumerate(rules):
                 fixed=rules[:i]+rules[i+1:]
                 side=conditional[(stratum,fixed),i][present]
@@ -78,8 +94,8 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled):
                 raise PatternAuditLimit('Outcome comparison-cell bound reached; no partial report published.')
     if reads!=accepted:raise ValueError('Outcome entry count differs from the indexed receipt.')
     ai._check(cancelled)
-    checks={str(n):dict(matched=contrast(cells,n),other_rules_fixed=contrast(conditional,n,metrics=RULE_METRICS)) for n in SUPPORT_MINIMUMS}
-    return dict(accepted=accepted,unknown=unknown,missing_rank=missing,rank_basis=builder.basis,matched=checks['5']['matched'],other_rules_fixed=checks['5']['other_rules_fixed'],support_checks=checks)
+    checks={str(n):dict(matched=contrast(cells,n,metrics=metrics),other_rules_fixed=contrast(conditional,n,metrics=rule_metrics)) for n in SUPPORT_MINIMUMS}
+    return dict(accepted=accepted,unknown=unknown,missing_rank=missing,rank_basis=builder.basis,matched=checks['5']['matched'],other_rules_fixed=checks['5']['other_rules_fixed'],support_checks=checks,**({'observed':observed} if _observed else {}))
 
 
 def _game_summary(contests,metric,comparison,minimum=None):

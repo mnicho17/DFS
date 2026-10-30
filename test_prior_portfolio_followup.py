@@ -127,4 +127,58 @@ class PriorPortfolioFollowupTests(unittest.TestCase):
         self.assertTrue(any('Reviewing 1/1 portfolios' in s for s in messages))
         self.assertTrue(any('Final source verification' in s for s in messages))
 
+class PriorPairingUsageTests(unittest.TestCase):
+    fixture=PriorPortfolioFollowupTests.fixture
+    day=PriorPortfolioFollowupTests.day
+    history=PriorPortfolioFollowupTests.history
+    review=PriorPortfolioFollowupTests.review
+    # Reuse source-backed fixtures without inheriting their test methods.
+    def test_usage_denominators_and_captain_specialists(self):
+        from pairing_usage import counts,metrics
+        def slot(role,pos,team):return ('x',role,dict(position=pos,team=team))
+        row=[slot('CPT','WR','A'),slot('FLEX','QB','A'),slot('FLEX','WR','A'),slot('FLEX','RB','B'),slot('FLEX','K','B'),slot('FLEX','DST','A')]
+        self.assertEqual(counts(row),[1,1,0,0,1,0])
+        row[0]=slot('CPT','K','A')
+        self.assertEqual(counts(row),[0,0,0,0,0,1])
+        self.assertEqual(metrics(counts(row)),dict(receiver_own_qb_pct=None,kd_zero_pct=0,kd_one_pct=0,kd_two_pct=0,kd_three_plus_pct=100))
+
+    def test_worker_enables_pairing_only_for_showdown_followups(self):
+        from winner_portfolio_ui import WinnerWorker
+        for kind,mode in [('showdown','prior_qualified'),('classic','prior_qualified'),('showdown','winners')]:
+            with self.subTest(kind=kind,mode=mode),patch('winner_portfolio_ui.review_winners',return_value={}) as run:
+                WinnerWorker('unused','2026-09-05',kind,'2026-08-01',mode,'2026-09-04').run()
+                self.assertEqual(run.call_args.kwargs.get('pairing_usage',False),kind=='showdown' and mode=='prior_qualified')
+
+    def test_pairing_opt_in_preserves_cohort_and_existing_metrics(self):
+        from pairing_usage import KEYS
+        f=self.history();self.day(f,'2026-09-04',4,loses=True)
+        old=self.review(f)
+        new=review_winners(f.db,'2026-09-04',review_mode='prior_qualified',followup_from='2026-09-04',pairing_usage=True)
+        a=old['contests'][0]['winners'][0];b=new['contests'][0]['winners'][0]
+        for key in ('username','entries','prior_record','winning_entries','peer_users','current_top_cutoff'):
+            self.assertEqual(a[key],b[key])
+        for key,value in a['metrics'].items():self.assertEqual(value,b['metrics'][key])
+        self.assertTrue(b['pairing_outcomes']['complete'])
+        self.assertEqual(set(b['pairing_outcomes']['support_checks']),{'5','10'})
+        self.assertTrue(all(k in b['metrics'] for k in KEYS))
+        self.assertAlmostEqual(sum(b['metrics'][k] for k in KEYS[1:]),100)
+        self.assertIn('only WR/TE Captain entries',render_overview(new))
+        overview=render_overview(new)
+        self.assertLess(overview.index('PAIRING EVIDENCE AT A GLANCE'),overview.index('History scope:'))
+        self.assertEqual(overview.count('PAIRING EVIDENCE AT A GLANCE'),1)
+
+    def test_partial_pairing_portfolio_withholds_all_usage(self):
+        from pairing_usage import KEYS
+        f=self.history();self.day(f,'2026-09-04',4,loses=True)
+        f.change("UPDATE opponent_entries SET metadata_complete=0 WHERE contest_key='dk:contest:day-4' AND entry_id='4000'")
+        r=review_winners(f.db,'2026-09-04',review_mode='prior_qualified',followup_from='2026-09-04',pairing_usage=True)
+        p=r['contests'][0]['winners'][0]
+        self.assertTrue(all(p['metrics'][k] is None for k in KEYS));self.assertEqual(p['peer_users'],0)
+        self.assertFalse(p['pairing_outcomes']['complete'])
+
+    def test_same_day_history_cannot_qualify_pairing_cohort(self):
+        f=self.history(dates=('2026-09-01','2026-09-02','2026-09-04'));self.day(f,'2026-09-04',4)
+        r=review_winners(f.db,'2026-09-04',review_mode='prior_qualified',followup_from='2026-09-04',pairing_usage=True)
+        self.assertTrue(all(not c['winners'] for c in r['contests']))
+
 if __name__=='__main__':unittest.main()
