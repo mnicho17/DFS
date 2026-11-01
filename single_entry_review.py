@@ -172,6 +172,8 @@ def render(report):
             lines.append(f"  Exact duplication: {duplication['resolved_entries']} resolved entries; {duplication['unique_rosters']} distinct observed rosters; {duplication['singleton_rosters']} observed singleton rosters; {duplication['duplicated_rosters']} shared rosters containing {duplication['entries_in_duplicated_rosters']} entries; {duplication['extra_copies']} extra copies; largest observed copy count {duplication['maximum_copies']}.")
             lines.append(f"  Resolved rank-one entries: {duplication['rank_one_resolved_entries']}; distinct rank-one rosters: {duplication['distinct_rank_one_rosters']}; rank-one entries whose rosters are shared: {duplication['rank_one_entries_in_shared_rosters']}. No payout split is inferred.")
             lines.append('  Observed copy distribution (copies per roster: number of rosters): '+', '.join(str(v['copies'])+': '+str(v['rosters']) for v in duplication['copy_histogram']))
+        from single_entry_construction_display import render as render_construction_shares
+        lines.append(render_construction_shares(d))
         for metric in KEYS:
             field=d['field'][metric];cohort=d['cohort'][metric];denom=sum(v[0] for v in field);n=sum(v[0] for v in cohort)
             lines.append(f"  {LABELS[metric]}: field usage {field[1][0]}/{denom}; earlier-cohort usage {cohort[1][0]}/{n}; feature-present top1/top0.1/rank1 counts {field[1][1:]}; feature-absent counts {field[0][1:]}.")
