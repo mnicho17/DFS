@@ -27,7 +27,7 @@ class WinnerWorker(QtCore.QObject):
 
 class WinnerPortfoliosDialog(QtWidgets.QDialog):
     def __init__(self,db_path,parent=None,contest_format='showdown'):
-        super().__init__(parent);self.db_path=db_path;self.data=None;self._thread=self._worker=None;self._closing=False
+        super().__init__(parent);self.db_path=db_path;self.data=None;self._completed_overview='';self._completed_on='';self._completed_through='';self._completed_receipts=();self._thread=self._worker=None;self._closing=False
         self.setWindowTitle('Historical Portfolios — Winners and Earlier Repeat Finishes');self.resize(1200,800)
         layout=QtWidgets.QVBoxLayout(self)
         note=QtWidgets.QLabel('Review all entries of contest winners, or later portfolios of users with repeated earlier strong finishes. Winning once is not proof of repeatable skill. Peer comparisons use exactly the same observed entry count; nothing changes your rules or models.')
@@ -54,6 +54,7 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
         from pane_styles import labelled_pane
         split.addWidget(labelled_pane('Contests and entrants — select a user',self.tree,'winnerUsersPane'));split.addWidget(labelled_pane('Entire observed portfolio, peer comparison and source limits',self.report,'winnerDetailsPane'));split.setSizes([260,420]);layout.addWidget(split,1)
         buttons=QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close);buttons.rejected.connect(self.reject)
+        self.save_button=buttons.addButton('Save completed review',QtWidgets.QDialogButtonBox.ActionRole);self.save_button.setEnabled(False);self.save_button.clicked.connect(self.save_completed)
         copy=buttons.addButton('Copy displayed review',QtWidgets.QDialogButtonBox.ActionRole);copy.clicked.connect(lambda:QtWidgets.QApplication.clipboard().setText(self.report.toPlainText()));layout.addWidget(buttons);self.mode_changed()
     def mode_changed(self):
         followup=self.mode.currentData()!='winners'
@@ -79,15 +80,39 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
         else:self.load_result(self._pending)
         if self._closing:super().reject()
     def load_result(self,result):
-        self.data=result;self.tree.clear()
+        overview=render_overview(result)
+        self._completed_overview=overview;self._completed_on=QtCore.QDateTime.currentDateTime().toString(QtCore.Qt.ISODate);self._completed_through=result['through']
+        self._completed_receipts=tuple((e['contest_key'],e['source'],e['salary_source']) for e in result.get('evidence',()))
+        self.data=result;self.save_button.setEnabled(True);self.tree.clear()
         followup=result.get('review_mode')=='prior_qualified'
         self.tree.headerItem().setText(5,'Prior top-cutoff slates' if followup else 'Prior rank-1 slates')
         for ci,c in enumerate(result['contests']):
             parent=QtWidgets.QTreeWidgetItem([c['date']+' '+c['name'],str(c['accepted']),'',str(sum(p['winning_entries'] for p in c['winners']))]);parent.setData(0,QtCore.Qt.UserRole,(ci,None));self.tree.addTopLevelItem(parent)
             for pi,p in enumerate(c['winners']):
                 item=QtWidgets.QTreeWidgetItem([p['username'],str(p['entries']),str(p['known']),str(p['winning_entries']),str(p['metrics']['captain_pool']) if p['metrics']['captain_pool'] is not None else '—',str(p['prior_record']['top_cutoff_slates'] if followup else p['prior_record']['rank1_slates']),str(p['peer_users'])]);item.setData(0,QtCore.Qt.UserRole,(ci,pi));parent.addChild(item)
-        self.tree.resizeColumnToContents(0);self.report.setPlainText(render_overview(result));self.filter_rows()
+        self.tree.resizeColumnToContents(0);self.report.setPlainText(overview);self.filter_rows()
         self.status.setText(f"Completed: {len(result['contests'])} verified contests; {sum(len(c['winners']) for c in result['contests'])} selected entrant profiles; {len(result['excluded'])} excluded contests. Select an entrant to inspect all their observed entries.")
+    def save_completed(self):
+        if not self._completed_overview:return
+        from portfolio_review_export import snapshot_text,save_text
+        from data_paths import review_reports_directory
+        import uuid
+        from pathlib import Path
+        # Capture before the native dialog's nested event loop can retire a newer review.
+        payload=snapshot_text(self._completed_overview,self.report.toPlainText(),self._completed_on,self._completed_receipts)
+        through=self._completed_through;database=self.db_path
+        try:
+            folder=review_reports_directory(excluded_roots=(Path(database).resolve().parent,))
+            suggested=folder/('DFS-Portfolio-Review-'+through+'-'+uuid.uuid4().hex[:8]+'.txt')
+            path,_=QtWidgets.QFileDialog.getSaveFileName(self,'Save completed portfolio review',str(suggested),'Text files (*.txt)')
+            if not path:return
+            saved=save_text(path,payload,database)
+            self.status.setText('Saved completed review: '+saved)
+        except ValueError as exc:
+            self.status.setText('Could not save the completed review: '+str(exc))
+        except OSError:
+            self.status.setText('Could not save the completed review. Check the destination folder and permissions, then retry.')
+
     def show_selected(self,item,previous=None):
         if item is None or self.data is None:return
         ci,pi=item.data(0,QtCore.Qt.UserRole);c=self.data['contests'][ci]
