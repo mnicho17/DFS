@@ -43,6 +43,8 @@ class SingleEntryTests(unittest.TestCase):
         f=self.history();self.day(f,4,loses=True);before=logical_db(f.db);sources=source_bytes(f.root)
         r=self.run_review(f);self.assertEqual(r['excluded'],[]);self.assertEqual(len(r['evidence']),4)
         c=r['contests'][0];self.assertEqual(c['preset'],'Single Entry');self.assertEqual(c['single_entry']['eligible'],100)
+        self.assertEqual(c['single_entry']['cash_evidence']['state'],'missing_columns')
+        self.assertEqual(c['single_entry']['cash_evidence']['missing'],['entry_fee','winnings','currency'])
         self.assertEqual([p['username'] for p in c['winners']],['Winner']);self.assertFalse(c['winners'][0]['current_top_cutoff'])
         self.assertEqual(c['single_entry']['cohort_eligible'],1);self.assertEqual(c['field_size'],100)
         d=WinnerPortfoliosDialog(f.db);self.addCleanup(d.close);d.load_result(r)

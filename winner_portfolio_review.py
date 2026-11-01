@@ -220,6 +220,8 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
                     if single_entries>MAX_REVIEW_ENTRIES:raise ReviewLimitError('Single Entry field review bound reached; narrow the evaluation range.')
                     progress('Auditing Single Entry construction field: '+name)
                     single_detail=audit_single(conn,key,manifest['players'],accepted,size,stats,cancelled)
+                    from historical_cash_coverage import inspect_source
+                    single_detail['cash_evidence']=inspect_source(sources[r]['snapshot'],cancelled)
                 history_rows+=len(pending_history)
                 if history_rows>MAX_HISTORY_RECORDS:raise ReviewLimitError('History row bound reached; narrow the history or evaluation range.')
                 for user,d,sl,best,n in pending_history:histories[user].append((d,sl,best,n))

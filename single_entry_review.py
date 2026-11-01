@@ -158,11 +158,14 @@ def render(report):
         'Contests average equally within a salary game/date, then games equally. Repeated users and lineups are not independent. Five games is a descriptive minimum, not a significance test.',
         'No Captain/salary matching or control for player quality in these raw associations. No automatic grouping, ranking or generation changes.',
         'Entry-fee matching and payouts/ROI are unavailable in this report. Rank-one ties do not establish identical lineups.',
+        'Payout evidence checks source column names only. Values, cash prize type, compatible currency, entry identity and coverage remain unverified. Rank, contest titles, prize pools and dollar symbols cannot establish returns; missing winnings are not zero.',
         'Exact duplication uses resolved Captain ID plus the five unordered FLEX IDs, within each contest. Counts include resolved entries with missing ranks; finishing comparisons still exclude missing ranks. Unresolved and unseen copies remain unknown, so observed singletons are not proof of full-field uniqueness.']
     contests=[c for c in report['contests'] if c.get('single_entry') is not None]
     if not contests:lines.append('Unavailable: no verified Single Entry Showdown field evidence in this review.')
     for c in contests:
         d=c['single_entry'];lines.append(f"{c['date']} {c['name']} | {field_scope(c)}: {d['eligible']}/{d['accepted']} ranked/resolved; {d['unknown_rosters']} unresolved rosters; {d['missing_ranks']} missing ranks; earlier cohort {d['cohort_eligible']}/{d['selected_users']}; complete-field receipt {c['complete_field']}; rank denominator {d['rank_denominator']}.")
+        from historical_cash_coverage import render as render_cash_coverage
+        lines.append(render_cash_coverage(d.get('cash_evidence')))
         duplication=d.get('duplication')
         if duplication is None:lines.append('  Exact duplication: unavailable in this older captured review; rerun the source-verified review to collect it.')
         else:
