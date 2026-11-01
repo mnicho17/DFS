@@ -917,3 +917,5 @@ Background maintenance now shares a retirement-aware priority queue: validated h
 
 
 The NFL Showdown Build panel and Preparation dialog now show a bounded per-slate preparation record: committed roster coverage, Captain partitions, screening counts / unknown totals, current-input compatibility and pause/wait reasons. Idle and immediate Advanced workers report to the same metadata view. Records survive restart without restarting work; matching inputs never authorize cache reuse or replace the existing Slate Readiness, source, model, reconciliation or final-generation checks. See the user guide for scope and recorded-versus-verified behavior.
+
+Single Entry historical reviews now open with a captured-evidence summary: distinct salary games, resolved entry coverage, earlier-cohort availability, metric support and payout-column gaps. Repeated contests from one game do not add independent games. The detailed evidence remains available below; this display does not rescan files or change build settings.

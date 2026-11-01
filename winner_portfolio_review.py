@@ -303,7 +303,9 @@ def render_overview(report):
         f"Complete-field receipts: {sum(c['complete_field'] for c in contests)}/{len(contests)}. All available entries are retained; unseen entries are unknown."]
     if report.get('single_entry_analysis'):
         from single_entry_review import render as render_single
-        lines[1:1]=['',render_single(report),'','DETAILED COHORT EVIDENCE']
+        from single_entry_readiness import render as render_single_readiness
+        lines[0]='SINGLE ENTRY SHOWDOWN - HISTORICAL EVIDENCE'
+        lines[1:1]=['',render_single_readiness(report),'','DETAILED FIELD EVIDENCE',render_single(report),'','DETAILED COHORT EVIDENCE']
     if followup and report.get('pairing_usage'):
         from prior_pairing_outcomes import render_evidence_summary
         lines[1:1]=['',render_evidence_summary(report),'','DETAILED EVIDENCE AND METHODS']

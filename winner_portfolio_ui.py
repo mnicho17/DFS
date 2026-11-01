@@ -102,6 +102,11 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
                 item=QtWidgets.QTreeWidgetItem([p['username'],str(p['entries']),str(p['known']),str(p['winning_entries']),str(p['metrics']['captain_pool']) if p['metrics']['captain_pool'] is not None else '—',str(p['prior_record']['top_cutoff_slates'] if followup else p['prior_record']['rank1_slates']),str(p['peer_users'])]);item.setData(0,QtCore.Qt.UserRole,(ci,pi));parent.addChild(item)
         self.tree.resizeColumnToContents(0);self.report.setPlainText(overview);self.filter_rows()
         self.status.setText(f"Completed: {len(result['contests'])} verified contests; {sum(len(c['winners']) for c in result['contests'])} selected entrant profiles; {len(result['excluded'])} excluded contests. Select an entrant to inspect all their observed entries.")
+        if result.get('single_entry_analysis'):
+            count=sum(len(c['winners']) for c in result['contests'])
+            detail=' Select a contest for field evidence.' if count==0 else ' Select a contest for field evidence or an entrant for their entry.'
+            self.status.setText(f"Completed: {len(result['contests'])} verified contests; {count} earlier-qualified entrant profiles; {len(result['excluded'])} excluded contests."+detail)
+
     def save_completed(self):
         if not self._completed_overview:return
         from portfolio_review_export import snapshot_text,save_text
