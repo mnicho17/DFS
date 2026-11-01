@@ -64,4 +64,34 @@ class CrossGamePatternTests(unittest.TestCase):
         b['review_mode']='winners'
         with self.assertRaises(ValueError):combine_followups([a,b])
 
+    def pairing_report(self,deltas=(2,2,2,2,2)):
+        r=report(deltas);r['pairing_usage']=True
+        for c,delta in zip(r['contests'],deltas):
+            for p in c['winners']:
+                p['metrics']['kd_two_pct']=10+delta;p['peer_medians']['kd_two_pct']=10
+        return r
+
+    def test_pairing_metrics_require_explicit_report_evidence(self):
+        r=self.pairing_report();v=pattern_checks(r)['showdown / 150-Max']['kd_two_pct']
+        self.assertEqual(v['mean_delta'],2);self.assertTrue(v['consistent_descriptive_direction'])
+        self.assertIn('Two K/DST (%)',render_checks(r))
+        r.pop('pairing_usage')
+        self.assertNotIn('kd_two_pct',pattern_checks(r)['showdown / 150-Max'])
+
+    def test_pairing_outlier_and_metric_specific_support_are_not_hidden(self):
+        r=self.pairing_report((100,-1,-1,-1,-1))
+        v=pattern_checks(r)['showdown / 150-Max']['kd_two_pct']
+        self.assertFalse(v['consistent_descriptive_direction']);self.assertEqual(v['leave_one_out_min'],-1)
+        for c in r['contests']:
+            for p in c['winners']:p['metric_peer_users']={'kd_two_pct':4}
+        self.assertNotIn('kd_two_pct',pattern_checks(r)['showdown / 150-Max'])
+
+    def test_pairing_small_games_and_unknown_values_do_not_supply_support(self):
+        r=self.pairing_report()
+        for p in r['contests'][0]['winners']:p['metrics']['kd_two_pct']=None
+        r['contests'][1]['winners']=r['contests'][1]['winners'][:9]
+        v=pattern_checks(r)['showdown / 150-Max']['kd_two_pct']
+        self.assertEqual(v['slates'],3);self.assertEqual(v['excluded_small_slates'],1)
+        self.assertFalse(v['consistent_descriptive_direction'])
+
 if __name__=='__main__':unittest.main()

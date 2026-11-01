@@ -20,7 +20,7 @@ def features(slots):
     return (int(teams==[1,5]),int(teams==[2,4]),int(teams==[3,3]),int(value['qb_dst']),int(value['all_four']))
 
 
-def audit_peers(conn,key,players,users,cancelled=lambda:False,progress=lambda text:None):
+def audit_peers(conn,key,players,users,cancelled=lambda:False,progress=lambda text:None,*,pairing_usage=False):
     """Caller verifies original sources/receipts. Every eligible peer entry is read.
 
     Cache keys include every raw slot identity/label/role/metadata field, not the
@@ -31,7 +31,7 @@ def audit_peers(conn,key,players,users,cancelled=lambda:False,progress=lambda te
     if len(users)>MAX_USERS:raise PatternAuditLimit('Peer-pattern user audit limit reached.')
     if any(type(n) is not int or n<=0 for n in users.values()):raise ValueError('Peer-pattern expected entrant count is invalid.')
     if sum(users.values())>MAX_ENTRIES:raise PatternAuditLimit('Peer-pattern entry audit limit reached; narrow the evaluation.')
-    totals={u:dict(entries=0,known=0,counts=[0]*len(METRICS)) for u in users}
+    totals={u:dict(entries=0,known=0,counts=[0]*len(METRICS),usage=[0]*6) for u in users}
     builder=Builder(players,max(1,sum(users.values())));cache=OrderedDict();missing=object();reads=resolutions=slot_reads=0
     ordered=sorted(users)
     for start in range(0,len(ordered),400):
@@ -58,11 +58,17 @@ def audit_peers(conn,key,players,users,cancelled=lambda:False,progress=lambda te
                     if resolutions>MAX_RESOLUTIONS:raise PatternAuditLimit('Peer-pattern identity resolution limit reached; no partial audit published.')
                     parsed=[(label,role,dict(id=ident,name=name,position=pos,team=team,salary=salary)) for ordinal,role,label,ident,name,pos,team,salary in raw]
                     value=features(parsed) if builder._resolve(parsed) is not None else None
+                    if value is not None and pairing_usage:
+                        from pairing_usage import counts
+                        value=(value,counts(parsed))
                     cache[identity]=value
                     if len(cache)>MAX_CACHE:cache.popitem(last=False)
                 else:cache.move_to_end(identity)
                 if value is None:continue
                 item['known']+=1
+                if pairing_usage:
+                    value,usage=value
+                    for i,n in enumerate(usage):item['usage'][i]+=n
                 for i,n in enumerate(value):item['counts'][i]+=n
             if reads==len(block) or reads%5000<len(block):progress(f'Auditing peer constructions: {reads:,}/{sum(users.values()):,} entries; exact slot identities checked.')
     result={}
@@ -70,5 +76,8 @@ def audit_peers(conn,key,players,users,cancelled=lambda:False,progress=lambda te
         if item['entries']!=users[user]:raise ValueError('Peer-pattern entry count differs from the indexed entrant receipt.')
         complete=item['known']==item['entries']
         result[user]=dict(entries=item['entries'],known=item['known'],unknown=item['entries']-item['known'],metrics={k:100*item['counts'][i]/item['entries'] if complete else None for i,k in enumerate(METRICS)})
+        if pairing_usage:
+            from pairing_usage import metrics,KEYS
+            result[user]['pairing_usage']=metrics(item['usage']) if complete else dict.fromkeys(KEYS)
     ai._check(cancelled)
     return result
