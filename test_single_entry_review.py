@@ -23,7 +23,7 @@ class SingleEntryTests(unittest.TestCase):
             results('single-'+str(day))(rows);h=rows[0]
             for i,row in enumerate(rows[1:101]):
                 row[h.index('EntryName')]='Winner' if i==0 or (duplicate_user and i==1) else 'Other'+str(i)
-                row[h.index('Rank')]=str(51 if loses and i==0 else i+1)
+                row[h.index('Rank')]=str((51 if i==0 else 1 if i==1 else i+1) if loses else i+1)
                 if missing and i==0:row[h.index('Rank')]=''
                 row[h.index('SlateDate')]='2026-09-0'+str(day)
         f=SourceFixture(edit_results=edit);self.addCleanup(f.close)
@@ -45,6 +45,9 @@ class SingleEntryTests(unittest.TestCase):
         c=r['contests'][0];self.assertEqual(c['preset'],'Single Entry');self.assertEqual(c['single_entry']['eligible'],100)
         self.assertEqual([p['username'] for p in c['winners']],['Winner']);self.assertFalse(c['winners'][0]['current_top_cutoff'])
         self.assertEqual(c['single_entry']['cohort_eligible'],1);self.assertEqual(c['field_size'],100)
+        d=WinnerPortfoliosDialog(f.db);self.addCleanup(d.close);d.load_result(r)
+        parent=d.tree.topLevelItem(0);self.assertEqual(parent.text(2),'100');self.assertEqual(parent.text(3),'1')
+        self.assertEqual(c['winners'][0]['winning_entries'],0)
         text=render_overview(r);self.assertIn('SINGLE ENTRY SHOWDOWN',text);self.assertIn('field usage',text)
         self.assertIn('Entry-fee matching, payouts/ROI and exact lineup duplication are unavailable',text)
         self.assertEqual(before,logical_db(f.db));self.assertEqual(sources,source_bytes(f.root))

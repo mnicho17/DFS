@@ -94,7 +94,10 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
         followup=result.get('review_mode')=='prior_qualified'
         self.tree.headerItem().setText(5,'Prior top-cutoff slates' if followup else 'Prior rank-1 slates')
         for ci,c in enumerate(result['contests']):
-            parent=QtWidgets.QTreeWidgetItem([c['date']+' '+c['name'],str(c['accepted']),'',str(sum(p['winning_entries'] for p in c['winners']))]);parent.setData(0,QtCore.Qt.UserRole,(ci,None));self.tree.addTopLevelItem(parent)
+            field=c.get('single_entry')
+            resolved=str(field['eligible']) if field is not None else ''
+            rank_one=sum(row[3] for row in field['field']['captain_QB']) if field is not None else sum(p['winning_entries'] for p in c['winners'])
+            parent=QtWidgets.QTreeWidgetItem([c['date']+' '+c['name'],str(c['accepted']),resolved,str(rank_one)]);parent.setData(0,QtCore.Qt.UserRole,(ci,None));self.tree.addTopLevelItem(parent)
             for pi,p in enumerate(c['winners']):
                 item=QtWidgets.QTreeWidgetItem([p['username'],str(p['entries']),str(p['known']),str(p['winning_entries']),str(p['metrics']['captain_pool']) if p['metrics']['captain_pool'] is not None else '—',str(p['prior_record']['top_cutoff_slates'] if followup else p['prior_record']['rank1_slates']),str(p['peer_users'])]);item.setData(0,QtCore.Qt.UserRole,(ci,pi));parent.addChild(item)
         self.tree.resizeColumnToContents(0);self.report.setPlainText(overview);self.filter_rows()
