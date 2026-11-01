@@ -110,17 +110,18 @@ def _portfolio(conn,key,user,players,kind,cancelled,*,pairing_usage=False,outcom
         constructions={k:dict(sorted(v.items())) for k,v in shapes.items()},patterns=dict(patterns),other_patterns=dict(other_patterns),other_known=other_known,**({'pairing_outcomes':finishes.finish(known==len(entries)==ranked)} if finishes is not None else {}))
 
 
-def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:None,*,contest_format='showdown',since='',review_mode='winners',followup_from='',pairing_usage=False):
+def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:None,*,contest_format='showdown',since='',review_mode='winners',followup_from='',pairing_usage=False,single_entry=False):
     ai._check(cancelled)
     if pairing_usage and contest_format!='showdown':raise ValueError('Pairing history review requires Showdown.')
     metric_names=METRICS+(USAGE_KEYS if pairing_usage else ())
     through=date.fromisoformat(through).isoformat();since=date.fromisoformat(since).isoformat() if since else '0001-01-01'
     followup=review_mode=='prior_qualified'
+    if single_entry and (not followup or contest_format!='showdown' or pairing_usage):raise ValueError('Single Entry review requires earlier-qualified Showdown mode.')
     if since>through or contest_format not in ('','showdown','classic') or review_mode not in ('winners','prior_qualified'):raise ValueError('Choose a valid date range, format and review mode.')
     if followup:
         followup_from=date.fromisoformat(followup_from).isoformat()
         if not since<followup_from<=through:raise ValueError('Evaluation must start after the history start date and on or before the through date.')
-    results=[];excluded=[];verified={};manifests={};histories=defaultdict(list);used_entries=0;history_rows=0;evidence=[]
+    results=[];excluded=[];verified={};manifests={};histories=defaultdict(list);used_entries=0;history_rows=0;evidence=[];single_entries=0
     from learning_db import _infer_field_preset
     with closing(_connect(db_path,True)) as conn:
         conn.execute('BEGIN')
@@ -130,6 +131,7 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
         sources={s['hash']:s for s in ai._sources(conn)};pairs=dict(conn.execute('SELECT result_hash,salary_hash FROM analysis_salary_pairs'))
         rows=conn.execute('SELECT contest_key,result_hash,salary_hash,name,format,start_date,end_date,field_size,complete,audit_json FROM opponent_contests WHERE version=? AND end_date BETWEEN ? AND ? ORDER BY end_date,contest_key',(VERSION,since,through)).fetchall()
         rows=[r for r in rows if not contest_format or r[4]==contest_format]
+        if single_entry:rows=[r for r in rows if _infer_field_preset(r[3])=='Single Entry']
         if len(rows)>100:raise ValueError('Choose a narrower date range; this review supports up to 100 contests.')
         candidates=set()
         for row in rows:
@@ -154,6 +156,9 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
                 if type(size) is int and (size<=0 or (type(accepted) is int and size<accepted)):raise ValueError('Supplied field size conflicts with indexed entries.')
                 if type(accepted) is not int or not 0<accepted<=1000000 or audit.get('conflicting_entry_ids_excluded')!=0:raise ValueError('Entry identity conflicts or invalid indexing receipt.')
                 if conn.execute('SELECT COUNT(*) FROM opponent_entries WHERE contest_key=?',(key,)).fetchone()[0]!=accepted:raise ValueError('Indexed entry count differs from its receipt.')
+                if single_entry:
+                    from single_entry_review import validate_users
+                    validate_users(conn,key,cancelled)
                 winners=dict(conn.execute('SELECT user_key,COUNT(*) FROM opponent_entries WHERE contest_key=? AND rank=1 GROUP BY user_key',(key,)))
                 peers=defaultdict(list);stats={};prior_stats={};pending_history=[];observed=0
                 slate=(kind,end,tuple(sorted(manifest['games'])));preset=_infer_field_preset(name)
@@ -208,12 +213,19 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
                     medians={metric:statistics.median(v[0][metric] for v in eligible_peers if v[0][metric] is not None) if any(v[0][metric] is not None for v in eligible_peers) else None for metric in metric_names}
                     extra=dict(prior_record=prior_stats[user],prior_qualified=True,current_top_cutoff=bool(type(p['best_rank']) is int and 0<p['best_rank']<=(cutoff_size+99)//100) if profile['ranked']==profile['entries'] else None,peer_top_rate=statistics.mean(v[1] for v in eligible_peers) if eligible_peers else None) if followup else {}
                     profiles.append(dict(username=p['username'],user_key=user,peer_users=len(eligible_peers),metric_peer_users={m:sum(v[0][m] is not None for v in eligible_peers) for m in metric_names},peer_medians=medians,**profile,**extra))
+                single_detail=None
+                if single_entry and evaluate:
+                    from single_entry_review import audit as audit_single,MAX_REVIEW_ENTRIES
+                    single_entries+=accepted
+                    if single_entries>MAX_REVIEW_ENTRIES:raise ReviewLimitError('Single Entry field review bound reached; narrow the evaluation range.')
+                    progress('Auditing Single Entry construction field: '+name)
+                    single_detail=audit_single(conn,key,manifest['players'],accepted,size,stats,cancelled)
                 history_rows+=len(pending_history)
                 if history_rows>MAX_HISTORY_RECORDS:raise ReviewLimitError('History row bound reached; narrow the history or evaluation range.')
                 for user,d,sl,best,n in pending_history:histories[user].append((d,sl,best,n))
                 receipt=dict(contest_key=key,name=name,date=end,format=kind,preset=preset,slate=list(slate),accepted=accepted,complete_field=bool(complete),rank_basis='supplied field size' if type(size) is int and size>0 else 'observed accepted-entry count; completeness unverified',source=r,salary_source=s)
                 evidence.append(receipt)
-                if evaluate:results.append(dict(**receipt,winners=profiles,peer_pattern_audit=audit_summary))
+                if evaluate:results.append(dict(**receipt,winners=profiles,peer_pattern_audit=audit_summary,**({'single_entry':single_detail,'field_size':size} if single_entry else {})))
             except (ai.ImportCancelled,ReviewLimitError,PatternAuditLimit):raise
             except Exception as exc:
                 ai._check(cancelled);excluded.append(dict(name=name,reason=str(exc)))
@@ -229,7 +241,7 @@ def review_winners(db_path,through,cancelled=lambda:False,progress=lambda text:N
             for profile in contest['winners']:
                 profile['prior_record']=prior_record(histories[profile['user_key']],contest['date'],contest['format'])
     ai._check(cancelled)
-    return dict(through=through,since=since,format=contest_format,contests=results,excluded=excluded,review_mode=review_mode,followup_from=followup_from if followup else '',evidence=evidence,**({'pairing_usage':True} if pairing_usage else {}))
+    return dict(through=through,since=since,format=contest_format,contests=results,excluded=excluded,review_mode=review_mode,followup_from=followup_from if followup else '',evidence=evidence,**({'pairing_usage':True} if pairing_usage else {}),**({'single_entry_analysis':True} if single_entry else {}))
 
 
 def prior_record(records,cutoff,kind):
@@ -287,6 +299,9 @@ def render_overview(report):
     lines=['EARLIER REPEAT FINISHES — LATER OBSERVED PORTFOLIOS' if followup else 'CONTEST WINNERS — ENTIRE OBSERVED PORTFOLIOS',f"History scope: {report['since']} through {report['through']}; format {report['format'] or 'all'}.",f"Verified evaluation contests: {len(contests)}; {cohort} entrant/contest profiles: {len(profiles)}; distinct usernames: {len({p['user_key'] for p in profiles})}.",
         f"Observed entries in those portfolios: {sum(p['entries'] for p in profiles):,}; resolved: {sum(p['known'] for p in profiles):,}; unknown: {sum(p['unknown'] for p in profiles):,}.",
         f"Complete-field receipts: {sum(c['complete_field'] for c in contests)}/{len(contests)}. All available entries are retained; unseen entries are unknown."]
+    if report.get('single_entry_analysis'):
+        from single_entry_review import render as render_single
+        lines[1:1]=['',render_single(report),'','DETAILED COHORT EVIDENCE']
     if followup and report.get('pairing_usage'):
         from prior_pairing_outcomes import render_evidence_summary
         lines[1:1]=['',render_evidence_summary(report),'','DETAILED EVIDENCE AND METHODS']

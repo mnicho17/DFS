@@ -15,7 +15,7 @@ def combine_followups(reports):
     if not reports or len(reports)>MAX_BATCHES:raise ReviewLimitError('Choose between 1 and 8 bounded evaluation windows.')
     ordered=sorted(reports,key=lambda r:r['followup_from']);first=ordered[0];contests={};evidence={};excluded={};windows=[]
     for report in ordered:
-        if report.get('review_mode')!='prior_qualified' or report['since']!=first['since'] or report['format']!=first['format'] or bool(report.get('pairing_usage'))!=bool(first.get('pairing_usage')):raise ValueError('Batch history scopes or review modes disagree.')
+        if report.get('review_mode')!='prior_qualified' or report['since']!=first['since'] or report['format']!=first['format'] or bool(report.get('pairing_usage'))!=bool(first.get('pairing_usage')) or bool(report.get('single_entry_analysis'))!=bool(first.get('single_entry_analysis')):raise ValueError('Batch history scopes or review modes disagree.')
         start=date.fromisoformat(report['followup_from']).isoformat();end=date.fromisoformat(report['through']).isoformat()
         if start>end or (windows and start<=windows[-1][1]):raise ValueError('Evaluation windows overlap or are invalid.')
         windows.append([start,end])

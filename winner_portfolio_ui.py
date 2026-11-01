@@ -15,7 +15,10 @@ class WinnerWorker(QtCore.QObject):
     def run(self):
         try:
             path,through,kind,since,review_mode,followup_from=self.args
-            if review_mode=='prior_series':
+            if review_mode=='single_entry':
+                from single_entry_review import review
+                result=review(path,through,self.stop.is_set,self.progress.emit,since=since,followup_from=followup_from)
+            elif review_mode=='prior_series':
                 from historical_series_review import review_series
                 result=review_series(path,through,self.stop.is_set,self.progress.emit,contest_format=kind,since=since,followup_from=followup_from,**({'pairing_usage':True} if kind=='showdown' else {}))
             else:result=review_winners(path,through,self.stop.is_set,self.progress.emit,contest_format=kind,since=since,review_mode=review_mode,followup_from=followup_from,**({'pairing_usage':True} if kind=='showdown' and review_mode=='prior_qualified' else {}))
@@ -33,7 +36,7 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
         note=QtWidgets.QLabel('Review all entries of contest winners, or later portfolios of users with repeated earlier strong finishes. Winning once is not proof of repeatable skill. Peer comparisons use exactly the same observed entry count; nothing changes your rules or models.')
         note.setWordWrap(True);layout.addWidget(note)
         mode_row=QtWidgets.QHBoxLayout();mode_row.addWidget(QtWidgets.QLabel('Review'))
-        self.mode=QtWidgets.QComboBox();self.mode.addItem('Contest winners — all entries','winners');self.mode.addItem('Earlier repeat finishes — later portfolios','prior_qualified');self.mode.addItem('Across more games — bounded batches','prior_series');mode_row.addWidget(self.mode)
+        self.mode=QtWidgets.QComboBox();self.mode.addItem('Contest winners — all entries','winners');self.mode.addItem('Earlier repeat finishes — later portfolios','prior_qualified');self.mode.addItem('Across more games — bounded batches','prior_series');self.mode.addItem('Single Entry Showdown - construction and later finishes','single_entry');mode_row.addWidget(self.mode)
         self.followup_label=QtWidgets.QLabel('Evaluate from');mode_row.addWidget(self.followup_label)
         self.followup_from=QtWidgets.QDateEdit(QtCore.QDate.currentDate().addDays(-7));self.followup_from.setCalendarPopup(True);self.followup_from.setDisplayFormat('yyyy-MM-dd');mode_row.addWidget(self.followup_from);mode_row.addStretch();layout.addLayout(mode_row)
         self.mode.currentIndexChanged.connect(self.mode_changed)
@@ -60,6 +63,9 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
     def mode_changed(self):
         followup=self.mode.currentData()!='winners'
         self.followup_label.setVisible(followup);self.followup_from.setVisible(followup)
+        single=self.mode.currentData()=='single_entry'
+        if single:self.kind.setCurrentIndex(self.kind.findData('showdown'))
+        self.kind.setEnabled(not single)
     def start(self):
         if self._thread is not None:return
         self._pending=None;self._error=''
@@ -75,7 +81,7 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
     def retire(self):
         stopped=self._worker.stop.is_set();thread=self._thread;self._thread=self._worker=None;thread.deleteLater()
         for widget in (self.since,self.through,self.kind,self.start_button,self.mode,self.followup_from):widget.setEnabled(True)
-        self.stop_button.setEnabled(False)
+        self.stop_button.setEnabled(False);self.mode_changed()
         if stopped:self.status.setText('Stopped. No partial review, rules or model changes were applied.')
         elif self._pending is None:self.status.setText('Review unavailable: '+self._error)
         else:self.load_result(self._pending)
