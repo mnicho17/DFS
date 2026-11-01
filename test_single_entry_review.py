@@ -48,8 +48,10 @@ class SingleEntryTests(unittest.TestCase):
         d=WinnerPortfoliosDialog(f.db);self.addCleanup(d.close);d.load_result(r)
         parent=d.tree.topLevelItem(0);self.assertEqual(parent.text(2),'100');self.assertEqual(parent.text(3),'1')
         self.assertEqual(c['winners'][0]['winning_entries'],0)
+        dup=c['single_entry']['duplication'];self.assertEqual(dup['unique_rosters'],1);self.assertEqual(dup['maximum_copies'],100)
+        self.assertEqual(dup['rank_one_resolved_entries'],1);self.assertEqual(dup['extra_copies'],99)
         text=render_overview(r);self.assertIn('SINGLE ENTRY SHOWDOWN',text);self.assertIn('field usage',text)
-        self.assertIn('Entry-fee matching, payouts/ROI and exact lineup duplication are unavailable',text)
+        self.assertIn('Entry-fee matching and payouts/ROI are unavailable',text)
         self.assertEqual(before,logical_db(f.db));self.assertEqual(sources,source_bytes(f.root))
     def test_other_entry_limits_cannot_supply_history(self):
         f=self.history(preset='150 Max');self.day(f,4)
@@ -72,6 +74,7 @@ class SingleEntryTests(unittest.TestCase):
         r=self.run_review(f);d=r['contests'][0]['single_entry']
         self.assertEqual(d['eligible'],98);self.assertEqual(d['missing_ranks'],1);self.assertEqual(d['unknown_rosters'],1)
         self.assertEqual(d['cohort_eligible'],0)
+        self.assertEqual(d['duplication']['resolved_entries'],99);self.assertEqual(d['duplication']['extra_copies'],98)
     def test_changed_source_cancellation_and_bounds_do_not_publish(self):
         f=self.history();self.day(f,4)
         with patch('single_entry_review.MAX_REVIEW_ENTRIES',99):
@@ -175,3 +178,44 @@ class SingleEntryTests(unittest.TestCase):
         b['single_entry'].update(eligible=40,unknown_rosters=0,missing_ranks=0,selected_users=10,cohort_eligible=10,rank_denominator=10000)
         text=render({'contests':[b]});self.assertIn(LOWER_BOUND_BUCKET,text)
         self.assertIn('complete-field receipt False; rank denominator 10000',text)
+
+    def test_exact_duplication_distinguishes_captains_and_tied_different_rosters(self):
+        from single_entry_review import Duplication
+        a=(('CPT','100'),('FLEX','1'),('FLEX','2'),('FLEX','3'),('FLEX','4'),('FLEX','5'))
+        b=(('CPT','101'),*a[1:]);d=Duplication()
+        d.observe('one',1,a);d.observe('two',None,a);d.observe('three',1,b)
+        r=d.finish();self.assertEqual(r['resolved_entries'],3);self.assertEqual(r['unique_rosters'],2)
+        self.assertEqual(r['singleton_rosters'],1);self.assertEqual(r['duplicated_rosters'],1)
+        self.assertEqual(r['entries_in_duplicated_rosters'],2);self.assertEqual(r['extra_copies'],1)
+        self.assertEqual(r['rank_one_resolved_entries'],2);self.assertEqual(r['distinct_rank_one_rosters'],2)
+        self.assertEqual(r['rank_one_entries_in_shared_rosters'],1)
+        self.assertEqual(r['copy_histogram'],[dict(copies=1,rosters=1,entries=1),dict(copies=2,rosters=1,entries=2)])
+        self.assertEqual(Duplication().finish()['maximum_copies'],0)
+    def test_duplication_bound_aborts_instead_of_sampling(self):
+        from single_entry_review import Duplication
+        from portfolio_pattern_audit import PatternAuditLimit
+        d=Duplication()
+        with patch('controlled_construction.MAX_SIGNATURES',1):
+            d.observe('one',1,(('CPT','1'),))
+            with self.assertRaises(PatternAuditLimit):d.observe('two',1,(('CPT','2'),))
+    def test_signature_callback_preserves_collector_results_ignores_flex_order_and_rejects_invalid_ids(self):
+        from contextlib import closing
+        from opponent_history import _connect
+        from construction_outcomes import contest_outcomes
+        from single_entry_review import Duplication
+        f=SourceFixture(edit_results=results());self.addCleanup(f.close);index_contest(f.db,f.source['hash'])
+        # Swap two FLEX ordinals in one indexed entry without changing its players.
+        f.change("UPDATE opponent_entry_slots SET ordinal=ordinal+10 WHERE entry_id='1001' AND ordinal IN (1,2)")
+        f.change("UPDATE opponent_entry_slots SET ordinal=CASE ordinal WHEN 11 THEN 2 ELSE 1 END WHERE entry_id='1001' AND ordinal IN (11,12)")
+        players=ai._salary_manifest(f.salary['snapshot'],lambda:False)['players']
+        def collect(callback=None):
+            with closing(_connect(f.db,True)) as conn:
+                return contest_outcomes(conn,'dk:contest:synthetic',players,100,100,None,lambda:False,_signature_observer=callback)
+        baseline=collect();d=Duplication();self.assertEqual(collect(d.observe),baseline)
+        self.assertEqual(d.finish()['unique_rosters'],1);self.assertEqual(d.finish()['maximum_copies'],100)
+        f.change("UPDATE opponent_entry_slots SET player_id='invalid-explicit-id' WHERE entry_id='1002' AND ordinal=0")
+        d=Duplication();r=collect(d.observe);self.assertEqual(r['unknown'],1);self.assertEqual(d.finish()['resolved_entries'],99)
+    def test_legacy_duplication_remains_unavailable_without_verified_signatures(self):
+        c=self.synthetic('2026-09-01');c.update(name='Legacy',complete_field=False)
+        c['single_entry'].update(eligible=40,accepted=40,unknown_rosters=0,missing_ranks=0,selected_users=10,cohort_eligible=10,rank_denominator=40)
+        self.assertIn('Exact duplication: unavailable in this older captured review',render({'contests':[c]}))

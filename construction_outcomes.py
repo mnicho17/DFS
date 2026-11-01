@@ -32,7 +32,7 @@ def contrast(cells,minimum=MIN_SIDE,*,metrics=METRICS):
     return out
 
 
-def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_features=None,_metrics=None,_rule_metrics=None,_observed=False,_observer=None):
+def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_features=None,_metrics=None,_rule_metrics=None,_observed=False,_observer=None,_signature_observer=None):
     feature_fn=_features or outcome_features
     metrics=METRICS if _metrics is None else _metrics
     rule_metrics=RULE_METRICS if _rule_metrics is None else _rule_metrics
@@ -67,6 +67,7 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_feat
                 slots=[(label,role,dict(id=ident,name=name,position=pos,team=team,salary=salary)) for ordinal,role,label,ident,name,pos,team,salary in rows]
                 resolved=builder._resolve(slots)
                 cache[identity]=(tuple(resolved[0].split('|')[:2]),feature_fn(slots)) if resolved else None
+                if resolved and _signature_observer is not None:cache[identity]+= (resolved[1],)
                 if len(cache)>MAX_CACHE:cache.popitem(last=False)
             else:cache.move_to_end(identity)
             value=cache[identity]
@@ -75,8 +76,9 @@ def contest_outcomes(conn,key,players,accepted,field_size,user,cancelled,*,_feat
                 if _observer is not None:_observer.observe(eid,rank,None,entry_user)
                 continue
             if _observer is not None:_observer.observe(eid,rank,value[1],entry_user)
+            if _signature_observer is not None:_signature_observer(eid,rank,value[2])
             if not ranked:continue
-            stratum,pattern=value
+            stratum,pattern=value[:2]
             outcomes=(1,int(rank<=(builder.cutoff+99)//100),int(rank<=(builder.cutoff+19)//20),int(rank==1))
             for i,present in enumerate(pattern):
                 if present is None:continue

@@ -55,6 +55,27 @@ class Observer:
             field=self.field,cohort=self.cohort)
 
 
+class Duplication:
+    """Receives only exact, already resolved role/ID signatures from the audit."""
+    def __init__(self):self.rosters={}
+    def observe(self,eid,rank,signature):
+        from controlled_construction import MAX_SIGNATURES
+        from portfolio_pattern_audit import PatternAuditLimit
+        if signature not in self.rosters:
+            if len(self.rosters)>=MAX_SIGNATURES:raise PatternAuditLimit('Single Entry duplication signature bound reached; no partial report published.')
+            self.rosters[signature]=[0,0]
+        row=self.rosters[signature];row[0]+=1;row[1]+=int(type(rank) is int and rank==1)
+    def finish(self):
+        histogram=Counter(row[0] for row in self.rosters.values())
+        rows=list(self.rosters.values())
+        return dict(resolved_entries=sum(n for n,_ in rows),unique_rosters=len(rows),
+            singleton_rosters=histogram[1],duplicated_rosters=sum(v for k,v in histogram.items() if k>1),
+            entries_in_duplicated_rosters=sum(n for n,_ in rows if n>1),extra_copies=sum(n-1 for n,_ in rows),
+            maximum_copies=max(histogram,default=0),rank_one_resolved_entries=sum(w for _,w in rows),
+            distinct_rank_one_rosters=sum(w>0 for _,w in rows),rank_one_entries_in_shared_rosters=sum(w for n,w in rows if n>1),
+            copy_histogram=[dict(copies=k,rosters=v,entries=k*v) for k,v in sorted(histogram.items())])
+
+
 def validate_users(conn,key,cancelled):
     from opponent_analysis import username_key
     for user,n,name in conn.execute('SELECT e.user_key,COUNT(*),u.username FROM opponent_entries e LEFT JOIN opponent_users u ON u.user_key=e.user_key WHERE e.contest_key=? GROUP BY e.user_key',(key,)):
@@ -65,8 +86,11 @@ def validate_users(conn,key,cancelled):
 def audit(conn,key,players,accepted,size,selected,cancelled):
     from construction_outcomes import contest_outcomes
     observer=Observer(selected,size if type(size) is int and size>0 else accepted)
-    contest_outcomes(conn,key,players,accepted,size,None,cancelled,_features=features,_metrics=KEYS,_rule_metrics=(),_observer=observer)
-    return observer.finish(accepted)
+    duplication=Duplication()
+    contest_outcomes(conn,key,players,accepted,size,None,cancelled,_features=features,_metrics=KEYS,_rule_metrics=(),_observer=observer,_signature_observer=duplication.observe)
+    result=observer.finish(accepted);result['duplication']=duplication.finish()
+    if result['duplication']['resolved_entries']!=accepted-result['unknown_rosters']:raise ValueError('Duplication coverage differs from resolved field coverage.')
+    return result
 
 
 LOWER_BOUND_BUCKET='10,000 or more (observed lower bound; total unknown)'
@@ -126,11 +150,18 @@ def render(report):
         'Rank cutoffs are ceil(denominator/100) and ceil(denominator/1000); supplied field size or observed entries if unavailable. Partial exports do not establish true field percentiles.',
         'Contests average equally within a salary game/date, then games equally. Repeated users and lineups are not independent. Five games is a descriptive minimum, not a significance test.',
         'No Captain/salary matching or control for player quality in these raw associations. No automatic grouping, ranking or generation changes.',
-        'Entry-fee matching, payouts/ROI and exact lineup duplication are unavailable in this report. Rank-one ties do not establish identical lineups.']
+        'Entry-fee matching and payouts/ROI are unavailable in this report. Rank-one ties do not establish identical lineups.',
+        'Exact duplication uses resolved Captain ID plus the five unordered FLEX IDs, within each contest. Counts include resolved entries with missing ranks; finishing comparisons still exclude missing ranks. Unresolved and unseen copies remain unknown, so observed singletons are not proof of full-field uniqueness.']
     contests=[c for c in report['contests'] if c.get('single_entry') is not None]
     if not contests:lines.append('Unavailable: no verified Single Entry Showdown field evidence in this review.')
     for c in contests:
         d=c['single_entry'];lines.append(f"{c['date']} {c['name']} | {field_scope(c)}: {d['eligible']}/{d['accepted']} ranked/resolved; {d['unknown_rosters']} unresolved rosters; {d['missing_ranks']} missing ranks; earlier cohort {d['cohort_eligible']}/{d['selected_users']}; complete-field receipt {c['complete_field']}; rank denominator {d['rank_denominator']}.")
+        duplication=d.get('duplication')
+        if duplication is None:lines.append('  Exact duplication: unavailable in this older captured review; rerun the source-verified review to collect it.')
+        else:
+            lines.append(f"  Exact duplication: {duplication['resolved_entries']} resolved entries; {duplication['unique_rosters']} distinct observed rosters; {duplication['singleton_rosters']} observed singleton rosters; {duplication['duplicated_rosters']} shared rosters containing {duplication['entries_in_duplicated_rosters']} entries; {duplication['extra_copies']} extra copies; largest observed copy count {duplication['maximum_copies']}.")
+            lines.append(f"  Resolved rank-one entries: {duplication['rank_one_resolved_entries']}; distinct rank-one rosters: {duplication['distinct_rank_one_rosters']}; rank-one entries whose rosters are shared: {duplication['rank_one_entries_in_shared_rosters']}. No payout split is inferred.")
+            lines.append('  Observed copy distribution (copies per roster: number of rosters): '+', '.join(str(v['copies'])+': '+str(v['rosters']) for v in duplication['copy_histogram']))
         for metric in KEYS:
             field=d['field'][metric];cohort=d['cohort'][metric];denom=sum(v[0] for v in field);n=sum(v[0] for v in cohort)
             lines.append(f"  {LABELS[metric]}: field usage {field[1][0]}/{denom}; earlier-cohort usage {cohort[1][0]}/{n}; feature-present top1/top0.1/rank1 counts {field[1][1:]}; feature-absent counts {field[0][1:]}.")
