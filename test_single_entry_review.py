@@ -145,3 +145,33 @@ class SingleEntryTests(unittest.TestCase):
         text=render(report);self.assertIn('insufficient independent games',text);self.assertNotIn('+20.000 pp',text)
         self.assertNotIn('supported descriptive sample',text)
         self.assertEqual(summarize(before),rows)
+
+    def test_observed_lower_bound_requires_consistent_captured_counts(self):
+        from single_entry_review import field_scope,LOWER_BOUND_BUCKET
+        c=self.synthetic('2026-09-01',None);c['accepted']=23781;c['single_entry']['accepted']=23781
+        before=copy.deepcopy(c);self.assertEqual(field_scope(c),LOWER_BOUND_BUCKET)
+        rows=summarize({'contests':[c]});self.assertTrue(rows)
+        self.assertEqual({r['bucket'] for r in rows},{LOWER_BOUND_BUCKET});self.assertEqual(c,before)
+        c['single_entry']['accepted']=23781.0;self.assertEqual(field_scope(c),'Unknown field size')
+        c['single_entry']['accepted']=23780;self.assertEqual(field_scope(c),'Unknown field size')
+        c.pop('accepted');self.assertEqual(field_scope(c),'Unknown field size')
+    def test_lower_bound_boundaries_do_not_infer_small_fields_or_repair_invalid_totals(self):
+        from single_entry_review import LOWER_BOUND_BUCKET
+        for n in (None,0,999,1000,9999,True,10000.0,'23781'):
+            self.assertEqual(field_bucket(None,n),'Unknown field size')
+        self.assertEqual(field_bucket(None,10000),LOWER_BOUND_BUCKET)
+        for invalid in (0,-1,True,'20000',20000.0):
+            self.assertEqual(field_bucket(invalid,23781),'Unknown field size')
+        self.assertEqual(field_bucket(30000,23781),'10,000 or more')
+        self.assertEqual(field_bucket(20000,23781),'Unknown field size')
+    def test_observed_bound_stays_separate_from_supplied_size_and_preserves_outcomes(self):
+        from single_entry_review import LOWER_BOUND_BUCKET
+        a=self.synthetic('2026-09-01');b=copy.deepcopy(a);b['field_size']=None
+        b['accepted']=10000;b['single_entry']['accepted']=10000
+        before=copy.deepcopy(b['single_entry']);rows=summarize({'contests':[a,b]})
+        self.assertEqual({r['bucket'] for r in rows},{'10,000 or more',LOWER_BOUND_BUCKET})
+        self.assertTrue(all(r['games']==1 for r in rows));self.assertEqual(b['single_entry'],before)
+        b.update(name='Captured field',complete_field=False)
+        b['single_entry'].update(eligible=40,unknown_rosters=0,missing_ranks=0,selected_users=10,cohort_eligible=10,rank_denominator=10000)
+        text=render({'contests':[b]});self.assertIn(LOWER_BOUND_BUCKET,text)
+        self.assertIn('complete-field receipt False; rank denominator 10000',text)

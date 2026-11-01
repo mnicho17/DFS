@@ -69,9 +69,22 @@ def audit(conn,key,players,accepted,size,selected,cancelled):
     return observer.finish(accepted)
 
 
-def field_bucket(size):
+LOWER_BOUND_BUCKET='10,000 or more (observed lower bound; total unknown)'
+
+
+def field_bucket(size,observed=None):
+    if type(size) is int and type(observed) is int and size<observed:return 'Unknown field size'
+    if size is None and type(observed) is int and observed>=10000:return LOWER_BOUND_BUCKET
     if type(size) is not int or size<=0:return 'Unknown field size'
     return 'Under 1,000' if size<1000 else '1,000-9,999' if size<10000 else '10,000 or more'
+
+
+def field_scope(contest):
+    detail=contest.get('single_entry') or {}
+    accepted=contest.get('accepted')
+    # Older or inconsistent captures cannot establish a verified observed bound.
+    observed=accepted if type(accepted) is int and type(detail.get('accepted')) is int and detail['accepted']==accepted else None
+    return field_bucket(contest.get('field_size'),observed)
 
 
 def summarize(report,minimum=10):
@@ -86,12 +99,12 @@ def summarize(report,minimum=10):
             for endpoint,index in zip(ENDPOINTS,(1,2,3)):
                 if min(field[0][0],field[1][0])>=minimum:
                     gap=100*(field[1][index]/field[1][0]-field[0][index]/field[0][0])
-                    groups[(field_bucket(c.get('field_size')),metric,endpoint,'field finish rate')][(c['date'],tuple(c['slate'][2]))].append(gap)
+                    groups[(field_scope(c),metric,endpoint,'field finish rate')][(c['date'],tuple(c['slate'][2]))].append(gap)
             # Compare usage against noncohort entries, without selecting on later success.
             n=sum(v[0] for v in cohort);other=[field[i][0]-cohort[i][0] for i in (0,1)];m=sum(other)
             if min(n,m)>=minimum:
                 gap=100*(cohort[1][0]/n-other[1]/m)
-                groups[(field_bucket(c.get('field_size')),metric,'usage','earlier cohort minus noncohort')][(c['date'],tuple(c['slate'][2]))].append(gap)
+                groups[(field_scope(c),metric,'usage','earlier cohort minus noncohort')][(c['date'],tuple(c['slate'][2]))].append(gap)
     out=[]
     for key,games in sorted(groups.items()):
         values=[statistics.mean(v) for _,v in sorted(games.items())]
@@ -106,6 +119,7 @@ def summarize(report,minimum=10):
 def render(report):
     lines=['SINGLE ENTRY SHOWDOWN - USAGE AND LATER FINISHES',
         'Field sizes stay separate: under 1,000; 1,000-9,999; 10,000 or more; unknown. A bucket is a descriptive scope, not a strategy recommendation.',
+        'With a missing total, at least 10,000 captured accepted entries establish only a lower bound. These contests have a separate scope; neither total size nor completeness is inferred. Smaller observed counts cannot establish an upper bound.',
         'Earlier cohort: at least three earlier ranked salary slates and two earlier top-cutoff finishes in Single Entry. Same-day and future results never qualify; later losses stay included.',
         'Field finish rate: feature-present minus feature-absent. Cohort usage: earlier-selected users minus remaining field. These are different questions.',
         'Only resolved, ranked entries contribute. Each verified username must have exactly one indexed entry. All rank-one ties count. Unknown rosters/ranks are excluded, never losses.',
@@ -116,7 +130,7 @@ def render(report):
     contests=[c for c in report['contests'] if c.get('single_entry') is not None]
     if not contests:lines.append('Unavailable: no verified Single Entry Showdown field evidence in this review.')
     for c in contests:
-        d=c['single_entry'];lines.append(f"{c['date']} {c['name']} | {field_bucket(c.get('field_size'))}: {d['eligible']}/{d['accepted']} ranked/resolved; {d['unknown_rosters']} unresolved rosters; {d['missing_ranks']} missing ranks; earlier cohort {d['cohort_eligible']}/{d['selected_users']}; complete-field receipt {c['complete_field']}; rank denominator {d['rank_denominator']}.")
+        d=c['single_entry'];lines.append(f"{c['date']} {c['name']} | {field_scope(c)}: {d['eligible']}/{d['accepted']} ranked/resolved; {d['unknown_rosters']} unresolved rosters; {d['missing_ranks']} missing ranks; earlier cohort {d['cohort_eligible']}/{d['selected_users']}; complete-field receipt {c['complete_field']}; rank denominator {d['rank_denominator']}.")
         for metric in KEYS:
             field=d['field'][metric];cohort=d['cohort'][metric];denom=sum(v[0] for v in field);n=sum(v[0] for v in cohort)
             lines.append(f"  {LABELS[metric]}: field usage {field[1][0]}/{denom}; earlier-cohort usage {cohort[1][0]}/{n}; feature-present top1/top0.1/rank1 counts {field[1][1:]}; feature-absent counts {field[0][1:]}.")
