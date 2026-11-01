@@ -52,7 +52,7 @@ class PortfolioExportTests(unittest.TestCase):
 
     def test_save_is_disabled_until_completed_and_never_exports_pending(self):
         root=self.folder();d=WinnerPortfoliosDialog(root/'history'/'exports.sqlite');self.addCleanup(d.close)
-        self.assertFalse(d.save_button.isEnabled());d._pending={'private':'unfinished'}
+        self.assertFalse(d.overview_button.isEnabled());d.show_overview();self.assertEqual(d.report.toPlainText(),'');self.assertFalse(d.save_button.isEnabled());d._pending={'private':'unfinished'}
         with patch.object(QtWidgets.QFileDialog,'getSaveFileName',side_effect=AssertionError('No incomplete export')):d.save_completed()
 
     def test_selected_export_is_frozen_before_save_dialog_and_does_not_reanalyze(self):
@@ -83,3 +83,25 @@ class PortfolioExportTests(unittest.TestCase):
         with patch('portfolio_review_export.QtCore.QSaveFile',return_value=fake):
             with self.assertRaises(OSError):save_text(target,'report',root/'history'/'exports.sqlite')
         fake.cancelWriting.assert_called_once();self.assertEqual(target.read_bytes(),b'old')
+
+    def test_full_overview_restores_captured_scope_preserving_search_and_pending(self):
+        f,d,r=self.dialog();overview=d._completed_overview;before=logical_db(f.db)
+        parent=d.tree.topLevelItem(0);entrant=parent.child(0)
+        d.tree.setCurrentItem(entrant);self.assertNotEqual(d.report.toPlainText(),overview)
+        d.find.setText(entrant.text(0));expanded=parent.isExpanded()
+        hidden=[parent.child(i).isHidden() for i in range(parent.childCount())]
+        d._pending={'unfinished':True};d.status.setText('Another review is running')
+        with patch('winner_portfolio_ui.review_winners',side_effect=AssertionError('No reanalysis')),patch('winner_portfolio_ui.render_overview',side_effect=AssertionError('Use captured overview')):
+            d.overview_button.click()
+        self.assertEqual(d.report.toPlainText(),overview);self.assertIsNone(d.tree.currentItem())
+        self.assertFalse(d.tree.selectedItems());self.assertEqual(d.find.text(),entrant.text(0))
+        self.assertEqual(parent.isExpanded(),expanded)
+        self.assertEqual([parent.child(i).isHidden() for i in range(parent.childCount())],hidden)
+        self.assertIs(d.data,r);self.assertEqual(d._pending,{'unfinished':True})
+        self.assertEqual(d.status.text(),'Another review is running');self.assertEqual(before,logical_db(f.db))
+        root=self.folder();target=root/'overview.txt'
+        with patch('data_paths.review_reports_directory',return_value=root),patch.object(QtWidgets.QFileDialog,'getSaveFileName',return_value=(str(target),'')):
+            d.save_completed()
+        text=target.read_text(encoding='utf-8')
+        self.assertEqual(text.count(overview),1);self.assertNotIn('SELECTED VIEW AT SAVE',text)
+        self.assertNotIn('unfinished',text)

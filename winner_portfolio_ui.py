@@ -54,6 +54,7 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
         from pane_styles import labelled_pane
         split.addWidget(labelled_pane('Contests and entrants — select a user',self.tree,'winnerUsersPane'));split.addWidget(labelled_pane('Entire observed portfolio, peer comparison and source limits',self.report,'winnerDetailsPane'));split.setSizes([260,420]);layout.addWidget(split,1)
         buttons=QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close);buttons.rejected.connect(self.reject)
+        self.overview_button=buttons.addButton('Full review overview',QtWidgets.QDialogButtonBox.ActionRole);self.overview_button.setEnabled(False);self.overview_button.clicked.connect(self.show_overview)
         self.save_button=buttons.addButton('Save completed review',QtWidgets.QDialogButtonBox.ActionRole);self.save_button.setEnabled(False);self.save_button.clicked.connect(self.save_completed)
         copy=buttons.addButton('Copy displayed review',QtWidgets.QDialogButtonBox.ActionRole);copy.clicked.connect(lambda:QtWidgets.QApplication.clipboard().setText(self.report.toPlainText()));layout.addWidget(buttons);self.mode_changed()
     def mode_changed(self):
@@ -83,7 +84,7 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
         overview=render_overview(result)
         self._completed_overview=overview;self._completed_on=QtCore.QDateTime.currentDateTime().toString(QtCore.Qt.ISODate);self._completed_through=result['through']
         self._completed_receipts=tuple((e['contest_key'],e['source'],e['salary_source']) for e in result.get('evidence',()))
-        self.data=result;self.save_button.setEnabled(True);self.tree.clear()
+        self.data=result;self.save_button.setEnabled(True);self.overview_button.setEnabled(True);self.tree.clear()
         followup=result.get('review_mode')=='prior_qualified'
         self.tree.headerItem().setText(5,'Prior top-cutoff slates' if followup else 'Prior rank-1 slates')
         for ci,c in enumerate(result['contests']):
@@ -112,6 +113,11 @@ class WinnerPortfoliosDialog(QtWidgets.QDialog):
             self.status.setText('Could not save the completed review: '+str(exc))
         except OSError:
             self.status.setText('Could not save the completed review. Check the destination folder and permissions, then retry.')
+
+    def show_overview(self):
+        if not self._completed_overview:return
+        self.tree.setCurrentItem(None);self.tree.clearSelection()
+        self.report.setPlainText(self._completed_overview)
 
     def show_selected(self,item,previous=None):
         if item is None or self.data is None:return
