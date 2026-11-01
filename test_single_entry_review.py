@@ -50,6 +50,8 @@ class SingleEntryTests(unittest.TestCase):
         self.assertEqual(c['winners'][0]['winning_entries'],0)
         dup=c['single_entry']['duplication'];self.assertEqual(dup['unique_rosters'],1);self.assertEqual(dup['maximum_copies'],100)
         self.assertEqual(dup['rank_one_resolved_entries'],1);self.assertEqual(dup['extra_copies'],99)
+        self.assertEqual(sum(side['entries'] for side in dup['by_construction']['captain_QB']),100)
+        self.assertEqual(sum(side['rosters'] for side in dup['by_construction']['captain_QB']),1)
         text=render_overview(r);self.assertIn('SINGLE ENTRY SHOWDOWN',text);self.assertIn('field usage',text)
         self.assertIn('Entry-fee matching and payouts/ROI are unavailable',text)
         self.assertEqual(before,logical_db(f.db));self.assertEqual(sources,source_bytes(f.root))
@@ -75,6 +77,7 @@ class SingleEntryTests(unittest.TestCase):
         self.assertEqual(d['eligible'],98);self.assertEqual(d['missing_ranks'],1);self.assertEqual(d['unknown_rosters'],1)
         self.assertEqual(d['cohort_eligible'],0)
         self.assertEqual(d['duplication']['resolved_entries'],99);self.assertEqual(d['duplication']['extra_copies'],98)
+        self.assertEqual(sum(side['entries'] for side in d['duplication']['by_construction']['captain_QB']),99)
     def test_changed_source_cancellation_and_bounds_do_not_publish(self):
         f=self.history();self.day(f,4)
         with patch('single_entry_review.MAX_REVIEW_ENTRIES',99):

@@ -38,6 +38,7 @@ class Observer:
         self.field={k:[[0]*4 for _ in range(2)] for k in KEYS}
         self.cohort={k:[[0]*4 for _ in range(2)] for k in KEYS}
     def observe(self,eid,rank,pattern,entry_user=None):
+        self.last_pattern=pattern
         self.seen+=1;ranked=type(rank) is int and 0<rank<=2**53-1
         self.unknown+=int(pattern is None);self.missing_rank+=int(not ranked)
         if pattern is None or not ranked:return
@@ -58,22 +59,28 @@ class Observer:
 class Duplication:
     """Receives only exact, already resolved role/ID signatures from the audit."""
     def __init__(self):self.rosters={}
-    def observe(self,eid,rank,signature):
+    def observe(self,eid,rank,signature,pattern=None):
+        if pattern is not None:
+            pattern=tuple(pattern)
+            if len(pattern)!=len(KEYS) or any(v is not None and (type(v) is not int or v not in (0,1)) for v in pattern):raise ValueError('Invalid verified construction features.')
         from controlled_construction import MAX_SIGNATURES
         from portfolio_pattern_audit import PatternAuditLimit
         if signature not in self.rosters:
             if len(self.rosters)>=MAX_SIGNATURES:raise PatternAuditLimit('Single Entry duplication signature bound reached; no partial report published.')
-            self.rosters[signature]=[0,0]
+            self.rosters[signature]=[0,0,pattern]
+        elif self.rosters[signature][2]!=pattern:raise ValueError('Same verified roster has conflicting construction features.')
         row=self.rosters[signature];row[0]+=1;row[1]+=int(type(rank) is int and rank==1)
     def finish(self):
         histogram=Counter(row[0] for row in self.rosters.values())
-        rows=list(self.rosters.values())
+        rows=[row[:2] for row in self.rosters.values()]
+        from duplication_construction import build_rows
+        constructions=build_rows(self.rosters.values(),KEYS)
         return dict(resolved_entries=sum(n for n,_ in rows),unique_rosters=len(rows),
             singleton_rosters=histogram[1],duplicated_rosters=sum(v for k,v in histogram.items() if k>1),
             entries_in_duplicated_rosters=sum(n for n,_ in rows if n>1),extra_copies=sum(n-1 for n,_ in rows),
             maximum_copies=max(histogram,default=0),rank_one_resolved_entries=sum(w for _,w in rows),
             distinct_rank_one_rosters=sum(w>0 for _,w in rows),rank_one_entries_in_shared_rosters=sum(w for n,w in rows if n>1),
-            copy_histogram=[dict(copies=k,rosters=v,entries=k*v) for k,v in sorted(histogram.items())])
+            copy_histogram=[dict(copies=k,rosters=v,entries=k*v) for k,v in sorted(histogram.items())],by_construction=constructions)
 
 
 def validate_users(conn,key,cancelled):
@@ -87,7 +94,7 @@ def audit(conn,key,players,accepted,size,selected,cancelled):
     from construction_outcomes import contest_outcomes
     observer=Observer(selected,size if type(size) is int and size>0 else accepted)
     duplication=Duplication()
-    contest_outcomes(conn,key,players,accepted,size,None,cancelled,_features=features,_metrics=KEYS,_rule_metrics=(),_observer=observer,_signature_observer=duplication.observe)
+    contest_outcomes(conn,key,players,accepted,size,None,cancelled,_features=features,_metrics=KEYS,_rule_metrics=(),_observer=observer,_signature_observer=lambda eid,rank,signature:duplication.observe(eid,rank,signature,observer.last_pattern))
     result=observer.finish(accepted);result['duplication']=duplication.finish()
     if result['duplication']['resolved_entries']!=accepted-result['unknown_rosters']:raise ValueError('Duplication coverage differs from resolved field coverage.')
     return result
@@ -173,6 +180,8 @@ def render(report):
             prefix=f"{row['bucket']} / {LABELS[row['metric']]} / {row['comparison']} / {row['endpoint']}: {row['games']} games; {row['status']}"
             if row['games']>=MIN_GAMES:prefix+=f"; {row['difference_pp']:+.3f} pp; higher/lower/equal {row['higher']}/{row['lower']}/{row['equal']}; omit-one {row['omit_one_range']}"
             lines.append(prefix+'.')
+    from duplication_construction import render as render_duplication
+    lines+=['',render_duplication(report)]
     return '\n'.join(lines)
 
 
