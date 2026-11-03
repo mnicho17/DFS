@@ -172,10 +172,13 @@ def _backup_history(source, destination, *, verify_existing, progress, live, ski
                 if handle.read(16)==b'SQLite format 3\x00':
                     databases.add(name)
                     known_sidecars.update(name+suffix for suffix in ('-wal','-shm','-journal'))
-    # SQLite's shared-memory read marks are not persistent database content.
-    # WAL/journal stamps still participate in the final source-change check.
+    # SQLite readers can create shared memory and an empty WAL after the last
+    # writer closes. Neither contains persistent database changes. Ignore only
+    # these artifacts for recognized SQLite databases; nonempty WALs, journals
+    # and the database itself still participate in the source-change check.
     def effective(rows):
-        return {n:stamp for n,stamp in rows.items() if not any(n==db+'-shm' for db in databases)}
+        return {n:stamp for n,stamp in rows.items()
+            if not any(n==db+'-shm' or (n==db+'-wal' and stamp[0]==0) for db in databases)}
     before=effective(before)
     omitted={db+suffix for db in databases for suffix in ('-wal','-shm','-journal')}
     planned={n:stamp for n,stamp in before.items() if n not in omitted}
