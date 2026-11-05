@@ -79,16 +79,21 @@ class CaptainAllocationRecoveryTests(unittest.TestCase):
             else: current['captain_pool_allocation']['targets']['c0'] = '5'
             self.assertEqual(allocation_targets(normalize_rules(current), 10), {}, change)
 
-    def test_missing_selected_captain_does_not_release_portfolio(self):
+    def test_missing_selected_captain_redistributes_generated_quota_without_changing_pool(self):
         rows, _, _, rules = fixture((10, 0))
-        # The selected pool must include the Captain with no available rows.
+        # Pool membership remains explicit, but generated shares may reach zero.
         empty = player('c1', LockCpt=True)
         _, rules, _ = prepare_captain_pool([rows[0]['Captain'], empty], {'min_unique': 2}, 10)
-        with self.assertRaises(PortfolioSelectionShortage) as caught:
-            choose(rows, rules)
-        diag = caught.exception.recovery_diagnostics
-        self.assertEqual(diag['starting_automatic_caps'], diag['effective_automatic_caps'])
-        self.assertNotIn('captain_pool_allocation', diag)
+        before = deepcopy((rows, rules))
+        result = choose(rows, rules)
+        self.assertEqual(len(result['lineups']), 10)
+        self.assertTrue(all(player_key(row['Captain']) == 'c0' for row in result['lineups']))
+        diag = result['report']['portfolio_recovery']
+        self.assertEqual(diag['recovery_stage'], 'required')
+        self.assertEqual(diag['captain_pool_allocation']['c1'], {'target': 5, 'selected': 0})
+        self.assertEqual(result['report']['effective_min_unique'], 2)
+        self.assertEqual((rows, rules), before)
+        self.assertIn('Automatic Captain allocation c1: 5 -> 0', result['report']['text'])
 
     def test_uniqueness_and_explicit_group_constraints_remain_hard(self):
         rows, _, _, rules = fixture()
