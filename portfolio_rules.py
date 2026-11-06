@@ -979,6 +979,10 @@ def select_portfolio(
             delta += weight * (before - after)
         return delta
 
+    # Each scenario count is the number of selected rosters hitting it. A swap
+    # can add at most one; retain the original subtraction and summation order.
+    scenario_count_logs = [math.log1p(n) for n in range(len(selected) + 2)] if refinement_passes else []
+
     def scenario_swap_delta(
         counts: Counter[int],
         outgoing: set[int],
@@ -991,9 +995,13 @@ def select_portfolio(
         scale = 100.0 / max(1, len(counts))
         delta = 0.0
         for scenario in touched:
-            before = max(0, counts[scenario])
-            after = max(0, before - int(scenario in outgoing) + int(scenario in incoming))
-            delta += math.log1p(after) - math.log1p(before)
+            before = counts[scenario]
+            if before < 0:
+                before = 0
+            after = before - (scenario in outgoing) + (scenario in incoming)
+            if after < 0:
+                after = 0
+            delta += scenario_count_logs[after] - scenario_count_logs[before]
         return weight * scale * delta
 
     def swap_is_admissible(outgoing: Any, incoming: Any) -> bool:
