@@ -11181,6 +11181,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
             self.portfolio_groups = apply(self.players, self.portfolio_groups, dialog.selected())
             self.lbl_portfolio_groups.setText(f'Groups: {len(self.portfolio_groups)}')
             self.lbl_portfolio_groups.setToolTip('\n'.join(g.get('label', '') for g in self.portfolio_groups))
+            from grouping_summary_ui import refresh
+            refresh(self)
             self.status.showMessage('Applied common Showdown groups. Saved lineups are unchanged.', 5000)
         except ValueError as exc:
             self.status.showMessage(str(exc), 6000)
@@ -11219,6 +11221,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self.lbl_portfolio_groups.setToolTip("\n".join(item.get("label", "") for item in self.portfolio_groups))
 
+        from grouping_summary_ui import refresh
+        refresh(self)
         self.status.showMessage(label, 5000)
 
 
@@ -11231,6 +11235,8 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
         self.lbl_portfolio_groups.setToolTip("")
 
+        from grouping_summary_ui import refresh
+        refresh(self)
         self.status.showMessage("Cleared portfolio player groups.", 3000)
 
 
@@ -17757,6 +17763,9 @@ class MainWindow(SnapshotActions, QtWidgets.QMainWindow):
 
 
     def _refresh_saved_tables(self) -> None:
+
+        from grouping_summary_ui import refresh
+        refresh(self)
 
         self.lbl_saved.setText(f"Saved: {len(self.saved_showdown)} showdown | {len(self.saved_classic)} classic")
 
