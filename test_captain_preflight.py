@@ -79,3 +79,9 @@ class CaptainPreflightTests(unittest.TestCase):
             with self.assertRaises(PortfolioSelectionShortage) as caught:run_deep_showdown(worker,_deep_shortlist)
         self.assertIs(caught.exception,error);self.assertEqual(error.recovery_diagnostics,{'kept':True})
         self.assertIn('original shortage',str(error));self.assertIn('Available to final selection: 10 distinct',str(error))
+
+    def test_render_order_survives_sorted_json_serialization(self):
+        import json
+        rows=bank(2,captain=2);c=inspect(rows,[],[rows[0]['Captain']],{},2)
+        stages={key:c for key in ('salary_eligible','shortlisted','validated','selection_bank','selected')}
+        self.assertEqual(lines(stages),lines(json.loads(json.dumps(stages,sort_keys=True))))

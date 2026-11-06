@@ -43,7 +43,9 @@ def lines(stages):
     result=['','CAPTAIN CANDIDATE COVERAGE BY STAGE',
         'Counts include distinct Captain/FLEX signatures and retained rows. Other rules and joint feasibility are not evaluated here; a short stage is not proof of slate infeasibility. Stage counts do not establish a rejection cause.']
     labels={'salary_eligible':'Before screening, after salary filtering','shortlisted':'After shortlisting','validated':'Independent validation output','selection_bank':'Available to final selection','selected':'Selected output'}
-    for stage,capture in stages.items():
+    for stage in list(labels) + sorted(set(stages)-set(labels)):
+        if stage not in stages:continue
+        capture=stages[stage]
         result.append(f"- {labels.get(stage,stage)}: {capture['distinct_candidates']:,} distinct signatures for {capture['requested']:,} requested; {capture['retained_distinct']:,} retained.")
         for row in capture['captains']:
             result.append(f"  {row['player']}: {row['available']:,} available; target {row['target']:,} ({row['target_source']}); shortfall {row['shortfall']:,}.")

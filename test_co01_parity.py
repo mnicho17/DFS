@@ -110,6 +110,13 @@ class ObjectiveParityTests(unittest.TestCase):
     @staticmethod
     def compatible_evidence(value):
         value = copy.deepcopy(value)
+        # Only this new read-only receipt and its exact rendered block are
+        # additive. All candidate identities, scores, ordering and exports below
+        # remain subject to the original frozen computational comparison.
+        coverage = value['diagnostic']['sim'].pop('captain_candidate_coverage', None)
+        if coverage:
+            from captain_preflight import lines as coverage_lines
+            value['build_report'] = value['build_report'].replace('\n' + '\n'.join(coverage_lines(coverage)), '', 1)
         # Preparation receipts add observability only. Preserve the exact frozen
         # candidates, metrics, selections, exports and all other report content.
         preparation = value['diagnostic'].pop('build_preparation', None)

@@ -461,7 +461,8 @@ def create_build_diagnostic(
             "selected_sources": aggregate_counts(candidate_sources.get("selected")),
             "quarterback_pipeline": dict(sim.get("quarterback_pipeline") or {}),
             "defense_pipeline": dict(sim.get("defense_pipeline") or {}),
-            "captain_candidate_coverage": copy.deepcopy(sim.get("captain_candidate_coverage") or {}),
+            **({"captain_candidate_coverage": copy.deepcopy(sim["captain_candidate_coverage"])}
+               if sim.get("captain_candidate_coverage") else {}),
             "screening_scenarios": max(0, _integer(timing.get("screening_scenarios"))),
             "validation_scenarios": max(0, _integer(timing.get("validation_scenarios"))),
             "portfolio_simulation_scenarios": max(
