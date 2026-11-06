@@ -263,13 +263,15 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     profile.cache_lookup_seconds=time.perf_counter()-lookup_started
     completed = 0
     scenario_volatility = {}
+    scenario_games = {}
     for scenario in range(max(1, int(scenarios))):
         if cancel_callback and cancel_callback():
             break
         def compute_frame():
             drawn=time.perf_counter()
             outcomes = _scenario_outcomes(rng, pool, script_counter=scripts,
-                                          _volatility_by_player=scenario_volatility)
+                                          _volatility_by_player=scenario_volatility,
+                                          _prepared_games=scenario_games)
             if outcome_transform is not None:
                 outcomes = outcome_transform(outcomes)
             profile.outcomes_seconds+=time.perf_counter()-drawn
