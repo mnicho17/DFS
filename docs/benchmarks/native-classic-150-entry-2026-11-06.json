@@ -1,0 +1,413 @@
+{
+  "sources": {
+    "before:nfl_simulation": {
+      "commit": "157f11b2e3b88287d4b7e2e4f2d0133abfe0392b",
+      "sha256": "865db47634647dd579bc4b7dfc4a653c381e83c0987a7666e2aafa5bb18bcc34"
+    },
+    "before:showdown_simulation": {
+      "commit": "157f11b2e3b88287d4b7e2e4f2d0133abfe0392b",
+      "sha256": "cf2ddf60b306b86fd727372b8fa93f8a43eab69b4762029458fe9eecd3a5d08a"
+    },
+    "before:portfolio_rules": {
+      "commit": "157f11b2e3b88287d4b7e2e4f2d0133abfe0392b",
+      "sha256": "dd9ece5b2d526ae8c0063807f82053cb1239c5e06c14349dbb7b45a2c8465a71"
+    },
+    "after:nfl_simulation": {
+      "commit": "89bb1c0a52c3731adf7d150ac691c47daaa2268d",
+      "sha256": "9a66abca13aac0f85016863322f4eef061993856b27242ce70ee0fe27f43e790",
+      "source": "native committed application"
+    },
+    "after:showdown_simulation": {
+      "commit": "89bb1c0a52c3731adf7d150ac691c47daaa2268d",
+      "sha256": "63a323c19a099da7d80476b07a364df00627f033e47331a835398653760bd126",
+      "source": "native committed application"
+    },
+    "after:portfolio_rules": {
+      "commit": "89bb1c0a52c3731adf7d150ac691c47daaa2268d",
+      "sha256": "43068c5f55d86f2928da35ebdab87b152dd6d5a11ef255f336c25a69feb10440",
+      "source": "native committed application"
+    }
+  },
+  "results": [
+    {
+      "kind": "classic",
+      "requested_candidates": 1000,
+      "requested_shortlist": 1000,
+      "requested_lineups": 150,
+      "requested_field": 1000,
+      "requested_scenarios": 2500,
+      "frozen_library_sha256": "efeac654ca1c5cb8464bdaa4d9f94f8e501e33a7f123973bf84f750fec3031ad",
+      "summary": {
+        "before": {
+          "wall_seconds": 29.232783199986443,
+          "stage_seconds": {
+            "generation_seconds": 0.003295700065791607,
+            "simulation_seconds": 13.703160099918023,
+            "selection_seconds": 15.408268099883571,
+            "total_seconds": 29.125245099887252
+          },
+          "simulation_phase_seconds": {
+            "screening": 1.0374637001659721,
+            "validation": 3.751332800136879,
+            "ranking_audit": 8.700285400031134
+          }
+        },
+        "after": {
+          "wall_seconds": 24.1705400000792,
+          "stage_seconds": {
+            "generation_seconds": 0.003334400011226535,
+            "simulation_seconds": 10.713054700056091,
+            "selection_seconds": 13.333902799990028,
+            "total_seconds": 24.059441299876198
+          },
+          "simulation_phase_seconds": {
+            "screening": 1.0422108999919146,
+            "validation": 3.749207899905741,
+            "ranking_audit": 5.698943999828771
+          }
+        }
+      },
+      "records": [
+        {
+          "engine": "before",
+          "mode": "cold_record",
+          "repeat": -1,
+          "wall_seconds": 37.994994499953464,
+          "result_digest": "323dfe92caedc95988ad9761316f90c8b5dbb251c94438cd4739961aa37d434e",
+          "stages": {
+            "generation_seconds": 0.012364000082015991,
+            "simulation_seconds": 22.35332369990647,
+            "selection_seconds": 15.502603000029922,
+            "total_seconds": 37.88176240003668
+          },
+          "simulation_profile": {
+            "screening": {
+              "calls": 1,
+              "completed_scenarios": 250,
+              "reused_scenarios": 0,
+              "candidate_evaluations": 75000,
+              "timings": {
+                "setup_seconds": 0.6240356999915093,
+                "cache_lookup_seconds": 0.05905290017835796,
+                "outcomes_seconds": 0.5173967038281262,
+                "opponents_seconds": 0.3422694990877062,
+                "scenario_io_seconds": 0.12016449682414532,
+                "candidates_seconds": 0.16031640116125345,
+                "cache_finish_seconds": 0.019279199885204434,
+                "result_assembly_seconds": 0.06462080008350313,
+                "other_seconds": 0.0017327989917248487,
+                "total_seconds": 1.9088685000315309
+              }
+            },
+            "validation": {
+              "calls": 1,
+              "completed_scenarios": 2500,
+              "reused_scenarios": 0,
+              "candidate_evaluations": 750000,
+              "timings": {
+                "setup_seconds": 0.5087186000309885,
+                "cache_lookup_seconds": 0.06263370020315051,
+                "outcomes_seconds": 5.081090096849948,
+                "opponents_seconds": 2.8278254044707865,
+                "scenario_io_seconds": 1.0674252901226282,
+                "candidates_seconds": 1.6394003997556865,
+                "cache_finish_seconds": 0.010872999904677272,
+                "result_assembly_seconds": 0.30903039989061654,
+                "other_seconds": 0.06454370869323611,
+                "total_seconds": 11.571540599921718
+              }
+            },
+            "ranking_audit": {
+              "calls": 1,
+              "completed_scenarios": 2000,
+              "reused_scenarios": 0,
+              "candidate_evaluations": 600000,
+              "timings": {
+                "setup_seconds": 0.509503000183031,
+                "cache_lookup_seconds": 9.899958968162537e-06,
+                "outcomes_seconds": 4.165430098772049,
+                "opponents_seconds": 2.417064208071679,
+                "scenario_io_seconds": 0.026421790244057775,
+                "candidates_seconds": 1.3581160018220544,
+                "cache_finish_seconds": 7.999828085303307e-06,
+                "result_assembly_seconds": 0.17258470016531646,
+                "other_seconds": 0.009414201136678457,
+                "total_seconds": 8.65855190018192
+              }
+            }
+          },
+          "audit": {
+            "status": "completed",
+            "reason": "",
+            "scenarios": 2000,
+            "candidate_count": 300,
+            "seed": 481516,
+            "requested_scenarios": 2000,
+            "time_budget_seconds": 120,
+            "leading_count": 50,
+            "overlap_pct": 54.0,
+            "median_rank_shift": 24.5,
+            "worst_audit_rank": 215,
+            "boundary_tied": false
+          },
+          "selector_calls": 2
+        },
+        {
+          "engine": "after",
+          "mode": "cold_record",
+          "repeat": -1,
+          "wall_seconds": 29.06687720003538,
+          "result_digest": "323dfe92caedc95988ad9761316f90c8b5dbb251c94438cd4739961aa37d434e",
+          "stages": {
+            "generation_seconds": 0.0030912000220268965,
+            "simulation_seconds": 15.461398999905214,
+            "selection_seconds": 13.470036400016397,
+            "total_seconds": 28.957363500026986
+          },
+          "simulation_profile": {
+            "screening": {
+              "calls": 1,
+              "completed_scenarios": 250,
+              "reused_scenarios": 0,
+              "candidate_evaluations": 75000,
+              "timings": {
+                "setup_seconds": 0.6311611998826265,
+                "cache_lookup_seconds": 0.05790359992533922,
+                "outcomes_seconds": 0.3244101000018418,
+                "opponents_seconds": 0.15392180136404932,
+                "scenario_io_seconds": 0.1141250969376415,
+                "candidates_seconds": 0.1601343024522066,
+                "cache_finish_seconds": 0.013470500009134412,
+                "result_assembly_seconds": 0.07329059997573495,
+                "other_seconds": 0.0015561995096504688,
+                "total_seconds": 1.5299734000582248
+              }
+            },
+            "validation": {
+              "calls": 1,
+              "completed_scenarios": 2500,
+              "reused_scenarios": 0,
+              "candidate_evaluations": 750000,
+              "timings": {
+                "setup_seconds": 0.5030247999820858,
+                "cache_lookup_seconds": 0.05571770016103983,
+                "outcomes_seconds": 3.262520703719929,
+                "opponents_seconds": 1.1898932941257954,
+                "scenario_io_seconds": 1.0542599058244377,
+                "candidates_seconds": 1.6308088989462703,
+                "cache_finish_seconds": 0.0162281000521034,
+                "result_assembly_seconds": 0.32755229994654655,
+                "other_seconds": 0.06253169709816575,
+                "total_seconds": 8.102537399856374
+              }
+            },
+            "ranking_audit": {
+              "calls": 1,
+              "completed_scenarios": 2000,
+              "reused_scenarios": 0,
+              "candidate_evaluations": 600000,
+              "timings": {
+                "setup_seconds": 0.5197960000950843,
+                "cache_lookup_seconds": 8.699949830770493e-06,
+                "outcomes_seconds": 2.6028147919569165,
+                "opponents_seconds": 0.9646433936432004,
+                "scenario_io_seconds": 0.025133311981335282,
+                "candidates_seconds": 1.3052877935115248,
+                "cache_finish_seconds": 9.899958968162537e-06,
+                "result_assembly_seconds": 0.17111320002004504,
+                "other_seconds": 0.00849820883013308,
+                "total_seconds": 5.597305299947038
+              }
+            }
+          },
+          "audit": {
+            "status": "completed",
+            "reason": "",
+            "scenarios": 2000,
+            "candidate_count": 300,
+            "seed": 481516,
+            "requested_scenarios": 2000,
+            "time_budget_seconds": 120,
+            "leading_count": 50,
+            "overlap_pct": 54.0,
+            "median_rank_shift": 24.5,
+            "worst_audit_rank": 215,
+            "boundary_tied": false
+          },
+          "selector_calls": 2
+        },
+        {
+          "engine": "before",
+          "mode": "warm_replay",
+          "repeat": 0,
+          "wall_seconds": 29.232783199986443,
+          "result_digest": "323dfe92caedc95988ad9761316f90c8b5dbb251c94438cd4739961aa37d434e",
+          "stages": {
+            "generation_seconds": 0.003295700065791607,
+            "simulation_seconds": 13.703160099918023,
+            "selection_seconds": 15.408268099883571,
+            "total_seconds": 29.125245099887252
+          },
+          "simulation_profile": {
+            "screening": {
+              "calls": 1,
+              "completed_scenarios": 250,
+              "reused_scenarios": 250,
+              "candidate_evaluations": 75000,
+              "timings": {
+                "setup_seconds": 0.6339525000657886,
+                "cache_lookup_seconds": 0.10653699981048703,
+                "outcomes_seconds": 0.0,
+                "opponents_seconds": 0.0,
+                "scenario_io_seconds": 0.057284001260995865,
+                "candidates_seconds": 0.16544230049476027,
+                "cache_finish_seconds": 0.005787499947473407,
+                "result_assembly_seconds": 0.06729610008187592,
+                "other_seconds": 0.0011642985045909882,
+                "total_seconds": 1.0374637001659721
+              }
+            },
+            "validation": {
+              "calls": 1,
+              "completed_scenarios": 2500,
+              "reused_scenarios": 2500,
+              "candidate_evaluations": 750000,
+              "timings": {
+                "setup_seconds": 0.5237935001496226,
+                "cache_lookup_seconds": 0.5771216000430286,
+                "outcomes_seconds": 0.0,
+                "opponents_seconds": 0.0,
+                "scenario_io_seconds": 0.5401606005616486,
+                "candidates_seconds": 1.7031233008019626,
+                "cache_finish_seconds": 0.0056507999543100595,
+                "result_assembly_seconds": 0.3457105001434684,
+                "other_seconds": 0.05577249848283827,
+                "total_seconds": 3.751332800136879
+              }
+            },
+            "ranking_audit": {
+              "calls": 1,
+              "completed_scenarios": 2000,
+              "reused_scenarios": 0,
+              "candidate_evaluations": 600000,
+              "timings": {
+                "setup_seconds": 0.5579422002192587,
+                "cache_lookup_seconds": 9.800074622035027e-06,
+                "outcomes_seconds": 4.185910302912816,
+                "opponents_seconds": 2.3800850049592555,
+                "scenario_io_seconds": 0.030878990655764937,
+                "candidates_seconds": 1.365225899266079,
+                "cache_finish_seconds": 9.19983722269535e-06,
+                "result_assembly_seconds": 0.17053309991024435,
+                "other_seconds": 0.009690902195870876,
+                "total_seconds": 8.700285400031134
+              }
+            }
+          },
+          "audit": {
+            "status": "completed",
+            "reason": "",
+            "scenarios": 2000,
+            "candidate_count": 300,
+            "seed": 481516,
+            "requested_scenarios": 2000,
+            "time_budget_seconds": 120,
+            "leading_count": 50,
+            "overlap_pct": 54.0,
+            "median_rank_shift": 24.5,
+            "worst_audit_rank": 215,
+            "boundary_tied": false
+          },
+          "selector_calls": 2
+        },
+        {
+          "engine": "after",
+          "mode": "warm_replay",
+          "repeat": 0,
+          "wall_seconds": 24.1705400000792,
+          "result_digest": "323dfe92caedc95988ad9761316f90c8b5dbb251c94438cd4739961aa37d434e",
+          "stages": {
+            "generation_seconds": 0.003334400011226535,
+            "simulation_seconds": 10.713054700056091,
+            "selection_seconds": 13.333902799990028,
+            "total_seconds": 24.059441299876198
+          },
+          "simulation_profile": {
+            "screening": {
+              "calls": 1,
+              "completed_scenarios": 250,
+              "reused_scenarios": 250,
+              "candidate_evaluations": 75000,
+              "timings": {
+                "setup_seconds": 0.6372617001179606,
+                "cache_lookup_seconds": 0.10578470001928508,
+                "outcomes_seconds": 0.0,
+                "opponents_seconds": 0.0,
+                "scenario_io_seconds": 0.05738370167091489,
+                "candidates_seconds": 0.16658159997314215,
+                "cache_finish_seconds": 0.008352200035005808,
+                "result_assembly_seconds": 0.06569690001197159,
+                "other_seconds": 0.0011500981636345387,
+                "total_seconds": 1.0422108999919146
+              }
+            },
+            "validation": {
+              "calls": 1,
+              "completed_scenarios": 2500,
+              "reused_scenarios": 2500,
+              "candidate_evaluations": 750000,
+              "timings": {
+                "setup_seconds": 0.5191641999408603,
+                "cache_lookup_seconds": 0.561027399962768,
+                "outcomes_seconds": 0.0,
+                "opponents_seconds": 0.0,
+                "scenario_io_seconds": 0.5427807033993304,
+                "candidates_seconds": 1.7360881071072072,
+                "cache_finish_seconds": 0.005273699993267655,
+                "result_assembly_seconds": 0.32847579987719655,
+                "other_seconds": 0.05639798962511122,
+                "total_seconds": 3.749207899905741
+              }
+            },
+            "ranking_audit": {
+              "calls": 1,
+              "completed_scenarios": 2000,
+              "reused_scenarios": 0,
+              "candidate_evaluations": 600000,
+              "timings": {
+                "setup_seconds": 0.53667449997738,
+                "cache_lookup_seconds": 9.400071576237679e-06,
+                "outcomes_seconds": 2.645671692676842,
+                "opponents_seconds": 0.9714040036778897,
+                "scenario_io_seconds": 0.028040602803230286,
+                "candidates_seconds": 1.3198368928860873,
+                "cache_finish_seconds": 1.0800082236528397e-05,
+                "result_assembly_seconds": 0.1886305999942124,
+                "other_seconds": 0.008665507659316063,
+                "total_seconds": 5.698943999828771
+              }
+            }
+          },
+          "audit": {
+            "status": "completed",
+            "reason": "",
+            "scenarios": 2000,
+            "candidate_count": 300,
+            "seed": 481516,
+            "requested_scenarios": 2000,
+            "time_budget_seconds": 120,
+            "leading_count": 50,
+            "overlap_pct": 54.0,
+            "median_rank_shift": 24.5,
+            "worst_audit_rank": 215,
+            "boundary_tied": false
+          },
+          "selector_calls": 2
+        }
+      ]
+    }
+  ],
+  "exact_combined_parity": true,
+  "integrated_application": true,
+  "limitations": "Native combined application functions for the after engine. Controlled benchmark in one host app revision. Pinned original simulator/sampler/selector versus either PRs 188-190 components or the native combined application (see integrated_application and source hashes). One shared frozen candidate bank per format; separate disposable caches per engine, one cold preparation then alternating paired warm trials. Capture overhead is included equally. Synthetic local timings are not production-slate latency. Nested phase times are included in simulation time, not additive stages. Audit remains 2,000 fresh scenarios each build."
+}
