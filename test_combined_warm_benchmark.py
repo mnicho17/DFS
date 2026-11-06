@@ -5,7 +5,7 @@ import copy
 import unittest
 import hashlib
 from types import ModuleType, SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import scripts.benchmark_combined_warm_build as benchmark
 from scripts.benchmark_combined_warm_build import digest, verify_profile, summarize
 
@@ -89,9 +89,9 @@ class CombinedWarmBenchmarkTests(unittest.TestCase):
         head = 'ab' * 20
         def output(args, **kwargs):
             return (head + '\n').encode() if args[1] == 'rev-parse' else stub
-        with patch.object(benchmark.subprocess, 'check_output', side_effect=output), \
-             patch.object(benchmark.subprocess, 'run', return_value=SimpleNamespace(returncode=0)), \
-             patch.object(benchmark.importlib, 'import_module', side_effect=lambda name: native[name]):
+        process = SimpleNamespace(check_output=output, run=lambda *a, **k: SimpleNamespace(returncode=0))
+        loader = SimpleNamespace(import_module=lambda name: native[name])
+        with patch.object(benchmark, 'subprocess', process), patch.object(benchmark, 'importlib', loader):
             components, hashes = benchmark.load_components(integrated=True)
         for name in names:
             self.assertIs(components['after'][name], native[name])
@@ -104,9 +104,11 @@ class CombinedWarmBenchmarkTests(unittest.TestCase):
 
     def test_integrated_mode_rejects_uncommitted_application_source(self):
         stub = b'def _scenario_outcomes(*args, **kwargs): return {}\n'
-        with patch.object(benchmark.subprocess, 'check_output', return_value=stub), \
-             patch.object(benchmark.subprocess, 'run', return_value=SimpleNamespace(returncode=1)), \
-             patch.object(benchmark.importlib, 'import_module') as native_import:
+        process = SimpleNamespace(check_output=lambda *a, **k: stub,
+                                  run=lambda *a, **k: SimpleNamespace(returncode=1))
+        native_import = Mock()
+        loader = SimpleNamespace(import_module=native_import)
+        with patch.object(benchmark, 'subprocess', process), patch.object(benchmark, 'importlib', loader):
             with self.assertRaisesRegex(ValueError, 'committed'):
                 benchmark.load_components(integrated=True)
         native_import.assert_not_called()

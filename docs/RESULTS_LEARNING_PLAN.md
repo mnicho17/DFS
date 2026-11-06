@@ -340,6 +340,25 @@ volatility, deterministic game setup and compiled opponent scoring banks.
 The combined benchmark now has an explicit `--integrated` mode that measures
 the native combined application functions as the after engine, retaining the
 pinned merged-main simulator/sampler/selector as its reference. It rejects
-uncommitted application-source changes and records native source hashes and
+uncommitted measured engine-source changes and records native source hashes and
 commit identity. The default historical component comparison remains available.
 Full combined tests, fresh/warm parity and packaging are verification gates.
+
+The native combined branch was measured against pinned original components in
+one common worker. All sixteen builds matched exact stage scores, selected
+lineups, structured portfolio evidence and independent-audit diagnostics within
+each format. The candidate library bytes and original players were unchanged;
+all warm screening/validation scenarios were replayed and every ranking audit
+completed 2,000 fresh scenarios. Measurements used one frozen library per format,
+separate caches per engine and three alternating warm trial pairs, following
+one cold preparation per engine. This controlled comparison is not a measurement
+of an independently launched historical binary or a production slate.
+
+Native source hashes, the measured application commit, complete raw trials and
+actual stage counts are in the
+[native combined receipt](benchmarks/native-combined-warm-build-2026-11-06.json).
+Reproduce using `scripts/benchmark_combined_warm_build.py --integrated --output <file>`.
+The synthetic request remains 20 entries with a 1,000-candidate budget,
+200-row shortlist and 1,000 field entries; delivered stage counts and local
+hardware/load limit extrapolation to a 150-entry production build. The combined
+review PR records the complete-suite and Windows packaging results separately.
