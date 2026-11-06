@@ -823,6 +823,7 @@ def _scenario_outcomes(
     script_counter: Optional[Counter[str]] = None,
     specialist_model: str = 'events',
     rotation_zero_prototype=None,
+    _volatility_by_player: Optional[Dict[int, float]] = None,
 ) -> Dict[str, float]:
     # Sorted inputs make seeded builds reproducible across separate app runs;
     # set iteration order varies with Python's per-process hash seed.
@@ -949,7 +950,16 @@ def _scenario_outcomes(
             baseline = _number(player.get('WorkloadProjection'), 0.0)
             if baseline > 0:
                 mean *= workload_points(sampled_workloads[id(player)]) / baseline
-        cv = _player_volatility_cv(player)
+        # Simulation callers own this lazy table for one fixed input snapshot.
+        # Direct diagnostic draws retain the uncached path. No sampled values
+        # or random state are stored, and a new simulation starts empty.
+        if _volatility_by_player is None:
+            cv = _player_volatility_cv(player)
+        else:
+            identity = id(player)
+            if identity not in _volatility_by_player:
+                _volatility_by_player[identity] = _player_volatility_cv(player)
+            cv = _volatility_by_player[identity]
         if pos == "DST":
             score = max(-4.0, mean + max(3.0, mean * cv) * z)
         else:
@@ -1354,12 +1364,14 @@ def simulate_nfl_contest(
         count=scenario_count, enabled=scenario_cache and outcome_transform is None, cancelled=cancel_callback,
         context=dict(players=list(players),opponent_players=opponent_players,config=config,salary_cap=salary_cap,field_size=effective_field_size))
     profile.cache_lookup_seconds=time.perf_counter()-lookup_started
+    scenario_volatility: Dict[int, float] = {}
     for scenario_index in range(scenario_count):
         if cancel_callback and cancel_callback():
             break
         def compute_frame():
             drawn=time.perf_counter()
-            outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
+            outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts,
+                                          _volatility_by_player=scenario_volatility)
             if outcome_transform is not None:
                 outcomes = outcome_transform(outcomes)
             profile.outcomes_seconds+=time.perf_counter()-drawn

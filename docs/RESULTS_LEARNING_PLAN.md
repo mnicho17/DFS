@@ -232,3 +232,34 @@ trials, source hash and limitations are recorded in
 Four regression cases retain exact merged-main receipts for overlapping/new
 scenario hits, empty hits, retained entries and Classic refinement. Existing
 recovery, cancellation, entry-safety and golden parity tests also apply.
+
+## Fresh-scenario volatility reuse checkpoint — November 6, 2026
+
+Profiles identified repeated role-aware player volatility calculations inside
+every scenario. Classic and Showdown contest simulations now lazily calculate
+that deterministic value once per player object for one simulation call. Each
+call owns a new table; direct diagnostic draws retain the uncached path. No
+random state, sampled workload, outcome, game/team factor or specialist output
+is stored. Warm replay and pre-draw cancellation do not evaluate unused values.
+The independent audit seed, 2,000 fresh scenarios, opponent field, scoring,
+validation and all portfolio rules remain unchanged.
+
+Three alternating-order synthetic trials per format compared fresh audit-sized
+simulations against merged main `157f11b2e3b88287d4b7e2e4f2d0133abfe0392b`,
+with 80 candidates and 1,000 field entries. Classic median simulation time fell
+from 8.508 to 7.618 seconds (10.5%); Showdown fell from 4.665 to 4.317 seconds
+(7.5%). Every run completed 2,000 scenarios with zero replayed scenarios. All
+metrics, scenario hits/values and non-timing reports matched exactly within
+each format. These are local synthetic simulation timings including opponent
+generation, not whole-build or real-contest speedup claims.
+
+Reproduce with `scripts/benchmark_volatility_reuse.py`; source hashes, raw trials,
+profiles and limitations are in [the receipt](benchmarks/scenario-volatility-2026-11-06.json).
+Tests compare direct fresh outcomes and full RNG state for both specialist
+models and NFL formats, per-call recalculation with changed inputs, cancellation,
+complete simulator results, cache replay qualification and existing golden data.
+
+Focused validation: 71 isolated scenario/audit/model/golden tests passed in
+101.969 seconds, plus 15 projection/ownership sensitivity and score-validation
+tests in 28.870 seconds (86 total); zero unexpected network attempts. Windows
+full-suite and packaged-executable checks remain CI gates for this slice.

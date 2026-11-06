@@ -262,12 +262,14 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
                      **({'history_profile':history_profile} if history_profile is not None else {})))
     profile.cache_lookup_seconds=time.perf_counter()-lookup_started
     completed = 0
+    scenario_volatility = {}
     for scenario in range(max(1, int(scenarios))):
         if cancel_callback and cancel_callback():
             break
         def compute_frame():
             drawn=time.perf_counter()
-            outcomes = _scenario_outcomes(rng, pool, script_counter=scripts)
+            outcomes = _scenario_outcomes(rng, pool, script_counter=scripts,
+                                          _volatility_by_player=scenario_volatility)
             if outcome_transform is not None:
                 outcomes = outcome_transform(outcomes)
             profile.outcomes_seconds+=time.perf_counter()-drawn
