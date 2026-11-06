@@ -15,8 +15,9 @@ receiving and K/DST effects; supported conditional contest-money comparisons.
 The initial point review has an explicitly defined portfolio point threshold,
 not a paid cutoff. No automatic injury probabilities or allocations are added.
 The requirements below remain the acceptance plan for these later slices.
-RL-07B now has a first recorded-evidence review slice; full pipeline tracing and
-DC-02B measured overnight improvements remain queued; unrelated backlog work is excluded from this branch.
+RL-07B now has a first recorded-evidence review slice; full pipeline tracing remains queued.
+DC-02B controlled warm-build measurements are recorded in the November 6 checkpoint below;
+the performance changes are assembled on the combined review branch and remain unmerged.
 
 **Goal:** help review a 150-entry portfolio's dependence on each starting QB
 and deliberately build coverage for an early exit. Showdown is the first build
@@ -117,3 +118,247 @@ Large-file GUI review found repeated column resizing stalled sorting on a popula
 ## Combined-import verification
 
 The combined importer is a separate review slice stacked on the opponent-analysis change. Its baseline is 414 passing isolated tests. Focused cases cover both NFL formats, embedded entry templates, overlapping folders, renamed/changed sources, per-contest associations, ambiguity, date/game/role conflicts, zero versus unknown salaries, interrupted-file rollback, successful retry and real GUI worker retirement. Existing pairs are fixed; replacing a chosen revision is not provided in this slice. Full eligible-pool qualification, payout templates, injury scenarios and optimization remain later work. Final local regression: 447 passed in 214.077s, including 33 new tests; no failures, skips or unexpected external connections. A disposable-copy GUI run imported 237,812 standings entries plus 12 real salary files, found 150 personal entries and saved one salary association in 100.968s. A repeat scan skipped all 13 files in 0.172s. Original hashes stayed unchanged. Final identity qualification covered 95/95 observed player/role identities; 911 unreadable rosters remained excluded. Current CI results are recorded in the review PR; visible-desktop and packaged runtime smoke checks remain not_run.
+
+
+## DC-02B warm-build measurement checkpoint - November 6, 2026
+
+Controlled synthetic Deep builds reused one frozen library per format, with
+three fresh/cold/warm trials and a separate disposable cache per trial. Every
+scoring/selection digest matched. Screening and validation replayed all recorded
+scenarios in warm runs; the 2,000-scenario ranking audit remained fresh. Live
+history and production caches were untouched. Raw observations are in
+`docs/benchmarks/warm-build-stages-2026-11-06.json`.
+
+| Requested fixture | Format | Fresh median | Warm median | Warm selection | Warm ranking audit |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 4 entries, 80 candidates, 20 shortlist, 200 field | Classic | 12.37 s | 6.75 s | 0.13 s | 4.82 s |
+| Same small fixture | Showdown | 6.63 s | 3.79 s | 0.05 s | 2.60 s |
+| 20 entries, 1,000 candidates, 200 shortlist, 1,000 field | Classic | 27.59 s | 19.13 s | 6.01 s | 8.70 s |
+| Same scaled fixture | Showdown | 19.39 s | 15.04 s | 7.63 s | 4.95 s |
+
+Requested candidate/shortlist limits are not actual bank sizes. In the scaled
+runs, screening evaluated 300 Classic and 94 Showdown candidates per scenario;
+validation evaluated 200 Classic and 94 Showdown candidates per scenario. The
+figures do not exercise a 20,000-candidate bank, a 2,000-row shortlist or a
+150-entry portfolio. Timings are local, fixed-order synthetic observations,
+not production-slate latency or a forecast of a real 60-minute build. Simulation
+phase profiles are nested inside simulation time and must not be added to it.
+
+The remaining bottleneck depends on scale. Fresh outcome sampling/auditing
+is prominent in the small fixture; portfolio selection/refinement becomes the
+largest measured Showdown stage in the scaled fixture. A separate synthetic
+selection profile preserved selected identities and found roughly 38 million
+`log1p` calls inside `scenario_swap_delta`. Profiler timings include substantial
+instrumentation overhead and are not comparable to the unprofiled table.
+
+Next measured target: reduce repeated integer-count logarithm work in swap
+refinement while preserving iteration order, floating results, selected/output
+identities, scenario evidence, fresh audits, manual constraints and cancellation.
+No sampler, selection, projection, ownership, ranking or default behavior changes
+are included in this measurement checkpoint.
+
+Reproduce with Python 3.12 and `PYTHONHASHSEED=0`:
+
+```text
+python scripts/benchmark_reuse_stages.py --kind both --candidates 80 --shortlist 20 --lineups 4 --field 200 --scenarios 2500 --repeats 3 --output small.json
+python scripts/benchmark_reuse_stages.py --kind both --candidates 1000 --shortlist 200 --lineups 20 --field 1000 --scenarios 2500 --repeats 3 --output scaled.json
+```
+
+## Combined warm-build measurement — November 6, 2026
+
+The component-swap benchmark now compares merged main `157f11b` simulator,
+sampler and selector against PR #188's selector (`8f8c24a`) and PR #190's
+simulators/sampler (`08cd3d3`, including PR #189). The host worker, optimizer,
+cache and library implementation stay common. This is a controlled combined
+component check, not a merged application integration build. App files are not
+modified by the benchmark.
+
+Each format uses one frozen candidate library, with separate disposable caches
+for the two engines. One cold recording per engine precedes three alternating
+paired warm trials. Every build requests 20 entries, a 1,000-candidate budget,
+a 200-row validation shortlist, 1,000 field entries and 2,500 validation scenarios.
+The delivered Classic screening/validation/audit counts were 300/200/200;
+Showdown delivered 102/102/102. These requested budgets are not claims of a
+1,000-row scored bank or a 150-entry production portfolio.
+
+| Format | Original warm median | Combined warm median | Reduction |
+| --- | ---: | ---: | ---: |
+| Classic | 18.179 s | 15.941 s | 12.3% |
+| Showdown | 17.887 s | 15.162 s | 15.2% |
+
+All sixteen builds (four cold preparations and twelve warm measurements) matched
+exact stage scores, ordered selected lineups, structured portfolio evidence and
+ranking-audit diagnostics within each format. Warm screening and validation
+replayed every scenario; each audit completed 2,000 fresh scenarios. The original
+players and frozen library bytes stayed unchanged. Captured evidence overhead
+is included equally; local synthetic results do not establish real-slate latency.
+Nested phase times are part of simulation time, not additional elapsed stages.
+
+The reproducible script is `scripts/benchmark_combined_warm_build.py`; pinned
+component hashes, complete trials and profiles are recorded in the
+[combined receipt](benchmarks/combined-warm-build-2026-11-06.json). A small
+Showdown smoke run also completed with matching cold/warm before/after results.
+Seventeen isolated benchmark/profiling tests passed in 1.617 seconds, with zero
+unexpected network attempts; six new checks reject changed evidence, unpaired
+trials and partial/replayed audits, and verify exact float/order identity.
+
+Runtime Windows checks have completed: PR #188 passed 2,444 tests in 1,201.667 s;
+PR #189 passed 2,444 tests in 990.818 s; PR #190 (including #189) passed 2,448
+tests in 1,164.831 s. Each had zero unexpected network attempts and successful
+executable, guide, checksum verification and artifact upload; tagged release
+publication was skipped. Runtime PRs remain unmerged. The benchmark-only update
+has its own full-suite/package CI rerun pending.
+
+## Refinement calculation reuse checkpoint — November 6, 2026
+
+Portfolio refinement now computes integer scenario-count logarithms once per
+selection call, bounded by the actual selected portfolio size. The touched-set
+iteration, subtraction, accumulation, weighting and refinement passes remain
+unchanged. Counts still come from the selected rosters; no simulation evidence
+or audit is cached by this change.
+
+A three-trial alternating-order synthetic comparison against merged main
+`157f11b2e3b88287d4b7e2e4f2d0133abfe0392b` used 100 Showdown candidates,
+20 requested entries, 2,500 scenarios and a 1,000-entry field. Selection plus
+refinement median wall time fell from 16.586 to 13.348 seconds (19.5%). All six
+runs returned identical ordered portfolios and structured report hashes,
+eight refinement attempts and six swaps. Generation and simulation were outside
+the measured interval. This is a local synthetic result, not a full-build or
+real-contest speedup claim. Fresh ranking audits and all hard rules remain.
+
+The reproducible script is `scripts/benchmark_refinement_log_counts.py`; raw
+trials, source hash and limitations are recorded in
+[the benchmark receipt](benchmarks/refinement-log-counts-2026-11-06.json).
+Four regression cases retain exact merged-main receipts for overlapping/new
+scenario hits, empty hits, retained entries and Classic refinement. Existing
+recovery, cancellation, entry-safety and golden parity tests also apply.
+
+## Fresh-scenario volatility reuse checkpoint — November 6, 2026
+
+Profiles identified repeated role-aware player volatility calculations inside
+every scenario. Classic and Showdown contest simulations now lazily calculate
+that deterministic value once per player object for one simulation call. Each
+call owns a new table; direct diagnostic draws retain the uncached path. No
+random state, sampled workload, outcome, game/team factor or specialist output
+is stored. Warm replay and pre-draw cancellation do not evaluate unused values.
+The independent audit seed, 2,000 fresh scenarios, opponent field, scoring,
+validation and all portfolio rules remain unchanged.
+
+Three alternating-order synthetic trials per format compared fresh audit-sized
+simulations against merged main `157f11b2e3b88287d4b7e2e4f2d0133abfe0392b`,
+with 80 candidates and 1,000 field entries. Classic median simulation time fell
+from 8.508 to 7.618 seconds (10.5%); Showdown fell from 4.665 to 4.317 seconds
+(7.5%). Every run completed 2,000 scenarios with zero replayed scenarios. All
+metrics, scenario hits/values and non-timing reports matched exactly within
+each format. These are local synthetic simulation timings including opponent
+generation, not whole-build or real-contest speedup claims.
+
+Reproduce with `scripts/benchmark_volatility_reuse.py`; source hashes, raw trials,
+profiles and limitations are in [the receipt](benchmarks/scenario-volatility-2026-11-06.json).
+Tests compare direct fresh outcomes and full RNG state for both specialist
+models and NFL formats, per-call recalculation with changed inputs, cancellation,
+complete simulator results, cache replay qualification and existing golden data.
+
+Focused validation: 71 isolated scenario/audit/model/golden tests passed in
+101.969 seconds, plus 15 projection/ownership sensitivity and score-validation
+tests in 28.870 seconds (86 total); zero unexpected network attempts. Windows
+full-suite and packaged-executable checks remain CI gates for this slice.
+
+## Fresh-scenario game setup reuse checkpoint — November 6, 2026
+
+This slice builds on PR #189 (`463cacd3d179b090786d5903a7f7f77250ddde90`).
+The deterministic game grouping, aggregate Vegas totals/spreads, script weights
+and sorted game teams are now prepared lazily once per contest simulation.
+Game-script rolls, random favorite choices when spreads are zero, game/team
+factors, workload sampling, player outcomes and specialist events remain fresh.
+The preparation table is local to a single call; direct diagnostic draws retain
+an uncached path. Pre-draw cancellation and full warm replay skip preparation.
+
+Three alternating-order synthetic trials per format compared against the pinned
+PR #189 implementation and sampler, using 80 candidates, 2,000 fresh scenarios
+and 1,000 field entries. Classic median simulation time fell from 7.140 to 6.528
+seconds (8.6%); Showdown fell from 4.335 to 3.968 seconds (8.5%). All 12 runs
+completed without replay and matched exact scenario metrics/hits/values and
+non-timing reports. These local synthetic simulation gains are relative to
+PR #189 and must not be added to earlier percentages or presented as whole-build
+or real-contest speedups.
+
+Reproduce with `scripts/benchmark_game_input_reuse.py`; the
+[receipt](benchmarks/scenario-game-inputs-2026-11-06.json) includes source hashes,
+raw trials and profiles. Four regression cases cover spread/random-favorite and
+missing-data paths with exact RNG state, per-call and changed-input preparation,
+cancellation/warm replay, and empty games/direct draws. Portfolio rules,
+independent ranking audits, saved evidence and model defaults are preserved.
+
+Focused verification: 90 isolated tests passed in 120.522 seconds, with zero
+unexpected network attempts. Windows complete-suite and packaging remain CI
+gates on the combined PR #189 plus game-setup reuse branch.
+
+## Classic opponent-field scoring checkpoint — November 6, 2026
+
+The combined fresh-audit profile identified repeated dictionary lookups while
+summing each Classic opponent roster in every scenario. Classic contest
+simulation now compiles each of its three active opponent banks lazily on first
+use. Each frame still reads fresh outcome values, retains each roster's supplied
+slot order, keeps duplicate rosters and uses the same built-in ordered sum and
+sorted field scores. Missing keys still contribute float zero; empty and
+single-slot diagnostic signatures preserve their original numeric semantics.
+No sampled result is retained in the compiled bank. Cancellation before a draw
+and complete warm replay skip compilation; each new simulation owns new banks.
+
+Three alternating-order synthetic fresh Classic comparisons against merged main
+`157f11b2e3b88287d4b7e2e4f2d0133abfe0392b` used 80 candidates, 2,000 scenarios
+and 1,000 opponent entries. Median full simulation time fell from 7.688 to 6.446
+seconds (16.2%); nested opponent scoring fell from 2.257 to 0.998 seconds. All six
+runs matched exact metrics, hits, scenario values and non-timing field reports;
+all 2,000 scenarios were drawn fresh. The benchmark excludes generation of the
+candidate bank but includes opponent generation. This independent change does
+not include PRs #188-#190, and its percentage must not be added to their results
+or presented as a whole-build or real-slate speedup.
+
+Reproduce with `scripts/benchmark_classic_field_scoring.py`; source hash,
+individual timings, profiles and limitations are in
+[the receipt](benchmarks/classic-field-scoring-2026-11-06.json). Seven new
+regressions cover adversarial slot order and repeated rosters, missing/repeated/
+empty/singleton identities, fresh values with reused structures, full RNG state
+and simulation/distribution reports, partial cancellation, diagnostic transforms,
+and cold/warm reuse with per-call reset. Model draws, field construction,
+portfolio rules, projections, ownership and saved evidence remain unchanged.
+
+Focused verification: 63 isolated tests passed in 130.679 seconds, including
+the seven new regressions, golden parity, audit safety, cache validation and
+projection/ownership sensitivity. Zero unexpected network attempts. The complete
+Windows suite and executable/guide/checksum packaging remain CI gates.
+
+## Combined application integration — November 6, 2026
+
+The review branch assembles PRs #187-#191 without merging main or closing the
+original PRs. Documentation appendices were retained. The single application
+conflict was resolved by retaining all three per-call Classic tables:
+volatility, deterministic game setup and compiled opponent scoring banks.
+
+The combined benchmark now has an explicit `--integrated` mode that measures
+the native combined application functions as the after engine, retaining the
+pinned merged-main simulator/sampler/selector as its reference. It rejects
+uncommitted measured engine-source changes and records native source hashes and
+commit identity. The default historical component comparison remains available.
+Full combined tests, fresh/warm parity and packaging are verification gates.
+
+The native combined branch was measured against pinned original components in
+one common worker. All sixteen builds matched exact stage scores, selected
+lineups, structured portfolio evidence and independent-audit diagnostics within
+each format. The candidate library bytes and original players were unchanged;
+all warm screening/validation scenarios were replayed and every ranking audit
+completed 2,000 fresh scenarios. Measurements used one frozen library per format,
+separate caches per engine and three alternating warm trial pairs, following
+one cold preparation per engine. This controlled comparison is not a measurement
+of an independently launched historical binary or a production slate.
+
+Native source hashes, the measured application commit, complete raw trials and
+actual stage counts are in the
+[native combined receipt](benchmarks/native-combined-warm-build-2026-11-06.json).
+Reproduce using `scripts/benchmark_combined_warm_build.py --integrated --output <file>`.
+The synthetic request remains 20 entries with a 1,000-candidate budget,
+200-row shortlist and 1,000 field entries; delivered stage counts and local
+hardware/load limit extrapolation to a 150-entry production build. The combined
+review PR records the complete-suite and Windows packaging results separately.
