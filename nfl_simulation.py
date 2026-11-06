@@ -15,6 +15,7 @@ field, and attaches slate-relative SIM Edge metrics to each candidate.
 import bisect
 import math
 import random
+from operator import itemgetter
 from collections import Counter, defaultdict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -1008,6 +1009,31 @@ def _scenario_outcomes(
     return outcomes
 
 
+def _compile_classic_score_bank(signatures):
+    """Compile lookups without changing slot order or roster multiplicity."""
+    signatures = tuple(tuple(signature) for signature in signatures)
+    keys = tuple(dict.fromkeys(key for signature in signatures for key in signature))
+    positions = {key: index for index, key in enumerate(keys)}
+    getters = []
+    for signature in signatures:
+        indices = tuple(positions[key] for key in signature)
+        if len(indices) > 1:
+            getters.append(itemgetter(*indices))
+        elif indices:
+            # itemgetter with one index returns a scalar; retain sum's original
+            # single-item semantics, including its numeric type and signed zero.
+            getters.append(lambda values, index=indices[0]: (values[index],))
+        else:
+            getters.append(lambda values: ())
+    return keys, tuple(getters)
+
+
+def _score_classic_bank(compiled, outcomes):
+    keys, getters = compiled
+    values = tuple(outcomes.get(key, 0.0) for key in keys)
+    return sorted(sum(getter(values)) for getter in getters)
+
+
 def _opponent_field_banks(
     field_keys: Sequence[Tuple[str, ...]],
     *,
@@ -1389,6 +1415,7 @@ def simulate_nfl_contest(
     profile.cache_lookup_seconds=time.perf_counter()-lookup_started
     scenario_volatility: Dict[int, float] = {}
     scenario_games: Dict[str, Any] = {}
+    compiled_opponent_banks = {}
     for scenario_index in range(scenario_count):
         if cancel_callback and cancel_callback():
             break
@@ -1401,9 +1428,10 @@ def simulate_nfl_contest(
                 outcomes = outcome_transform(outcomes)
             profile.outcomes_seconds+=time.perf_counter()-drawn
             opponent_started=time.perf_counter()
-            active_field_keys = opponent_field_banks[scenario_index % len(opponent_field_banks)]
-            ranked=sorted(sum(outcomes.get(key, 0.0) for key in signature)
-                for signature in active_field_keys)
+            bank_index = scenario_index % len(opponent_field_banks)
+            if bank_index not in compiled_opponent_banks:
+                compiled_opponent_banks[bank_index] = _compile_classic_score_bank(opponent_field_banks[bank_index])
+            ranked = _score_classic_bank(compiled_opponent_banks[bank_index], outcomes)
             profile.opponents_seconds+=time.perf_counter()-opponent_started
             return outcomes, ranked
         before=profile.outcomes_seconds+profile.opponents_seconds

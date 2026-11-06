@@ -293,3 +293,39 @@ independent ranking audits, saved evidence and model defaults are preserved.
 Focused verification: 90 isolated tests passed in 120.522 seconds, with zero
 unexpected network attempts. Windows complete-suite and packaging remain CI
 gates on the combined PR #189 plus game-setup reuse branch.
+
+## Classic opponent-field scoring checkpoint — November 6, 2026
+
+The combined fresh-audit profile identified repeated dictionary lookups while
+summing each Classic opponent roster in every scenario. Classic contest
+simulation now compiles each of its three active opponent banks lazily on first
+use. Each frame still reads fresh outcome values, retains each roster's supplied
+slot order, keeps duplicate rosters and uses the same built-in ordered sum and
+sorted field scores. Missing keys still contribute float zero; empty and
+single-slot diagnostic signatures preserve their original numeric semantics.
+No sampled result is retained in the compiled bank. Cancellation before a draw
+and complete warm replay skip compilation; each new simulation owns new banks.
+
+Three alternating-order synthetic fresh Classic comparisons against merged main
+`157f11b2e3b88287d4b7e2e4f2d0133abfe0392b` used 80 candidates, 2,000 scenarios
+and 1,000 opponent entries. Median full simulation time fell from 7.688 to 6.446
+seconds (16.2%); nested opponent scoring fell from 2.257 to 0.998 seconds. All six
+runs matched exact metrics, hits, scenario values and non-timing field reports;
+all 2,000 scenarios were drawn fresh. The benchmark excludes generation of the
+candidate bank but includes opponent generation. This independent change does
+not include PRs #188-#190, and its percentage must not be added to their results
+or presented as a whole-build or real-slate speedup.
+
+Reproduce with `scripts/benchmark_classic_field_scoring.py`; source hash,
+individual timings, profiles and limitations are in
+[the receipt](benchmarks/classic-field-scoring-2026-11-06.json). Seven new
+regressions cover adversarial slot order and repeated rosters, missing/repeated/
+empty/singleton identities, fresh values with reused structures, full RNG state
+and simulation/distribution reports, partial cancellation, diagnostic transforms,
+and cold/warm reuse with per-call reset. Model draws, field construction,
+portfolio rules, projections, ownership and saved evidence remain unchanged.
+
+Focused verification: 63 isolated tests passed in 130.679 seconds, including
+the seven new regressions, golden parity, audit safety, cache validation and
+projection/ownership sensitivity. Zero unexpected network attempts. The complete
+Windows suite and executable/guide/checksum packaging remain CI gates.
