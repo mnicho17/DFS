@@ -15,8 +15,9 @@ receiving and K/DST effects; supported conditional contest-money comparisons.
 The initial point review has an explicitly defined portfolio point threshold,
 not a paid cutoff. No automatic injury probabilities or allocations are added.
 The requirements below remain the acceptance plan for these later slices.
-RL-07B now has a first recorded-evidence review slice; full pipeline tracing and
-DC-02B measured overnight improvements remain queued; unrelated backlog work is excluded from this branch.
+RL-07B now has a first recorded-evidence review slice; full pipeline tracing remains queued.
+DC-02B controlled warm-build measurements are recorded in the November 6 checkpoint below;
+production performance optimizations remain queued.
 
 **Goal:** help review a 150-entry portfolio's dependence on each starting QB
 and deliberately build coverage for an early exit. Showdown is the first build
@@ -117,3 +118,93 @@ Large-file GUI review found repeated column resizing stalled sorting on a popula
 ## Combined-import verification
 
 The combined importer is a separate review slice stacked on the opponent-analysis change. Its baseline is 414 passing isolated tests. Focused cases cover both NFL formats, embedded entry templates, overlapping folders, renamed/changed sources, per-contest associations, ambiguity, date/game/role conflicts, zero versus unknown salaries, interrupted-file rollback, successful retry and real GUI worker retirement. Existing pairs are fixed; replacing a chosen revision is not provided in this slice. Full eligible-pool qualification, payout templates, injury scenarios and optimization remain later work. Final local regression: 447 passed in 214.077s, including 33 new tests; no failures, skips or unexpected external connections. A disposable-copy GUI run imported 237,812 standings entries plus 12 real salary files, found 150 personal entries and saved one salary association in 100.968s. A repeat scan skipped all 13 files in 0.172s. Original hashes stayed unchanged. Final identity qualification covered 95/95 observed player/role identities; 911 unreadable rosters remained excluded. Current CI results are recorded in the review PR; visible-desktop and packaged runtime smoke checks remain not_run.
+
+
+## DC-02B warm-build measurement checkpoint - November 6, 2026
+
+Controlled synthetic Deep builds reused one frozen library per format, with
+three fresh/cold/warm trials and a separate disposable cache per trial. Every
+scoring/selection digest matched. Screening and validation replayed all recorded
+scenarios in warm runs; the 2,000-scenario ranking audit remained fresh. Live
+history and production caches were untouched. Raw observations are in
+`docs/benchmarks/warm-build-stages-2026-11-06.json`.
+
+| Requested fixture | Format | Fresh median | Warm median | Warm selection | Warm ranking audit |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 4 entries, 80 candidates, 20 shortlist, 200 field | Classic | 12.37 s | 6.75 s | 0.13 s | 4.82 s |
+| Same small fixture | Showdown | 6.63 s | 3.79 s | 0.05 s | 2.60 s |
+| 20 entries, 1,000 candidates, 200 shortlist, 1,000 field | Classic | 27.59 s | 19.13 s | 6.01 s | 8.70 s |
+| Same scaled fixture | Showdown | 19.39 s | 15.04 s | 7.63 s | 4.95 s |
+
+Requested candidate/shortlist limits are not actual bank sizes. In the scaled
+runs, screening evaluated 300 Classic and 94 Showdown candidates per scenario;
+validation evaluated 200 Classic and 94 Showdown candidates per scenario. The
+figures do not exercise a 20,000-candidate bank, a 2,000-row shortlist or a
+150-entry portfolio. Timings are local, fixed-order synthetic observations,
+not production-slate latency or a forecast of a real 60-minute build. Simulation
+phase profiles are nested inside simulation time and must not be added to it.
+
+The remaining bottleneck depends on scale. Fresh outcome sampling/auditing
+is prominent in the small fixture; portfolio selection/refinement becomes the
+largest measured Showdown stage in the scaled fixture. A separate synthetic
+selection profile preserved selected identities and found roughly 38 million
+`log1p` calls inside `scenario_swap_delta`. Profiler timings include substantial
+instrumentation overhead and are not comparable to the unprofiled table.
+
+Next measured target: reduce repeated integer-count logarithm work in swap
+refinement while preserving iteration order, floating results, selected/output
+identities, scenario evidence, fresh audits, manual constraints and cancellation.
+No sampler, selection, projection, ownership, ranking or default behavior changes
+are included in this measurement checkpoint.
+
+Reproduce with Python 3.12 and `PYTHONHASHSEED=0`:
+
+```text
+python scripts/benchmark_reuse_stages.py --kind both --candidates 80 --shortlist 20 --lineups 4 --field 200 --scenarios 2500 --repeats 3 --output small.json
+python scripts/benchmark_reuse_stages.py --kind both --candidates 1000 --shortlist 200 --lineups 20 --field 1000 --scenarios 2500 --repeats 3 --output scaled.json
+```
+
+## Combined warm-build measurement — November 6, 2026
+
+The component-swap benchmark now compares merged main `157f11b` simulator,
+sampler and selector against PR #188's selector (`8f8c24a`) and PR #190's
+simulators/sampler (`08cd3d3`, including PR #189). The host worker, optimizer,
+cache and library implementation stay common. This is a controlled combined
+component check, not a merged application integration build. App files are not
+modified by the benchmark.
+
+Each format uses one frozen candidate library, with separate disposable caches
+for the two engines. One cold recording per engine precedes three alternating
+paired warm trials. Every build requests 20 entries, a 1,000-candidate budget,
+a 200-row validation shortlist, 1,000 field entries and 2,500 validation scenarios.
+The delivered Classic screening/validation/audit counts were 300/200/200;
+Showdown delivered 102/102/102. These requested budgets are not claims of a
+1,000-row scored bank or a 150-entry production portfolio.
+
+| Format | Original warm median | Combined warm median | Reduction |
+| --- | ---: | ---: | ---: |
+| Classic | 18.179 s | 15.941 s | 12.3% |
+| Showdown | 17.887 s | 15.162 s | 15.2% |
+
+All sixteen builds (four cold preparations and twelve warm measurements) matched
+exact stage scores, ordered selected lineups, structured portfolio evidence and
+ranking-audit diagnostics within each format. Warm screening and validation
+replayed every scenario; each audit completed 2,000 fresh scenarios. The original
+players and frozen library bytes stayed unchanged. Captured evidence overhead
+is included equally; local synthetic results do not establish real-slate latency.
+Nested phase times are part of simulation time, not additional elapsed stages.
+
+The reproducible script is `scripts/benchmark_combined_warm_build.py`; pinned
+component hashes, complete trials and profiles are recorded in the
+[combined receipt](benchmarks/combined-warm-build-2026-11-06.json). A small
+Showdown smoke run also completed with matching cold/warm before/after results.
+Seventeen isolated benchmark/profiling tests passed in 1.617 seconds, with zero
+unexpected network attempts; six new checks reject changed evidence, unpaired
+trials and partial/replayed audits, and verify exact float/order identity.
+
+Runtime Windows checks have completed: PR #188 passed 2,444 tests in 1,201.667 s;
+PR #189 passed 2,444 tests in 990.818 s; PR #190 (including #189) passed 2,448
+tests in 1,164.831 s. Each had zero unexpected network attempts and successful
+executable, guide, checksum verification and artifact upload; tagged release
+publication was skipped. Runtime PRs remain unmerged. The benchmark-only update
+has its own full-suite/package CI rerun pending.
