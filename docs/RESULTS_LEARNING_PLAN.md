@@ -17,7 +17,7 @@ not a paid cutoff. No automatic injury probabilities or allocations are added.
 The requirements below remain the acceptance plan for these later slices.
 RL-07B now has a first recorded-evidence review slice; full pipeline tracing remains queued.
 DC-02B controlled warm-build measurements are recorded in the November 6 checkpoint below;
-production performance optimizations remain queued.
+the performance changes are assembled on the combined review branch and remain unmerged.
 
 **Goal:** help review a 150-entry portfolio's dependence on each starting QB
 and deliberately build coverage for an early exit. Showdown is the first build
@@ -329,3 +329,17 @@ Focused verification: 63 isolated tests passed in 130.679 seconds, including
 the seven new regressions, golden parity, audit safety, cache validation and
 projection/ownership sensitivity. Zero unexpected network attempts. The complete
 Windows suite and executable/guide/checksum packaging remain CI gates.
+
+## Combined application integration — November 6, 2026
+
+The review branch assembles PRs #187-#191 without merging main or closing the
+original PRs. Documentation appendices were retained. The single application
+conflict was resolved by retaining all three per-call Classic tables:
+volatility, deterministic game setup and compiled opponent scoring banks.
+
+The combined benchmark now has an explicit `--integrated` mode that measures
+the native combined application functions as the after engine, retaining the
+pinned merged-main simulator/sampler/selector as its reference. It rejects
+uncommitted application-source changes and records native source hashes and
+commit identity. The default historical component comparison remains available.
+Full combined tests, fresh/warm parity and packaging are verification gates.

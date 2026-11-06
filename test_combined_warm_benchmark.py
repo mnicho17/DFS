@@ -3,6 +3,10 @@ from test_environment import install
 install()
 import copy
 import unittest
+import hashlib
+from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
+import scripts.benchmark_combined_warm_build as benchmark
 from scripts.benchmark_combined_warm_build import digest, verify_profile, summarize
 
 
@@ -75,6 +79,37 @@ class CombinedWarmBenchmarkTests(unittest.TestCase):
         self.assertNotEqual(digest(1.0000000000000002), digest(1.))
         self.assertNotEqual(digest({'id': 'a'}), digest({'id': 'b'}))
         self.assertEqual(digest({'a': 1, 'b': 2}), digest({'b': 2, 'a': 1}))
+
+
+    def test_integrated_mode_uses_native_modules_and_records_committed_sources(self):
+        names = ('nfl_simulation', 'showdown_simulation', 'portfolio_rules')
+        native = {name: ModuleType('native_' + name) for name in names}
+        native['nfl_simulation']._scenario_outcomes = object()
+        stub = b'def _scenario_outcomes(*args, **kwargs): return {}\n'
+        head = 'ab' * 20
+        def output(args, **kwargs):
+            return (head + '\n').encode() if args[1] == 'rev-parse' else stub
+        with patch.object(benchmark.subprocess, 'check_output', side_effect=output), \
+             patch.object(benchmark.subprocess, 'run', return_value=SimpleNamespace(returncode=0)), \
+             patch.object(benchmark.importlib, 'import_module', side_effect=lambda name: native[name]):
+            components, hashes = benchmark.load_components(integrated=True)
+        for name in names:
+            self.assertIs(components['after'][name], native[name])
+            self.assertIsNot(components['before'][name], native[name])
+            receipt = hashes['after:' + name]
+            self.assertEqual(receipt['commit'], head)
+            self.assertEqual(receipt['sha256'], hashlib.sha256((benchmark.ROOT / (name + '.py')).read_bytes()).hexdigest())
+        self.assertIs(native['showdown_simulation']._scenario_outcomes,
+                      native['nfl_simulation']._scenario_outcomes)
+
+    def test_integrated_mode_rejects_uncommitted_application_source(self):
+        stub = b'def _scenario_outcomes(*args, **kwargs): return {}\n'
+        with patch.object(benchmark.subprocess, 'check_output', return_value=stub), \
+             patch.object(benchmark.subprocess, 'run', return_value=SimpleNamespace(returncode=1)), \
+             patch.object(benchmark.importlib, 'import_module') as native_import:
+            with self.assertRaisesRegex(ValueError, 'committed'):
+                benchmark.load_components(integrated=True)
+        native_import.assert_not_called()
 
 
 if __name__ == '__main__':

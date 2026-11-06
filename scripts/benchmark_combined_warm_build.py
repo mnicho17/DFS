@@ -4,6 +4,7 @@ import argparse
 import copy
 from contextlib import ExitStack
 import hashlib
+import importlib
 import json
 import os
 import statistics
@@ -62,7 +63,7 @@ def summarize(records, repeats):
     return result
 
 
-def load_components():
+def load_components(*, integrated=False):
     modules, hashes = {}, {}
     for label, commit, names in (
         ('before', BASE, ('nfl_simulation', 'showdown_simulation', 'portfolio_rules')),
@@ -75,6 +76,18 @@ def load_components():
             exec(source.decode('utf-8'), module.__dict__)
             modules.setdefault(label, {})[name] = module
             hashes[label + ':' + name] = dict(commit=commit, sha256=hashlib.sha256(source).hexdigest())
+    if integrated:
+        names = ('nfl_simulation', 'showdown_simulation', 'portfolio_rules')
+        status = subprocess.run(['git', 'diff', '--quiet', 'HEAD', '--',
+                                 *[name + '.py' for name in names]], cwd=ROOT)
+        if status.returncode:
+            raise ValueError('Integrated application source must be committed before measurement')
+        commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()
+        modules['after'] = {name: importlib.import_module(name) for name in names}
+        for name in names:
+            hashes['after:' + name] = dict(commit=commit,
+                sha256=hashlib.sha256((ROOT / (name + '.py')).read_bytes()).hexdigest(),
+                source='native committed application')
     for group in modules.values():
         group['showdown_simulation']._scenario_outcomes = group['nfl_simulation']._scenario_outcomes
     return modules, hashes
@@ -190,6 +203,7 @@ def main():
     parser.add_argument('--kind', choices=('classic', 'showdown', 'both'), default='both')
     for name, default in (('candidates', 1000), ('shortlist', 200), ('lineups', 20), ('field', 1000), ('repeats', 3)):
         parser.add_argument('--' + name, type=int, default=default)
+    parser.add_argument('--integrated', action='store_true', help='Measure native combined application functions as the after engine')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if not (20 <= args.candidates <= 2000 and 20 <= args.shortlist <= 2000
@@ -203,15 +217,15 @@ def main():
     install()
     from PyQt5 import QtCore
     app = QtCore.QCoreApplication.instance() or QtCore.QCoreApplication([])
-    components, sources = load_components()
+    components, sources = load_components(integrated=args.integrated)
     with tempfile.TemporaryDirectory(prefix='dfs-combined-warm-') as raw:
         results = [run_case(kind, Path(raw), components, candidates=args.candidates,
             shortlist=args.shortlist, lineups=args.lineups, field=args.field, repeats=args.repeats)
             for kind in (('classic', 'showdown') if args.kind == 'both' else (args.kind,))]
     if network_attempts:
         raise AssertionError('Unexpected network access')
-    receipt = dict(sources=sources, results=results, exact_combined_parity=True,
-        limitations='Controlled component-swap benchmark in one host app revision. Pinned original simulator/sampler/selector versus PRs 188-190 components; not a merged application integration build. One shared frozen candidate bank per format; separate disposable caches per engine, one cold preparation then alternating paired warm trials. Capture overhead is included equally. Synthetic local timings are not production-slate latency. Nested phase times are included in simulation time, not additive stages. Audit remains 2,000 fresh scenarios each build.')
+    receipt = dict(sources=sources, results=results, exact_combined_parity=True, integrated_application=args.integrated,
+        limitations=('Native combined application functions for the after engine. ' if args.integrated else 'Pinned component swap, not a merged application integration build. ') + 'Controlled benchmark in one host app revision. Pinned original simulator/sampler/selector versus either PRs 188-190 components or the native combined application (see integrated_application and source hashes). One shared frozen candidate bank per format; separate disposable caches per engine, one cold preparation then alternating paired warm trials. Capture overhead is included equally. Synthetic local timings are not production-slate latency. Nested phase times are included in simulation time, not additive stages. Audit remains 2,000 fresh scenarios each build.')
     output.write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
 
 

@@ -55,4 +55,3 @@ def main():
     receipt=benchmark();destination.write_text(json.dumps(receipt,indent=2),encoding='utf-8')
     print(json.dumps(receipt['median_seconds']))
 if __name__=='__main__':main()
-
