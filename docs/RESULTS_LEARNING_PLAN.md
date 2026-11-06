@@ -117,3 +117,27 @@ Large-file GUI review found repeated column resizing stalled sorting on a popula
 ## Combined-import verification
 
 The combined importer is a separate review slice stacked on the opponent-analysis change. Its baseline is 414 passing isolated tests. Focused cases cover both NFL formats, embedded entry templates, overlapping folders, renamed/changed sources, per-contest associations, ambiguity, date/game/role conflicts, zero versus unknown salaries, interrupted-file rollback, successful retry and real GUI worker retirement. Existing pairs are fixed; replacing a chosen revision is not provided in this slice. Full eligible-pool qualification, payout templates, injury scenarios and optimization remain later work. Final local regression: 447 passed in 214.077s, including 33 new tests; no failures, skips or unexpected external connections. A disposable-copy GUI run imported 237,812 standings entries plus 12 real salary files, found 150 personal entries and saved one salary association in 100.968s. A repeat scan skipped all 13 files in 0.172s. Original hashes stayed unchanged. Final identity qualification covered 95/95 observed player/role identities; 911 unreadable rosters remained excluded. Current CI results are recorded in the review PR; visible-desktop and packaged runtime smoke checks remain not_run.
+
+## Refinement calculation reuse checkpoint — November 6, 2026
+
+Portfolio refinement now computes integer scenario-count logarithms once per
+selection call, bounded by the actual selected portfolio size. The touched-set
+iteration, subtraction, accumulation, weighting and refinement passes remain
+unchanged. Counts still come from the selected rosters; no simulation evidence
+or audit is cached by this change.
+
+A three-trial alternating-order synthetic comparison against merged main
+`157f11b2e3b88287d4b7e2e4f2d0133abfe0392b` used 100 Showdown candidates,
+20 requested entries, 2,500 scenarios and a 1,000-entry field. Selection plus
+refinement median wall time fell from 16.586 to 13.348 seconds (19.5%). All six
+runs returned identical ordered portfolios and structured report hashes,
+eight refinement attempts and six swaps. Generation and simulation were outside
+the measured interval. This is a local synthetic result, not a full-build or
+real-contest speedup claim. Fresh ranking audits and all hard rules remain.
+
+The reproducible script is `scripts/benchmark_refinement_log_counts.py`; raw
+trials, source hash and limitations are recorded in
+[the benchmark receipt](benchmarks/refinement-log-counts-2026-11-06.json).
+Four regression cases retain exact merged-main receipts for overlapping/new
+scenario hits, empty hits, retained entries and Classic refinement. Existing
+recovery, cancellation, entry-safety and golden parity tests also apply.
