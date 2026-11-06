@@ -11,6 +11,18 @@ from scripts.benchmark_combined_warm_build import digest, verify_profile, summar
 
 
 class CombinedWarmBenchmarkTests(unittest.TestCase):
+    def test_preparation_keeps_candidate_target_and_bounds_each_batch(self):
+        with patch('candidate_library.run_search', return_value=1750) as search:
+            self.assertEqual(benchmark.prepare_library('library', {}, candidates=2000, seconds=30), 1750)
+        search.assert_called_once_with('library', {}, seconds=30, candidate_limit=2000, batch_size=1000)
+
+    def test_invalid_preparation_budget_never_starts_search(self):
+        with patch('candidate_library.run_search') as search:
+            for seconds in (0, -1, 121, float('nan'), float('inf')):
+                with self.subTest(seconds=seconds), self.assertRaises(ValueError):
+                    benchmark.prepare_library('library', {}, candidates=1000, seconds=seconds)
+        search.assert_not_called()
+
     def records(self):
         return [dict(engine=engine, mode='warm_replay', repeat=trial,
             result_digest='identical', wall_seconds=seconds * scale,

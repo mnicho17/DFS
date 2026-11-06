@@ -93,9 +93,18 @@ def load_components(*, integrated=False):
     return modules, hashes
 
 
-def run_case(kind, root, components, *, candidates, shortlist, lineups, field, repeats):
+def prepare_library(path, snapshot, *, candidates, seconds):
+    from candidate_library import run_search
+    if not 0 < seconds <= 120:
+        raise ValueError('Benchmark preparation must be between zero and 120 seconds')
+    return run_search(path, snapshot, seconds=seconds, candidate_limit=candidates,
+                      batch_size=min(candidates, 1000))
+
+
+def run_case(kind, root, components, *, candidates, shortlist, lineups, field, repeats,
+             preparation_seconds=3):
     from build_snapshots import create_snapshot, fingerprint
-    from candidate_library import run_search, roster_keys
+    from candidate_library import roster_keys
     from test_nfl_logic import _fixture_players
     from test_showdown_performance import _showdown_players
     from main_window import LineupBuildWorker
@@ -105,7 +114,7 @@ def run_case(kind, root, components, *, candidates, shortlist, lineups, field, r
     library = root / (kind + '.dfslib')
     snapshot = create_snapshot(players, dict(sport='NFL', contest_kind=kind, salary_cap=50000,
         salary_strategy='Balanced Spend', requested_lineups=lineups), {})
-    run_search(library, snapshot, seconds=3, candidate_limit=candidates, batch_size=candidates)
+    prepared_candidates = prepare_library(library, snapshot, candidates=candidates, seconds=preparation_seconds)
     library_hash = hashlib.sha256(library.read_bytes()).hexdigest()
     expected = None
     records = []
@@ -193,7 +202,8 @@ def run_case(kind, root, components, *, candidates, shortlist, lineups, field, r
         order = ('before', 'after') if repeat % 2 == 0 else ('after', 'before')
         for engine in order:
             build(engine, 'warm_replay', repeat)
-    return dict(kind=kind, requested_candidates=candidates, requested_shortlist=shortlist,
+    return dict(kind=kind, prepared_candidates=prepared_candidates, preparation_seconds=preparation_seconds,
+        requested_candidates=candidates, requested_shortlist=shortlist,
         requested_lineups=lineups, requested_field=field, requested_scenarios=2500,
         frozen_library_sha256=library_hash, summary=summarize(records, repeats), records=records)
 
@@ -203,12 +213,14 @@ def main():
     parser.add_argument('--kind', choices=('classic', 'showdown', 'both'), default='both')
     for name, default in (('candidates', 1000), ('shortlist', 200), ('lineups', 20), ('field', 1000), ('repeats', 3)):
         parser.add_argument('--' + name, type=int, default=default)
+    parser.add_argument('--preparation-seconds', type=float, default=3)
     parser.add_argument('--integrated', action='store_true', help='Measure native combined application functions as the after engine')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if not (20 <= args.candidates <= 2000 and 20 <= args.shortlist <= 2000
             and 1 <= args.lineups <= min(150, args.candidates, args.shortlist)
-            and 1 <= args.field <= 10000 and 1 <= args.repeats <= 5):
+            and 1 <= args.field <= 10000 and 1 <= args.repeats <= 5
+            and 0 < args.preparation_seconds <= 120):
         raise ValueError('Benchmark bounds exceeded')
     output = args.output.resolve()
     if output.exists():
@@ -220,7 +232,8 @@ def main():
     components, sources = load_components(integrated=args.integrated)
     with tempfile.TemporaryDirectory(prefix='dfs-combined-warm-') as raw:
         results = [run_case(kind, Path(raw), components, candidates=args.candidates,
-            shortlist=args.shortlist, lineups=args.lineups, field=args.field, repeats=args.repeats)
+            shortlist=args.shortlist, lineups=args.lineups, field=args.field, repeats=args.repeats,
+            preparation_seconds=args.preparation_seconds)
             for kind in (('classic', 'showdown') if args.kind == 'both' else (args.kind,))]
     if network_attempts:
         raise AssertionError('Unexpected network access')
