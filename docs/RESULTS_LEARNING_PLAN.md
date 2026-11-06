@@ -163,3 +163,48 @@ Reproduce with Python 3.12 and `PYTHONHASHSEED=0`:
 python scripts/benchmark_reuse_stages.py --kind both --candidates 80 --shortlist 20 --lineups 4 --field 200 --scenarios 2500 --repeats 3 --output small.json
 python scripts/benchmark_reuse_stages.py --kind both --candidates 1000 --shortlist 200 --lineups 20 --field 1000 --scenarios 2500 --repeats 3 --output scaled.json
 ```
+
+## Combined warm-build measurement — November 6, 2026
+
+The component-swap benchmark now compares merged main `157f11b` simulator,
+sampler and selector against PR #188's selector (`8f8c24a`) and PR #190's
+simulators/sampler (`08cd3d3`, including PR #189). The host worker, optimizer,
+cache and library implementation stay common. This is a controlled combined
+component check, not a merged application integration build. App files are not
+modified by the benchmark.
+
+Each format uses one frozen candidate library, with separate disposable caches
+for the two engines. One cold recording per engine precedes three alternating
+paired warm trials. Every build requests 20 entries, a 1,000-candidate budget,
+a 200-row validation shortlist, 1,000 field entries and 2,500 validation scenarios.
+The delivered Classic screening/validation/audit counts were 300/200/200;
+Showdown delivered 102/102/102. These requested budgets are not claims of a
+1,000-row scored bank or a 150-entry production portfolio.
+
+| Format | Original warm median | Combined warm median | Reduction |
+| --- | ---: | ---: | ---: |
+| Classic | 18.179 s | 15.941 s | 12.3% |
+| Showdown | 17.887 s | 15.162 s | 15.2% |
+
+All sixteen builds (four cold preparations and twelve warm measurements) matched
+exact stage scores, ordered selected lineups, structured portfolio evidence and
+ranking-audit diagnostics within each format. Warm screening and validation
+replayed every scenario; each audit completed 2,000 fresh scenarios. The original
+players and frozen library bytes stayed unchanged. Captured evidence overhead
+is included equally; local synthetic results do not establish real-slate latency.
+Nested phase times are part of simulation time, not additional elapsed stages.
+
+The reproducible script is `scripts/benchmark_combined_warm_build.py`; pinned
+component hashes, complete trials and profiles are recorded in the
+[combined receipt](benchmarks/combined-warm-build-2026-11-06.json). A small
+Showdown smoke run also completed with matching cold/warm before/after results.
+Seventeen isolated benchmark/profiling tests passed in 1.617 seconds, with zero
+unexpected network attempts; six new checks reject changed evidence, unpaired
+trials and partial/replayed audits, and verify exact float/order identity.
+
+Runtime Windows checks have completed: PR #188 passed 2,444 tests in 1,201.667 s;
+PR #189 passed 2,444 tests in 990.818 s; PR #190 (including #189) passed 2,448
+tests in 1,164.831 s. Each had zero unexpected network attempts and successful
+executable, guide, checksum verification and artifact upload; tagged release
+publication was skipped. Runtime PRs remain unmerged. The benchmark-only update
+has its own full-suite/package CI rerun pending.
