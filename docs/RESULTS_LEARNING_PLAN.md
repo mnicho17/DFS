@@ -263,3 +263,33 @@ Focused validation: 71 isolated scenario/audit/model/golden tests passed in
 101.969 seconds, plus 15 projection/ownership sensitivity and score-validation
 tests in 28.870 seconds (86 total); zero unexpected network attempts. Windows
 full-suite and packaged-executable checks remain CI gates for this slice.
+
+## Fresh-scenario game setup reuse checkpoint — November 6, 2026
+
+This slice builds on PR #189 (`463cacd3d179b090786d5903a7f7f77250ddde90`).
+The deterministic game grouping, aggregate Vegas totals/spreads, script weights
+and sorted game teams are now prepared lazily once per contest simulation.
+Game-script rolls, random favorite choices when spreads are zero, game/team
+factors, workload sampling, player outcomes and specialist events remain fresh.
+The preparation table is local to a single call; direct diagnostic draws retain
+an uncached path. Pre-draw cancellation and full warm replay skip preparation.
+
+Three alternating-order synthetic trials per format compared against the pinned
+PR #189 implementation and sampler, using 80 candidates, 2,000 fresh scenarios
+and 1,000 field entries. Classic median simulation time fell from 7.140 to 6.528
+seconds (8.6%); Showdown fell from 4.335 to 3.968 seconds (8.5%). All 12 runs
+completed without replay and matched exact scenario metrics/hits/values and
+non-timing reports. These local synthetic simulation gains are relative to
+PR #189 and must not be added to earlier percentages or presented as whole-build
+or real-contest speedups.
+
+Reproduce with `scripts/benchmark_game_input_reuse.py`; the
+[receipt](benchmarks/scenario-game-inputs-2026-11-06.json) includes source hashes,
+raw trials and profiles. Four regression cases cover spread/random-favorite and
+missing-data paths with exact RNG state, per-call and changed-input preparation,
+cancellation/warm replay, and empty games/direct draws. Portfolio rules,
+independent ranking audits, saved evidence and model defaults are preserved.
+
+Focused verification: 90 isolated tests passed in 120.522 seconds, with zero
+unexpected network attempts. Windows complete-suite and packaging remain CI
+gates on the combined PR #189 plus game-setup reuse branch.
