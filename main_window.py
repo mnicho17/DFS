@@ -1123,11 +1123,23 @@ class LineupBuildWorker(QtCore.QObject):
         self.library_folder = library_folder
         self.allow_partial_library = allow_partial_library
         self.library_candidates = []
+        self.captain_candidate_coverage = {}
         self.library_report = {}
 
         self._cancel_event = threading.Event()
 
 
+
+    def _capture_candidate_coverage(self, stage, rows, retained=None, announce=False):
+        if self.kind != 'showdown' or self.sport != 'NFL' or self._cancel_event.is_set():
+            return None
+        from captain_preflight import inspect, summary
+        capture = inspect(rows, self.retained_lineups if retained is None else retained,
+            self.players, self.portfolio_rules, self.num_lineups, self._cancel_event.is_set)
+        self.captain_candidate_coverage[stage] = capture
+        if announce:
+            self.progress.emit(0, self.num_lineups, summary(capture))
+        return capture
 
     def _load_candidate_library(self, profile):
         if self.retained_lineups:
@@ -1171,6 +1183,7 @@ class LineupBuildWorker(QtCore.QObject):
                 salary_strategy=self.salary_strategy, rules=self.portfolio_rules)
             self.progress.emit(0, len(self.library_candidates),
                 f"Library: {len(self.library_candidates):,} candidates accepted; {self.library_report['rejected']:,} rejected")
+        self._capture_candidate_coverage('library_loaded', self.library_candidates, announce=True)
         return True
 
     def request_cancel(self) -> None:
@@ -1908,6 +1921,7 @@ class LineupBuildWorker(QtCore.QObject):
                     candidate_target += len(coverage)
                     candidate_budget += len(coverage)
 
+            self._capture_candidate_coverage('generated', lineups, announce=True)
             generation_seconds = time.perf_counter() - build_started
 
             sim_report: Dict[str, Any] = {"candidate_library": self.library_report}
@@ -2515,33 +2529,40 @@ class LineupBuildWorker(QtCore.QObject):
 
             )
 
-            selected = select_portfolio(
+            self._capture_candidate_coverage('selection_bank', lineups)
+            try:
+                selected = select_portfolio(
 
-                lineups,
+                    lineups,
 
-                self.num_lineups,
+                    self.num_lineups,
 
-                rules=self.portfolio_rules,
-                allow_relaxation=False,
-                automatic_recovery=True,
-                recovery_deadline=deep_deadline if deep_build else None,
-                fallback_lineups=feasible_fallback,
-                selection_cancel_callback=self._cancel_event.is_set,
-                repair_time_limit=max(0,min(15,deep_deadline-time.perf_counter())) if deep_build else 15,
+                    rules=self.portfolio_rules,
+                    allow_relaxation=False,
+                    automatic_recovery=True,
+                    recovery_deadline=deep_deadline if deep_build else None,
+                    fallback_lineups=feasible_fallback,
+                    selection_cancel_callback=self._cancel_event.is_set,
+                    repair_time_limit=max(0,min(15,deep_deadline-time.perf_counter())) if deep_build else 15,
 
-                kind=self.kind,
+                    kind=self.kind,
 
-                retained_lineups=self.retained_lineups,
+                    retained_lineups=self.retained_lineups,
 
-                refinement_passes=256 if deep_build else 0,
+                    refinement_passes=256 if deep_build else 0,
 
-                refinement_stop_callback=refinement_should_stop if deep_build else None,
+                    refinement_stop_callback=refinement_should_stop if deep_build else None,
 
-                refinement_polish_duplication=deep_build,
+                    refinement_polish_duplication=deep_build,
 
-                individual_ranking=deep_build and self.deep_options["selection_mode"] == "Individual ranking",
+                    individual_ranking=deep_build and self.deep_options["selection_mode"] == "Individual ranking",
 
-            )
+                )
+            except PortfolioSelectionShortage as error:
+                from captain_preflight import lines as coverage_lines
+                if self.captain_candidate_coverage:
+                    error.args = (str(error) + '\n' + '\n'.join(coverage_lines(self.captain_candidate_coverage)),)
+                raise
 
             if deep_build:
 
@@ -2727,6 +2748,10 @@ class LineupBuildWorker(QtCore.QObject):
                 if sim_report:
 
                     sim_report["joint_portfolio"] = dict(joint_report)
+
+            self._capture_candidate_coverage('selected', lineups)
+            if self.captain_candidate_coverage:
+                sim_report['captain_candidate_coverage'] = dict(self.captain_candidate_coverage)
 
             if sim_report and selected["report"].get("sim_summary"):
 
