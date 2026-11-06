@@ -220,3 +220,63 @@ class LiveHistoryBackupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'failed verification'):
             backup_history(source,dest,live=True,verify_existing=True,progress=lambda s:None)
         self.assertEqual(len(list((dest/'incremental-v1/manifests').glob('*.json'))),1)
+
+
+    def test_closed_wal_database_reader_artifacts_do_not_block_verified_backup(self):
+        import sqlite3
+        root,source,dest=self.fixture();db=source/'exports.sqlite'
+        with closing(sqlite3.connect(db)) as con:
+            con.execute('PRAGMA journal_mode=WAL');con.execute('CREATE TABLE data(value)')
+            con.execute('INSERT INTO data VALUES (42)');con.commit()
+        self.assertFalse(Path(str(db)+'-wal').exists())
+        saved=backup_history(source,dest,live=True,progress=lambda s:None)
+        receipt=json.loads(Path(saved['manifest']).read_text())
+        self.assertNotIn('exports.sqlite-wal',receipt['source_inventory'])
+        self.assertNotIn('exports.sqlite-shm',receipt['entries'])
+        restore_history(saved['manifest'],root/'closed-restore')
+        with closing(sqlite3.connect(root/'closed-restore/exports.sqlite')) as con:
+            self.assertEqual(con.execute('SELECT * FROM data').fetchall(),[(42,)])
+        again=backup_history(source,dest,progress=lambda s:None)
+        self.assertTrue(again['unchanged'])
+
+    def test_exit_after_idle_backup_accepts_closed_wal_sidecar_removal(self):
+        import sqlite3
+        root,source,dest=self.fixture();db=source/'exports.sqlite'
+        con=sqlite3.connect(db)
+        try:
+            con.execute('PRAGMA journal_mode=WAL');con.execute('CREATE TABLE data(value)')
+            con.execute('INSERT INTO data VALUES (7)');con.commit()
+            first=backup_history(source,dest,live=True,progress=lambda s:None)
+        finally:con.close()
+        saved=backup_history(source,dest,progress=lambda s:None)
+        restore_history(saved['manifest'],root/'exit-restore')
+        with closing(sqlite3.connect(root/'exit-restore/exports.sqlite')) as con:
+            self.assertEqual(con.execute('SELECT * FROM data').fetchall(),[(7,)])
+        self.assertTrue(Path(first['manifest']).is_file())
+
+    def test_empty_wal_becoming_nonempty_during_backup_still_blocks_publication(self):
+        import sqlite3
+        from history_backup import HistoryChanged
+        root,source,dest=self.fixture();db=source/'exports.sqlite'
+        with closing(sqlite3.connect(db)) as con:
+            con.execute('PRAGMA journal_mode=WAL');con.execute('CREATE TABLE data(value)');con.commit()
+            con.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+            self.assertEqual(Path(str(db)+'-wal').stat().st_size,0)
+            changed=[]
+            def progress(message):
+                if message.startswith('History backup: 2/2 files;') and not changed:
+                    con.execute('INSERT INTO data VALUES (99)');con.commit();changed.append(True)
+            with self.assertRaises(HistoryChanged):backup_history(source,dest,live=True,progress=progress)
+            self.assertTrue(changed)
+            self.assertFalse(list(dest.rglob('manifests/*.json')))
+
+    def test_empty_wal_named_ordinary_file_is_not_ignored(self):
+        from history_backup import HistoryChanged
+        root,source,dest=self.fixture();(source/'data-wal').write_bytes(b'')
+        changed=[]
+        def progress(message):
+            if message.startswith('History backup: 2/2 files;') and not changed:
+                (source/'data-wal').unlink();changed.append(True)
+        with self.assertRaises(HistoryChanged):backup_history(source,dest,live=True,progress=progress)
+        self.assertTrue(changed)
+        self.assertFalse(list(dest.rglob('manifests/*.json')))

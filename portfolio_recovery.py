@@ -62,7 +62,10 @@ def recover(pool, retained, selected, meta, conflicts, limits, group_ok, score, 
             for key in keys:
                 trial[label][key] = increased(starting[label][key])
         for key, target in captain_targets.items():
-            trial['min_captain'][key] = 1 if factor is None else max(1, math.floor(target / factor + 1e-9))
+            # A pool lock limits eligible Captains; it does not require every
+            # selected Captain to have a feasible candidate. The final automatic
+            # stage can redistribute all generated quotas, including down to zero.
+            trial['min_captain'][key] = 0 if factor is None else max(1, math.floor(target / factor + 1e-9))
         if starting['specialist'] is not None:
             trial['specialist'] = increased(starting['specialist'])
         diagnostics['automatic_recovery_ran'] = True
