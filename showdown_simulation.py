@@ -485,6 +485,14 @@ def run_deep_showdown(worker, shortlist_fn):
             screening=screening_settings(options, worker.sim_scenarios, profile)))
     bank = {showdown_signature(lu): lu for lu in eligible_salary}
     dst_stages['salary_eligible'] = defense_mix(list(bank.values()) + retained)
+    from captain_preflight import inspect as inspect_coverage, summary as coverage_summary
+    coverage_stages = {}
+    def capture_coverage(stage, rows, saved):
+        if not worker._cancel_event.is_set():
+            coverage_stages[stage] = inspect_coverage(rows, saved, players, worker.portfolio_rules, worker.num_lineups, worker._cancel_event.is_set)
+    capture_coverage('salary_eligible', list(bank.values()), retained)
+    if coverage_stages:
+        worker.progress.emit(0, worker.num_lineups, coverage_summary(coverage_stages['salary_eligible']))
     if generated and not bank and not retained:
         raise PortfolioSelectionShortage(LIMITS_TITLE + "\n\nNo generated Showdown candidates meet the selected salary strategy. Broaden the search or deliberately change the salary strategy.")
     generation_seconds = time.perf_counter() - start
@@ -525,6 +533,7 @@ def run_deep_showdown(worker, shortlist_fn):
                 individual_ranking=options['selection_mode'] == 'Individual ranking',
                 deadline=deadline - min(60, limit * .20), cancelled=worker._cancel_event.is_set)
             coverage_short = list(short)
+            capture_coverage('shortlisted', short, retained)
             audit.screened(coarse, short, reservations, feasible_fallback)
             qb_stages["shortlisted"] = quarterback_mix(short, scored=True)
             dst_stages['shortlisted'] = defense_mix(short, scored=True)
@@ -540,6 +549,7 @@ def run_deep_showdown(worker, shortlist_fn):
                 if validated["report"]["scenarios"]:
                     short = validated["lineups"]
                     coverage_validated = list(short)
+                    capture_coverage('validated', short, retained)
                     coverage_complete = validated['report']['scenarios'] == max(2500, worker.sim_scenarios)
                     qb_stages["validated"] = quarterback_mix(short, scored=True)
                     dst_stages['validated'] = defense_mix(short, scored=True)
@@ -572,16 +582,22 @@ def run_deep_showdown(worker, shortlist_fn):
     worker.progress.emit(0, worker.num_lineups, "Phase 4 of 4 - selecting and refining Showdown portfolio")
     if getattr(worker,'contest_profile',None) and any(not (getattr(lu,'sim_metrics',{}) or {}).get('sim_selection_fields') for lu in retained+lineups):
         raise ValueError('Contest-specific selection could not score the candidate bank within the available budget. Increase the Deep budget and rebuild.')
-    selected = select_portfolio(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
-        allow_relaxation=worker._cancel_event.is_set(),
-        # Keep the existing cancelled Deep Showdown receipt path verbatim.
-        automatic_recovery=not worker._cancel_event.is_set(), recovery_deadline=deadline,
-        fallback_lineups=feasible_fallback,
-        selection_cancel_callback=worker._cancel_event.is_set,
-        repair_time_limit=max(0,min(15,deadline-time.perf_counter())),
-        retained_lineups=retained, refinement_passes=256,
-        refinement_stop_callback=lambda: stop(deadline), refinement_polish_duplication=True,
-        individual_ranking=options["selection_mode"] == "Individual ranking")
+    capture_coverage('selection_bank', lineups, retained)
+    try:
+        selected = select_portfolio(lineups, worker.num_lineups, kind="showdown", rules=worker.portfolio_rules,
+            allow_relaxation=worker._cancel_event.is_set(),
+            # Keep the existing cancelled Deep Showdown receipt path verbatim.
+            automatic_recovery=not worker._cancel_event.is_set(), recovery_deadline=deadline,
+            fallback_lineups=feasible_fallback,
+            selection_cancel_callback=worker._cancel_event.is_set,
+            repair_time_limit=max(0,min(15,deadline-time.perf_counter())),
+            retained_lineups=retained, refinement_passes=256,
+            refinement_stop_callback=lambda: stop(deadline), refinement_polish_duplication=True,
+            individual_ranking=options["selection_mode"] == "Individual ranking")
+    except PortfolioSelectionShortage as error:
+        from captain_preflight import lines as coverage_lines
+        error.args = (str(error) + '\n' + '\n'.join(coverage_lines(coverage_stages)),)
+        raise
     selected["lineups"] = ranked_lineups(selected["lineups"])
     deep['screening_audit'] = audit.save(selected['lineups'], build_cancelled=worker._cancel_event.is_set())
     if loading.get('type')=='prepared_showdown':
@@ -595,6 +611,8 @@ def run_deep_showdown(worker, shortlist_fn):
     if not deep["validation_scenarios"]:
         selected["report"].setdefault("warnings", []).append("Deep Showdown did not complete independent validation; returning the best available stage.")
     qb_stages["selected"] = quarterback_mix(selected["lineups"], scored=True)
+    capture_coverage('selected', selected['lineups'], retained)
+    sim_report['captain_candidate_coverage'] = coverage_stages
     sim_report["quarterback_pipeline"] = qb_stages
     if coverage_complete:
         dst_stages['ranked'] = defense_mix(ranked_lineups(coverage_validated)[:len(selected['lineups'])], scored=True)

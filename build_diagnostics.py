@@ -461,6 +461,7 @@ def create_build_diagnostic(
             "selected_sources": aggregate_counts(candidate_sources.get("selected")),
             "quarterback_pipeline": dict(sim.get("quarterback_pipeline") or {}),
             "defense_pipeline": dict(sim.get("defense_pipeline") or {}),
+            "captain_candidate_coverage": copy.deepcopy(sim.get("captain_candidate_coverage") or {}),
             "screening_scenarios": max(0, _integer(timing.get("screening_scenarios"))),
             "validation_scenarios": max(0, _integer(timing.get("validation_scenarios"))),
             "portfolio_simulation_scenarios": max(
@@ -906,6 +907,8 @@ def format_build_report(record: Mapping[str, Any]) -> str:
         from specialist_diagnostics import text
         lines.extend(text(portfolio['specialist_diagnostics']))
     lines.extend(format_defense_pipeline(sim.get("defense_pipeline") or {}))
+    from captain_preflight import lines as coverage_stage_lines
+    lines.extend(coverage_stage_lines(sim.get("captain_candidate_coverage") or {}))
     from field_diagnostics import format_field
     from projection_coverage import format_projection_coverage
     lines.extend(format_projection_coverage(record.get('projection_coverage') or {}))
