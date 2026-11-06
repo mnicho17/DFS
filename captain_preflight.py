@@ -42,7 +42,7 @@ def lines(stages):
     if not stages:return []
     result=['','CAPTAIN CANDIDATE COVERAGE BY STAGE',
         'Counts include distinct Captain/FLEX signatures and retained rows. Other rules and joint feasibility are not evaluated here; a short stage is not proof of slate infeasibility. Stage counts do not establish a rejection cause.']
-    labels={'salary_eligible':'Before screening, after salary filtering','shortlisted':'After shortlisting','validated':'Independent validation output','selection_bank':'Available to final selection','selected':'Selected output'}
+    labels={'library_loaded':'Accepted library bank before scoring','generated':'Generated/expanded bank before selection','salary_eligible':'Before screening, after salary filtering','shortlisted':'After shortlisting','validated':'Independent validation output','selection_bank':'Available to final selection','selected':'Selected output'}
     for stage in list(labels) + sorted(set(stages)-set(labels)):
         if stage not in stages:continue
         capture=stages[stage]

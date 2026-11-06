@@ -85,3 +85,43 @@ class CaptainPreflightTests(unittest.TestCase):
         rows=bank(2,captain=2);c=inspect(rows,[],[rows[0]['Captain']],{},2)
         stages={key:c for key in ('salary_eligible','shortlisted','validated','selection_bank','selected')}
         self.assertEqual(lines(stages),lines(json.loads(json.dumps(stages,sort_keys=True))))
+
+    def test_fast_showdown_captures_generated_and_selected_counts(self):
+        from main_window import LineupBuildWorker
+        rows=bank(10,captain=10)
+        players=list({p['FlexID']:p for row in rows for p in [row['Captain']]+row['Flex']}.values())
+        worker=LineupBuildWorker(players,kind='showdown',num_lineups=10,salary_cap=50000,sim_enabled=False,compute_mode='Fast',salary_strategy='Balanced Spend')
+        results=[];errors=[];events=[]
+        worker.finished.connect(results.append);worker.error.connect(errors.append)
+        worker.progress.connect(lambda a,b,text:events.append(text))
+        with patch('main_window.ShowdownOptimizer') as optimizer,patch('showdown_coverage.expand_capped_candidates',return_value=[]):
+            optimizer.return_value.build_lineups.return_value=rows
+            worker.run()
+        self.assertFalse(errors,errors);self.assertEqual(len(results[0]['lineups']),10)
+        stages=results[0]['sim_report']['captain_candidate_coverage']
+        self.assertEqual(list(stages),['generated','selection_bank','selected'])
+        self.assertEqual(stages['selected']['distinct_candidates'],10)
+        self.assertNotIn('validated',stages)
+        self.assertTrue(any(text.startswith('Candidate coverage:') for text in events))
+    def test_library_load_captures_missing_captain_after_existing_loader_checks(self):
+        from main_window import LineupBuildWorker
+        rows=bank(10,captain=10);rows[0]['Captain']['LockCpt']=True
+        players=[rows[0]['Captain'],player('missing',LockCpt=True)]
+        _,rules,_=prepare_captain_pool(players,{},10)
+        worker=LineupBuildWorker(players,kind='showdown',num_lineups=10,salary_cap=50000,sim_enabled=True,compute_mode='Deep',candidate_library='bank.dfslib',portfolio_rules=rules)
+        events=[];worker.progress.connect(lambda a,b,text:events.append(text))
+        with patch('showdown_library.is_prepared_library',return_value=False),patch('candidate_library.load_candidates',return_value=(rows,{'rejected':0})) as load:
+            self.assertTrue(worker._load_candidate_library(None))
+        load.assert_called_once()
+        c=worker.captain_candidate_coverage['library_loaded']
+        missing=next(r for r in c['captains'] if r['player']=='missing')
+        self.assertEqual((missing['available'],missing['shortfall']),(0,5))
+        self.assertTrue(any(text.startswith('Candidate coverage:') for text in events))
+    def test_non_showdown_and_cancelled_workers_do_not_capture_coverage(self):
+        from main_window import LineupBuildWorker
+        worker=LineupBuildWorker([],kind='classic',num_lineups=1,salary_cap=50000)
+        with patch('captain_preflight.inspect',side_effect=AssertionError('not applicable')):
+            self.assertIsNone(worker._capture_candidate_coverage('generated',[]))
+            worker.kind='showdown';worker.request_cancel()
+            self.assertIsNone(worker._capture_candidate_coverage('generated',[]))
+        self.assertEqual(worker.captain_candidate_coverage,{})

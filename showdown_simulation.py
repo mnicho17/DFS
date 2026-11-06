@@ -486,7 +486,7 @@ def run_deep_showdown(worker, shortlist_fn):
     bank = {showdown_signature(lu): lu for lu in eligible_salary}
     dst_stages['salary_eligible'] = defense_mix(list(bank.values()) + retained)
     from captain_preflight import inspect as inspect_coverage, summary as coverage_summary
-    coverage_stages = {}
+    coverage_stages = dict(getattr(worker, "captain_candidate_coverage", {}))
     def capture_coverage(stage, rows, saved):
         if not worker._cancel_event.is_set():
             coverage_stages[stage] = inspect_coverage(rows, saved, players, worker.portfolio_rules, worker.num_lineups, worker._cancel_event.is_set)
