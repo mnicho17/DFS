@@ -15,8 +15,16 @@ class RefinementCounterArithmeticTests(unittest.TestCase):
         tree = ast.parse(Path(portfolio_rules.__file__).read_text(encoding='utf-8'))
         node = next(node for node in ast.walk(tree)
                     if isinstance(node, ast.FunctionDef) and node.name == 'scenario_swap_delta')
-        scope = {'Counter': Counter, 'scenario_count_logs': [math.log1p(n) for n in range(153)]}
-        exec(compile(ast.Module(body=[node], type_ignores=[]), '<actual swap kernel>', 'exec'), scope)
+        assignments = [statement for statement in ast.walk(tree)
+                       if isinstance(statement, ast.Assign) and any(
+                           isinstance(target, ast.Name) and target.id in
+                           ('scenario_count_logs', 'scenario_count_deltas')
+                           for target in statement.targets)]
+        self.assertEqual(len(assignments), 2)
+        scope = {'Counter': Counter, 'math': math, 'selected': list(range(150)),
+                 'refinement_passes': 8}
+        exec(compile(ast.Module(body=assignments + [node], type_ignores=[]),
+                     '<actual swap kernel and tables>', 'exec'), scope)
         actual = scope['scenario_swap_delta']
         rng = random.Random(90210)
         for trial in range(200):
