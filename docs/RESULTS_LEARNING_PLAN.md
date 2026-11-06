@@ -15,8 +15,9 @@ receiving and K/DST effects; supported conditional contest-money comparisons.
 The initial point review has an explicitly defined portfolio point threshold,
 not a paid cutoff. No automatic injury probabilities or allocations are added.
 The requirements below remain the acceptance plan for these later slices.
-RL-07B now has a first recorded-evidence review slice; full pipeline tracing and
-DC-02B measured overnight improvements remain queued; unrelated backlog work is excluded from this branch.
+RL-07B now has a first recorded-evidence review slice; full pipeline tracing remains queued.
+DC-02B controlled warm-build measurements are recorded in the November 6 checkpoint below;
+production performance optimizations remain queued.
 
 **Goal:** help review a 150-entry portfolio's dependence on each starting QB
 and deliberately build coverage for an early exit. Showdown is the first build
@@ -117,3 +118,48 @@ Large-file GUI review found repeated column resizing stalled sorting on a popula
 ## Combined-import verification
 
 The combined importer is a separate review slice stacked on the opponent-analysis change. Its baseline is 414 passing isolated tests. Focused cases cover both NFL formats, embedded entry templates, overlapping folders, renamed/changed sources, per-contest associations, ambiguity, date/game/role conflicts, zero versus unknown salaries, interrupted-file rollback, successful retry and real GUI worker retirement. Existing pairs are fixed; replacing a chosen revision is not provided in this slice. Full eligible-pool qualification, payout templates, injury scenarios and optimization remain later work. Final local regression: 447 passed in 214.077s, including 33 new tests; no failures, skips or unexpected external connections. A disposable-copy GUI run imported 237,812 standings entries plus 12 real salary files, found 150 personal entries and saved one salary association in 100.968s. A repeat scan skipped all 13 files in 0.172s. Original hashes stayed unchanged. Final identity qualification covered 95/95 observed player/role identities; 911 unreadable rosters remained excluded. Current CI results are recorded in the review PR; visible-desktop and packaged runtime smoke checks remain not_run.
+
+
+## DC-02B warm-build measurement checkpoint - November 6, 2026
+
+Controlled synthetic Deep builds reused one frozen library per format, with
+three fresh/cold/warm trials and a separate disposable cache per trial. Every
+scoring/selection digest matched. Screening and validation replayed all recorded
+scenarios in warm runs; the 2,000-scenario ranking audit remained fresh. Live
+history and production caches were untouched. Raw observations are in
+`docs/benchmarks/warm-build-stages-2026-11-06.json`.
+
+| Requested fixture | Format | Fresh median | Warm median | Warm selection | Warm ranking audit |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 4 entries, 80 candidates, 20 shortlist, 200 field | Classic | 12.37 s | 6.75 s | 0.13 s | 4.82 s |
+| Same small fixture | Showdown | 6.63 s | 3.79 s | 0.05 s | 2.60 s |
+| 20 entries, 1,000 candidates, 200 shortlist, 1,000 field | Classic | 27.59 s | 19.13 s | 6.01 s | 8.70 s |
+| Same scaled fixture | Showdown | 19.39 s | 15.04 s | 7.63 s | 4.95 s |
+
+Requested candidate/shortlist limits are not actual bank sizes. In the scaled
+runs, screening evaluated 300 Classic and 94 Showdown candidates per scenario;
+validation evaluated 200 Classic and 94 Showdown candidates per scenario. The
+figures do not exercise a 20,000-candidate bank, a 2,000-row shortlist or a
+150-entry portfolio. Timings are local, fixed-order synthetic observations,
+not production-slate latency or a forecast of a real 60-minute build. Simulation
+phase profiles are nested inside simulation time and must not be added to it.
+
+The remaining bottleneck depends on scale. Fresh outcome sampling/auditing
+is prominent in the small fixture; portfolio selection/refinement becomes the
+largest measured Showdown stage in the scaled fixture. A separate synthetic
+selection profile preserved selected identities and found roughly 38 million
+`log1p` calls inside `scenario_swap_delta`. Profiler timings include substantial
+instrumentation overhead and are not comparable to the unprofiled table.
+
+Next measured target: reduce repeated integer-count logarithm work in swap
+refinement while preserving iteration order, floating results, selected/output
+identities, scenario evidence, fresh audits, manual constraints and cancellation.
+No sampler, selection, projection, ownership, ranking or default behavior changes
+are included in this measurement checkpoint.
+
+Reproduce with Python 3.12 and `PYTHONHASHSEED=0`:
+
+```text
+python scripts/benchmark_reuse_stages.py --kind both --candidates 80 --shortlist 20 --lineups 4 --field 200 --scenarios 2500 --repeats 3 --output small.json
+python scripts/benchmark_reuse_stages.py --kind both --candidates 1000 --shortlist 200 --lineups 20 --field 1000 --scenarios 2500 --repeats 3 --output scaled.json
+```
