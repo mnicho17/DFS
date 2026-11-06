@@ -263,6 +263,55 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(diag['recovery_stage'], 'none')
 
 
+
+    def test_generated_captain_allocation_can_drop_uncovered_captains_to_zero(self):
+        from captain_pool import prepare_captain_pool
+        rows=bank(150)
+        captains=[player('pool'+str(i),LockCpt=True) for i in range(5)]
+        for i,row in enumerate(rows):
+            row['Captain']=captains[0 if i<100 else 1 if i<141 else 2]
+        _,rules,_=prepare_captain_pool(captains,{},150)
+        before=deepcopy(rules)
+        result=choose(rows,requested=150,rules=rules)
+        self.assertEqual(len(result['lineups']),150)
+        allocation=result['report']['portfolio_recovery']['captain_pool_allocation']
+        self.assertEqual(allocation['pool3']['selected'],0)
+        self.assertEqual(allocation['pool4']['selected'],0)
+        self.assertEqual(rules,before)
+        self.assertIn('pool3: 30 -> 0',result['report']['text'])
+
+
+    def test_generated_allocation_zero_floor_preserves_pool_in_both_candidate_orders(self):
+        from captain_pool import prepare_captain_pool
+        captains=[player('pool'+str(i),LockCpt=True) for i in range(3)]
+        rows=bank(10)
+        for row in rows:row['Captain']=captains[0]
+        _,rules,_=prepare_captain_pool(captains,{},10)
+        outsider=bank(1)[0]
+        for candidates in (rows+[outsider],list(reversed(rows+[outsider]))):
+            result=choose(candidates,requested=10,rules=rules)
+            self.assertEqual(len(result['lineups']),10)
+            self.assertTrue(all(player_key(row['Captain'])=='pool0' for row in result['lineups']))
+            self.assertEqual(result['report']['portfolio_recovery']['recovery_stage'],'required')
+
+    def test_edited_captain_quota_remains_manual_and_is_not_dropped(self):
+        from captain_pool import prepare_captain_pool
+        captains=[player('pool'+str(i),LockCpt=True) for i in range(2)]
+        rows=bank(10)
+        for row in rows:row['Captain']=captains[0]
+        _,rules,_=prepare_captain_pool(captains,{},10)
+        rules['player_constraints']['pool1']['MinCptPct']=40
+        with self.assertRaises(PortfolioSelectionShortage):choose(rows,requested=10,rules=rules)
+
+    def test_uncovered_pool_does_not_release_partial_or_outside_captains(self):
+        from captain_pool import prepare_captain_pool
+        captains=[player('pool'+str(i),LockCpt=True) for i in range(2)]
+        rows=bank(9)
+        for row in rows:row['Captain']=captains[0]
+        _,rules,_=prepare_captain_pool(captains,{},10)
+        with self.assertRaises(PortfolioSelectionShortage):choose(rows+bank(5),requested=10,rules=rules)
+
+
 class CandidateRecoveryTests(unittest.TestCase):
     def probe(self, rows, players, **kwargs):
         return expand_candidates(rows, players, 10, kwargs.pop('rules', {}),
