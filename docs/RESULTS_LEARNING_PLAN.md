@@ -1,6 +1,13 @@
 # Results & Learning: staged implementation
 
-## Current development stage: contest objectives and QB early-exit coverage
+## Active completion sequence — November 7, 2026
+
+The user requested completion of the existing list before reassessing next steps.
+Use [the active checklist](ACTIVE_CHECKLIST.md) for current ordering, completed
+evidence and open validation gates. Earlier requirements below remain acceptance
+criteria; they do not override the current sequence or authorize research defaults.
+
+## Earlier accepted stage: contest objectives and QB early-exit coverage
 
 Queued by the user on October 4, 2026, after the v1.24.0 release. This is
 an accepted staged plan. The user subsequently prioritized single-entry contest
