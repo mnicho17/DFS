@@ -21,13 +21,17 @@ The real-input comparison used five Captain locks, 63 groups, minimum unique 2, 
 - [x] Local regression verifies audited unused benchmark edits preserve identity and permit compatible roster resume/load; seven new cases passed within the 65-test acceptance run.
 - [x] Local regression verifies runtime/dependency/unknown-file/imported-benchmark changes remain strict, including dynamic/relative/transitive imports and syntax errors. Existing legacy/frozen/mismatched-model gates passed.
 - [x] Full validation on runtime commit d50ef1f: local 2,490 tests in 792.114s (2,489 passed, one symlink-creation skip); Windows all 2,490 passed in 663.522s with no skips. Executable, guide, checksum and artifact checks passed. [Run](https://github.com/mnicho17/DFS/actions/runs/42375109998).
-- [x] Remaining boundaries documented in MODEL_COMPATIBILITY.md: runtime, dependency, Python/platform, unknown-source and mismatched-stamp changes remain strict; old artifacts are not migrated. This bounded fix does not eliminate legitimate refreshes.\n- [ ] Review/integrate the bounded fix and verify first post-update preparation; original library stamps may require a one-time refresh.
+- [x] Remaining boundaries documented in MODEL_COMPATIBILITY.md: runtime, dependency, Python/platform, unknown-source and mismatched-stamp changes remain strict; old artifacts are not migrated. This bounded fix does not eliminate legitimate refreshes.
+- [ ] Review/integrate the bounded fix and verify first post-update preparation; original library stamps may require a one-time refresh.
 
 The bounded change excludes only an explicit audited benchmark list when not reachable from strict source. Static/transitive imports reinstate strict hashing; ambiguous dynamic execution keeps all audited benchmarks strict. New benchmark filenames remain strict until audited. The changed policy itself intentionally requires a new stamp once: it does not migrate or approve existing old stamps, saved SIM evidence or historical records.
 
-## 3. Explain lineup decisions — next backend item
+## 3. Explain lineup decisions — inventory completed; integration pending
 
 - [x] Initial source inventory: build_explanations.py explicitly records supported local-rule checks and final output membership; generation, screening, independent validation and selection rejection histories are not recorded per witness. This is a documented limit, not completed pipeline tracing.
+- [x] Inventory the separate Showdown screening audit and evidence boundaries; see BUILD_EXPLANATION_EVIDENCE.md. Integration remains pending.
+- [x] Implement archive-time capture of the exact referenced screening audit bytes with receipt, snapshot/context and selected-occurrence checks. Optional evidence failures remain unavailable; explanation integration remains pending.
+- [ ] Revalidate and expose captured stage membership in the historical explanation view.
 - [ ] Add stage-specific explanations only where original evidence supports them.
 - [ ] Keep missing causes explicitly unavailable; absence alone is not proof of rejection.
 
@@ -58,4 +62,5 @@ The bounded change excludes only an explicit audited benchmark list when not rea
 ## Reassessment gate
 
 Reassess after these accepted scopes are completed or explicitly resolved with the user. Preserve validation limits and blockers in this file; do not mark research hypotheses, unmerged changes or unperformed GUI checks as delivered.
-\nValidation counts above qualify runtime commit d50ef1f. The subsequent checklist/results update changes documentation only; current follow-up status is maintained in [PR #198](https://github.com/mnicho17/DFS/pull/198). Visible packaged-app testing, integration and research acceptance remain open.\n
+
+Validation counts above qualify runtime commit d50ef1f. The subsequent checklist/results update changes documentation only; current follow-up status is maintained in [PR #198](https://github.com/mnicho17/DFS/pull/198). Visible packaged-app testing, integration and research acceptance remain open.
