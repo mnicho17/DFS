@@ -73,12 +73,12 @@ def _score_compiled_bank(bank, outcomes):
 
 
 
-def _index_score_bank(bank):
-    unique, positions = bank
-    keys = tuple(dict.fromkeys(key for captain, flex in unique for key in (captain,) + flex))
+def _index_score_rosters(rosters):
+    rosters = tuple(rosters)
+    keys = tuple(dict.fromkeys(key for captain, flex in rosters for key in (captain,) + flex))
     offsets = {key: index for index, key in enumerate(keys)}
     layouts = []
-    for captain, flex in unique:
+    for captain, flex in rosters:
         indices = tuple(offsets[key] for key in flex)
         if len(indices) > 1:
             getter = itemgetter(*indices)
@@ -87,14 +87,25 @@ def _index_score_bank(bank):
         else:
             getter = lambda values: ()
         layouts.append((offsets[captain], getter))
-    return keys, tuple(layouts), tuple(positions)
+    return keys, tuple(layouts)
+
+
+def _score_indexed_rosters(rosters, outcomes):
+    keys, layouts = rosters
+    # Read this frame's outcomes; never retain sampled values in the layout.
+    values = tuple(outcomes[key] for key in keys)
+    return [1.5 * values[captain] + sum(getter(values)) for captain, getter in layouts]
+
+
+def _index_score_bank(bank):
+    unique, positions = bank
+    keys, layouts = _index_score_rosters(unique)
+    return keys, layouts, tuple(positions)
 
 
 def _score_indexed_bank(bank, outcomes):
     keys, layouts, positions = bank
-    # Read this frame's outcomes; never retain sampled values in the bank.
-    values = tuple(outcomes[key] for key in keys)
-    scores = [1.5 * values[captain] + sum(getter(values)) for captain, getter in layouts]
+    scores = _score_indexed_rosters((keys, layouts), outcomes)
     return sorted(scores[position] for position in positions)
 
 
@@ -292,6 +303,7 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
     scenario_volatility = {}
     scenario_games = {}
     indexed_banks = {}
+    indexed_candidates = None
     for scenario in range(max(1, int(scenarios))):
         if cancel_callback and cancel_callback():
             break
@@ -323,9 +335,13 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         top1, top5, cash, bust = [ranked[int(q * (field_count - 1))] for q in (0.99, 0.95, 0.8, 0.4)]
         top2 = ranked[int(.98 * (field_count - 1))]
         winner = ranked[-1]
+        frame_scores = None
+        if compiled_candidates is not None:
+            if indexed_candidates is None:
+                indexed_candidates = _index_score_rosters(compiled_candidates)
+            frame_scores = _score_indexed_rosters(indexed_candidates, outcomes)
         for i, lineup in enumerate(candidates):
-            score = (_score_compiled_roster(compiled_candidates[i], outcomes)
-                     if compiled_candidates is not None else showdown_score(lineup, outcomes))
+            score = frame_scores[i] if frame_scores is not None else showdown_score(lineup, outcomes)
             scores[i].append(score)
             pct = bisect.bisect_right(ranked, score) / field_count
             sums[i] += pct
