@@ -119,7 +119,16 @@ def load_audit(path):
     """Data-only bounded read; integrity does not certify pregame timing or scores."""
     path = Path(path)
     if path.stat().st_size > MAX_COMPRESSED_BYTES: raise ValueError('Compressed audit limit exceeded.')
-    with gzip.open(path, 'rb') as handle:
+    with path.open('rb') as handle:
+        captured = handle.read(MAX_COMPRESSED_BYTES + 1)
+    return load_audit_bytes(captured)
+
+
+def load_audit_bytes(captured):
+    """Validate exactly the captured compressed bytes, without a second file read."""
+    import io
+    if len(captured) > MAX_COMPRESSED_BYTES: raise ValueError('Compressed audit limit exceeded.')
+    with gzip.GzipFile(fileobj=io.BytesIO(captured), mode='rb') as handle:
         raw = handle.read(MAX_BYTES + 1)
     if len(raw) > MAX_BYTES: raise ValueError('Audit decompression limit exceeded.')
     envelope = json.loads(raw); payload = envelope['payload']

@@ -8,6 +8,7 @@ import random
 import time
 from array import array
 from collections import Counter
+from operator import itemgetter
 
 from lineup_ranking import search_jobs, ranked_lineups, finish_rank
 from compute_settings import deep_candidate_budget, deep_search_seeds, deep_phase_fractions
@@ -69,6 +70,43 @@ def _score_compiled_bank(bank, outcomes):
     unique, positions = bank
     values = [_score_compiled_roster(roster, outcomes) for roster in unique]
     return sorted(values[position] for position in positions)
+
+
+
+def _index_score_rosters(rosters):
+    rosters = tuple(rosters)
+    keys = tuple(dict.fromkeys(key for captain, flex in rosters for key in (captain,) + flex))
+    offsets = {key: index for index, key in enumerate(keys)}
+    layouts = []
+    for captain, flex in rosters:
+        indices = tuple(offsets[key] for key in flex)
+        if len(indices) > 1:
+            getter = itemgetter(*indices)
+        elif indices:
+            getter = lambda values, index=indices[0]: (values[index],)
+        else:
+            getter = lambda values: ()
+        layouts.append((offsets[captain], getter))
+    return keys, tuple(layouts)
+
+
+def _score_indexed_rosters(rosters, outcomes):
+    keys, layouts = rosters
+    # Read this frame's outcomes; never retain sampled values in the layout.
+    values = tuple(outcomes[key] for key in keys)
+    return [1.5 * values[captain] + sum(getter(values)) for captain, getter in layouts]
+
+
+def _index_score_bank(bank):
+    unique, positions = bank
+    keys, layouts = _index_score_rosters(unique)
+    return keys, layouts, tuple(positions)
+
+
+def _score_indexed_bank(bank, outcomes):
+    keys, layouts, positions = bank
+    scores = _score_indexed_rosters((keys, layouts), outcomes)
+    return sorted(scores[position] for position in positions)
 
 
 def validate_showdown_lineup(lineup, players, salary_cap):
@@ -262,18 +300,27 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
                      **({'history_profile':history_profile} if history_profile is not None else {})))
     profile.cache_lookup_seconds=time.perf_counter()-lookup_started
     completed = 0
+    scenario_volatility = {}
+    scenario_games = {}
+    indexed_banks = {}
+    indexed_candidates = None
     for scenario in range(max(1, int(scenarios))):
         if cancel_callback and cancel_callback():
             break
         def compute_frame():
             drawn=time.perf_counter()
-            outcomes = _scenario_outcomes(rng, pool, script_counter=scripts)
+            outcomes = _scenario_outcomes(rng, pool, script_counter=scripts,
+                                          _volatility_by_player=scenario_volatility,
+                                          _prepared_games=scenario_games)
             if outcome_transform is not None:
                 outcomes = outcome_transform(outcomes)
             profile.outcomes_seconds+=time.perf_counter()-drawn
             opponent_started=time.perf_counter()
             if compiled_banks is not None:
-                ranked = _score_compiled_bank(compiled_banks[scenario % 3], outcomes)
+                bank_index = scenario % 3
+                if bank_index not in indexed_banks:
+                    indexed_banks[bank_index] = _index_score_bank(compiled_banks[bank_index])
+                ranked = _score_indexed_bank(indexed_banks[bank_index], outcomes)
             else:
                 ranked = sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
             profile.opponents_seconds+=time.perf_counter()-opponent_started
@@ -288,9 +335,13 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
         top1, top5, cash, bust = [ranked[int(q * (field_count - 1))] for q in (0.99, 0.95, 0.8, 0.4)]
         top2 = ranked[int(.98 * (field_count - 1))]
         winner = ranked[-1]
+        frame_scores = None
+        if compiled_candidates is not None:
+            if indexed_candidates is None:
+                indexed_candidates = _index_score_rosters(compiled_candidates)
+            frame_scores = _score_indexed_rosters(indexed_candidates, outcomes)
         for i, lineup in enumerate(candidates):
-            score = (_score_compiled_roster(compiled_candidates[i], outcomes)
-                     if compiled_candidates is not None else showdown_score(lineup, outcomes))
+            score = frame_scores[i] if frame_scores is not None else showdown_score(lineup, outcomes)
             scores[i].append(score)
             pct = bisect.bisect_right(ranked, score) / field_count
             sums[i] += pct

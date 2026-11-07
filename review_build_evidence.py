@@ -27,7 +27,7 @@ MAX_LINEUPS = 1000
 MAX_PLAYER_DETAILS = 1000
 HASH = re.compile(r'[0-9a-f]{64}')
 MEMBERS = {'manifest.json', 'input-snapshot.json', 'lineups.json',
-           'audit-lineups.csv', 'build-report.txt'}
+           'audit-lineups.csv', 'build-report.txt', 'screening-audit.json.gz'}
 
 
 def digest(value):
