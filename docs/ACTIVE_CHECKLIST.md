@@ -26,21 +26,25 @@ The real-input comparison used five Captain locks, 63 groups, minimum unique 2, 
 
 The bounded change excludes only an explicit audited benchmark list when not reachable from strict source. Static/transitive imports reinstate strict hashing; ambiguous dynamic execution keeps all audited benchmarks strict. New benchmark filenames remain strict until audited. The changed policy itself intentionally requires a new stamp once: it does not migrate or approve existing old stamps, saved SIM evidence or historical records.
 
-## 3. Explain lineup decisions — recorded membership implemented; validation/review pending
+## 3. Explain lineup decisions — automated validation complete; review/delivery pending
 
 - [x] Initial source inventory: build_explanations.py explicitly records supported local-rule checks and final output membership; generation, screening, independent validation and selection rejection histories are not recorded per witness. This is a documented limit, not completed pipeline tracing.
-- [x] Inventory the separate Showdown screening audit and evidence boundaries; see BUILD_EXPLANATION_EVIDENCE.md. Integration remains pending.
-- [x] Implement archive-time capture of the exact referenced screening audit bytes with receipt, snapshot/context and selected-occurrence checks. Optional evidence failures remain unavailable; explanation integration remains pending.
+- [x] Inventory the separate Showdown screening audit and evidence boundaries; see BUILD_EXPLANATION_EVIDENCE.md. Bounded integration is implemented in PR #200; application delivery remains pending.
+- [x] Implement archive-time capture of the exact referenced screening audit bytes with receipt, snapshot/context and selected-occurrence checks. Optional evidence failures remain unavailable; the read-only explanation integration is implemented in PR #200; delivery remains pending.
 - [x] Implement source-bound screening membership in the historical explanation view, including exact occurrences, Captain roles, partial/not-run scoring and aggregate/private reporting. Original ZIP bytes are revalidated; decompression consumes the shared read budget.
 - [x] Limit stage explanations to originally recorded membership. Older/missing/conflicting evidence is unavailable; no pipeline rejection cause is inferred.
 - [x] Keep missing causes explicitly unavailable; absence alone is not proof of rejection. Independent-validation and portfolio-selection rejection causes remain not recorded.
-- [ ] Complete validation/review of this read-only slice; integration/publication and visible packaged-app testing remain separate gates.
+- [x] Automated validation on 9212ba7: local 2,512 tests (2,511 passed, one symlink-permission skip); Windows all 2,512 passed, no skips/failures or unexpected network attempts. Executable, guide, checksum and artifact upload passed; publication skipped. [Run](https://github.com/mnicho17/DFS/actions/runs/42382898646).
+- [ ] Review/deliver this read-only slice; integration/publication and visible packaged-app testing remain separate gates.
 
-## 4. Historical construction research — queued
+## 4. Historical construction research — initial checkpoint completed; comparison gaps open
 
-- [ ] Compare successful users' whole contest portfolios with the full field and entry-count peers.
-- [ ] Report K/DST combinations, team splits and Captain/opposing-DST constructions across independent games.
-- [ ] Use held-out slates and disclose coverage, entry counts and uncertainty before proposing defaults.
+- [x] Audit indexed coverage and predeclare the holdout: 42 Showdown records / 23 game groups; 17 discovery and six held-out groups. Field completeness is unverified.
+- [x] Complete the existing winner/peer discovery review: 36 contests, 1,136 winner/contest portfolios; no excluded contests.
+- [x] Complete six bounded walk-forward date reviews: 5,195 entrant/contest profiles; five/ten-peer support checks and game-level sensitivities. No defaults changed. See [the research checkpoint](research/HISTORICAL_CONSTRUCTION_2026_11_07.md).
+- [ ] Compare successful users' whole contest portfolios with the full field and entry-count peers. Median contrasts are available; fresh observed-field and mean-to-mean checks remain open.
+- [ ] Finish K/DST, team-split and direct Captain/opposing-DST comparisons across game groups. K/DST/splits and QB/opposing-DST are described in the checkpoint; the direct all-position Captain pairing is still unavailable.
+- [x] Use a predeclared held-out period and disclose coverage, entry counts, support attrition and game-level sensitivity. No grouping defaults proposed; matched construction/field checks remain open.
 
 ## 5. Zero-score/team/DST SIM research — queued, diagnostic only
 
