@@ -1,0 +1,66 @@
+{
+  "baseline": "de40aeaa70db2482d77078e3486033581dc39475",
+  "source_sha256": "f8c60fb3477369734541699d55c10e027abf2792b224c1b0de8f091a012144dd",
+  "basis": "Synthetic distinct-roster selection only; not full-build or real-slate timing",
+  "candidates": 100,
+  "requested": 20,
+  "scenarios": 2500,
+  "field": 1000,
+  "seed": 90210,
+  "trials": [
+    {
+      "trial": 0,
+      "mode": "before",
+      "seconds": 6.071491000009701,
+      "sha256": "5d6a4432b297945078900fda64286f78d40accb7089ad28d134b7873dc4a229c",
+      "refinement_attempts": 8,
+      "refinement_swaps": 6
+    },
+    {
+      "trial": 0,
+      "mode": "after",
+      "seconds": 5.364079099847004,
+      "sha256": "5d6a4432b297945078900fda64286f78d40accb7089ad28d134b7873dc4a229c",
+      "refinement_attempts": 8,
+      "refinement_swaps": 6
+    },
+    {
+      "trial": 1,
+      "mode": "after",
+      "seconds": 5.443365500075743,
+      "sha256": "5d6a4432b297945078900fda64286f78d40accb7089ad28d134b7873dc4a229c",
+      "refinement_attempts": 8,
+      "refinement_swaps": 6
+    },
+    {
+      "trial": 1,
+      "mode": "before",
+      "seconds": 5.844642899930477,
+      "sha256": "5d6a4432b297945078900fda64286f78d40accb7089ad28d134b7873dc4a229c",
+      "refinement_attempts": 8,
+      "refinement_swaps": 6
+    },
+    {
+      "trial": 2,
+      "mode": "before",
+      "seconds": 5.8708675999660045,
+      "sha256": "5d6a4432b297945078900fda64286f78d40accb7089ad28d134b7873dc4a229c",
+      "refinement_attempts": 8,
+      "refinement_swaps": 6
+    },
+    {
+      "trial": 2,
+      "mode": "after",
+      "seconds": 5.4035797000397,
+      "sha256": "5d6a4432b297945078900fda64286f78d40accb7089ad28d134b7873dc4a229c",
+      "refinement_attempts": 8,
+      "refinement_swaps": 6
+    }
+  ],
+  "exact_order_and_report_equal": true,
+  "median_seconds": {
+    "before": 5.8708675999660045,
+    "after": 5.4035797000397
+  },
+  "limitations": "Selection and refinement timing; generation and simulation excluded. Structured report listings are normalized and derived display text/timing excluded from parity hashes. Synthetic fixtures and local hardware/load; no model quality claim."
+}

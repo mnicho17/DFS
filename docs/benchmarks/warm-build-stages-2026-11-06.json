@@ -1,0 +1,3362 @@
+{
+  "production_commit": "157f11b2e3b88287d4b7e2e4f2d0133abfe0392b",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "scenario_reuse_verified": true,
+  "production_cache_untouched": true,
+  "cases": [
+    {
+      "case": "small",
+      "requested": {
+        "lineups": 4,
+        "candidates": 80,
+        "shortlist": 20,
+        "field": 200,
+        "scenarios": 2500,
+        "repeats": 3
+      },
+      "measurements": {
+        "limitations": "Fixed fresh/cold/warm ordering; OS cache, hardware and load affect timings. Small synthetic banks are not production-slate latency. Profiles are nested inside simulation time, not extra elapsed time.",
+        "note": "Synthetic fixed-candidate Deep comparison, not production slate latency. Independent audits remain fresh.",
+        "results": [
+          {
+            "kind": "classic",
+            "requested_candidates": 80,
+            "requested_field": 200,
+            "requested_scenarios": 2500,
+            "build": "70d4026ecffb4330c3f960999a1a396e0dae9c7061714419d1d80c00f6c5dc10",
+            "identical_results": true,
+            "repeats": 3,
+            "summary": {
+              "fresh": {
+                "wall_seconds": 12.370391299948096,
+                "stage_seconds": {
+                  "generation_seconds": 0.0011515999212861061,
+                  "simulation_seconds": 12.185506099835038,
+                  "selection_seconds": 0.12543610017746687,
+                  "total_seconds": 12.31307219993323
+                },
+                "simulation_phase_seconds": {
+                  "screening": 1.2349640000611544,
+                  "validation": 6.149735900107771,
+                  "ranking_audit": 4.771656199824065
+                }
+              },
+              "cold_record": {
+                "wall_seconds": 13.522450699936599,
+                "stage_seconds": {
+                  "generation_seconds": 0.0010337000712752342,
+                  "simulation_seconds": 13.336539600044489,
+                  "selection_seconds": 0.1244981000199914,
+                  "total_seconds": 13.462822299916297
+                },
+                "simulation_phase_seconds": {
+                  "screening": 1.4085474000312388,
+                  "validation": 6.848809699993581,
+                  "ranking_audit": 5.06527949986048
+                }
+              },
+              "warm_replay": {
+                "wall_seconds": 6.74624800006859,
+                "stage_seconds": {
+                  "generation_seconds": 0.0011644999030977488,
+                  "simulation_seconds": 6.556098399916664,
+                  "selection_seconds": 0.12702000001445413,
+                  "total_seconds": 6.6853880998678505
+                },
+                "simulation_phase_seconds": {
+                  "screening": 0.6414495999924839,
+                  "validation": 1.0534844999201596,
+                  "ranking_audit": 4.815123799955472
+                }
+              }
+            },
+            "runs": [
+              {
+                "repeat": 0,
+                "mode": "fresh",
+                "wall_seconds": 12.170592800015584,
+                "result_digest": "d21ff450901060e87bfe617aa8595c8f3fd4896b8ce0d5baf8bc664c7ace7cc9",
+                "stages": {
+                  "generation_seconds": 0.002184400102123618,
+                  "simulation_seconds": 11.980733099859208,
+                  "selection_seconds": 0.12481740000657737,
+                  "total_seconds": 12.112293200101703
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 20000,
+                    "timings": {
+                      "setup_seconds": 0.403429500060156,
+                      "cache_lookup_seconds": 1.0200077667832375e-05,
+                      "outcomes_seconds": 0.5037527014501393,
+                      "opponents_seconds": 0.2262625005096197,
+                      "scenario_io_seconds": 0.0025679985992610455,
+                      "candidates_seconds": 0.04417880135588348,
+                      "cache_finish_seconds": 1.559988595545292e-05,
+                      "result_assembly_seconds": 0.03471369994804263,
+                      "other_seconds": 0.0014320979826152325,
+                      "total_seconds": 1.2163630998693407
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.10556809999980032,
+                      "cache_lookup_seconds": 8.999835699796677e-06,
+                      "outcomes_seconds": 5.015987703111023,
+                      "opponents_seconds": 0.5690050013363361,
+                      "scenario_io_seconds": 0.01147419773042202,
+                      "candidates_seconds": 0.11806289642117918,
+                      "cache_finish_seconds": 1.3499986380338669e-05,
+                      "result_assembly_seconds": 0.12644009990617633,
+                      "other_seconds": 0.058022701647132635,
+                      "total_seconds": 6.0045831999741495
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.11233420018106699,
+                      "cache_lookup_seconds": 7.899943739175797e-06,
+                      "outcomes_seconds": 4.0296337944455445,
+                      "opponents_seconds": 0.4576600003056228,
+                      "scenario_io_seconds": 0.00936210690997541,
+                      "candidates_seconds": 0.09450780018232763,
+                      "cache_finish_seconds": 8.599832653999329e-06,
+                      "result_assembly_seconds": 0.01506080012768507,
+                      "other_seconds": 0.007076598238199949,
+                      "total_seconds": 4.7256518001668155
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 0,
+                "mode": "cold_record",
+                "wall_seconds": 13.51876199990511,
+                "result_digest": "d21ff450901060e87bfe617aa8595c8f3fd4896b8ce0d5baf8bc664c7ace7cc9",
+                "stages": {
+                  "generation_seconds": 0.0011655001435428858,
+                  "simulation_seconds": 13.331596500007436,
+                  "selection_seconds": 0.1244981000199914,
+                  "total_seconds": 13.458329200046137
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.063
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 20000,
+                    "timings": {
+                      "setup_seconds": 0.4330710000358522,
+                      "cache_lookup_seconds": 0.05433519999496639,
+                      "outcomes_seconds": 0.5060018987860531,
+                      "opponents_seconds": 0.2260381004307419,
+                      "scenario_io_seconds": 0.09474400035105646,
+                      "candidates_seconds": 0.04447559919208288,
+                      "cache_finish_seconds": 0.014006600016728044,
+                      "result_assembly_seconds": 0.034348599845543504,
+                      "other_seconds": 0.0015264013782143593,
+                      "total_seconds": 1.4085474000312388
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.1003276000265032,
+                      "cache_lookup_seconds": 0.062174699967727065,
+                      "outcomes_seconds": 5.405847699614242,
+                      "opponents_seconds": 0.6078113135881722,
+                      "scenario_io_seconds": 0.6768827838823199,
+                      "candidates_seconds": 0.1317980047315359,
+                      "cache_finish_seconds": 0.008232500171288848,
+                      "result_assembly_seconds": 0.12471209978684783,
+                      "other_seconds": 0.06247449805960059,
+                      "total_seconds": 7.180261199828237
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.1112707001157105,
+                      "cache_lookup_seconds": 1.0499963536858559e-05,
+                      "outcomes_seconds": 4.023396400734782,
+                      "opponents_seconds": 0.45691559952683747,
+                      "scenario_io_seconds": 0.009867995511740446,
+                      "candidates_seconds": 0.09359009936451912,
+                      "cache_finish_seconds": 1.0200077667832375e-05,
+                      "result_assembly_seconds": 0.013019399950280786,
+                      "other_seconds": 0.007128904806450009,
+                      "total_seconds": 4.715209800051525
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 0,
+                "mode": "warm_replay",
+                "wall_seconds": 6.672306700143963,
+                "result_digest": "d21ff450901060e87bfe617aa8595c8f3fd4896b8ce0d5baf8bc664c7ace7cc9",
+                "stages": {
+                  "generation_seconds": 0.0020337000023573637,
+                  "simulation_seconds": 6.489818299887702,
+                  "selection_seconds": 0.12160920002497733,
+                  "total_seconds": 6.614497300004587
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.063
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 20000,
+                    "timings": {
+                      "setup_seconds": 0.4177241998258978,
+                      "cache_lookup_seconds": 0.09164600004442036,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.04529959731735289,
+                      "candidates_seconds": 0.04430529894307256,
+                      "cache_finish_seconds": 0.005247500026598573,
+                      "result_assembly_seconds": 0.03633789997547865,
+                      "other_seconds": 0.0008891038596630096,
+                      "total_seconds": 0.6414495999924839
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.10308689996600151,
+                      "cache_lookup_seconds": 0.3384965001605451,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.31228690780699253,
+                      "candidates_seconds": 0.11945689283311367,
+                      "cache_finish_seconds": 0.00608370010741055,
+                      "result_assembly_seconds": 0.12322880001738667,
+                      "other_seconds": 0.053753199288621545,
+                      "total_seconds": 1.0563929001800716
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.1162959998473525,
+                      "cache_lookup_seconds": 8.499948307871819e-06,
+                      "outcomes_seconds": 4.058878198266029,
+                      "opponents_seconds": 0.46162350103259087,
+                      "scenario_io_seconds": 0.010377504862844944,
+                      "candidates_seconds": 0.09607710386626422,
+                      "cache_finish_seconds": 1.2499978765845299e-05,
+                      "result_assembly_seconds": 0.014365400187671185,
+                      "other_seconds": 0.007285892032086849,
+                      "total_seconds": 4.764924600021914
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "fresh",
+                "wall_seconds": 12.370391299948096,
+                "result_digest": "d21ff450901060e87bfe617aa8595c8f3fd4896b8ce0d5baf8bc664c7ace7cc9",
+                "stages": {
+                  "generation_seconds": 0.0010605999268591404,
+                  "simulation_seconds": 12.185506099835038,
+                  "selection_seconds": 0.12543610017746687,
+                  "total_seconds": 12.31307219993323
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.063
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 20000,
+                    "timings": {
+                      "setup_seconds": 0.4199046001303941,
+                      "cache_lookup_seconds": 8.399831131100655e-06,
+                      "outcomes_seconds": 0.501637298380956,
+                      "opponents_seconds": 0.2283575979527086,
+                      "scenario_io_seconds": 0.003063902026042342,
+                      "candidates_seconds": 0.04443610203452408,
+                      "cache_finish_seconds": 9.699957445263863e-06,
+                      "result_assembly_seconds": 0.036143500125035644,
+                      "other_seconds": 0.0014028996229171753,
+                      "total_seconds": 1.2349640000611544
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.09856280009262264,
+                      "cache_lookup_seconds": 7.6000578701496124e-06,
+                      "outcomes_seconds": 5.141258398536593,
+                      "opponents_seconds": 0.5867134982254356,
+                      "scenario_io_seconds": 0.013336109928786755,
+                      "candidates_seconds": 0.12208600575104356,
+                      "cache_finish_seconds": 8.600065484642982e-06,
+                      "result_assembly_seconds": 0.12799559999257326,
+                      "other_seconds": 0.05976728745736182,
+                      "total_seconds": 6.149735900107771
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.11351189995184541,
+                      "cache_lookup_seconds": 8.500181138515472e-06,
+                      "outcomes_seconds": 4.0659873015247285,
+                      "opponents_seconds": 0.4635802984703332,
+                      "scenario_io_seconds": 0.010563601506873965,
+                      "candidates_seconds": 0.09589310106821358,
+                      "cache_finish_seconds": 9.299954399466515e-06,
+                      "result_assembly_seconds": 0.014821199933066964,
+                      "other_seconds": 0.007280997233465314,
+                      "total_seconds": 4.771656199824065
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "cold_record",
+                "wall_seconds": 13.522450699936599,
+                "result_digest": "d21ff450901060e87bfe617aa8595c8f3fd4896b8ce0d5baf8bc664c7ace7cc9",
+                "stages": {
+                  "generation_seconds": 0.0010337000712752342,
+                  "simulation_seconds": 13.336539600044489,
+                  "selection_seconds": 0.12427540007047355,
+                  "total_seconds": 13.462822299916297
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.046
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 20000,
+                    "timings": {
+                      "setup_seconds": 0.4144747999962419,
+                      "cache_lookup_seconds": 0.05282499990426004,
+                      "outcomes_seconds": 0.5081698975991458,
+                      "opponents_seconds": 0.22913049790076911,
+                      "scenario_io_seconds": 0.09591770335100591,
+                      "candidates_seconds": 0.04535459936596453,
+                      "cache_finish_seconds": 0.012092299992218614,
+                      "result_assembly_seconds": 0.035254100104793906,
+                      "other_seconds": 0.0015173018909990788,
+                      "total_seconds": 1.394736200105399
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.10361709981225431,
+                      "cache_lookup_seconds": 0.05032489984296262,
+                      "outcomes_seconds": 5.102922102902085,
+                      "opponents_seconds": 0.5764100986998528,
+                      "scenario_io_seconds": 0.6515181951690465,
+                      "candidates_seconds": 0.12538589537143707,
+                      "cache_finish_seconds": 0.009578899946063757,
+                      "result_assembly_seconds": 0.16954310005530715,
+                      "other_seconds": 0.059509408194571733,
+                      "total_seconds": 6.848809699993581
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.13071119994856417,
+                      "cache_lookup_seconds": 8.200062438845634e-06,
+                      "outcomes_seconds": 4.3099800979252905,
+                      "opponents_seconds": 0.48969510081224144,
+                      "scenario_io_seconds": 0.011642202269285917,
+                      "candidates_seconds": 0.10199829540215433,
+                      "cache_finish_seconds": 7.899943739175797e-06,
+                      "result_assembly_seconds": 0.013388999970629811,
+                      "other_seconds": 0.007847503526136279,
+                      "total_seconds": 5.06527949986048
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "warm_replay",
+                "wall_seconds": 6.845986700151116,
+                "result_digest": "d21ff450901060e87bfe617aa8595c8f3fd4896b8ce0d5baf8bc664c7ace7cc9",
+                "stages": {
+                  "generation_seconds": 0.0010182000696659088,
+                  "simulation_seconds": 6.6546129998750985,
+                  "selection_seconds": 0.12957880017347634,
+                  "total_seconds": 6.787168400129303
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 20000,
+                    "timings": {
+                      "setup_seconds": 0.4091686001047492,
+                      "cache_lookup_seconds": 0.09355430002324283,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.04588770167902112,
+                      "candidates_seconds": 0.04423790075816214,
+                      "cache_finish_seconds": 0.005526899825781584,
+                      "result_assembly_seconds": 0.03423450002446771,
+                      "other_seconds": 0.00093819759786129,
+                      "total_seconds": 0.6335481000132859
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.10396659979596734,
+                      "cache_lookup_seconds": 0.3338797001633793,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.3056287015788257,
+                      "candidates_seconds": 0.1168010956607759,
+                      "cache_finish_seconds": 0.005413900129497051,
+                      "result_assembly_seconds": 0.1275017000734806,
+                      "other_seconds": 0.05196990258991718,
+                      "total_seconds": 1.045161599991843
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.1227086998987943,
+                      "cache_lookup_seconds": 8.800067007541656e-06,
+                      "outcomes_seconds": 4.205915497848764,
+                      "opponents_seconds": 0.4840267018880695,
+                      "scenario_io_seconds": 0.011198810068890452,
+                      "candidates_seconds": 0.1002736953087151,
+                      "cache_finish_seconds": 1.009996049106121e-05,
+                      "result_assembly_seconds": 0.016360500128939748,
+                      "other_seconds": 0.007617194904014468,
+                      "total_seconds": 4.948120000073686
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "fresh",
+                "wall_seconds": 12.804265199927613,
+                "result_digest": "d21ff450901060e87bfe617aa8595c8f3fd4896b8ce0d5baf8bc664c7ace7cc9",
+                "stages": {
+                  "generation_seconds": 0.0011515999212861061,
+                  "simulation_seconds": 12.609830100089312,
+                  "selection_seconds": 0.13179020001553,
+                  "total_seconds": 12.743936699815094
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 20000,
+                    "timings": {
+                      "setup_seconds": 0.4390959001611918,
+                      "cache_lookup_seconds": 8.899951353669167e-06,
+                      "outcomes_seconds": 0.5218950007110834,
+                      "opponents_seconds": 0.23239369946531951,
+                      "scenario_io_seconds": 0.0032278993166983128,
+                      "candidates_seconds": 0.04563550022430718,
+                      "cache_finish_seconds": 1.0200077667832375e-05,
+                      "result_assembly_seconds": 0.03608039999380708,
+                      "other_seconds": 0.0014479001984000206,
+                      "total_seconds": 1.2797954000998288
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.10027149994857609,
+                      "cache_lookup_seconds": 9.600073099136353e-06,
+                      "outcomes_seconds": 5.2851502078119665,
+                      "opponents_seconds": 0.6081178043968976,
+                      "scenario_io_seconds": 0.014081483939662576,
+                      "candidates_seconds": 0.12475300300866365,
+                      "cache_finish_seconds": 9.499955922365189e-06,
+                      "result_assembly_seconds": 0.13653439981862903,
+                      "other_seconds": 0.06103720096871257,
+                      "total_seconds": 6.3299646999221295
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.12540280004031956,
+                      "cache_lookup_seconds": 1.009996049106121e-05,
+                      "outcomes_seconds": 4.224302305839956,
+                      "opponents_seconds": 0.487068303860724,
+                      "scenario_io_seconds": 0.011354792164638638,
+                      "candidates_seconds": 0.09938610414974391,
+                      "cache_finish_seconds": 1.0200077667832375e-05,
+                      "result_assembly_seconds": 0.015387400053441525,
+                      "other_seconds": 0.00773919397033751,
+                      "total_seconds": 4.97066120011732
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "cold_record",
+                "wall_seconds": 13.90290669980459,
+                "result_digest": "d21ff450901060e87bfe617aa8595c8f3fd4896b8ce0d5baf8bc664c7ace7cc9",
+                "stages": {
+                  "generation_seconds": 0.0009956001304090023,
+                  "simulation_seconds": 13.706038899952546,
+                  "selection_seconds": 0.12809129990637302,
+                  "total_seconds": 13.836322700139135
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.062
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 20000,
+                    "timings": {
+                      "setup_seconds": 0.4400817002169788,
+                      "cache_lookup_seconds": 0.055826300056651235,
+                      "outcomes_seconds": 0.5152757014147937,
+                      "opponents_seconds": 0.23074509971775115,
+                      "scenario_io_seconds": 0.09907929901964962,
+                      "candidates_seconds": 0.04613749939016998,
+                      "cache_finish_seconds": 0.01135459984652698,
+                      "result_assembly_seconds": 0.0400392001029104,
+                      "other_seconds": 0.0015659003984183073,
+                      "total_seconds": 1.4401053001638502
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.10144989984109998,
+                      "cache_lookup_seconds": 0.051904299994930625,
+                      "outcomes_seconds": 5.111126806586981,
+                      "opponents_seconds": 0.5851948985364288,
+                      "scenario_io_seconds": 0.6569810959044844,
+                      "candidates_seconds": 0.1257169998716563,
+                      "cache_finish_seconds": 0.00930699985474348,
+                      "result_assembly_seconds": 0.12201769999228418,
+                      "other_seconds": 0.05882359924726188,
+                      "total_seconds": 6.8225222998298705
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.11861789994873106,
+                      "cache_lookup_seconds": 8.399831131100655e-06,
+                      "outcomes_seconds": 4.608681308338419,
+                      "opponents_seconds": 0.5392191959545016,
+                      "scenario_io_seconds": 0.012956497725099325,
+                      "candidates_seconds": 0.1114410050213337,
+                      "cache_finish_seconds": 1.019984483718872e-05,
+                      "result_assembly_seconds": 0.015226299874484539,
+                      "other_seconds": 0.008579593384638429,
+                      "total_seconds": 5.414740399923176
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "warm_replay",
+                "wall_seconds": 6.74624800006859,
+                "result_digest": "d21ff450901060e87bfe617aa8595c8f3fd4896b8ce0d5baf8bc664c7ace7cc9",
+                "stages": {
+                  "generation_seconds": 0.0011644999030977488,
+                  "simulation_seconds": 6.556098399916664,
+                  "selection_seconds": 0.12702000001445413,
+                  "total_seconds": 6.6853880998678505
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.063
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 20000,
+                    "timings": {
+                      "setup_seconds": 0.42875010007992387,
+                      "cache_lookup_seconds": 0.09368659998290241,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.047725200885906816,
+                      "candidates_seconds": 0.04615940107032657,
+                      "cache_finish_seconds": 0.00437250011600554,
+                      "result_assembly_seconds": 0.03623010008595884,
+                      "other_seconds": 0.0009373978246003389,
+                      "total_seconds": 0.6578613000456244
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.09741070005111396,
+                      "cache_lookup_seconds": 0.33295189985074103,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.3124153984244913,
+                      "candidates_seconds": 0.11842059367336333,
+                      "cache_finish_seconds": 0.006378199905157089,
+                      "result_assembly_seconds": 0.13306299992837012,
+                      "other_seconds": 0.052844708086922765,
+                      "total_seconds": 1.0534844999201596
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.12142649991437793,
+                      "cache_lookup_seconds": 8.500181138515472e-06,
+                      "outcomes_seconds": 4.093291396740824,
+                      "opponents_seconds": 0.4662775029428303,
+                      "scenario_io_seconds": 0.011404898716136813,
+                      "candidates_seconds": 0.09777780249714851,
+                      "cache_finish_seconds": 1.4599878340959549e-05,
+                      "result_assembly_seconds": 0.017578199971467257,
+                      "other_seconds": 0.0073443991132080555,
+                      "total_seconds": 4.815123799955472
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "kind": "showdown",
+            "requested_candidates": 80,
+            "requested_field": 200,
+            "requested_scenarios": 2500,
+            "build": "70d4026ecffb4330c3f960999a1a396e0dae9c7061714419d1d80c00f6c5dc10",
+            "identical_results": true,
+            "repeats": 3,
+            "summary": {
+              "fresh": {
+                "wall_seconds": 6.626801900099963,
+                "stage_seconds": {
+                  "generation_seconds": 0.0020870999433100224,
+                  "simulation_seconds": 6.531607300043106,
+                  "selection_seconds": 0.05145149980671704,
+                  "total_seconds": 6.58513809973374
+                },
+                "simulation_phase_seconds": {
+                  "screening": 0.4282432999461889,
+                  "validation": 3.3673204998485744,
+                  "ranking_audit": 2.612312800018117
+                }
+              },
+              "cold_record": {
+                "wall_seconds": 7.405660000164062,
+                "stage_seconds": {
+                  "generation_seconds": 0.0017510999459773302,
+                  "simulation_seconds": 7.30669269990176,
+                  "selection_seconds": 0.05437340005300939,
+                  "total_seconds": 7.3602519002743065
+                },
+                "simulation_phase_seconds": {
+                  "screening": 0.5703125,
+                  "validation": 3.9812941001728177,
+                  "ranking_audit": 2.6283422999549657
+                }
+              },
+              "warm_replay": {
+                "wall_seconds": 3.786909299902618,
+                "stage_seconds": {
+                  "generation_seconds": 0.0018265999387949705,
+                  "simulation_seconds": 3.686855500098318,
+                  "selection_seconds": 0.05116760008968413,
+                  "total_seconds": 3.742183400085196
+                },
+                "simulation_phase_seconds": {
+                  "screening": 0.17602959997020662,
+                  "validation": 0.8029566998593509,
+                  "ranking_audit": 2.603572899941355
+                }
+              }
+            },
+            "runs": [
+              {
+                "repeat": 0,
+                "mode": "fresh",
+                "wall_seconds": 6.806856900220737,
+                "result_digest": "a2863cd2f9057bcd633742a465aa2eecb6c0ef9b2aec1b3eb128a137095c9dd2",
+                "stages": {
+                  "generation_seconds": 0.0057576000690460205,
+                  "simulation_seconds": 6.699397700140253,
+                  "selection_seconds": 0.052760699996724725,
+                  "total_seconds": 6.758214400149882
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 14750,
+                    "timings": {
+                      "setup_seconds": 0.09591459995135665,
+                      "cache_lookup_seconds": 0.0011440000962466002,
+                      "outcomes_seconds": 0.2665266990661621,
+                      "opponents_seconds": 0.04312659986317158,
+                      "scenario_io_seconds": 0.001179601065814495,
+                      "candidates_seconds": 0.02902510017156601,
+                      "cache_finish_seconds": 9.899958968162537e-06,
+                      "result_assembly_seconds": 0.006884399801492691,
+                      "other_seconds": 0.0008836998604238033,
+                      "total_seconds": 0.4446945998352021
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.10258909990079701,
+                      "cache_lookup_seconds": 0.004432300105690956,
+                      "outcomes_seconds": 2.6117402971722186,
+                      "opponents_seconds": 0.4141352043952793,
+                      "scenario_io_seconds": 0.01047619921155274,
+                      "candidates_seconds": 0.10991100454702973,
+                      "cache_finish_seconds": 1.0400079190731049e-05,
+                      "result_assembly_seconds": 0.07570589985698462,
+                      "other_seconds": 0.038320094579830766,
+                      "total_seconds": 3.3673204998485744
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.07574210013262928,
+                      "cache_lookup_seconds": 0.0010865000076591969,
+                      "outcomes_seconds": 2.2454368954058737,
+                      "opponents_seconds": 0.3567672062199563,
+                      "scenario_io_seconds": 0.00970929954200983,
+                      "candidates_seconds": 0.09662548871710896,
+                      "cache_finish_seconds": 9.799841791391373e-06,
+                      "result_assembly_seconds": 0.010284800082445145,
+                      "other_seconds": 0.007183110108599067,
+                      "total_seconds": 2.802845200058073
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 0,
+                "mode": "cold_record",
+                "wall_seconds": 7.405660000164062,
+                "result_digest": "a2863cd2f9057bcd633742a465aa2eecb6c0ef9b2aec1b3eb128a137095c9dd2",
+                "stages": {
+                  "generation_seconds": 0.0017510999459773302,
+                  "simulation_seconds": 7.30669269990176,
+                  "selection_seconds": 0.05155850015580654,
+                  "total_seconds": 7.3602519002743065
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 14750,
+                    "timings": {
+                      "setup_seconds": 0.1290197998750955,
+                      "cache_lookup_seconds": 0.051615600008517504,
+                      "outcomes_seconds": 0.2559189999010414,
+                      "opponents_seconds": 0.04021610249765217,
+                      "scenario_io_seconds": 0.05932829692028463,
+                      "candidates_seconds": 0.028745602117851377,
+                      "cache_finish_seconds": 0.011887999949976802,
+                      "result_assembly_seconds": 0.006804700009524822,
+                      "other_seconds": 0.0009787986055016518,
+                      "total_seconds": 0.5845158998854458
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.12071870011277497,
+                      "cache_lookup_seconds": 0.05461209989152849,
+                      "outcomes_seconds": 2.6065836038906127,
+                      "opponents_seconds": 0.41681680269539356,
+                      "scenario_io_seconds": 0.5718761878088117,
+                      "candidates_seconds": 0.11658930405974388,
+                      "cache_finish_seconds": 0.008577900007367134,
+                      "result_assembly_seconds": 0.0753612001426518,
+                      "other_seconds": 0.03983650146983564,
+                      "total_seconds": 4.01097230007872
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.07762650004588068,
+                      "cache_lookup_seconds": 0.0011509000323712826,
+                      "outcomes_seconds": 2.100037904223427,
+                      "opponents_seconds": 0.33265679981559515,
+                      "scenario_io_seconds": 0.00870818947441876,
+                      "candidates_seconds": 0.08963249856606126,
+                      "cache_finish_seconds": 8.800067007541656e-06,
+                      "result_assembly_seconds": 0.011877199867740273,
+                      "other_seconds": 0.0066435078624635935,
+                      "total_seconds": 2.6283422999549657
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 0,
+                "mode": "warm_replay",
+                "wall_seconds": 3.7471288999076933,
+                "result_digest": "a2863cd2f9057bcd633742a465aa2eecb6c0ef9b2aec1b3eb128a137095c9dd2",
+                "stages": {
+                  "generation_seconds": 0.001610300038009882,
+                  "simulation_seconds": 3.6545834001153708,
+                  "selection_seconds": 0.049557700054720044,
+                  "total_seconds": 3.705983000108972
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.031
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 14750,
+                    "timings": {
+                      "setup_seconds": 0.04659970011562109,
+                      "cache_lookup_seconds": 0.0649834000505507,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.023194699781015515,
+                      "candidates_seconds": 0.026325399987399578,
+                      "cache_finish_seconds": 0.005117699969559908,
+                      "result_assembly_seconds": 0.009188500000163913,
+                      "other_seconds": 0.000620200065895915,
+                      "total_seconds": 0.17602959997020662
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.04039280000142753,
+                      "cache_lookup_seconds": 0.2866150999907404,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.246615202864632,
+                      "candidates_seconds": 0.10193769074976444,
+                      "cache_finish_seconds": 0.006055200006812811,
+                      "result_assembly_seconds": 0.07653470011427999,
+                      "other_seconds": 0.0334966063965112,
+                      "total_seconds": 0.7916473001241684
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.07680819998495281,
+                      "cache_lookup_seconds": 0.001124299829825759,
+                      "outcomes_seconds": 2.0829168031923473,
+                      "opponents_seconds": 0.32913300138898194,
+                      "scenario_io_seconds": 0.00824139267206192,
+                      "candidates_seconds": 0.08837529923766851,
+                      "cache_finish_seconds": 9.699957445263863e-06,
+                      "result_assembly_seconds": 0.010407499969005585,
+                      "other_seconds": 0.006556703709065914,
+                      "total_seconds": 2.603572899941355
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "fresh",
+                "wall_seconds": 6.537158600054681,
+                "result_digest": "a2863cd2f9057bcd633742a465aa2eecb6c0ef9b2aec1b3eb128a137095c9dd2",
+                "stages": {
+                  "generation_seconds": 0.0020870999433100224,
+                  "simulation_seconds": 6.4397298998665065,
+                  "selection_seconds": 0.04985609999857843,
+                  "total_seconds": 6.491936800070107
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 14750,
+                    "timings": {
+                      "setup_seconds": 0.08857899997383356,
+                      "cache_lookup_seconds": 0.001321299932897091,
+                      "outcomes_seconds": 0.259124897653237,
+                      "opponents_seconds": 0.04164619860239327,
+                      "scenario_io_seconds": 0.00114280148409307,
+                      "candidates_seconds": 0.028412299696356058,
+                      "cache_finish_seconds": 8.799834176898003e-06,
+                      "result_assembly_seconds": 0.007119900081306696,
+                      "other_seconds": 0.000888102687895298,
+                      "total_seconds": 0.4282432999461889
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.07785949995741248,
+                      "cache_lookup_seconds": 0.0010603000409901142,
+                      "outcomes_seconds": 2.584911208599806,
+                      "opponents_seconds": 0.41716640046797693,
+                      "scenario_io_seconds": 0.010891483398154378,
+                      "candidates_seconds": 0.11049119546078146,
+                      "cache_finish_seconds": 9.800074622035027e-06,
+                      "result_assembly_seconds": 0.07794420002028346,
+                      "other_seconds": 0.03819291200488806,
+                      "total_seconds": 3.3185270000249147
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.08006069995462894,
+                      "cache_lookup_seconds": 0.001121800160035491,
+                      "outcomes_seconds": 2.0869103083387017,
+                      "opponents_seconds": 0.3308084064628929,
+                      "scenario_io_seconds": 0.008242584997788072,
+                      "candidates_seconds": 0.08795039844699204,
+                      "cache_finish_seconds": 9.600073099136353e-06,
+                      "result_assembly_seconds": 0.010767899919301271,
+                      "other_seconds": 0.006441101664677262,
+                      "total_seconds": 2.612312800018117
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "cold_record",
+                "wall_seconds": 7.305285299895331,
+                "result_digest": "a2863cd2f9057bcd633742a465aa2eecb6c0ef9b2aec1b3eb128a137095c9dd2",
+                "stages": {
+                  "generation_seconds": 0.001737500075250864,
+                  "simulation_seconds": 7.208487500203773,
+                  "selection_seconds": 0.05437340005300939,
+                  "total_seconds": 7.264840099960566
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 14750,
+                    "timings": {
+                      "setup_seconds": 0.07224699994549155,
+                      "cache_lookup_seconds": 0.059061599895358086,
+                      "outcomes_seconds": 0.2807566993869841,
+                      "opponents_seconds": 0.04431790020316839,
+                      "scenario_io_seconds": 0.06459959759376943,
+                      "candidates_seconds": 0.03115329844877124,
+                      "cache_finish_seconds": 0.009832900017499924,
+                      "result_assembly_seconds": 0.007242999970912933,
+                      "other_seconds": 0.0011005045380443335,
+                      "total_seconds": 0.5703125
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.041202499996870756,
+                      "cache_lookup_seconds": 0.05187839991413057,
+                      "outcomes_seconds": 2.5920264043379575,
+                      "opponents_seconds": 0.4056203933432698,
+                      "scenario_io_seconds": 0.5970296040177345,
+                      "candidates_seconds": 0.11547549651004374,
+                      "cache_finish_seconds": 0.010175300063565373,
+                      "result_assembly_seconds": 0.08274310012347996,
+                      "other_seconds": 0.04010850191116333,
+                      "total_seconds": 3.9362597002182156
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.08076100004836917,
+                      "cache_lookup_seconds": 0.0011386999394744635,
+                      "outcomes_seconds": 2.0992405992001295,
+                      "opponents_seconds": 0.32359500019811094,
+                      "scenario_io_seconds": 0.008563504321500659,
+                      "candidates_seconds": 0.08882889524102211,
+                      "cache_finish_seconds": 1.0200077667832375e-05,
+                      "result_assembly_seconds": 0.010683600092306733,
+                      "other_seconds": 0.0064811010379344225,
+                      "total_seconds": 2.619302600156516
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "warm_replay",
+                "wall_seconds": 3.8427204000763595,
+                "result_digest": "a2863cd2f9057bcd633742a465aa2eecb6c0ef9b2aec1b3eb128a137095c9dd2",
+                "stages": {
+                  "generation_seconds": 0.002785000018775463,
+                  "simulation_seconds": 3.7410959999542683,
+                  "selection_seconds": 0.05116760008968413,
+                  "total_seconds": 3.7953087999485433
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 14750,
+                    "timings": {
+                      "setup_seconds": 0.03895479999482632,
+                      "cache_lookup_seconds": 0.06645609997212887,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.024766002781689167,
+                      "candidates_seconds": 0.028623199556022882,
+                      "cache_finish_seconds": 0.004197700181975961,
+                      "result_assembly_seconds": 0.00775569980032742,
+                      "other_seconds": 0.0006961976177990437,
+                      "total_seconds": 0.17144969990476966
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.043371599866077304,
+                      "cache_lookup_seconds": 0.2845822998788208,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.2544317974243313,
+                      "candidates_seconds": 0.10435179737396538,
+                      "cache_finish_seconds": 0.005421199835836887,
+                      "result_assembly_seconds": 0.07652379991486669,
+                      "other_seconds": 0.034274205565452576,
+                      "total_seconds": 0.8029566998593509
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.08110630000010133,
+                      "cache_lookup_seconds": 0.0011882998514920473,
+                      "outcomes_seconds": 2.143694408936426,
+                      "opponents_seconds": 0.3329424951225519,
+                      "scenario_io_seconds": 0.008634593337774277,
+                      "candidates_seconds": 0.09140140027739108,
+                      "cache_finish_seconds": 9.00006853044033e-06,
+                      "result_assembly_seconds": 0.010388199938461185,
+                      "other_seconds": 0.00673070247285068,
+                      "total_seconds": 2.676095400005579
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "fresh",
+                "wall_seconds": 6.626801900099963,
+                "result_digest": "a2863cd2f9057bcd633742a465aa2eecb6c0ef9b2aec1b3eb128a137095c9dd2",
+                "stages": {
+                  "generation_seconds": 0.001836499897763133,
+                  "simulation_seconds": 6.531607300043106,
+                  "selection_seconds": 0.05145149980671704,
+                  "total_seconds": 6.58513809973374
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 14750,
+                    "timings": {
+                      "setup_seconds": 0.0899308999069035,
+                      "cache_lookup_seconds": 0.0010935000609606504,
+                      "outcomes_seconds": 0.25548310065642,
+                      "opponents_seconds": 0.04101600218564272,
+                      "scenario_io_seconds": 0.0010732980445027351,
+                      "candidates_seconds": 0.027850800892338157,
+                      "cache_finish_seconds": 7.800059393048286e-06,
+                      "result_assembly_seconds": 0.006276099942624569,
+                      "other_seconds": 0.0008795980829745531,
+                      "total_seconds": 0.42361109983175993
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.08571070013567805,
+                      "cache_lookup_seconds": 0.0011153998784720898,
+                      "outcomes_seconds": 2.6734626025427133,
+                      "opponents_seconds": 0.42704410129226744,
+                      "scenario_io_seconds": 0.011082696728408337,
+                      "candidates_seconds": 0.11396550294011831,
+                      "cache_finish_seconds": 8.699949830770493e-06,
+                      "result_assembly_seconds": 0.074072299990803,
+                      "other_seconds": 0.0389405966270715,
+                      "total_seconds": 3.425402600085363
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.0751116001047194,
+                      "cache_lookup_seconds": 0.0011915999930351973,
+                      "outcomes_seconds": 2.0867656022310257,
+                      "opponents_seconds": 0.32586949737742543,
+                      "scenario_io_seconds": 0.008526999969035387,
+                      "candidates_seconds": 0.08825640729628503,
+                      "cache_finish_seconds": 9.600073099136353e-06,
+                      "result_assembly_seconds": 0.010692999931052327,
+                      "other_seconds": 0.0065962930675596,
+                      "total_seconds": 2.603020600043237
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "cold_record",
+                "wall_seconds": 7.432873799931258,
+                "result_digest": "a2863cd2f9057bcd633742a465aa2eecb6c0ef9b2aec1b3eb128a137095c9dd2",
+                "stages": {
+                  "generation_seconds": 0.00176800019107759,
+                  "simulation_seconds": 7.325507899979129,
+                  "selection_seconds": 0.06459699990227818,
+                  "total_seconds": 7.392115000169724
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 14750,
+                    "timings": {
+                      "setup_seconds": 0.04161119996570051,
+                      "cache_lookup_seconds": 0.04971589986234903,
+                      "outcomes_seconds": 0.2532690982334316,
+                      "opponents_seconds": 0.04002950224094093,
+                      "scenario_io_seconds": 0.060292901238426566,
+                      "candidates_seconds": 0.02744069928303361,
+                      "cache_finish_seconds": 0.013569900067523122,
+                      "result_assembly_seconds": 0.007700599962845445,
+                      "other_seconds": 0.0009674991015344858,
+                      "total_seconds": 0.4945972999557853
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.04140090011060238,
+                      "cache_lookup_seconds": 0.05682729999534786,
+                      "outcomes_seconds": 2.6072414009831846,
+                      "opponents_seconds": 0.4147011989261955,
+                      "scenario_io_seconds": 0.6059752942528576,
+                      "candidates_seconds": 0.1169094005599618,
+                      "cache_finish_seconds": 0.01244270009920001,
+                      "result_assembly_seconds": 0.08510230015963316,
+                      "other_seconds": 0.04069360508583486,
+                      "total_seconds": 3.9812941001728177
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.0833333998452872,
+                      "cache_lookup_seconds": 0.0010852999985218048,
+                      "outcomes_seconds": 2.216277596540749,
+                      "opponents_seconds": 0.3474979002494365,
+                      "scenario_io_seconds": 0.00921700056642294,
+                      "candidates_seconds": 0.09474790724925697,
+                      "cache_finish_seconds": 9.499955922365189e-06,
+                      "result_assembly_seconds": 0.010746399872004986,
+                      "other_seconds": 0.007114895619452,
+                      "total_seconds": 2.770029899897054
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "warm_replay",
+                "wall_seconds": 3.786909299902618,
+                "result_digest": "a2863cd2f9057bcd633742a465aa2eecb6c0ef9b2aec1b3eb128a137095c9dd2",
+                "stages": {
+                  "generation_seconds": 0.0018265999387949705,
+                  "simulation_seconds": 3.686855500098318,
+                  "selection_seconds": 0.05325929983519018,
+                  "total_seconds": 3.742183400085196
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 14750,
+                    "timings": {
+                      "setup_seconds": 0.045410700142383575,
+                      "cache_lookup_seconds": 0.07285799994133413,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.026734098326414824,
+                      "candidates_seconds": 0.030953298788517714,
+                      "cache_finish_seconds": 0.005512799834832549,
+                      "result_assembly_seconds": 0.007786500034853816,
+                      "other_seconds": 0.0007979029323905706,
+                      "total_seconds": 0.19005330000072718
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 50000,
+                    "timings": {
+                      "setup_seconds": 0.043995700078085065,
+                      "cache_lookup_seconds": 0.28413880011066794,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.25725319143384695,
+                      "candidates_seconds": 0.10524750757031143,
+                      "cache_finish_seconds": 0.006570899859070778,
+                      "result_assembly_seconds": 0.0764591998886317,
+                      "other_seconds": 0.034649101085960865,
+                      "total_seconds": 0.8083144000265747
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 40000,
+                    "timings": {
+                      "setup_seconds": 0.08172969985753298,
+                      "cache_lookup_seconds": 0.0011738999746739864,
+                      "outcomes_seconds": 2.079008799046278,
+                      "opponents_seconds": 0.3229681032244116,
+                      "scenario_io_seconds": 0.008415996562689543,
+                      "candidates_seconds": 0.08799129677936435,
+                      "cache_finish_seconds": 8.799834176898003e-06,
+                      "result_assembly_seconds": 0.011404399992898107,
+                      "other_seconds": 0.00642750458791852,
+                      "total_seconds": 2.599128499859944
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "scaled",
+      "requested": {
+        "lineups": 20,
+        "candidates": 1000,
+        "shortlist": 200,
+        "field": 1000,
+        "scenarios": 2500,
+        "repeats": 3
+      },
+      "measurements": {
+        "limitations": "Fixed fresh/cold/warm ordering; OS cache, hardware and load affect timings. Small synthetic banks are not production-slate latency. Profiles are nested inside simulation time, not extra elapsed time.",
+        "note": "Synthetic fixed-candidate Deep comparison, not production slate latency. Independent audits remain fresh.",
+        "results": [
+          {
+            "kind": "classic",
+            "requested_lineups": 20,
+            "requested_shortlist": 200,
+            "requested_candidates": 1000,
+            "requested_field": 1000,
+            "requested_scenarios": 2500,
+            "build": "70d4026ecffb4330c3f960999a1a396e0dae9c7061714419d1d80c00f6c5dc10",
+            "identical_results": true,
+            "repeats": 3,
+            "summary": {
+              "fresh": {
+                "wall_seconds": 27.590666299918666,
+                "stage_seconds": {
+                  "generation_seconds": 0.0038288000505417585,
+                  "simulation_seconds": 21.504469899926335,
+                  "selection_seconds": 6.166362999938428,
+                  "total_seconds": 27.473819100065157
+                },
+                "simulation_phase_seconds": {
+                  "screening": 1.470002599991858,
+                  "validation": 11.225466199917719,
+                  "ranking_audit": 8.667647800175473
+                }
+              },
+              "cold_record": {
+                "wall_seconds": 28.343366499990225,
+                "stage_seconds": {
+                  "generation_seconds": 0.003617099951952696,
+                  "simulation_seconds": 22.082271000137553,
+                  "selection_seconds": 6.142190800048411,
+                  "total_seconds": 28.23126449994743
+                },
+                "simulation_phase_seconds": {
+                  "screening": 1.6171267998870462,
+                  "validation": 11.95587330008857,
+                  "ranking_audit": 8.428012599935755
+                }
+              },
+              "warm_replay": {
+                "wall_seconds": 19.12503100000322,
+                "stage_seconds": {
+                  "generation_seconds": 0.0037306000012904406,
+                  "simulation_seconds": 13.012828100007027,
+                  "selection_seconds": 6.008243900025263,
+                  "total_seconds": 19.010947699891403
+                },
+                "simulation_phase_seconds": {
+                  "screening": 0.8312556999735534,
+                  "validation": 3.3074785999488086,
+                  "ranking_audit": 8.69923759996891
+                }
+              }
+            },
+            "runs": [
+              {
+                "repeat": 0,
+                "mode": "fresh",
+                "wall_seconds": 28.057349799899384,
+                "result_digest": "490eb10ceb9b70cef70ff19533afdb2b4e7fb37dc7baba4de8b18ff17757f0e3",
+                "stages": {
+                  "generation_seconds": 0.004775600042194128,
+                  "simulation_seconds": 21.686825699871406,
+                  "selection_seconds": 6.248156699817628,
+                  "total_seconds": 27.947120599914342
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.109
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 75000,
+                    "timings": {
+                      "setup_seconds": 0.4411939000710845,
+                      "cache_lookup_seconds": 1.2800097465515137e-05,
+                      "outcomes_seconds": 0.5297173971775919,
+                      "opponents_seconds": 0.23616070044226944,
+                      "scenario_io_seconds": 0.0026141032576560974,
+                      "candidates_seconds": 0.16256699850782752,
+                      "cache_finish_seconds": 1.3899989426136017e-05,
+                      "result_assembly_seconds": 0.05098449997603893,
+                      "other_seconds": 0.0015867005567997694,
+                      "total_seconds": 1.4248510000761598
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 500000,
+                    "timings": {
+                      "setup_seconds": 0.5263300999067724,
+                      "cache_lookup_seconds": 1.00000761449337e-05,
+                      "outcomes_seconds": 5.783048704266548,
+                      "opponents_seconds": 3.293070096289739,
+                      "scenario_io_seconds": 0.03726639389060438,
+                      "candidates_seconds": 1.2747723977081478,
+                      "cache_finish_seconds": 1.8900027498602867e-05,
+                      "result_assembly_seconds": 0.3266831999644637,
+                      "other_seconds": 0.07492820778861642,
+                      "total_seconds": 11.316127999918535
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 400000,
+                    "timings": {
+                      "setup_seconds": 0.5702567999251187,
+                      "cache_lookup_seconds": 8.599832653999329e-06,
+                      "outcomes_seconds": 4.515093597350642,
+                      "opponents_seconds": 2.549420701339841,
+                      "scenario_io_seconds": 0.028971698135137558,
+                      "candidates_seconds": 0.9814691019710153,
+                      "cache_finish_seconds": 9.699957445263863e-06,
+                      "result_assembly_seconds": 0.1537880999967456,
+                      "other_seconds": 0.010109401540830731,
+                      "total_seconds": 8.80912770004943
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 0,
+                "mode": "cold_record",
+                "wall_seconds": 29.838428099872544,
+                "result_digest": "490eb10ceb9b70cef70ff19533afdb2b4e7fb37dc7baba4de8b18ff17757f0e3",
+                "stages": {
+                  "generation_seconds": 0.0035111999604851007,
+                  "simulation_seconds": 23.16139900009148,
+                  "selection_seconds": 6.55055440007709,
+                  "total_seconds": 29.718518800102174
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.125
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 75000,
+                    "timings": {
+                      "setup_seconds": 0.4511534001212567,
+                      "cache_lookup_seconds": 0.05928940000012517,
+                      "outcomes_seconds": 0.5623477001208812,
+                      "opponents_seconds": 0.25398600031621754,
+                      "scenario_io_seconds": 0.10447290004231036,
+                      "candidates_seconds": 0.17511230055242777,
+                      "cache_finish_seconds": 0.013289700029417872,
+                      "result_assembly_seconds": 0.05532189994119108,
+                      "other_seconds": 0.0018552988767623901,
+                      "total_seconds": 1.67682860000059
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 500000,
+                    "timings": {
+                      "setup_seconds": 0.5804769999813288,
+                      "cache_lookup_seconds": 0.0626054999884218,
+                      "outcomes_seconds": 5.662477800389752,
+                      "opponents_seconds": 3.2248954041860998,
+                      "scenario_io_seconds": 1.1527103956323117,
+                      "candidates_seconds": 1.2462081997655332,
+                      "cache_finish_seconds": 0.009615899994969368,
+                      "result_assembly_seconds": 0.3573532998561859,
+                      "other_seconds": 0.07094190013594925,
+                      "total_seconds": 12.367285399930552
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 400000,
+                    "timings": {
+                      "setup_seconds": 0.6959649999625981,
+                      "cache_lookup_seconds": 9.699957445263863e-06,
+                      "outcomes_seconds": 4.5279387990012765,
+                      "opponents_seconds": 2.577703003305942,
+                      "scenario_io_seconds": 0.03162409667856991,
+                      "candidates_seconds": 0.9809589986689389,
+                      "cache_finish_seconds": 1.2600095942616463e-05,
+                      "result_assembly_seconds": 0.13144259992986917,
+                      "other_seconds": 0.01004770235158503,
+                      "total_seconds": 8.955702499952167
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 0,
+                "mode": "warm_replay",
+                "wall_seconds": 18.781267600134015,
+                "result_digest": "490eb10ceb9b70cef70ff19533afdb2b4e7fb37dc7baba4de8b18ff17757f0e3",
+                "stages": {
+                  "generation_seconds": 0.0035006001126021147,
+                  "simulation_seconds": 12.61711180000566,
+                  "selection_seconds": 6.041915100067854,
+                  "total_seconds": 18.665665900101885
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.109
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 75000,
+                    "timings": {
+                      "setup_seconds": 0.44519430003128946,
+                      "cache_lookup_seconds": 0.09791120002046227,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.051343103870749474,
+                      "candidates_seconds": 0.17546459916047752,
+                      "cache_finish_seconds": 0.004529800033196807,
+                      "result_assembly_seconds": 0.05367689998820424,
+                      "other_seconds": 0.001204696949571371,
+                      "total_seconds": 0.8293246000539511
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 500000,
+                    "timings": {
+                      "setup_seconds": 0.5553621000144631,
+                      "cache_lookup_seconds": 0.6024241999257356,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.5656602005474269,
+                      "candidates_seconds": 1.190348002826795,
+                      "cache_finish_seconds": 0.005674399901181459,
+                      "result_assembly_seconds": 0.2713685999624431,
+                      "other_seconds": 0.05768269672989845,
+                      "total_seconds": 3.2485201999079436
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 400000,
+                    "timings": {
+                      "setup_seconds": 0.5512417000718415,
+                      "cache_lookup_seconds": 9.899958968162537e-06,
+                      "outcomes_seconds": 4.292354498291388,
+                      "opponents_seconds": 2.4542334992438555,
+                      "scenario_io_seconds": 0.03075910429470241,
+                      "candidates_seconds": 0.9362364043481648,
+                      "cache_finish_seconds": 1.200009137392044e-05,
+                      "result_assembly_seconds": 0.13943690015003085,
+                      "other_seconds": 0.009252193616703153,
+                      "total_seconds": 8.413536200067028
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "fresh",
+                "wall_seconds": 27.52673659985885,
+                "result_digest": "490eb10ceb9b70cef70ff19533afdb2b4e7fb37dc7baba4de8b18ff17757f0e3",
+                "stages": {
+                  "generation_seconds": 0.0038288000505417585,
+                  "simulation_seconds": 21.231930600013584,
+                  "selection_seconds": 6.166362999938428,
+                  "total_seconds": 27.405498799867928
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.125
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 75000,
+                    "timings": {
+                      "setup_seconds": 0.42457969998940825,
+                      "cache_lookup_seconds": 9.19983722269535e-06,
+                      "outcomes_seconds": 0.5596491005271673,
+                      "opponents_seconds": 0.2520175010431558,
+                      "scenario_io_seconds": 0.003663596697151661,
+                      "candidates_seconds": 0.17295889789238572,
+                      "cache_finish_seconds": 1.500011421740055e-05,
+                      "result_assembly_seconds": 0.055328499991446733,
+                      "other_seconds": 0.0017811038997024298,
+                      "total_seconds": 1.470002599991858
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 500000,
+                    "timings": {
+                      "setup_seconds": 0.5559485999401659,
+                      "cache_lookup_seconds": 1.0399846360087395e-05,
+                      "outcomes_seconds": 5.610113599803299,
+                      "opponents_seconds": 3.2450170945376158,
+                      "scenario_io_seconds": 0.040724210906773806,
+                      "candidates_seconds": 1.2306379980873317,
+                      "cache_finish_seconds": 1.0100193321704865e-05,
+                      "result_assembly_seconds": 0.3366084999870509,
+                      "other_seconds": 0.06955669657327235,
+                      "total_seconds": 11.08862719987519
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 400000,
+                    "timings": {
+                      "setup_seconds": 0.602349900174886,
+                      "cache_lookup_seconds": 9.999843314290047e-06,
+                      "outcomes_seconds": 4.3613405912183225,
+                      "opponents_seconds": 2.466899703722447,
+                      "scenario_io_seconds": 0.033183509251102805,
+                      "candidates_seconds": 0.9459014036692679,
+                      "cache_finish_seconds": 1.0499963536858559e-05,
+                      "result_assembly_seconds": 0.12903270008973777,
+                      "other_seconds": 0.009559992235153913,
+                      "total_seconds": 8.54828830016777
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "cold_record",
+                "wall_seconds": 27.990574199939147,
+                "result_digest": "490eb10ceb9b70cef70ff19533afdb2b4e7fb37dc7baba4de8b18ff17757f0e3",
+                "stages": {
+                  "generation_seconds": 0.0036448000464588404,
+                  "simulation_seconds": 21.854088899912313,
+                  "selection_seconds": 6.013401200063527,
+                  "total_seconds": 27.874357199994847
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.11
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 75000,
+                    "timings": {
+                      "setup_seconds": 0.44836550019681454,
+                      "cache_lookup_seconds": 0.05553540005348623,
+                      "outcomes_seconds": 0.5355388973839581,
+                      "opponents_seconds": 0.23935510055162013,
+                      "scenario_io_seconds": 0.0993834005203098,
+                      "candidates_seconds": 0.16759120230562985,
+                      "cache_finish_seconds": 0.012908400036394596,
+                      "result_assembly_seconds": 0.051940000150352716,
+                      "other_seconds": 0.0016971989534795284,
+                      "total_seconds": 1.6123151001520455
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 500000,
+                    "timings": {
+                      "setup_seconds": 0.5547097001690418,
+                      "cache_lookup_seconds": 0.05650750012136996,
+                      "outcomes_seconds": 5.403867497574538,
+                      "opponents_seconds": 3.033719295402989,
+                      "scenario_io_seconds": 1.0959199976641685,
+                      "candidates_seconds": 1.1900428945664316,
+                      "cache_finish_seconds": 0.00991929997690022,
+                      "result_assembly_seconds": 0.28189409989863634,
+                      "other_seconds": 0.06608281470835209,
+                      "total_seconds": 11.692663100082427
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 400000,
+                    "timings": {
+                      "setup_seconds": 0.5621739998459816,
+                      "cache_lookup_seconds": 1.00000761449337e-05,
+                      "outcomes_seconds": 4.30283589893952,
+                      "opponents_seconds": 2.448708789423108,
+                      "scenario_io_seconds": 0.03362552169710398,
+                      "candidates_seconds": 0.9412449894007295,
+                      "cache_finish_seconds": 1.209997572004795e-05,
+                      "result_assembly_seconds": 0.12983389990404248,
+                      "other_seconds": 0.009567400673404336,
+                      "total_seconds": 8.428012599935755
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "warm_replay",
+                "wall_seconds": 19.12503100000322,
+                "result_digest": "490eb10ceb9b70cef70ff19533afdb2b4e7fb37dc7baba4de8b18ff17757f0e3",
+                "stages": {
+                  "generation_seconds": 0.004504899960011244,
+                  "simulation_seconds": 13.012828100007027,
+                  "selection_seconds": 5.989874000195414,
+                  "total_seconds": 19.010947699891403
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.11
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 75000,
+                    "timings": {
+                      "setup_seconds": 0.4835167999844998,
+                      "cache_lookup_seconds": 0.09666360006667674,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.05440349807031453,
+                      "candidates_seconds": 0.18470900086686015,
+                      "cache_finish_seconds": 0.005203399807214737,
+                      "result_assembly_seconds": 0.0530799999833107,
+                      "other_seconds": 0.0013139010407030582,
+                      "total_seconds": 0.8788901998195797
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 500000,
+                    "timings": {
+                      "setup_seconds": 0.5562082000542432,
+                      "cache_lookup_seconds": 0.5968065999913961,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.5731128971092403,
+                      "candidates_seconds": 1.2200665974523872,
+                      "cache_finish_seconds": 0.005871300119906664,
+                      "result_assembly_seconds": 0.2962336998898536,
+                      "other_seconds": 0.05917930533178151,
+                      "total_seconds": 3.3074785999488086
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 400000,
+                    "timings": {
+                      "setup_seconds": 0.5626884000375867,
+                      "cache_lookup_seconds": 9.799841791391373e-06,
+                      "outcomes_seconds": 4.4301847002934664,
+                      "opponents_seconds": 2.5310353003442287,
+                      "scenario_io_seconds": 0.035172196105122566,
+                      "candidates_seconds": 0.9828910005744547,
+                      "cache_finish_seconds": 1.1999858543276787e-05,
+                      "result_assembly_seconds": 0.1473457000683993,
+                      "other_seconds": 0.009898502845317125,
+                      "total_seconds": 8.69923759996891
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "fresh",
+                "wall_seconds": 27.590666299918666,
+                "result_digest": "490eb10ceb9b70cef70ff19533afdb2b4e7fb37dc7baba4de8b18ff17757f0e3",
+                "stages": {
+                  "generation_seconds": 0.003492299932986498,
+                  "simulation_seconds": 21.504469899926335,
+                  "selection_seconds": 5.96284280018881,
+                  "total_seconds": 27.473819100065157
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.125
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 75000,
+                    "timings": {
+                      "setup_seconds": 0.4561274000443518,
+                      "cache_lookup_seconds": 9.399838745594025e-06,
+                      "outcomes_seconds": 0.5385994990356266,
+                      "opponents_seconds": 0.2456261005718261,
+                      "scenario_io_seconds": 0.003294999012723565,
+                      "candidates_seconds": 0.16819100105203688,
+                      "cache_finish_seconds": 1.0200077667832375e-05,
+                      "result_assembly_seconds": 0.05773840006440878,
+                      "other_seconds": 0.0015937003772705793,
+                      "total_seconds": 1.4711907000746578
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 500000,
+                    "timings": {
+                      "setup_seconds": 0.5568266999907792,
+                      "cache_lookup_seconds": 8.699949830770493e-06,
+                      "outcomes_seconds": 5.714441400952637,
+                      "opponents_seconds": 3.27950899861753,
+                      "scenario_io_seconds": 0.04400639492087066,
+                      "candidates_seconds": 1.2660171003080904,
+                      "cache_finish_seconds": 1.0200077667832375e-05,
+                      "result_assembly_seconds": 0.29489580006338656,
+                      "other_seconds": 0.06975090503692627,
+                      "total_seconds": 11.225466199917719
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 400000,
+                    "timings": {
+                      "setup_seconds": 0.5680776000954211,
+                      "cache_lookup_seconds": 1.00000761449337e-05,
+                      "outcomes_seconds": 4.432102495571598,
+                      "opponents_seconds": 2.511903598671779,
+                      "scenario_io_seconds": 0.03457420412451029,
+                      "candidates_seconds": 0.9640024988912046,
+                      "cache_finish_seconds": 1.2699980288743973e-05,
+                      "result_assembly_seconds": 0.14731120015494525,
+                      "other_seconds": 0.009653502609580755,
+                      "total_seconds": 8.667647800175473
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "cold_record",
+                "wall_seconds": 28.343366499990225,
+                "result_digest": "490eb10ceb9b70cef70ff19533afdb2b4e7fb37dc7baba4de8b18ff17757f0e3",
+                "stages": {
+                  "generation_seconds": 0.003617099951952696,
+                  "simulation_seconds": 22.082271000137553,
+                  "selection_seconds": 6.142190800048411,
+                  "total_seconds": 28.23126449994743
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.109
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 75000,
+                    "timings": {
+                      "setup_seconds": 0.4356807000003755,
+                      "cache_lookup_seconds": 0.05578249995596707,
+                      "outcomes_seconds": 0.5410049012862146,
+                      "opponents_seconds": 0.2450004976708442,
+                      "scenario_io_seconds": 0.10207970277406275,
+                      "candidates_seconds": 0.17247039987705648,
+                      "cache_finish_seconds": 0.012700399849563837,
+                      "result_assembly_seconds": 0.05066370009444654,
+                      "other_seconds": 0.0017439983785152435,
+                      "total_seconds": 1.6171267998870462
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 500000,
+                    "timings": {
+                      "setup_seconds": 0.539250000147149,
+                      "cache_lookup_seconds": 0.05530410003848374,
+                      "outcomes_seconds": 5.511070603504777,
+                      "opponents_seconds": 3.1309886949602515,
+                      "scenario_io_seconds": 1.1216105003841221,
+                      "candidates_seconds": 1.2292445998173207,
+                      "cache_finish_seconds": 0.009426899952813983,
+                      "result_assembly_seconds": 0.2858029999770224,
+                      "other_seconds": 0.07317490130662918,
+                      "total_seconds": 11.95587330008857
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 400000,
+                    "timings": {
+                      "setup_seconds": 0.5484841000288725,
+                      "cache_lookup_seconds": 8.600065484642982e-06,
+                      "outcomes_seconds": 4.290818209061399,
+                      "opponents_seconds": 2.42665329715237,
+                      "scenario_io_seconds": 0.03383729187771678,
+                      "candidates_seconds": 0.9415480007883161,
+                      "cache_finish_seconds": 1.3699987903237343e-05,
+                      "result_assembly_seconds": 0.1325728001538664,
+                      "other_seconds": 0.009334500879049301,
+                      "total_seconds": 8.383270499994978
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "warm_replay",
+                "wall_seconds": 19.43510240013711,
+                "result_digest": "490eb10ceb9b70cef70ff19533afdb2b4e7fb37dc7baba4de8b18ff17757f0e3",
+                "stages": {
+                  "generation_seconds": 0.0037306000012904406,
+                  "simulation_seconds": 13.30202559987083,
+                  "selection_seconds": 6.008243900025263,
+                  "total_seconds": 19.317009099991992
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.125
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 75000,
+                    "timings": {
+                      "setup_seconds": 0.4495123999658972,
+                      "cache_lookup_seconds": 0.09552840003743768,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.05137510225176811,
+                      "candidates_seconds": 0.17570320167578757,
+                      "cache_finish_seconds": 0.004867800045758486,
+                      "result_assembly_seconds": 0.05305039999075234,
+                      "other_seconds": 0.0012183960061520338,
+                      "total_seconds": 0.8312556999735534
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 500000,
+                    "timings": {
+                      "setup_seconds": 0.5342695000581443,
+                      "cache_lookup_seconds": 0.646472199819982,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.5723700099624693,
+                      "candidates_seconds": 1.2076805047690868,
+                      "cache_finish_seconds": 0.004815000109374523,
+                      "result_assembly_seconds": 0.29538280004635453,
+                      "other_seconds": 0.05812628543935716,
+                      "total_seconds": 3.3191163002047688
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 400000,
+                    "timings": {
+                      "setup_seconds": 0.5546506000682712,
+                      "cache_lookup_seconds": 9.400071576237679e-06,
+                      "outcomes_seconds": 4.599589394638315,
+                      "opponents_seconds": 2.620841995580122,
+                      "scenario_io_seconds": 0.03737370693124831,
+                      "candidates_seconds": 1.0076497050467879,
+                      "cache_finish_seconds": 1.2399861589074135e-05,
+                      "result_assembly_seconds": 0.19539060001261532,
+                      "other_seconds": 0.01031559775583446,
+                      "total_seconds": 9.02583339996636
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "kind": "showdown",
+            "requested_lineups": 20,
+            "requested_shortlist": 200,
+            "requested_candidates": 1000,
+            "requested_field": 1000,
+            "requested_scenarios": 2500,
+            "build": "70d4026ecffb4330c3f960999a1a396e0dae9c7061714419d1d80c00f6c5dc10",
+            "identical_results": true,
+            "repeats": 3,
+            "summary": {
+              "fresh": {
+                "wall_seconds": 19.387796299997717,
+                "stage_seconds": {
+                  "generation_seconds": 0.0025198999792337418,
+                  "simulation_seconds": 12.11983840004541,
+                  "selection_seconds": 7.214572600089014,
+                  "total_seconds": 19.34107550024055
+                },
+                "simulation_phase_seconds": {
+                  "screening": 1.01267349999398,
+                  "validation": 6.174809200223535,
+                  "ranking_audit": 4.80122709996067
+                }
+              },
+              "cold_record": {
+                "wall_seconds": 21.084158400073647,
+                "stage_seconds": {
+                  "generation_seconds": 0.0026740001048892736,
+                  "simulation_seconds": 13.524947899859399,
+                  "selection_seconds": 7.513167299795896,
+                  "total_seconds": 21.041031499858946
+                },
+                "simulation_phase_seconds": {
+                  "screening": 0.9121968999970704,
+                  "validation": 6.929512899834663,
+                  "ranking_audit": 5.0856133999768645
+                }
+              },
+              "warm_replay": {
+                "wall_seconds": 15.035560300108045,
+                "stage_seconds": {
+                  "generation_seconds": 0.002460199873894453,
+                  "simulation_seconds": 7.04757390008308,
+                  "selection_seconds": 7.6252896001096815,
+                  "total_seconds": 14.991398599930108
+                },
+                "simulation_phase_seconds": {
+                  "screening": 0.2975750998593867,
+                  "validation": 1.7899098000489175,
+                  "ranking_audit": 4.948954599909484
+                }
+              }
+            },
+            "runs": [
+              {
+                "repeat": 0,
+                "mode": "fresh",
+                "wall_seconds": 19.387796299997717,
+                "result_digest": "053f3b0a6e24c031ee93244a19211a91e8dcdb24930ce45035cca181aeaed5e4",
+                "stages": {
+                  "generation_seconds": 0.0064050001092255116,
+                  "simulation_seconds": 12.11983840004541,
+                  "selection_seconds": 7.214572600089014,
+                  "total_seconds": 19.34107550024055
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 23500,
+                    "timings": {
+                      "setup_seconds": 0.43678719992749393,
+                      "cache_lookup_seconds": 0.006038899999111891,
+                      "outcomes_seconds": 0.2741666024085134,
+                      "opponents_seconds": 0.21496569993905723,
+                      "scenario_io_seconds": 0.00403419928625226,
+                      "candidates_seconds": 0.04867649916559458,
+                      "cache_finish_seconds": 1.5300000086426735e-05,
+                      "result_assembly_seconds": 0.026858200086280704,
+                      "other_seconds": 0.0011308991815894842,
+                      "total_seconds": 1.01267349999398
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 235000,
+                    "timings": {
+                      "setup_seconds": 0.41185729997232556,
+                      "cache_lookup_seconds": 0.0058843998704105616,
+                      "outcomes_seconds": 2.8857641923241317,
+                      "opponents_seconds": 2.2482233981136233,
+                      "scenario_io_seconds": 0.042811119463294744,
+                      "candidates_seconds": 0.5325277952942997,
+                      "cache_finish_seconds": 9.09995287656784e-06,
+                      "result_assembly_seconds": 0.12921050004661083,
+                      "other_seconds": 0.0459773950278759,
+                      "total_seconds": 6.302265200065449
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 188000,
+                    "timings": {
+                      "setup_seconds": 0.45355110010132194,
+                      "cache_lookup_seconds": 0.006966499844565988,
+                      "outcomes_seconds": 2.1492345929145813,
+                      "opponents_seconds": 1.6676587981637567,
+                      "scenario_io_seconds": 0.03245741268619895,
+                      "candidates_seconds": 0.3868249077349901,
+                      "cache_finish_seconds": 1.0599847882986069e-05,
+                      "result_assembly_seconds": 0.04912129999138415,
+                      "other_seconds": 0.00815488863736391,
+                      "total_seconds": 4.753980099922046
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 0,
+                "mode": "cold_record",
+                "wall_seconds": 21.084158400073647,
+                "result_digest": "053f3b0a6e24c031ee93244a19211a91e8dcdb24930ce45035cca181aeaed5e4",
+                "stages": {
+                  "generation_seconds": 0.0026740001048892736,
+                  "simulation_seconds": 13.524947899859399,
+                  "selection_seconds": 7.513167299795896,
+                  "total_seconds": 21.041031499858946
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 23500,
+                    "timings": {
+                      "setup_seconds": 0.49904360016807914,
+                      "cache_lookup_seconds": 0.06178270000964403,
+                      "outcomes_seconds": 0.27048359881155193,
+                      "opponents_seconds": 0.20777479885146022,
+                      "scenario_io_seconds": 0.09975070180371404,
+                      "candidates_seconds": 0.04772119945846498,
+                      "cache_finish_seconds": 0.013341899961233139,
+                      "result_assembly_seconds": 0.02518879994750023,
+                      "other_seconds": 0.001157101010903716,
+                      "total_seconds": 1.2262444000225514
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 235000,
+                    "timings": {
+                      "setup_seconds": 0.46303560002706945,
+                      "cache_lookup_seconds": 0.06272980011999607,
+                      "outcomes_seconds": 2.6888136910274625,
+                      "opponents_seconds": 2.0580225996673107,
+                      "scenario_io_seconds": 0.9823024121578783,
+                      "candidates_seconds": 0.5004801023751497,
+                      "cache_finish_seconds": 0.009535500081256032,
+                      "result_assembly_seconds": 0.12158669997006655,
+                      "other_seconds": 0.04300649440847337,
+                      "total_seconds": 6.929512899834663
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 188000,
+                    "timings": {
+                      "setup_seconds": 0.4461463000625372,
+                      "cache_lookup_seconds": 0.0065709000919014215,
+                      "outcomes_seconds": 2.404013302177191,
+                      "opponents_seconds": 1.9239131025969982,
+                      "scenario_io_seconds": 0.03631949471309781,
+                      "candidates_seconds": 0.44418340059928596,
+                      "cache_finish_seconds": 9.800074622035027e-06,
+                      "result_assembly_seconds": 0.049277199897915125,
+                      "other_seconds": 0.009383099852129817,
+                      "total_seconds": 5.319816600065678
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 0,
+                "mode": "warm_replay",
+                "wall_seconds": 14.095542300026864,
+                "result_digest": "053f3b0a6e24c031ee93244a19211a91e8dcdb24930ce45035cca181aeaed5e4",
+                "stages": {
+                  "generation_seconds": 0.0023330000694841146,
+                  "simulation_seconds": 6.841684499988332,
+                  "selection_seconds": 7.206142399925739,
+                  "total_seconds": 14.050397200044245
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 23500,
+                    "timings": {
+                      "setup_seconds": 0.06400000001303852,
+                      "cache_lookup_seconds": 0.10697189997881651,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.04846779932267964,
+                      "candidates_seconds": 0.046980400336906314,
+                      "cache_finish_seconds": 0.004639400169253349,
+                      "result_assembly_seconds": 0.025710499845445156,
+                      "other_seconds": 0.0008051001932471991,
+                      "total_seconds": 0.2975750998593867
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 235000,
+                    "timings": {
+                      "setup_seconds": 0.06487010000273585,
+                      "cache_lookup_seconds": 0.5669871000573039,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.5016644985880703,
+                      "candidates_seconds": 0.48899310687556863,
+                      "cache_finish_seconds": 0.005088499980047345,
+                      "result_assembly_seconds": 0.1243035001680255,
+                      "other_seconds": 0.03800299437716603,
+                      "total_seconds": 1.7899098000489175
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 188000,
+                    "timings": {
+                      "setup_seconds": 0.40996519988402724,
+                      "cache_lookup_seconds": 0.005844000028446317,
+                      "outcomes_seconds": 2.1303093971218914,
+                      "opponents_seconds": 1.6787607993464917,
+                      "scenario_io_seconds": 0.031880400609225035,
+                      "candidates_seconds": 0.384727799333632,
+                      "cache_finish_seconds": 9.499955922365189e-06,
+                      "result_assembly_seconds": 0.054173799930140376,
+                      "other_seconds": 0.008047203766182065,
+                      "total_seconds": 4.7037180999759585
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "fresh",
+                "wall_seconds": 19.31933360011317,
+                "result_digest": "053f3b0a6e24c031ee93244a19211a91e8dcdb24930ce45035cca181aeaed5e4",
+                "stages": {
+                  "generation_seconds": 0.002405300037935376,
+                  "simulation_seconds": 12.080463099991903,
+                  "selection_seconds": 7.189903700025752,
+                  "total_seconds": 19.273020700085908
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 23500,
+                    "timings": {
+                      "setup_seconds": 0.4734190001618117,
+                      "cache_lookup_seconds": 0.008766100043430924,
+                      "outcomes_seconds": 0.27392129926010966,
+                      "opponents_seconds": 0.21785359713248909,
+                      "scenario_io_seconds": 0.004019002662971616,
+                      "candidates_seconds": 0.04938420024700463,
+                      "cache_finish_seconds": 8.700182661414146e-06,
+                      "result_assembly_seconds": 0.02639149990864098,
+                      "other_seconds": 0.0011449004523456097,
+                      "total_seconds": 1.0549083000514656
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 235000,
+                    "timings": {
+                      "setup_seconds": 0.42493190011009574,
+                      "cache_lookup_seconds": 0.00607010000385344,
+                      "outcomes_seconds": 2.8093913041520864,
+                      "opponents_seconds": 2.2023265999741852,
+                      "scenario_io_seconds": 0.04322849470190704,
+                      "candidates_seconds": 0.5175687021110207,
+                      "cache_finish_seconds": 9.299954399466515e-06,
+                      "result_assembly_seconds": 0.125583800021559,
+                      "other_seconds": 0.045698999194428325,
+                      "total_seconds": 6.174809200223535
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 188000,
+                    "timings": {
+                      "setup_seconds": 0.425804500002414,
+                      "cache_lookup_seconds": 0.006035900209099054,
+                      "outcomes_seconds": 2.165598204592243,
+                      "opponents_seconds": 1.71598209743388,
+                      "scenario_io_seconds": 0.03294339613057673,
+                      "candidates_seconds": 0.3905253019183874,
+                      "cache_finish_seconds": 1.00000761449337e-05,
+                      "result_assembly_seconds": 0.05611879983916879,
+                      "other_seconds": 0.00820889975875616,
+                      "total_seconds": 4.80122709996067
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "cold_record",
+                "wall_seconds": 19.65518549992703,
+                "result_digest": "053f3b0a6e24c031ee93244a19211a91e8dcdb24930ce45035cca181aeaed5e4",
+                "stages": {
+                  "generation_seconds": 0.0025208001025021076,
+                  "simulation_seconds": 12.369110100204125,
+                  "selection_seconds": 7.237378800055012,
+                  "total_seconds": 19.60924470005557
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 23500,
+                    "timings": {
+                      "setup_seconds": 0.06543789990246296,
+                      "cache_lookup_seconds": 0.06376720010302961,
+                      "outcomes_seconds": 0.2726808968000114,
+                      "opponents_seconds": 0.21318559860810637,
+                      "scenario_io_seconds": 0.10226410604082048,
+                      "candidates_seconds": 0.04971519880928099,
+                      "cache_finish_seconds": 0.011473999824374914,
+                      "result_assembly_seconds": 0.026788299903273582,
+                      "other_seconds": 0.001223699888214469,
+                      "total_seconds": 0.8065368998795748
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 235000,
+                    "timings": {
+                      "setup_seconds": 0.09108439995907247,
+                      "cache_lookup_seconds": 0.06569910002872348,
+                      "outcomes_seconds": 2.741161303827539,
+                      "opponents_seconds": 2.142355704912916,
+                      "scenario_io_seconds": 1.0036914928350598,
+                      "candidates_seconds": 0.5165618991013616,
+                      "cache_finish_seconds": 0.00970879988744855,
+                      "result_assembly_seconds": 0.12296080007217824,
+                      "other_seconds": 0.044928799383342266,
+                      "total_seconds": 6.738152300007641
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 188000,
+                    "timings": {
+                      "setup_seconds": 0.41526699997484684,
+                      "cache_lookup_seconds": 0.00589390005916357,
+                      "outcomes_seconds": 2.1745878004003316,
+                      "opponents_seconds": 1.6927265033591539,
+                      "scenario_io_seconds": 0.03319009859114885,
+                      "candidates_seconds": 0.3923367937095463,
+                      "cache_finish_seconds": 1.3199867680668831e-05,
+                      "result_assembly_seconds": 0.053150299936532974,
+                      "other_seconds": 0.008070304058492184,
+                      "total_seconds": 4.775235899956897
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 1,
+                "mode": "warm_replay",
+                "wall_seconds": 15.035560300108045,
+                "result_digest": "053f3b0a6e24c031ee93244a19211a91e8dcdb24930ce45035cca181aeaed5e4",
+                "stages": {
+                  "generation_seconds": 0.002460199873894453,
+                  "simulation_seconds": 7.04757390008308,
+                  "selection_seconds": 7.941110200015828,
+                  "total_seconds": 14.991398599930108
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 23500,
+                    "timings": {
+                      "setup_seconds": 0.06519740005023777,
+                      "cache_lookup_seconds": 0.10297660017386079,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.04809419927187264,
+                      "candidates_seconds": 0.04735650145448744,
+                      "cache_finish_seconds": 0.004719600081443787,
+                      "result_assembly_seconds": 0.023973200004547834,
+                      "other_seconds": 0.0007634989451617002,
+                      "total_seconds": 0.29308099998161197
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 235000,
+                    "timings": {
+                      "setup_seconds": 0.061980800004675984,
+                      "cache_lookup_seconds": 0.5480595000553876,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.49365250673145056,
+                      "candidates_seconds": 0.481568799354136,
+                      "cache_finish_seconds": 0.005453999852761626,
+                      "result_assembly_seconds": 0.12269490002654493,
+                      "other_seconds": 0.03705979394726455,
+                      "total_seconds": 1.7504702999722213
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 188000,
+                    "timings": {
+                      "setup_seconds": 0.428804500028491,
+                      "cache_lookup_seconds": 0.040475500049069524,
+                      "outcomes_seconds": 2.2267731023021042,
+                      "opponents_seconds": 1.7517379049677402,
+                      "scenario_io_seconds": 0.03359848912805319,
+                      "candidates_seconds": 0.4039248041808605,
+                      "cache_finish_seconds": 9.699957445263863e-06,
+                      "result_assembly_seconds": 0.05518679996021092,
+                      "other_seconds": 0.008443799335509539,
+                      "total_seconds": 4.948954599909484
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "fresh",
+                "wall_seconds": 19.912601600168273,
+                "result_digest": "053f3b0a6e24c031ee93244a19211a91e8dcdb24930ce45035cca181aeaed5e4",
+                "stages": {
+                  "generation_seconds": 0.0025198999792337418,
+                  "simulation_seconds": 12.186544999945909,
+                  "selection_seconds": 7.678804300026968,
+                  "total_seconds": 19.868139799917117
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 23500,
+                    "timings": {
+                      "setup_seconds": 0.4162702998146415,
+                      "cache_lookup_seconds": 0.005654500098899007,
+                      "outcomes_seconds": 0.27381069981493056,
+                      "opponents_seconds": 0.2155219002161175,
+                      "scenario_io_seconds": 0.004108299966901541,
+                      "candidates_seconds": 0.047613400500267744,
+                      "cache_finish_seconds": 1.009996049106121e-05,
+                      "result_assembly_seconds": 0.025876199826598167,
+                      "other_seconds": 0.0011107996106147766,
+                      "total_seconds": 0.9899761998094618
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 235000,
+                    "timings": {
+                      "setup_seconds": 0.42530680005438626,
+                      "cache_lookup_seconds": 0.006606200011447072,
+                      "outcomes_seconds": 2.755862101446837,
+                      "opponents_seconds": 2.193150201579556,
+                      "scenario_io_seconds": 0.040880307322368026,
+                      "candidates_seconds": 0.5075099046807736,
+                      "cache_finish_seconds": 9.299954399466515e-06,
+                      "result_assembly_seconds": 0.1274874999653548,
+                      "other_seconds": 0.04298648494295776,
+                      "total_seconds": 6.09979879995808
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 188000,
+                    "timings": {
+                      "setup_seconds": 0.427249199943617,
+                      "cache_lookup_seconds": 0.006929400144144893,
+                      "outcomes_seconds": 2.28402710147202,
+                      "opponents_seconds": 1.8168327941093594,
+                      "scenario_io_seconds": 0.035878504160791636,
+                      "candidates_seconds": 0.41639910195954144,
+                      "cache_finish_seconds": 1.3299984857439995e-05,
+                      "result_assembly_seconds": 0.05190339987166226,
+                      "other_seconds": 0.008889798307791352,
+                      "total_seconds": 5.0481225999537855
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "cold_record",
+                "wall_seconds": 21.527300000190735,
+                "result_digest": "053f3b0a6e24c031ee93244a19211a91e8dcdb24930ce45035cca181aeaed5e4",
+                "stages": {
+                  "generation_seconds": 0.0031793999951332808,
+                  "simulation_seconds": 13.642776699969545,
+                  "selection_seconds": 7.828113799914718,
+                  "total_seconds": 21.474329499760643
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 23500,
+                    "timings": {
+                      "setup_seconds": 0.06698930007405579,
+                      "cache_lookup_seconds": 0.10587949980981648,
+                      "outcomes_seconds": 0.2993530980311334,
+                      "opponents_seconds": 0.2343255002051592,
+                      "scenario_io_seconds": 0.10984110250137746,
+                      "candidates_seconds": 0.05388819985091686,
+                      "cache_finish_seconds": 0.013446899829432368,
+                      "result_assembly_seconds": 0.027086999965831637,
+                      "other_seconds": 0.001386299729347229,
+                      "total_seconds": 0.9121968999970704
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 235000,
+                    "timings": {
+                      "setup_seconds": 0.07073019980452955,
+                      "cache_lookup_seconds": 0.08109620003961027,
+                      "outcomes_seconds": 3.0783706856891513,
+                      "opponents_seconds": 2.440564300864935,
+                      "scenario_io_seconds": 1.1383659082930535,
+                      "candidates_seconds": 0.5891212036367506,
+                      "cache_finish_seconds": 0.009348899824544787,
+                      "result_assembly_seconds": 0.13226209999993443,
+                      "other_seconds": 0.05085430177859962,
+                      "total_seconds": 7.590713799931109
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 188000,
+                    "timings": {
+                      "setup_seconds": 0.43519870005548,
+                      "cache_lookup_seconds": 0.007166099967435002,
+                      "outcomes_seconds": 2.282770594349131,
+                      "opponents_seconds": 1.83959179953672,
+                      "scenario_io_seconds": 0.03642500448040664,
+                      "candidates_seconds": 0.42326929327100515,
+                      "cache_finish_seconds": 9.499955922365189e-06,
+                      "result_assembly_seconds": 0.052218700060620904,
+                      "other_seconds": 0.00896370830014348,
+                      "total_seconds": 5.0856133999768645
+                    }
+                  }
+                }
+              },
+              {
+                "repeat": 2,
+                "mode": "warm_replay",
+                "wall_seconds": 15.136926000006497,
+                "result_digest": "053f3b0a6e24c031ee93244a19211a91e8dcdb24930ce45035cca181aeaed5e4",
+                "stages": {
+                  "generation_seconds": 0.00303170015104115,
+                  "simulation_seconds": 7.460559000028297,
+                  "selection_seconds": 7.6252896001096815,
+                  "total_seconds": 15.089113699970767
+                },
+                "preparation": [
+                  {
+                    "stage": "captain",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "history",
+                    "seconds": 0.0
+                  },
+                  {
+                    "stage": "library",
+                    "seconds": 0.047
+                  },
+                  {
+                    "stage": "eligibility",
+                    "seconds": 0.0
+                  }
+                ],
+                "simulation_profile": {
+                  "screening": {
+                    "calls": 1,
+                    "completed_scenarios": 250,
+                    "reused_scenarios": 250,
+                    "candidate_evaluations": 23500,
+                    "timings": {
+                      "setup_seconds": 0.06930309999734163,
+                      "cache_lookup_seconds": 0.11028799996711314,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.05011390009894967,
+                      "candidates_seconds": 0.04864039830863476,
+                      "cache_finish_seconds": 0.005916999885812402,
+                      "result_assembly_seconds": 0.026950999861583114,
+                      "other_seconds": 0.0008716017473489046,
+                      "total_seconds": 0.3120849998667836
+                    }
+                  },
+                  "validation": {
+                    "calls": 1,
+                    "completed_scenarios": 2500,
+                    "reused_scenarios": 2500,
+                    "candidate_evaluations": 235000,
+                    "timings": {
+                      "setup_seconds": 0.0684484001249075,
+                      "cache_lookup_seconds": 0.5957369999960065,
+                      "outcomes_seconds": 0.0,
+                      "opponents_seconds": 0.0,
+                      "scenario_io_seconds": 0.5380249002482742,
+                      "candidates_seconds": 0.5199116095900536,
+                      "cache_finish_seconds": 0.005064199911430478,
+                      "result_assembly_seconds": 0.13357280008494854,
+                      "other_seconds": 0.04035349003970623,
+                      "total_seconds": 1.901112399995327
+                    }
+                  },
+                  "ranking_audit": {
+                    "calls": 1,
+                    "completed_scenarios": 2000,
+                    "reused_scenarios": 0,
+                    "candidate_evaluations": 188000,
+                    "timings": {
+                      "setup_seconds": 0.5174766001291573,
+                      "cache_lookup_seconds": 0.007324900012463331,
+                      "outcomes_seconds": 2.3120600960683078,
+                      "opponents_seconds": 1.8253148978110403,
+                      "scenario_io_seconds": 0.03568080649711192,
+                      "candidates_seconds": 0.425791701534763,
+                      "cache_finish_seconds": 1.4099990949034691e-05,
+                      "result_assembly_seconds": 0.06063549988903105,
+                      "other_seconds": 0.009083898039534688,
+                      "total_seconds": 5.193382499972358
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

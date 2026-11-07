@@ -66,6 +66,7 @@ class CaptureReader(be.Reader):
     def __init__(self, cancelled):
         super().__init__(cancelled, historical=True)
         self.snapshots, self.archives, self.directories = {}, defaultdict(list), {}
+        self.screening = self.screening_members
 
     @staticmethod
     def stamps(paths):

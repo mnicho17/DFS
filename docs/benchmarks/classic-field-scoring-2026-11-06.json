@@ -1,0 +1,172 @@
+{
+  "baseline": "157f11b2e3b88287d4b7e2e4f2d0133abfe0392b",
+  "source_sha256": "00af2c34c994c4d77bb7d804c8baff67bae010c5139bef5205668803fa1b12ff",
+  "candidates": 80,
+  "scenarios": 2000,
+  "field": 1000,
+  "seed": 481516,
+  "exact_results_equal": true,
+  "trials": [
+    {
+      "trial": 0,
+      "mode": "before",
+      "seconds": 7.503260200144723,
+      "result_sha256": "46fb0d4adee10610df5d4d4391b6ea12bca1991bb1bc3abd2caf31158e2833ee",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.9274508999660611,
+          "cache_lookup_seconds": 1.1299969628453255e-05,
+          "outcomes_seconds": 3.894956798059866,
+          "opponents_seconds": 2.235045997425914,
+          "scenario_io_seconds": 0.023771404987201095,
+          "candidates_seconds": 0.3560692025348544,
+          "cache_finish_seconds": 1.3800105080008507e-05,
+          "result_assembly_seconds": 0.06176469987258315,
+          "other_seconds": 0.004149697022512555,
+          "total_seconds": 7.5032337999437
+        },
+        "requested_scenarios": 2000,
+        "completed_scenarios": 2000,
+        "candidate_count": 80,
+        "field_count": 1000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 0,
+      "mode": "after",
+      "seconds": 6.406514700036496,
+      "result_sha256": "46fb0d4adee10610df5d4d4391b6ea12bca1991bb1bc3abd2caf31158e2833ee",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.9599162000231445,
+          "cache_lookup_seconds": 1.2600095942616463e-05,
+          "outcomes_seconds": 3.998112299479544,
+          "opponents_seconds": 0.9857457031030208,
+          "scenario_io_seconds": 0.02247599815018475,
+          "candidates_seconds": 0.3665257974062115,
+          "cache_finish_seconds": 2.71000899374485e-05,
+          "result_assembly_seconds": 0.06885419995523989,
+          "other_seconds": 0.0042663016356527805,
+          "total_seconds": 6.405936199938878
+        },
+        "requested_scenarios": 2000,
+        "completed_scenarios": 2000,
+        "candidate_count": 80,
+        "field_count": 1000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "after",
+      "seconds": 6.44551040022634,
+      "result_sha256": "46fb0d4adee10610df5d4d4391b6ea12bca1991bb1bc3abd2caf31158e2833ee",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.9633649999741465,
+          "cache_lookup_seconds": 9.399838745594025e-06,
+          "outcomes_seconds": 4.020907688653097,
+          "opponents_seconds": 0.9980938988737762,
+          "scenario_io_seconds": 0.02311890316195786,
+          "candidates_seconds": 0.36788930371403694,
+          "cache_finish_seconds": 9.600073099136353e-06,
+          "result_assembly_seconds": 0.0670686000958085,
+          "other_seconds": 0.004272305639460683,
+          "total_seconds": 6.444734700024128
+        },
+        "requested_scenarios": 2000,
+        "completed_scenarios": 2000,
+        "candidate_count": 80,
+        "field_count": 1000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 1,
+      "mode": "before",
+      "seconds": 7.9326341999694705,
+      "result_sha256": "46fb0d4adee10610df5d4d4391b6ea12bca1991bb1bc3abd2caf31158e2833ee",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.979386999970302,
+          "cache_lookup_seconds": 8.800067007541656e-06,
+          "outcomes_seconds": 4.134469503769651,
+          "opponents_seconds": 2.3437580931931734,
+          "scenario_io_seconds": 0.025273206178098917,
+          "candidates_seconds": 0.37340809195302427,
+          "cache_finish_seconds": 1.019984483718872e-05,
+          "result_assembly_seconds": 0.07122380007058382,
+          "other_seconds": 0.0044765048660337925,
+          "total_seconds": 7.932015199912712
+        },
+        "requested_scenarios": 2000,
+        "completed_scenarios": 2000,
+        "candidate_count": 80,
+        "field_count": 1000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "before",
+      "seconds": 7.68836129992269,
+      "result_sha256": "46fb0d4adee10610df5d4d4391b6ea12bca1991bb1bc3abd2caf31158e2833ee",
+      "profile": {
+        "timings": {
+          "setup_seconds": 1.0137143000029027,
+          "cache_lookup_seconds": 8.800067007541656e-06,
+          "outcomes_seconds": 3.9611637014895678,
+          "opponents_seconds": 2.2574415986891836,
+          "scenario_io_seconds": 0.024853602051734924,
+          "candidates_seconds": 0.358977003255859,
+          "cache_finish_seconds": 9.500188753008842e-06,
+          "result_assembly_seconds": 0.06733200000599027,
+          "other_seconds": 0.004251594189554453,
+          "total_seconds": 7.687752099940553
+        },
+        "requested_scenarios": 2000,
+        "completed_scenarios": 2000,
+        "candidate_count": 80,
+        "field_count": 1000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    },
+    {
+      "trial": 2,
+      "mode": "after",
+      "seconds": 6.479286399902776,
+      "result_sha256": "46fb0d4adee10610df5d4d4391b6ea12bca1991bb1bc3abd2caf31158e2833ee",
+      "profile": {
+        "timings": {
+          "setup_seconds": 0.9982286999002099,
+          "cache_lookup_seconds": 7.699942216277122e-06,
+          "outcomes_seconds": 4.012423603562638,
+          "opponents_seconds": 1.0034549972042441,
+          "scenario_io_seconds": 0.02406339324079454,
+          "candidates_seconds": 0.3671372989192605,
+          "cache_finish_seconds": 8.299946784973145e-06,
+          "result_assembly_seconds": 0.06901940004900098,
+          "other_seconds": 0.0041890072170645,
+          "total_seconds": 6.478532399982214
+        },
+        "requested_scenarios": 2000,
+        "completed_scenarios": 2000,
+        "candidate_count": 80,
+        "field_count": 1000,
+        "reused_scenarios": 0,
+        "cache_status": "disabled"
+      }
+    }
+  ],
+  "median_seconds": {
+    "before": 7.68836129992269,
+    "after": 6.44551040022634
+  },
+  "limitations": "Three alternating-order local synthetic fresh Classic simulations, including opponent generation; no scenario replay. This independent change is compared against merged main, without PRs 188-190 optimizations. Not a whole-build or real-slate speedup claim. Observational profile timing excluded from exact parity hashes."
+}

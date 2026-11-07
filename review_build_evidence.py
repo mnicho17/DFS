@@ -27,7 +27,7 @@ MAX_LINEUPS = 1000
 MAX_PLAYER_DETAILS = 1000
 HASH = re.compile(r'[0-9a-f]{64}')
 MEMBERS = {'manifest.json', 'input-snapshot.json', 'lineups.json',
-           'audit-lineups.csv', 'build-report.txt'}
+           'audit-lineups.csv', 'build-report.txt', 'screening-audit.json.gz'}
 
 
 def digest(value):
@@ -200,6 +200,7 @@ class Reader:
         self.bytes = 0
         self.issues = Counter()
         self.receipts = {}
+        self.screening_members = {}
 
     def check(self):
         if self.cancelled():
@@ -254,7 +255,7 @@ class Reader:
         return self.archive_details(path)[:4]
 
     def archive_details(self, path):
-        """Also return validated output occurrences from the same captured bytes."""
+        """Return output occurrences and retain optional audit bytes from this read."""
         self.check()
         if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
             raise ValueError('unsupported archive')
@@ -306,7 +307,10 @@ class Reader:
                 if k.startswith('@cpt:'):
                     cpts[k[5:]] += 1
         self.receipts[str(path)] = hashlib.sha256(captured).hexdigest()
-        return snap, meta, sigs, cpts, rows
+        detail = (snap, meta, sigs, cpts, rows)
+        key = digest([snap['raw'], meta, rows])
+        self.screening_members.setdefault(key, []).append(data.get('screening-audit.json.gz'))
+        return detail
 
 
 def capture_build_evidence(root, options, results, cancelled, progress):
