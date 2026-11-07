@@ -8,6 +8,7 @@ import random
 import time
 from array import array
 from collections import Counter
+from operator import itemgetter
 
 from lineup_ranking import search_jobs, ranked_lineups, finish_rank
 from compute_settings import deep_candidate_budget, deep_search_seeds, deep_phase_fractions
@@ -69,6 +70,32 @@ def _score_compiled_bank(bank, outcomes):
     unique, positions = bank
     values = [_score_compiled_roster(roster, outcomes) for roster in unique]
     return sorted(values[position] for position in positions)
+
+
+
+def _index_score_bank(bank):
+    unique, positions = bank
+    keys = tuple(dict.fromkeys(key for captain, flex in unique for key in (captain,) + flex))
+    offsets = {key: index for index, key in enumerate(keys)}
+    layouts = []
+    for captain, flex in unique:
+        indices = tuple(offsets[key] for key in flex)
+        if len(indices) > 1:
+            getter = itemgetter(*indices)
+        elif indices:
+            getter = lambda values, index=indices[0]: (values[index],)
+        else:
+            getter = lambda values: ()
+        layouts.append((offsets[captain], getter))
+    return keys, tuple(layouts), tuple(positions)
+
+
+def _score_indexed_bank(bank, outcomes):
+    keys, layouts, positions = bank
+    # Read this frame's outcomes; never retain sampled values in the bank.
+    values = tuple(outcomes[key] for key in keys)
+    scores = [1.5 * values[captain] + sum(getter(values)) for captain, getter in layouts]
+    return sorted(scores[position] for position in positions)
 
 
 def validate_showdown_lineup(lineup, players, salary_cap):
@@ -262,18 +289,26 @@ def simulate_showdown(candidates, players, *, scenarios, field_lineup_count, sal
                      **({'history_profile':history_profile} if history_profile is not None else {})))
     profile.cache_lookup_seconds=time.perf_counter()-lookup_started
     completed = 0
+    scenario_volatility = {}
+    scenario_games = {}
+    indexed_banks = {}
     for scenario in range(max(1, int(scenarios))):
         if cancel_callback and cancel_callback():
             break
         def compute_frame():
             drawn=time.perf_counter()
-            outcomes = _scenario_outcomes(rng, pool, script_counter=scripts)
+            outcomes = _scenario_outcomes(rng, pool, script_counter=scripts,
+                                          _volatility_by_player=scenario_volatility,
+                                          _prepared_games=scenario_games)
             if outcome_transform is not None:
                 outcomes = outcome_transform(outcomes)
             profile.outcomes_seconds+=time.perf_counter()-drawn
             opponent_started=time.perf_counter()
             if compiled_banks is not None:
-                ranked = _score_compiled_bank(compiled_banks[scenario % 3], outcomes)
+                bank_index = scenario % 3
+                if bank_index not in indexed_banks:
+                    indexed_banks[bank_index] = _index_score_bank(compiled_banks[bank_index])
+                ranked = _score_indexed_bank(indexed_banks[bank_index], outcomes)
             else:
                 ranked = sorted(showdown_score(lu, outcomes) for lu in banks[scenario % 3])
             profile.opponents_seconds+=time.perf_counter()-opponent_started

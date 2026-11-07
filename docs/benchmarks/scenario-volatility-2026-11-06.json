@@ -1,0 +1,346 @@
+{
+  "baseline": "157f11b2e3b88287d4b7e2e4f2d0133abfe0392b",
+  "scenarios": 2000,
+  "field": 1000,
+  "seed": 481516,
+  "source_sha256": {
+    "nfl_simulation": "b1e2956081424e06c0078c003fee74d96d05c3f24858d06bf34e915cf16946ee",
+    "showdown_simulation": "b609b6f1879f2d1dd1e29ee5174361bd3597f2d6b6d4f5a5e815fcf44b875010"
+  },
+  "exact_results_equal": true,
+  "records": [
+    {
+      "kind": "classic",
+      "candidates": 80,
+      "trials": [
+        {
+          "trial": 0,
+          "mode": "before",
+          "seconds": 8.685718800174072,
+          "result_sha256": "8f3aaec38d457769283241efba2a8c57b1308c89f1baa5a51cec2384649c816f",
+          "profile": {
+            "timings": {
+              "setup_seconds": 1.082376099890098,
+              "cache_lookup_seconds": 1.0499963536858559e-05,
+              "outcomes_seconds": 4.520542296115309,
+              "opponents_seconds": 2.565812300425023,
+              "scenario_io_seconds": 0.027211605804041028,
+              "candidates_seconds": 0.4092327025718987,
+              "cache_finish_seconds": 1.9999919459223747e-05,
+              "result_assembly_seconds": 0.0756407999433577,
+              "other_seconds": 0.004819795256480575,
+              "total_seconds": 8.685666099889204
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 0,
+          "mode": "after",
+          "seconds": 8.302150399889797,
+          "result_sha256": "8f3aaec38d457769283241efba2a8c57b1308c89f1baa5a51cec2384649c816f",
+          "profile": {
+            "timings": {
+              "setup_seconds": 1.0625293001066893,
+              "cache_lookup_seconds": 9.799841791391373e-06,
+              "outcomes_seconds": 3.8669074084609747,
+              "opponents_seconds": 2.8224179020617157,
+              "scenario_io_seconds": 0.030442389892414212,
+              "candidates_seconds": 0.44228379940614104,
+              "cache_finish_seconds": 1.29002146422863e-05,
+              "result_assembly_seconds": 0.07211589999496937,
+              "other_seconds": 0.005372100044041872,
+              "total_seconds": 8.30209150002338
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 1,
+          "mode": "after",
+          "seconds": 7.588792400201783,
+          "result_sha256": "8f3aaec38d457769283241efba2a8c57b1308c89f1baa5a51cec2384649c816f",
+          "profile": {
+            "timings": {
+              "setup_seconds": 1.0453480000142008,
+              "cache_lookup_seconds": 9.00006853044033e-06,
+              "outcomes_seconds": 3.519015898462385,
+              "opponents_seconds": 2.5212438015732914,
+              "scenario_io_seconds": 0.027865898329764605,
+              "candidates_seconds": 0.39850910170935094,
+              "cache_finish_seconds": 9.799841791391373e-06,
+              "result_assembly_seconds": 0.07216740003786981,
+              "other_seconds": 0.004570400109514594,
+              "total_seconds": 7.588739300146699
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 1,
+          "mode": "before",
+          "seconds": 8.508313200203702,
+          "result_sha256": "8f3aaec38d457769283241efba2a8c57b1308c89f1baa5a51cec2384649c816f",
+          "profile": {
+            "timings": {
+              "setup_seconds": 1.0443491998594254,
+              "cache_lookup_seconds": 9.699957445263863e-06,
+              "outcomes_seconds": 4.438818297116086,
+              "opponents_seconds": 2.5170148971956223,
+              "scenario_io_seconds": 0.02877110429108143,
+              "candidates_seconds": 0.39734340040013194,
+              "cache_finish_seconds": 9.800074622035027e-06,
+              "result_assembly_seconds": 0.07735919998958707,
+              "other_seconds": 0.0045840011443942785,
+              "total_seconds": 8.508259600028396
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 2,
+          "mode": "before",
+          "seconds": 8.329007199965417,
+          "result_sha256": "8f3aaec38d457769283241efba2a8c57b1308c89f1baa5a51cec2384649c816f",
+          "profile": {
+            "timings": {
+              "setup_seconds": 1.053148299921304,
+              "cache_lookup_seconds": 9.700190275907516e-06,
+              "outcomes_seconds": 4.334917998639867,
+              "opponents_seconds": 2.444422601722181,
+              "scenario_io_seconds": 0.02849440509453416,
+              "candidates_seconds": 0.3904532992746681,
+              "cache_finish_seconds": 9.699957445263863e-06,
+              "result_assembly_seconds": 0.07304219994693995,
+              "other_seconds": 0.004459795309230685,
+              "total_seconds": 8.328958000056446
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 2,
+          "mode": "after",
+          "seconds": 7.617912700166926,
+          "result_sha256": "8f3aaec38d457769283241efba2a8c57b1308c89f1baa5a51cec2384649c816f",
+          "profile": {
+            "timings": {
+              "setup_seconds": 1.0829123000148684,
+              "cache_lookup_seconds": 1.0200077667832375e-05,
+              "outcomes_seconds": 3.504560495959595,
+              "opponents_seconds": 2.5220602001063526,
+              "scenario_io_seconds": 0.029116203309968114,
+              "candidates_seconds": 0.39798029721714556,
+              "cache_finish_seconds": 1.1200085282325745e-05,
+              "result_assembly_seconds": 0.07668409985490143,
+              "other_seconds": 0.004522503353655338,
+              "total_seconds": 7.617857499979436
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        }
+      ],
+      "median_seconds": {
+        "before": 8.508313200203702,
+        "after": 7.617912700166926
+      }
+    },
+    {
+      "kind": "showdown",
+      "candidates": 80,
+      "trials": [
+        {
+          "trial": 0,
+          "mode": "before",
+          "seconds": 4.628890900174156,
+          "result_sha256": "dc1a6b27809ec358d172c621c58e6ebd8ee3696b7ff6d2cc60c707d2ba714175",
+          "profile": {
+            "timings": {
+              "setup_seconds": 0.42519900016486645,
+              "cache_lookup_seconds": 0.0056820998433977365,
+              "outcomes_seconds": 2.1537944958545268,
+              "opponents_seconds": 1.631157705327496,
+              "scenario_io_seconds": 0.030885596526786685,
+              "candidates_seconds": 0.3325120972003788,
+              "cache_finish_seconds": 9.699957445263863e-06,
+              "result_assembly_seconds": 0.04554320010356605,
+              "other_seconds": 0.004053005250170827,
+              "total_seconds": 4.6288369002286345
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 0,
+          "mode": "after",
+          "seconds": 4.317232599947602,
+          "result_sha256": "dc1a6b27809ec358d172c621c58e6ebd8ee3696b7ff6d2cc60c707d2ba714175",
+          "profile": {
+            "timings": {
+              "setup_seconds": 0.42874940019100904,
+              "cache_lookup_seconds": 0.006095499964430928,
+              "outcomes_seconds": 1.766455799806863,
+              "opponents_seconds": 1.6903809972573072,
+              "scenario_io_seconds": 0.031372410245239735,
+              "candidates_seconds": 0.34514639456756413,
+              "cache_finish_seconds": 9.400071576237679e-06,
+              "result_assembly_seconds": 0.044910000171512365,
+              "other_seconds": 0.004065397894009948,
+              "total_seconds": 4.317185300169513
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 1,
+          "mode": "after",
+          "seconds": 4.401322899851948,
+          "result_sha256": "dc1a6b27809ec358d172c621c58e6ebd8ee3696b7ff6d2cc60c707d2ba714175",
+          "profile": {
+            "timings": {
+              "setup_seconds": 0.4236578999552876,
+              "cache_lookup_seconds": 0.005876499926671386,
+              "outcomes_seconds": 1.8127432949841022,
+              "opponents_seconds": 1.7209463033359498,
+              "scenario_io_seconds": 0.03235110221430659,
+              "candidates_seconds": 0.3497866995166987,
+              "cache_finish_seconds": 9.599840268492699e-06,
+              "result_assembly_seconds": 0.05158339999616146,
+              "other_seconds": 0.0043204003013670444,
+              "total_seconds": 4.401275200070813
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 1,
+          "mode": "before",
+          "seconds": 4.664831700036302,
+          "result_sha256": "dc1a6b27809ec358d172c621c58e6ebd8ee3696b7ff6d2cc60c707d2ba714175",
+          "profile": {
+            "timings": {
+              "setup_seconds": 0.41536500002257526,
+              "cache_lookup_seconds": 0.0058524999767541885,
+              "outcomes_seconds": 2.179112811340019,
+              "opponents_seconds": 1.6462504002265632,
+              "scenario_io_seconds": 0.03174908785149455,
+              "candidates_seconds": 0.3375474000349641,
+              "cache_finish_seconds": 1.109996810555458e-05,
+              "result_assembly_seconds": 0.04482439998537302,
+              "other_seconds": 0.004068500595167279,
+              "total_seconds": 4.664781200001016
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 2,
+          "mode": "before",
+          "seconds": 4.66931529995054,
+          "result_sha256": "dc1a6b27809ec358d172c621c58e6ebd8ee3696b7ff6d2cc60c707d2ba714175",
+          "profile": {
+            "timings": {
+              "setup_seconds": 0.4316537999548018,
+              "cache_lookup_seconds": 0.006343099987134337,
+              "outcomes_seconds": 2.1750901981722564,
+              "opponents_seconds": 1.6394480064045638,
+              "scenario_io_seconds": 0.03038589609786868,
+              "candidates_seconds": 0.3328686060849577,
+              "cache_finish_seconds": 8.299946784973145e-06,
+              "result_assembly_seconds": 0.049332500202581286,
+              "other_seconds": 0.004128593252971768,
+              "total_seconds": 4.669259000103921
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        },
+        {
+          "trial": 2,
+          "mode": "after",
+          "seconds": 4.1921677000354975,
+          "result_sha256": "dc1a6b27809ec358d172c621c58e6ebd8ee3696b7ff6d2cc60c707d2ba714175",
+          "profile": {
+            "timings": {
+              "setup_seconds": 0.41283600009046495,
+              "cache_lookup_seconds": 0.006130199879407883,
+              "outcomes_seconds": 1.7248416999354959,
+              "opponents_seconds": 1.6353247065562755,
+              "scenario_io_seconds": 0.03080219659022987,
+              "candidates_seconds": 0.33428890723735094,
+              "cache_finish_seconds": 1.009996049106121e-05,
+              "result_assembly_seconds": 0.043877100106328726,
+              "other_seconds": 0.003999289823696017,
+              "total_seconds": 4.192110200179741
+            },
+            "requested_scenarios": 2000,
+            "completed_scenarios": 2000,
+            "candidate_count": 80,
+            "field_count": 1000,
+            "reused_scenarios": 0,
+            "cache_status": "disabled"
+          }
+        }
+      ],
+      "median_seconds": {
+        "before": 4.664831700036302,
+        "after": 4.317232599947602
+      }
+    }
+  ],
+  "limitations": "Three alternating-order local synthetic trials per format. Fresh audit-sized simulation only, including opponent generation; not a whole-build or real-slate speedup claim. No scenario replay. Observational profile timing excluded from exact parity hashes."
+}
