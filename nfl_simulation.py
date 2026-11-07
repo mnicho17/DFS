@@ -15,6 +15,7 @@ field, and attaches slate-relative SIM Edge metrics to each candidate.
 import bisect
 import math
 import random
+from operator import itemgetter
 from collections import Counter, defaultdict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -816,14 +817,8 @@ def simulate_nfl_field_ownership(
     }
 
 
-def _scenario_outcomes(
-    rng: random.Random,
-    players: Sequence[Dict[str, Any]],
-    *,
-    script_counter: Optional[Counter[str]] = None,
-    specialist_model: str = 'events',
-    rotation_zero_prototype=None,
-) -> Dict[str, float]:
+def _prepare_scenario_games(players):
+    """Deterministic game inputs only; random scripts remain per scenario."""
     # Sorted inputs make seeded builds reproducible across separate app runs;
     # set iteration order varies with Python's per-process hash seed.
     games = sorted({_game(player) for player in players if _game(player)})
@@ -833,9 +828,7 @@ def _scenario_outcomes(
         if _game(player):
             players_by_game[_game(player)].append(player)
 
-    game_scripts: Dict[str, str] = {}
-    game_factor: Dict[str, float] = {}
-    favorite_by_game: Dict[str, str] = {}
+    game_inputs = {}
     for game in games:
         game_players = players_by_game.get(game, [])
         totals = [
@@ -858,6 +851,38 @@ def _scenario_outcomes(
         shootout_weight = _clamp(0.10 + (game_total - 43.0) * 0.015, 0.06, 0.30)
         defensive_weight = _clamp(0.12 + (43.0 - game_total) * 0.015, 0.06, 0.28)
         blowout_weight = _clamp(0.08 + max(0.0, largest_spread - 3.0) * 0.020, 0.07, 0.27)
+        game_inputs[game] = dict(
+            weights=(shootout_weight, defensive_weight, blowout_weight),
+            spreads=team_spreads, largest_spread=largest_spread,
+            teams=sorted({_team(player) for player in game_players if _team(player)}),
+        )
+    return teams, game_inputs
+
+
+def _scenario_outcomes(
+    rng: random.Random,
+    players: Sequence[Dict[str, Any]],
+    *,
+    script_counter: Optional[Counter[str]] = None,
+    specialist_model: str = 'events',
+    rotation_zero_prototype=None,
+    _volatility_by_player: Optional[Dict[int, float]] = None,
+    _prepared_games: Optional[Dict[str, Any]] = None,
+) -> Dict[str, float]:
+    if _prepared_games is None:
+        teams, game_inputs = _prepare_scenario_games(players)
+    else:
+        if 'value' not in _prepared_games:
+            _prepared_games['value'] = _prepare_scenario_games(players)
+        teams, game_inputs = _prepared_games['value']
+
+    game_scripts: Dict[str, str] = {}
+    game_factor: Dict[str, float] = {}
+    favorite_by_game: Dict[str, str] = {}
+    for game, inputs in game_inputs.items():
+        shootout_weight, defensive_weight, blowout_weight = inputs['weights']
+        team_spreads = inputs['spreads']
+        largest_spread = inputs['largest_spread']
         roll = rng.random()
         if roll < shootout_weight:
             script = "Shootout"
@@ -881,7 +906,7 @@ def _scenario_outcomes(
         else:
             game_factor[game] = raw_game
 
-        game_teams = sorted({_team(player) for player in game_players if _team(player)})
+        game_teams = inputs['teams']
         if game_teams:
             favorite_by_game[game] = (
                 min(game_teams, key=lambda team: (team_spreads.get(team, 0.0), team))
@@ -892,7 +917,7 @@ def _scenario_outcomes(
     team_environment = {team: rng.gauss(0.0, 1.0) for team in teams}
     team_style = {team: rng.gauss(0.0, 1.0) for team in teams}
     for game, script in game_scripts.items():
-        game_teams = sorted({_team(player) for player in players_by_game.get(game, []) if _team(player)})
+        game_teams = game_inputs[game]['teams']
         if script == "Shootout":
             for team in game_teams:
                 team_environment[team] += 0.45
@@ -949,7 +974,16 @@ def _scenario_outcomes(
             baseline = _number(player.get('WorkloadProjection'), 0.0)
             if baseline > 0:
                 mean *= workload_points(sampled_workloads[id(player)]) / baseline
-        cv = _player_volatility_cv(player)
+        # Simulation callers own this lazy table for one fixed input snapshot.
+        # Direct diagnostic draws retain the uncached path. No sampled values
+        # or random state are stored, and a new simulation starts empty.
+        if _volatility_by_player is None:
+            cv = _player_volatility_cv(player)
+        else:
+            identity = id(player)
+            if identity not in _volatility_by_player:
+                _volatility_by_player[identity] = _player_volatility_cv(player)
+            cv = _volatility_by_player[identity]
         if pos == "DST":
             score = max(-4.0, mean + max(3.0, mean * cv) * z)
         else:
@@ -973,6 +1007,31 @@ def _scenario_outcomes(
     elif specialist_model != 'legacy':
         raise ValueError('Unknown specialist model')
     return outcomes
+
+
+def _compile_classic_score_bank(signatures):
+    """Compile lookups without changing slot order or roster multiplicity."""
+    signatures = tuple(tuple(signature) for signature in signatures)
+    keys = tuple(dict.fromkeys(key for signature in signatures for key in signature))
+    positions = {key: index for index, key in enumerate(keys)}
+    getters = []
+    for signature in signatures:
+        indices = tuple(positions[key] for key in signature)
+        if len(indices) > 1:
+            getters.append(itemgetter(*indices))
+        elif indices:
+            # itemgetter with one index returns a scalar; retain sum's original
+            # single-item semantics, including its numeric type and signed zero.
+            getters.append(lambda values, index=indices[0]: (values[index],))
+        else:
+            getters.append(lambda values: ())
+    return keys, tuple(getters)
+
+
+def _score_classic_bank(compiled, outcomes):
+    keys, getters = compiled
+    values = tuple(outcomes.get(key, 0.0) for key in keys)
+    return sorted(sum(getter(values)) for getter in getters)
 
 
 def _opponent_field_banks(
@@ -1354,19 +1413,25 @@ def simulate_nfl_contest(
         count=scenario_count, enabled=scenario_cache and outcome_transform is None, cancelled=cancel_callback,
         context=dict(players=list(players),opponent_players=opponent_players,config=config,salary_cap=salary_cap,field_size=effective_field_size))
     profile.cache_lookup_seconds=time.perf_counter()-lookup_started
+    scenario_volatility: Dict[int, float] = {}
+    scenario_games: Dict[str, Any] = {}
+    compiled_opponent_banks = {}
     for scenario_index in range(scenario_count):
         if cancel_callback and cancel_callback():
             break
         def compute_frame():
             drawn=time.perf_counter()
-            outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts)
+            outcomes = _scenario_outcomes(rng, sim_players, script_counter=script_counts,
+                                          _volatility_by_player=scenario_volatility,
+                                          _prepared_games=scenario_games)
             if outcome_transform is not None:
                 outcomes = outcome_transform(outcomes)
             profile.outcomes_seconds+=time.perf_counter()-drawn
             opponent_started=time.perf_counter()
-            active_field_keys = opponent_field_banks[scenario_index % len(opponent_field_banks)]
-            ranked=sorted(sum(outcomes.get(key, 0.0) for key in signature)
-                for signature in active_field_keys)
+            bank_index = scenario_index % len(opponent_field_banks)
+            if bank_index not in compiled_opponent_banks:
+                compiled_opponent_banks[bank_index] = _compile_classic_score_bank(opponent_field_banks[bank_index])
+            ranked = _score_classic_bank(compiled_opponent_banks[bank_index], outcomes)
             profile.opponents_seconds+=time.perf_counter()-opponent_started
             return outcomes, ranked
         before=profile.outcomes_seconds+profile.opponents_seconds

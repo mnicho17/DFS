@@ -1,0 +1,9 @@
+# Precomputed refinement count deltas
+
+Profiling #194 still put scenario-swap scoring first: 4.977 of 7.791 instrumented seconds in a synthetic 100-candidate/20-entry selection. An overlap shortcut preserved exact results but measured 5.780s versus 5.840s and was discarded. Instrumented profile timings are not unprofiled latency estimates.
+
+Precompute the exact floating subtraction for each feasible count changing down one (clamped to zero), staying unchanged, or increasing one. The tables are local to the selection call, bounded by the selected portfolio, and absent when refinement is disabled. Keep traversal, delta addition and weighting order; count clamps, rules, cancellation and all search/refinement budgets remain. The largest before-count is the number of selected rosters; an incoming swap can add at most one.
+
+Three alternating paired trials against #194 de40aea measured selection medians 5.871s before and 5.404s after (8.0% lower). All six trials matched exact ordered-portfolio and structured-report digests, eight attempts and six swaps, and retained candidate rows, values, metrics and hit sets. This selection-only synthetic sample used 100 candidates, 20 entries, 2,500 scenarios and 1,000 field lineups; it does not establish full 150-entry or production-slate speed.
+
+74 focused portfolio/refinement/recovery tests passed in 15.545s with zero unexpected network attempts. The kernel equivalence test now extracts the actual table assignments along with the actual nested kernel, comparing exact float hex against original arithmetic over 200 deterministic cases and four weights, including missing/negative/zero/maximum counts, overlapping and new hits and empty sets. Existing receipts cover retained portfolios and Classic behavior. Full suite and Windows package checks remain pending for this follow-up.
