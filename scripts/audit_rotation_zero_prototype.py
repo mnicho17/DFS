@@ -29,6 +29,7 @@ from nfl_specialists import team_kicker
 from nfl_eligibility import depth
 from repeatability import model_version
 from distribution_validation import validation_report
+from scripts.audit_outcome_summary import outcome_sign_subgroups
 
 db=args.db
 version=model_version();audit=PregameEvidence(db)
@@ -210,12 +211,7 @@ for profile in profile_options if report['games'] else ():
   **{k:statistics.mean(g[k] for g in game_metrics) for k in game_metrics[0]},
   interactions={k:statistics.mean(g[k] for g in team_metrics) for k in team_metrics[0]})
  if args.interaction_study or args.joint_study or args.event_study or args.reconciled_study:
-  report['summary'][profile]['subgroups']={}
-  for label,is_zero in [('actual_zero',True),('actual_positive',False)]:
-   groups=[[r['profiles'][profile]['crps'] for r in g['rows'] if (r['actual']==0)==is_zero] for g in report['games']]
-   present=[statistics.mean(v) for v in groups if v]
-   report['summary'][profile]['subgroups'][label]=dict(games=len(present),observations=sum(map(len,groups)),
-    crps=statistics.mean(present) if present else None)
+  report['summary'][profile]['subgroups']=outcome_sign_subgroups(report['games'],profile)
  if args.event_study or args.reconciled_study:
   offense={}
   for position in ('all','QB','RB','WR','TE'):

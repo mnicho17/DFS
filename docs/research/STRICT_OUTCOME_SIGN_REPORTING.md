@@ -1,0 +1,17 @@
+# Strict outcome-sign audit reporting
+
+The diagnostic zero-score auditor previously labeled every nonzero actual score as `actual_positive`. A negative score therefore contaminated its positive-only CRPS. The reporting helper now separates `actual_zero` (== 0), `actual_positive` (> 0), and `actual_negative` (< 0). It averages player CRPS within each represented game, then games equally. Empty categories retain zero counts and null CRPS; missing, boolean and nonfinite actuals/metrics fail rather than becoming zeros.
+
+This change affects diagnostic reporting only. It does not change draws, forecasts, models, qualification, actual-score readers, source reconciliation, cancellation, saved evidence, ownership, ranking or lineup generation. Existing raw reports are retained unchanged. Consumers must not interpret an older report's nonzero subgroup as strictly positive.
+
+Six regression tests cover sign separation, negative zero, nonmutation, equal-game weighting, absent categories, unknown actuals, invalid metrics and missing profiles. The helper also reproduces games/counts/CRPS exactly for all five profiles in the previously captured two-game report: ten zero, fifteen positive and one negative outcome. That replay reads the existing report; it does not rerun or tune the model and leaves its hash unchanged. Focused prototype/source/outcome tests: 59 passed, no unexpected network attempts. Complete-suite results will be recorded after completion.
+
+## Next bounded-reader slice
+
+Inspection confirms that `field_outcome_validation._rows` counts every CSV data row against `historical_identity.MAX_RESULTS` (200,000), even when most rows are standings rather than player scores. `_score_observations` independently bounds retained exact player-score observations at 5,000. The current limits remain unchanged in this reporting fix.
+
+The next implementation should provide an explicit research-only, bounded score-reading path, rather than changing global historical/AR limits or certifying complete fields. It must scan to EOF, retain original CSV line numbers, use the same exact identity/role/score validator, and detect contradictory score rows even when they occur after a long standings prefix. Missing selected-source scores must never be supplied by other exports. Source hashing, same-game cross-export conflicts, frozen-pregame qualification and final revalidation remain mandatory.
+
+Choose and record separate finite row, byte and elapsed-time budgets before reading new outcomes. Bound verification reads too; stat alone does not enforce a budget against a growing file. Cancellation must work during CSV scans and verification. No partial result or cache entry may escape after cancellation, budget exhaustion, parse failure, source mutation or cross-export conflict. Do not claim that score-only admission certifies standings completeness.
+
+Required regressions include: a valid score table beyond the legacy standings-row budget; a conflicting identity/score after that prefix; exact and exceeded row/byte budgets; cancelled scans/verification; mutated source; missing selected scores despite another export; score-observation budget; and unchanged legacy reader limits. First compare newly implemented output against the existing reader on small fixtures before evaluating the excluded games. Keep any new larger-game results separate from the original two-game receipt and disclose remaining exclusions.
