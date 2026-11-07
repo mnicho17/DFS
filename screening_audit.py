@@ -124,12 +124,18 @@ def load_audit(path):
     return load_audit_bytes(captured)
 
 
-def load_audit_bytes(captured):
+def load_audit_bytes(captured, *, check=lambda: None, consume=lambda size: None):
     """Validate exactly the captured compressed bytes, without a second file read."""
     import io
+    check()
     if len(captured) > MAX_COMPRESSED_BYTES: raise ValueError('Compressed audit limit exceeded.')
     with gzip.GzipFile(fileobj=io.BytesIO(captured), mode='rb') as handle:
-        raw = handle.read(MAX_BYTES + 1)
+        chunks = []; size = 0
+        while block := handle.read(min(1024 * 1024, MAX_BYTES + 1 - size)):
+            check(); size += len(block); consume(len(block)); chunks.append(block)
+            if size > MAX_BYTES: break
+        raw = b''.join(chunks)
+    check()
     if len(raw) > MAX_BYTES: raise ValueError('Audit decompression limit exceeded.')
     envelope = json.loads(raw); payload = envelope['payload']
     if payload.get('schema') != 1 or envelope.get('audit_id') != fingerprint(payload):
@@ -138,6 +144,7 @@ def load_audit_bytes(captured):
     if not 0 <= len(rows) <= MAX_CANDIDATES: raise ValueError('Audit candidate limit exceeded.')
     for field in ('generated_order', 'salary_eligible_order', 'retained_order', 'screening_input_order',
                   'coarse_order', 'shortlisted', 'captain_reserved', 'feasible_reserved', 'selected'):
+        check()
         if any(type(i) is not int or not 0 <= i < len(rows) for i in payload[field]):
             raise ValueError('Invalid candidate stage index.')
     if payload['screening_input_order'] != payload['retained_order'] + payload['salary_eligible_order']:
@@ -153,6 +160,7 @@ def load_audit_bytes(captured):
     from showdown_simulation import validate_showdown_lineup
     from optimizers import ShowdownLineup
     for row in rows:
+        check()
         signature = tuple(row['signature'])
         if len(signature) != 6 or not signature[0].startswith('CPT:'):
             raise ValueError('Invalid audit roster slots.')

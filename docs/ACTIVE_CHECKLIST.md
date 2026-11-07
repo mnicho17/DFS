@@ -26,14 +26,15 @@ The real-input comparison used five Captain locks, 63 groups, minimum unique 2, 
 
 The bounded change excludes only an explicit audited benchmark list when not reachable from strict source. Static/transitive imports reinstate strict hashing; ambiguous dynamic execution keeps all audited benchmarks strict. New benchmark filenames remain strict until audited. The changed policy itself intentionally requires a new stamp once: it does not migrate or approve existing old stamps, saved SIM evidence or historical records.
 
-## 3. Explain lineup decisions — inventory completed; integration pending
+## 3. Explain lineup decisions — recorded membership implemented; validation/review pending
 
 - [x] Initial source inventory: build_explanations.py explicitly records supported local-rule checks and final output membership; generation, screening, independent validation and selection rejection histories are not recorded per witness. This is a documented limit, not completed pipeline tracing.
 - [x] Inventory the separate Showdown screening audit and evidence boundaries; see BUILD_EXPLANATION_EVIDENCE.md. Integration remains pending.
 - [x] Implement archive-time capture of the exact referenced screening audit bytes with receipt, snapshot/context and selected-occurrence checks. Optional evidence failures remain unavailable; explanation integration remains pending.
-- [ ] Revalidate and expose captured stage membership in the historical explanation view.
-- [ ] Add stage-specific explanations only where original evidence supports them.
-- [ ] Keep missing causes explicitly unavailable; absence alone is not proof of rejection.
+- [x] Implement source-bound screening membership in the historical explanation view, including exact occurrences, Captain roles, partial/not-run scoring and aggregate/private reporting. Original ZIP bytes are revalidated; decompression consumes the shared read budget.
+- [x] Limit stage explanations to originally recorded membership. Older/missing/conflicting evidence is unavailable; no pipeline rejection cause is inferred.
+- [x] Keep missing causes explicitly unavailable; absence alone is not proof of rejection. Independent-validation and portfolio-selection rejection causes remain not recorded.
+- [ ] Complete validation/review of this read-only slice; integration/publication and visible packaged-app testing remain separate gates.
 
 ## 4. Historical construction research — queued
 

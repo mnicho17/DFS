@@ -253,8 +253,8 @@ class Reader:
         # Keep the established four-value API for all existing consumers.
         return self.archive_details(path)[:4]
 
-    def archive_details(self, path):
-        """Also return validated output occurrences from the same captured bytes."""
+    def archive_details(self, path, *, include_screening=False):
+        """Return output occurrences and optionally the same captured audit member."""
         self.check()
         if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
             raise ValueError('unsupported archive')
@@ -306,7 +306,8 @@ class Reader:
                 if k.startswith('@cpt:'):
                     cpts[k[5:]] += 1
         self.receipts[str(path)] = hashlib.sha256(captured).hexdigest()
-        return snap, meta, sigs, cpts, rows
+        detail = (snap, meta, sigs, cpts, rows)
+        return detail + (data.get('screening-audit.json.gz'),) if include_screening else detail
 
 
 def capture_build_evidence(root, options, results, cancelled, progress):
