@@ -200,6 +200,7 @@ class Reader:
         self.bytes = 0
         self.issues = Counter()
         self.receipts = {}
+        self.screening_members = {}
 
     def check(self):
         if self.cancelled():
@@ -253,8 +254,8 @@ class Reader:
         # Keep the established four-value API for all existing consumers.
         return self.archive_details(path)[:4]
 
-    def archive_details(self, path, *, include_screening=False):
-        """Return output occurrences and optionally the same captured audit member."""
+    def archive_details(self, path):
+        """Return output occurrences and retain optional audit bytes from this read."""
         self.check()
         if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
             raise ValueError('unsupported archive')
@@ -307,7 +308,9 @@ class Reader:
                     cpts[k[5:]] += 1
         self.receipts[str(path)] = hashlib.sha256(captured).hexdigest()
         detail = (snap, meta, sigs, cpts, rows)
-        return detail + (data.get('screening-audit.json.gz'),) if include_screening else detail
+        key = digest([snap['raw'], meta, rows])
+        self.screening_members.setdefault(key, []).append(data.get('screening-audit.json.gz'))
+        return detail
 
 
 def capture_build_evidence(root, options, results, cancelled, progress):

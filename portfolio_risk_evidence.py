@@ -66,7 +66,7 @@ class CaptureReader(be.Reader):
     def __init__(self, cancelled):
         super().__init__(cancelled, historical=True)
         self.snapshots, self.archives, self.directories = {}, defaultdict(list), {}
-        self.screening = defaultdict(list)
+        self.screening = self.screening_members
 
     @staticmethod
     def stamps(paths):
@@ -87,10 +87,8 @@ class CaptureReader(be.Reader):
         return value
 
     def archive(self, path):
-        captured = super().archive_details(path, include_screening=True)
-        detail, screening = captured[:5], captured[5]
+        detail = super().archive_details(path)
         snap,meta,sigs,_,rows = detail
-        self.screening[be.digest([snap['raw'],meta,rows])].append(screening)
         self.snapshots[be.digest(snap['raw'])] = snap
         self.archives[be.archive_identity(meta,sigs)].append(detail)
         return detail[:4]
