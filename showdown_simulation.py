@@ -48,7 +48,9 @@ def _compile_score_roster(lineup):
 
 def _score_compiled_roster(roster, outcomes):
     captain, flex = roster
-    return 1.5 * outcomes[captain] + sum(outcomes[key] for key in flex)
+    # map keeps the exact FLEX order and built-in sum arithmetic while
+    # avoiding a Python generator resume for every player score.
+    return 1.5 * outcomes[captain] + sum(map(outcomes.__getitem__, flex))
 
 
 def _compile_score_bank(bank):
