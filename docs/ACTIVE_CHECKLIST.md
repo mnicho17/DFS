@@ -42,8 +42,10 @@ The bounded change excludes only an explicit audited benchmark list when not rea
 - [x] Audit indexed coverage and predeclare the holdout: 42 Showdown records / 23 game groups; 17 discovery and six held-out groups. Field completeness is unverified.
 - [x] Complete the existing winner/peer discovery review: 36 contests, 1,136 winner/contest portfolios; no excluded contests.
 - [x] Complete six bounded walk-forward date reviews: 5,195 entrant/contest profiles; five/ten-peer support checks and game-level sensitivities. No defaults changed. See [the research checkpoint](research/HISTORICAL_CONSTRUCTION_2026_11_07.md).
-- [ ] Compare successful users' whole contest portfolios with the full field and entry-count peers. Median contrasts are available; fresh observed-field and mean-to-mean checks remain open.
-- [ ] Finish K/DST, team-split and direct Captain/opposing-DST comparisons across game groups. K/DST/splits and QB/opposing-DST are described in the checkpoint; the direct all-position Captain pairing is still unavailable.
+- [x] Complete fresh per-entry observed-field and exact-entry-count peer-mean checks for receiver pairing and aggregate specialist counts: 42 contests / 4,996,498 entries, no excluded contests; unresolved entries and incomplete portfolios withheld. Five/ten-peer and game sensitivities recorded in the research checkpoint.
+- [x] Complete exact-Captain/salary-band finish-rate checks for those receiver/specialist features, with five/ten entries per side and game sensitivities. No defaults changed.
+- [ ] Extend fresh field/peer-mean checks to separate kicker/defense flags, team splits and the earlier-qualified cohort; do not substitute outcome-selected winners for walk-forward evidence.
+- [ ] Finish K/DST, team-split and direct Captain/opposing-DST comparisons across game groups. Aggregate K/DST counts now have fresh field/peer-mean and matched-finish checks; separate flags/splits and QB/opposing-DST retain the initial median-based descriptions. The direct all-position Captain pairing is still unavailable.
 - [x] Use a predeclared held-out period and disclose coverage, entry counts, support attrition and game-level sensitivity. No grouping defaults proposed; matched construction/field checks remain open.
 
 ## 5. Zero-score/team/DST SIM research — queued, diagnostic only
