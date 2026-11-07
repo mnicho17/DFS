@@ -49,11 +49,14 @@ The bounded change excludes only an explicit audited benchmark list when not rea
 - [x] Complete fresh K/DST flags, team-split and direct all-position Captain/opposing-DST field/peer-mean and exact-Captain/salary-matched comparisons across game groups. Position-conditional support and game sensitivity are recorded; no defaults changed. The app's older portfolio report is unchanged.
 - [x] Use a predeclared held-out period and disclose coverage, entry counts, support attrition and game-level sensitivity. No grouping defaults proposed; broader cohort-pattern checks and further unseen-game validation remain open before any production/default change.
 
-## 5. Zero-score/team/DST SIM research — queued, diagnostic only
+## 5. Zero-score/team/DST SIM research — first independent pass complete; acceptance blocked
 
-- [ ] Validate the existing reconciled-event prototype on independent qualified games.
-- [ ] Preserve forecast means, record infeasible cases and evaluate shared team/opposing-DST behavior.
-- [ ] Review zero rates, positive tails and correlations before choosing any production change.
+- [x] Complete a declared later-game pass with the unchanged reconciled-event auditor: two admitted games / 26 rotation outcomes; five larger exports withheld by the original outcome-row limit. See [the independent-game checkpoint](research/ZERO_SCORE_INDEPENDENT_2026_11_07.md). This is exploratory coverage, not production acceptance.
+- [x] Verify fixed-bound feasibility and modeled forecast means on admitted games: optimal plans, normalizers 1, analytic residual below tolerance, 88 profile-specific Monte Carlo checks within five standard errors; frozen-input/protected-draw/DST-offense invariants retained. No feasibility inference for excluded games.
+- [x] Review zero, strictly positive/negative outcomes, team tails and DST interactions: zeros improve, positive bias worsens and linked-DST CRPS worsens in both admitted games. No defaults changed.
+- [ ] Correct the existing audit tool's nonzero-as-positive subgroup label; the current checkpoint uses a separately tested strict-sign aggregation and retains the original report unchanged.
+- [ ] Broaden admitted independent-game coverage through a reviewed bounded outcome reader, preserving full-source identity/conflict/cancellation checks; do not promote partial large-export results.
+- [ ] Resolve positive bias/tails and opposing-DST calibration before any production/default change; two games and four DST outcomes are insufficient.
 
 ## 6. QB early-exit coverage — queued
 
