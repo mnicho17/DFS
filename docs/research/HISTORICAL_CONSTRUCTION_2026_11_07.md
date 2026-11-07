@@ -104,7 +104,7 @@ These are feature-present minus baseline top-1%-cutoff rates, using resolved ran
 
 Again, the columns cover 12, eight and six supported games. Later two-versus-zero is higher in three games and lower in three, with an omit-one range of -0.52 to +1.28 pp. Later receiver/own-QB is also three higher and three lower, with an omit-one range of -0.05 to +0.40 pp. Discovery three-plus-versus-zero in 150-Max is positive in only one game and negative in eleven, yet its mean is nearly zero; its omit-one range spans -1.14 to +0.19 pp. Game-level sensitivity matters more than a rounded average.
 
-These are observational associations with unknown field completeness, repeated users/rosters and outcome-selected winners. They establish neither causality nor ROI and do not justify automatic grouping defaults. This first fresh audit covered receiver pairing and aggregate specialist counts. The following audit extends to separate flags, team splits and direct Captain/opposing-DST; earlier-qualified-cohort mean comparisons remain open.
+These are observational associations with unknown field completeness, repeated users/rosters and outcome-selected winners. They establish neither causality nor ROI and do not justify automatic grouping defaults. This first fresh audit covered receiver pairing and aggregate specialist counts. The following audits extend to separate flags, team splits, direct Captain/opposing-DST and the earlier-qualified cohort's existing fresh metrics.
 
 ## Direct Captain/opposing-DST and remaining construction audit
 
@@ -175,18 +175,62 @@ The columns cover twelve, eight and six supported games. Later two-kicker compar
 
 These later tables describe **current observed winners**, not the earlier-qualified cohort with the negative bundle-usage contrast above. Different cohort selection and mean-versus-median comparisons answer different questions; this is not a correction or reversal of that earlier cohort result. Captain-pool concentration can reflect chosen locks and is not evidence of normal SIM behavior. Single Entry remains limited to two discovery games, with no later-period validation; no Single Entry or large-field strategy default is established.
 
-The direct Captain/opposing-DST signal and repeated two-kicker finding deserve a separate earlier-qualified-cohort check and additional unseen games. The earlier-qualified peer-mean review remains open. No forecasts, SIM, ownership, ranking, generation, saved rules, qualification defaults or salary associations changed; there are no ROI or payout claims.
+The direct Captain/opposing-DST signal and repeated two-kicker finding deserve broader earlier-qualified-cohort checks and additional unseen games. The following peer-mean review covers ten existing fresh cohort features; it does not add direct Captain/opposing-DST or fresh separate double-K/DST/QB flags to that reviewer. No forecasts, SIM, ownership, ranking, generation, saved rules, qualification defaults or salary associations changed; there are no ROI or payout claims.
+
+## Earlier-qualified cohort: peer-average follow-up
+
+The six predeclared evaluation windows have now been rerun with the unchanged bounded historical-series reviewer. The result contains the same 5,195 earlier-qualified entrant/contest profiles and 690,269 entries, with no excluded contests. Every original serialized legacy value reproduces exactly, including cohort membership, prior records, medians, support counts, outcome rates and source receipts. Original database size and modification time were unchanged. The [peer-average receipt](earlier-qualified-peer-means-2026-11-07.json) retains per-game results and five/ten-peer sensitivities; raw identities stay private.
+
+A private, module-local recorder returns each original median unchanged and records the arithmetic mean of that exact same filtered peer-value vector beside it. After the existing reviewer finishes all source/association/index checks, each recording's original median and metric-specific peer count must match its profile before the separately calculated mean is bound; missing, extra or conflicting bindings abort publication. Canonical JSON comparison normalizes saved tuple/list representation without changing values or order. No production calculation, source/identity gate, code file or app setting changed.
+
+This uses six explicit nonoverlapping one-date windows, retaining all earlier history. The existing 300,000 selected-entry cap remains in each window; the existing series caps are eight windows, 1,200,000 entries and 10,000 profiles. Research cancellation limits remain ten minutes per window and forty minutes overall. Nothing was truncated or promoted from an incomplete attempt.
+
+The freshly audited metrics below cover team splits, any-QB/opposing-DST, the original four-rule bundle, receiver-Captain/own-QB usage and aggregate K/DST counts. The old cached player/Captain pools, repeated-lineup/overlap/salary summaries and separate double-QB/K/DST percentages are not used for fresh conclusions. Direct all-position Captain/opposing-DST is **not** a feature of this earlier-qualified reviewer; its separate current-winner/field analysis above cannot substitute for this cohort.
+
+At ten eligible peers per feature, all rows cover six 150-Max games. Values are equal-user averages within contest, contests within game, then games equally. Peers match observed entry count and exact earlier ranked-slate count, with at least three earlier ranked slates. They are noncohort participants; a current winner can remain a peer. They are not matched on exact prior contests, Captain allocation, salary, entry fee or field strength.
+
+| Pattern | Cohort average | Peer average | Difference | Supported profiles |
+| --- | ---: | ---: | ---: | ---: |
+| 5-1 | 18.78% | 17.48% | +1.30 pp | 662 |
+| 4-2 | 46.74% | 46.77% | -0.04 pp | 662 |
+| 3-3 | 34.48% | 35.74% | -1.26 pp | 662 |
+| Any QB with opposing DST | 11.54% | 11.79% | -0.26 pp | 662 |
+| Meets the original four restrictions | 51.69% | 54.57% | -2.87 pp | 662 |
+| WR/TE Captain with own QB | 81.47% | 74.54% | +6.93 pp | 631 |
+| Zero K/DST | 43.03% | 45.57% | -2.54 pp | 662 |
+| One K/DST | 43.49% | 40.64% | +2.85 pp | 662 |
+| Two K/DST | 12.25% | 12.40% | -0.15 pp | 662 |
+| Three or more K/DST | 1.23% | 1.39% | -0.16 pp | 662 |
+
+Receiver comparisons require eligible WR/TE Captain entries for both the cohort user and enough peers; they do not borrow specialist-count support. At five-peer support, 897 profiles support the receiver comparison versus 1,127 for the other rows. At ten-peer support the corresponding counts are 631 and 662. The original review still contains 2,150 unresolved selected-portfolio entries; their means remain unavailable rather than becoming zeros. Unsupported comparisons are not counted as losses.
+
+### What changes relative to the median comparison
+
+Only the comparator statistic changes here: metric-specific eligible profiles and cohort averages are identical to the original median-based review. This isolates a statistic change, unlike the earlier current-winner fresh audit, which also applied fresh identity exclusions.
+
+- Receiver-Captain/own-QB usage changes from -1.64 pp versus peer medians to **+6.93 pp versus peer averages**. The mean gap is positive in four of six games; the omit-one range is +4.71 to +8.92 pp. At five-peer support it remains +5.26 pp. This is a conditional usage association, not proof that a pairing causes better finishes.
+- Any-QB/opposing-DST changes from +2.50 pp versus medians to -0.26 pp versus averages. At ten-peer support it is higher in two games and lower in four, with an omit-one range crossing zero. It still does not answer direct Captain/opposing-DST behavior.
+- Two-K/DST usage changes from +4.47 pp versus medians to -0.15 pp versus averages at ten-peer support. Its omit-one range spans -0.68 to +0.19 pp. At five-peer support it is instead +1.02 pp (five higher games, one lower). The direction is support-sensitive; a blanket claim of excess or avoidance is unsupported.
+- Three-plus-K/DST changes from +1.23 pp versus medians to -0.16 pp versus averages, with an omit-one range crossing zero. The earlier positive median gap does not establish heavier specialist use relative to the population average.
+- The four-rule bundle remains less common on average: -2.87 pp, lower in five games and higher in one; omit-one -3.63 to -2.33 pp. The five-peer result is -1.63 pp. This differs from the current-winner cohort's positive bundle contrast and is not a causal verdict on the bundle.
+- The 5-1 usage gap shrinks from +7.29 pp versus medians to +1.30 pp versus averages. It is +0.63 pp at five-peer support, with an omit-one range crossing zero at that support level. The receipt retains all three exhaustive team-split categories; peer averages now sum to 100%, as do the four K/DST categories.
+
+The original top-cutoff association is unchanged: at ten-peer support, 662 profiles have equal-game rates of at least one top-1%-cutoff entry of 52.21% versus 38.55% for peers; at five-peer support, 1,127 profiles yield 58.37% versus 37.68%. These are not entry-level win probabilities, ROI or a new predictive validation. They describe the same observed participants and outcomes as before.
+
+Ten private recorder checks passed in 3.070s, including skewed means, zeros versus unavailable values, exact legacy output, later losers/current-winning peers, incomplete identities, support binding, bounds, cancellation, restoration and equal-game arithmetic. The 85 existing history/cohort/series/pairing regression tests passed in 51.572s, with no unexpected network attempts. Independent checks reproduce original qualification/outcome data, metric-specific eligibility, game averages, omit-one ranges and exhaustive-category totals. No Python files were added to the repository.
+
+This completes the declared earlier-qualified peer-average comparison for these ten audited metrics. Broader earlier-qualified direct-pairing/separate-flag checks and additional unseen games remain limitations before any production grouping or field-model change. All six games are 150-Max, field completeness is unverified, peers/users recur, and participation and Captain-pool choices can affect the patterns. No forecasts, SIM, ownership, ranking, generation, saved limits, payouts or defaults changed. The next queued checklist work is independent-game validation of the existing zero-score/team/DST prototype.
 
 ## Coverage gaps and next accepted checks
 
 - Nineteen cataloged result sources are unpaired: fifteen Classic and four Showdown. A saved-manifest candidate scan found no compatible salary match; eighteen have same-date candidates with identity/role conflicts and one lacks a same-date candidate. This preliminary scan is not fresh source qualification and does not authorize a new association. Salary reuse across contests is allowed; these were not excluded because another contest used the file.
-- Fresh whole-observed-field and mean-to-mean same-entry-count peer checks now cover receiver pairing, aggregate K/DST counts, separate flags, team splits and direct Captain/opposing-DST for current winners. The earlier-qualified cohort still needs a separate fresh mean comparison.
+- Fresh whole-observed-field and mean-to-mean same-entry-count peer checks now cover receiver pairing, aggregate K/DST counts, separate flags, team splits and direct Captain/opposing-DST for current winners. The earlier-qualified cohort now has a separate fresh mean comparison for its ten audited features; broader direct-pairing/separate-flag cohort checks remain unavailable.
 - Direct all-position Captain/opposing-DST and position-conditional checks are complete in the private diagnostic audit above. The existing app portfolio reviewer still exposes its older QB/opposing-DST feature; no new app functionality is shipped by this documentation PR.
-- Captain/salary-overlap finish-rate checks now cover all measured patterns in the fresh audit. Evaluate the earlier-qualified cohort and more unseen games before proposing grouping defaults. Preserve minimum-support checks and report unavailable cells.
+- Captain/salary-overlap finish-rate checks now cover all measured patterns in the fresh audit. The earlier-qualified cohort's mean comparison is complete for its ten audited features. Evaluate broader cohort patterns and more unseen games before proposing grouping defaults. Preserve minimum-support checks and report unavailable cells.
 - These roster/rank reviews do not qualify player-event, zero-score, SIM or payout evidence. Those checklist items retain their own gates.
 
 ## Validation and reproducibility
 
 Analysis used runtime commit 9212ba76b532eea8912447c6ab639173acec99d1 and read-only SQLite connections. Original source verification completed within each report. Private receipts include the predeclared plan, source inventory, discovery report, six bounded daily reports, five/ten-peer summaries and game-level sensitivities. The companion aggregate includes hashes of the complete private held-out reports. It is not a substitute historical source or model/cache artifact.
 
-No runtime source changes were made for this checkpoint or either fresh-audit follow-up. The receiver/specialist follow-up reran 45 focused reviewer regressions: all passed in 7.704s with zero unexpected network attempts. The direct-pairing follow-up passed 66 existing reviewer regressions and nine private diagnostic checks, plus exact legacy/peer-mean parity, field-gap tolerance, privacy and arithmetic checks. No complete runtime suite was rerun for these documentation/data-only changes. Aggregate privacy, coverage, complete-portfolio and independent equal-game arithmetic checks passed. PR #200’s Windows run passed all 2,512 tests with no skips/failures or unexpected network attempts; executable, guide, checksum verification and artifact upload passed. Publication was skipped. Visible packaged-app interaction, integration and publication remain separate open gates.
+No runtime source changes were made for this checkpoint or any follow-up. The receiver/specialist follow-up reran 45 focused reviewer regressions: all passed in 7.704s with zero unexpected network attempts. The direct-pairing follow-up passed 66 existing reviewer regressions and nine private diagnostic checks, plus exact legacy/peer-mean parity, field-gap tolerance, privacy and arithmetic checks. The earlier-qualified mean follow-up passed 85 existing regressions and ten private recorder checks, with exact canonical legacy-series reproduction and independent support/game/category arithmetic. No complete runtime suite was rerun for these documentation/data-only changes. Aggregate privacy, coverage, complete-portfolio and independent equal-game arithmetic checks passed. PR #200’s Windows run passed all 2,512 tests with no skips/failures or unexpected network attempts; executable, guide, checksum verification and artifact upload passed. Publication was skipped. Visible packaged-app interaction, integration and publication remain separate open gates.

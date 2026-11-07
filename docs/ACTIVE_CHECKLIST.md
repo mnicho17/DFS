@@ -37,7 +37,7 @@ The bounded change excludes only an explicit audited benchmark list when not rea
 - [x] Automated validation on 9212ba7: local 2,512 tests (2,511 passed, one symlink-permission skip); Windows all 2,512 passed, no skips/failures or unexpected network attempts. Executable, guide, checksum and artifact upload passed; publication skipped. [Run](https://github.com/mnicho17/DFS/actions/runs/42382898646).
 - [ ] Review/deliver this read-only slice; integration/publication and visible packaged-app testing remain separate gates.
 
-## 4. Historical construction research — initial checkpoint completed; comparison gaps open
+## 4. Historical construction research — bounded comparisons completed; validation limits remain
 
 - [x] Audit indexed coverage and predeclare the holdout: 42 Showdown records / 23 game groups; 17 discovery and six held-out groups. Field completeness is unverified.
 - [x] Complete the existing winner/peer discovery review: 36 contests, 1,136 winner/contest portfolios; no excluded contests.
@@ -45,9 +45,9 @@ The bounded change excludes only an explicit audited benchmark list when not rea
 - [x] Complete fresh per-entry observed-field and exact-entry-count peer-mean checks for receiver pairing and aggregate specialist counts: 42 contests / 4,996,498 entries, no excluded contests; unresolved entries and incomplete portfolios withheld. Five/ten-peer and game sensitivities recorded in the research checkpoint.
 - [x] Complete exact-Captain/salary-band finish-rate checks for those receiver/specialist features, with five/ten entries per side and game sensitivities. No defaults changed.
 - [x] Extend fresh field/peer-mean checks to separate kicker/defense flags and team splits for current observed winners, retaining five/ten-peer checks and per-game sensitivity.
-- [ ] Complete the earlier-qualified cohort's fresh peer-mean comparison; current winners do not substitute for walk-forward evidence.
+- [x] Complete the earlier-qualified cohort's fresh peer-mean comparison for ten audited construction/pairing metrics: six bounded windows, 5,195 profiles / 690,269 entries, exact original legacy-series reproduction, five/ten-peer and per-game sensitivities. Current winners remain a separate cohort. Direct Captain/opposing-DST and fresh separate double-K/DST/QB flags are unavailable in this earlier-qualified slice.
 - [x] Complete fresh K/DST flags, team-split and direct all-position Captain/opposing-DST field/peer-mean and exact-Captain/salary-matched comparisons across game groups. Position-conditional support and game sensitivity are recorded; no defaults changed. The app's older portfolio report is unchanged.
-- [x] Use a predeclared held-out period and disclose coverage, entry counts, support attrition and game-level sensitivity. No grouping defaults proposed; earlier-qualified mean comparisons and further unseen-game validation remain open.
+- [x] Use a predeclared held-out period and disclose coverage, entry counts, support attrition and game-level sensitivity. No grouping defaults proposed; broader cohort-pattern checks and further unseen-game validation remain open before any production/default change.
 
 ## 5. Zero-score/team/DST SIM research — queued, diagnostic only
 
