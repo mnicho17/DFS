@@ -24,7 +24,8 @@ Detailed evidence is retained in [the pre-consolidation record](COMPLETION_EVIDE
 
 ## 2. Resolve prototype calibration before changing defaults
 
-- [ ] Isolate the changed DST marginal distribution from its coupling to opposing offense. DST CRPS is a marginal score, not a test of correlation correctness.
+- [x] Complete the first research-only DST distribution/alignment isolation pass on the seven previously studied games: exact previous-game reproduction, fourteen qualified pairs, 28 exact marginal comparisons and 84 seed checks. See [the diagnostic](research/DST_ALIGNMENT_DIAGNOSTIC_2026_11_07.md). Thirteen new regressions, 51 focused tests and six receipt checks pass; full isolated suite: 2,544 run / 2,543 passed / one symlink-permission skip, no unexpected network attempts. This is not new validation or production acceptance; review/integration and the new Windows package check remain pending.
+- [ ] Define a forecast-mean-preserving DST marginal comparison with explicit spread/tail assumptions and legal score bounds before tuning dependence. The existing residual narrows average DST SD from 4.457 to 1.730; its small joint-score benefit over a fixed alignment control is driven by an event absent from all fourteen observations.
 - [ ] Diagnose the positive-outcome bias and reduced team dispersion/tails while preserving supplied forecast means, frozen inputs, protected draws and parent-RNG behavior.
 - [ ] Declare any alternative comparison before reading its validation outcomes. Retain a genuine new validation window; do not tune coefficients on the seven-game retrospective sample.
 - [ ] Recheck zero/strict-positive/negative scores, marginal and joint behavior, feasibility, means, support and game sensitivity before proposing a production change.
