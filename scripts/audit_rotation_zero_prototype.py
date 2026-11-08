@@ -13,6 +13,7 @@ parser.add_argument('--joint-study',action='store_true',help='Predeclared finite
 parser.add_argument('--event-study',action='store_true',help='Predeclared direct linked-event scoring; changes modeled QB/starter draws only in diagnostics')
 parser.add_argument('--reconciled-study',action='store_true',help='Fixed-bound event moment reconciliation and opposing-DST residual comparisons')
 parser.add_argument('--evaluation-after',help='Exclusive game-date boundary fixed before reading holdout scores')
+parser.add_argument('--bounded-research-outcomes',action='store_true',help='Research-only full-file score scan: 1M rows, 128 MiB per file, 60 seconds per read/verification operation; legacy limits unchanged')
 args=parser.parse_args()
 if args.evaluation_after:
  dt.date.fromisoformat(args.evaluation_after)
@@ -43,11 +44,18 @@ report=dict(status='running',model_version=version,completed_before=args.complet
 destination=Path(args.output_prefix).with_suffix('.json')
 def save():destination.write_text(json.dumps(report,indent=2,allow_nan=False),encoding='utf-8')
 score_cache={};verified={}
+research_reader=None
+if args.bounded_research_outcomes:
+ from scripts.research_outcome_reader import ResearchScoreReader
+ research_reader=ResearchScoreReader()
+ report['outcome_reader']=dict(kind='bounded_research_score_only',limits=research_reader.limits,total_bytes_per_score_operation=3*research_reader.limits['file_bytes']+64*1024,standings_completeness='not_established')
 def verify(source):
- if source['hash'] not in verified:ai._verify(source,lambda:False);verified[source['hash']]=source
+ if source['hash'] not in verified:
+  (research_reader.verify(source) if research_reader else ai._verify(source,lambda:False))
+  verified[source['hash']]=source
 def scores(source,manifest,salary_hash):
  key=(source['hash'],salary_hash)
- if key not in score_cache:score_cache[key]=_scores(source,manifest,lambda:False)
+ if key not in score_cache:score_cache[key]=(research_reader.scores(source,manifest) if research_reader else _scores(source,manifest,lambda:False))
  return score_cache[key]
 report['prototype']=dict(version='rotation-zero-prototype-v1',diagnostic_only=True,defaults_changed=False,
  modes=['baseline','frozen_hurdle','sampled_hurdle'],
@@ -201,7 +209,9 @@ with _connect(db,True) as conn:
   except Exception as exc:
    report['excluded'].append(dict(date=row['date'],game=row['game'],reason=str(exc)));print('EXCLUDED',str(exc),flush=True)
   save()
-for source in verified.values():ai._verify(source,lambda:False)
+for source in verified.values():
+ if research_reader:research_reader.verify(source)
+ else:ai._verify(source,lambda:False)
 audit.revalidate();assert version==model_version(),'Scoring source changed'
 report['summary']={}
 for profile in profile_options if report['games'] else ():

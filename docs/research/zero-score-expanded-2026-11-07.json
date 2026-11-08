@@ -1,0 +1,2672 @@
+{
+  "schema_version": 1,
+  "authority": "Expanded retrospective diagnostic only; no default/ROI/production qualification",
+  "plan": {
+    "created_at": "2026-11-07T23:34:47.328996+00:00",
+    "evaluation_after": "2026-10-16",
+    "completed_before": "2026-11-07",
+    "authority": "Retrospective diagnostic follow-up; expanded admission, not a new unseen holdout; original two games retained separately",
+    "seeds": [
+      90210,
+      481516,
+      730001
+    ],
+    "scenarios_per_seed": 2000,
+    "profiles": [
+      "baseline",
+      "sampled_hurdle",
+      "linked_completion",
+      "reconciled_events",
+      "reconciled_dst"
+    ],
+    "priors": "Existing reconciliation bounds/profile options unchanged; no fitting or outcome-based source selection",
+    "reader_limits": {
+      "file_bytes": 134217728,
+      "rows": 1000000,
+      "seconds": 60,
+      "total_bytes_per_score_operation": 402718720
+    },
+    "process_deadline_seconds": 1800,
+    "original_report_sha256": "007a7275ef88a72689f0f0dd28a29a9b4e5c1616c9767b020d4ec268bbaa4484",
+    "original_plan_sha256": "fa4ec7629ab2256717e70c74e9cf477d5c7c45873f8be49e0b9c65638e8d237b",
+    "gates": [
+      "Original source/salary/pregame qualification unchanged",
+      "Full-file exact player-role validator; final original hash verification",
+      "Same-game cross-export conflicts; never fill selected scores",
+      "Original database/index/source inventory unchanged",
+      "No partial report promoted",
+      "Separate newly admitted games and original two-game parity",
+      "No model/default or production limit changes"
+    ]
+  },
+  "verification": {
+    "status": "complete",
+    "seconds": 456.79699999978766,
+    "report_sha256": "5d23dec229f6f51e956f3fa381d7429c1524938f4d6ef9135ae4ae25d6d041ed",
+    "auditor_sha256": "d415cb383f9fcaff0eabf27445f0829292732484aacbcf61dbb0067bfb742f42",
+    "reader_sha256": "21883d26dfbe0a6d8c9aa0925feea8b8af38d519726ed5c46c04b6ca4d943a09",
+    "inventory_sha256": "b30a351c586653c5033ad77a8c7171b91df3a409e38fd1e7187ed501087b1166",
+    "db_attributes_unchanged": true,
+    "source_qualified_games": 7,
+    "admitted_games": 7,
+    "excluded_games": 0
+  },
+  "outcome_reader": {
+    "kind": "bounded_research_score_only",
+    "limits": {
+      "file_bytes": 134217728,
+      "rows": 1000000,
+      "seconds": 60
+    },
+    "total_bytes_per_score_operation": 402718720,
+    "standings_completeness": "not_established"
+  },
+  "prototype": {
+    "version": "rotation-zero-prototype-v1",
+    "diagnostic_only": true,
+    "defaults_changed": false,
+    "modes": [
+      "baseline",
+      "sampled_hurdle",
+      "linked_completion",
+      "reconciled_events",
+      "reconciled_dst"
+    ],
+    "limitations": "Offensive raw partial-event DK means reconciled to forecasts under fixed bounds; infeasible cases excluded explicitly. Bounded beta yardage. DST is a bounded forecast-centered opposing-QB-event residual, not complete DK defensive scoring. No defaults changed.",
+    "profiles": {
+      "baseline": null,
+      "sampled_hurdle": {
+        "opportunity_basis": "sampled"
+      },
+      "linked_completion": {
+        "linked_events": true,
+        "completion_environment": 0.2
+      },
+      "reconciled_events": {
+        "reconciled": true
+      },
+      "reconciled_dst": {
+        "reconciled": true,
+        "link_dst": true
+      }
+    },
+    "reconciliation_bounds": {
+      "rush_yards": 15.0,
+      "receive_yards": 30.0,
+      "rush_td": 0.15,
+      "receive_td": 0.35,
+      "interception": 0.25
+    },
+    "cohort_rule": "Paired profiles require feasible fixed-bound plans; rejected source-qualified games remain explicit exclusions.",
+    "event_model": "reconciled-event-prototype-v1"
+  },
+  "source_qualified_games": 7,
+  "candidate_games": 7,
+  "original_game_exact_parity": true,
+  "scoring_model_unchanged": true,
+  "coverage": {
+    "admitted_games": 7,
+    "newly_admitted_games": 5,
+    "excluded_games": 0,
+    "source_exclusions": 0,
+    "modeled_offense_observations": 143,
+    "modeled_dst_observations": 14
+  },
+  "mean_checks": {
+    "profile_specific_checks": 300,
+    "all_normalizers_one": true,
+    "analytic_tolerance": 2e-05,
+    "max_analytic_residual": 3.2656887682946945e-07,
+    "failed_analytic": 0,
+    "failed_5se": 0
+  },
+  "summaries": {
+    "all_admitted": {
+      "games": 7,
+      "rotation_observations": 87,
+      "outcome_counts": {
+        "actual_zero": 29,
+        "actual_positive": 57,
+        "actual_negative": 1
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 2.03916304499316,
+            "bias": 0.11564464818115493,
+            "zero_brier": 0.32925407925407923,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 7,
+              "observations": 29,
+              "crps": 1.2074879021545988,
+              "bias": 2.1141775438129042,
+              "inside": 0.0,
+              "p95": 5.762196220734498
+            },
+            "actual_positive": {
+              "games": 7,
+              "observations": 57,
+              "crps": 2.474137887530481,
+              "bias": -1.1860965061071067,
+              "inside": 0.7158163265306122,
+              "p95": 15.088075829680713
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.3107112318217937,
+              "bias": 3.6016818622945306,
+              "inside": 0.0,
+              "p95": 8.552149133592986
+            }
+          },
+          "dst_crps": 2.5020578696006686,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2580585256514215,
+            "offense_mean": 85.79465436773688,
+            "offense_sd": 31.415697741652128,
+            "offense_p90": 126.44583779287257,
+            "qb_receiver_correlation": 0.5403164381636234,
+            "rotation_pair_correlation": 0.23564806886287518,
+            "kicker_mean": 8.135738095238096,
+            "kicker_zero": 0.014142857142857143,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 1.9403839143991948,
+            "bias": 0.1181016179441148,
+            "zero_brier": 0.13708146306240057,
+            "predicted_zero": 0.23180284992784994
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 7,
+              "observations": 29,
+              "crps": 0.863124902932702,
+              "bias": 2.1173796410665364,
+              "inside": 0.9285714285714286,
+              "p95": 7.417234862321531
+            },
+            "actual_positive": {
+              "games": 7,
+              "observations": 57,
+              "crps": 2.4956081965078134,
+              "bias": -1.1842511115393994,
+              "inside": 0.8040816326530612,
+              "p95": 15.967597284218801
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.269280989815547,
+              "bias": 3.601066317001782,
+              "inside": 0.0,
+              "p95": 8.616767271105738
+            }
+          },
+          "dst_crps": 2.5020578696006686,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2580585256514215,
+            "offense_mean": 85.80894024165234,
+            "offense_sd": 31.98052510397979,
+            "offense_p90": 127.23522354569025,
+            "qb_receiver_correlation": 0.5254839764360582,
+            "rotation_pair_correlation": 0.14373843836977457,
+            "kicker_mean": 8.130416666666667,
+            "kicker_zero": 0.01419047619047619,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 1.8891624141286547,
+            "bias": -0.18361538666066785,
+            "zero_brier": 0.13793713172475672,
+            "predicted_zero": 0.22695929070929072
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 7,
+              "observations": 29,
+              "crps": 0.900767193604672,
+              "bias": 1.9339067215229728,
+              "inside": 0.9,
+              "p95": 6.1678405123306455
+            },
+            "actual_positive": {
+              "games": 7,
+              "observations": 57,
+              "crps": 2.4079592587537584,
+              "bias": -1.5442134332466986,
+              "inside": 0.7862244897959183,
+              "p95": 13.44423814384426
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.0611944910573263,
+              "bias": 3.5354509474756566,
+              "inside": 0.0,
+              "p95": 9.726371263781255
+            }
+          },
+          "dst_crps": 2.5020578696006686,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.0033750837659099896,
+            "offense_mean": 82.15404932054504,
+            "offense_sd": 22.077636116260955,
+            "offense_p90": 111.29375110947888,
+            "qb_receiver_correlation": 0.7967477319775623,
+            "rotation_pair_correlation": 0.014864314002212758,
+            "kicker_mean": 8.114797619047618,
+            "kicker_zero": 0.01325,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 1.8859724922262893,
+            "bias": -0.18238599569579442,
+            "zero_brier": 0.13622967052854554,
+            "predicted_zero": 0.3002582695082695
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 7,
+              "observations": 29,
+              "crps": 0.8099159303224975,
+              "bias": 1.9352248071738005,
+              "inside": 0.9476190476190476,
+              "p95": 6.712140190500857
+            },
+            "actual_positive": {
+              "games": 7,
+              "observations": 57,
+              "crps": 2.4408473008788545,
+              "bias": -1.5422194791746988,
+              "inside": 0.713265306122449,
+              "p95": 13.862955810168595
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.049356701870762,
+              "bias": 3.472506265684858,
+              "inside": 0.0,
+              "p95": 9.429129885397359
+            }
+          },
+          "dst_crps": 2.5020578696006686,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.002353973347181472,
+            "offense_mean": 82.2190303378095,
+            "offense_sd": 20.52992113247822,
+            "offense_p90": 109.32149167479487,
+            "qb_receiver_correlation": 0.8342789656186159,
+            "rotation_pair_correlation": 0.005265738304824605,
+            "kicker_mean": 8.129547619047619,
+            "kicker_zero": 0.013047619047619047,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 1.8859724922262893,
+            "bias": -0.18238599569579442,
+            "zero_brier": 0.13622967052854554,
+            "predicted_zero": 0.3002582695082695
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 7,
+              "observations": 29,
+              "crps": 0.8099159303224975,
+              "bias": 1.9352248071738005,
+              "inside": 0.9476190476190476,
+              "p95": 6.712140190500857
+            },
+            "actual_positive": {
+              "games": 7,
+              "observations": 57,
+              "crps": 2.4408473008788545,
+              "bias": -1.5422194791746988,
+              "inside": 0.713265306122449,
+              "p95": 13.862955810168595
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.049356701870762,
+              "bias": 3.472506265684858,
+              "inside": 0.0,
+              "p95": 9.429129885397359
+            }
+          },
+          "dst_crps": 2.801657975969407,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.10230972454436058,
+            "offense_mean": 82.2190303378095,
+            "offense_sd": 20.52992113247822,
+            "offense_p90": 109.32149167479487,
+            "qb_receiver_correlation": 0.8342789656186159,
+            "rotation_pair_correlation": 0.005265738304824605,
+            "kicker_mean": 8.129547619047619,
+            "kicker_zero": 0.013047619047619047,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    },
+    "original_two": {
+      "games": 2,
+      "rotation_observations": 26,
+      "outcome_counts": {
+        "actual_zero": 10,
+        "actual_positive": 15,
+        "actual_negative": 1
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 2.37819541057669,
+            "bias": -0.9085623432224029,
+            "zero_brier": 0.38461538461538464,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 2,
+              "observations": 10,
+              "crps": 1.0074364504641602,
+              "bias": 1.8206539910355097,
+              "inside": 0.0,
+              "p95": 5.080134676704731
+            },
+            "actual_positive": {
+              "games": 2,
+              "observations": 15,
+              "crps": 3.3958691849124505,
+              "bias": -3.1631022812176983,
+              "inside": 0.5892857142857143,
+              "p95": 15.65473307379844
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.3107112318217937,
+              "bias": 3.6016818622945306,
+              "inside": 0.0,
+              "p95": 8.552149133592986
+            }
+          },
+          "dst_crps": 2.966015115650146,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2558643173896297,
+            "offense_mean": 85.13053706074048,
+            "offense_sd": 31.464018666089142,
+            "offense_p90": 125.7099193274974,
+            "qb_receiver_correlation": 0.5386085132648635,
+            "rotation_pair_correlation": 0.22966618101848635,
+            "kicker_mean": 7.859541666666667,
+            "kicker_zero": 0.017,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 2.23816911285191,
+            "bias": -0.910600129838722,
+            "zero_brier": 0.13991,
+            "predicted_zero": 0.24434615384615385
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 2,
+              "observations": 10,
+              "crps": 0.6634881397011239,
+              "bias": 1.8267373940828384,
+              "inside": 1.0,
+              "p95": 6.6727514749954056
+            },
+            "actual_positive": {
+              "games": 2,
+              "observations": 15,
+              "crps": 3.3829608321723637,
+              "bias": -3.1706868879654335,
+              "inside": 0.7232142857142857,
+              "p95": 16.444038936531452
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.269280989815547,
+              "bias": 3.601066317001782,
+              "inside": 0.0,
+              "p95": 8.616767271105738
+            }
+          },
+          "dst_crps": 2.966015115650146,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2558643173896297,
+            "offense_mean": 85.1172914477344,
+            "offense_sd": 31.982989376290277,
+            "offense_p90": 126.5037642133272,
+            "qb_receiver_correlation": 0.5234365596849735,
+            "rotation_pair_correlation": 0.13746438976394482,
+            "kicker_mean": 7.861041666666667,
+            "kicker_zero": 0.01679166666666667,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 2.2133023116197124,
+            "bias": -1.193883705581657,
+            "zero_brier": 0.14121046794871794,
+            "predicted_zero": 0.23496153846153847
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 2,
+              "observations": 10,
+              "crps": 0.7035871649059995,
+              "bias": 1.6521024613066813,
+              "inside": 1.0,
+              "p95": 5.49002456369109
+            },
+            "actual_positive": {
+              "games": 2,
+              "observations": 15,
+              "crps": 3.329442766988942,
+              "bias": -3.546361668253538,
+              "inside": 0.5892857142857143,
+              "p95": 13.773015045458374
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.0611944910573263,
+              "bias": 3.5354509474756566,
+              "inside": 0.0,
+              "p95": 9.726371263781255
+            }
+          },
+          "dst_crps": 2.966015115650146,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.01029009011611173,
+            "offense_mean": 81.2980812026546,
+            "offense_sd": 22.07392603602714,
+            "offense_p90": 110.38763923430874,
+            "qb_receiver_correlation": 0.7909210690824096,
+            "rotation_pair_correlation": 0.01377685657942103,
+            "kicker_mean": 7.84275,
+            "kicker_zero": 0.01608333333333333,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 2.1139061090095908,
+            "bias": -1.1923735287259403,
+            "zero_brier": 0.11003715277777779,
+            "predicted_zero": 0.3641602564102564
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 2,
+              "observations": 10,
+              "crps": 0.5039273016906721,
+              "bias": 1.6432167606683816,
+              "inside": 1.0,
+              "p95": 6.764873275635379
+            },
+            "actual_positive": {
+              "games": 2,
+              "observations": 15,
+              "crps": 3.2876470493574947,
+              "bias": -3.5336870113346395,
+              "inside": 0.5178571428571428,
+              "p95": 14.214875975830683
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.049356701870762,
+              "bias": 3.472506265684858,
+              "inside": 0.0,
+              "p95": 9.429129885397359
+            }
+          },
+          "dst_crps": 2.966015115650146,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.005779255570819369,
+            "offense_mean": 81.45553503640308,
+            "offense_sd": 21.975129997436877,
+            "offense_p90": 110.25522355892022,
+            "qb_receiver_correlation": 0.8517132819939144,
+            "rotation_pair_correlation": 0.006464592897346303,
+            "kicker_mean": 7.863833333333333,
+            "kicker_zero": 0.01583333333333333,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 2.1139061090095908,
+            "bias": -1.1923735287259403,
+            "zero_brier": 0.11003715277777779,
+            "predicted_zero": 0.3641602564102564
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 2,
+              "observations": 10,
+              "crps": 0.5039273016906721,
+              "bias": 1.6432167606683816,
+              "inside": 1.0,
+              "p95": 6.764873275635379
+            },
+            "actual_positive": {
+              "games": 2,
+              "observations": 15,
+              "crps": 3.2876470493574947,
+              "bias": -3.5336870113346395,
+              "inside": 0.5178571428571428,
+              "p95": 14.214875975830683
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.049356701870762,
+              "bias": 3.472506265684858,
+              "inside": 0.0,
+              "p95": 9.429129885397359
+            }
+          },
+          "dst_crps": 3.3296280311883946,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.06757872390165315,
+            "offense_mean": 81.45553503640308,
+            "offense_sd": 21.975129997436877,
+            "offense_p90": 110.25522355892022,
+            "qb_receiver_correlation": 0.8517132819939144,
+            "rotation_pair_correlation": 0.006464592897346303,
+            "kicker_mean": 7.863833333333333,
+            "kicker_zero": 0.01583333333333333,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    },
+    "newly_admitted": {
+      "games": 5,
+      "rotation_observations": 61,
+      "outcome_counts": {
+        "actual_zero": 19,
+        "actual_positive": 42,
+        "actual_negative": 0
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 1.9035500987597482,
+            "bias": 0.5253274447425781,
+            "zero_brier": 0.3071095571095571,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 5,
+              "observations": 19,
+              "crps": 1.2875084828307741,
+              "bias": 2.231586964923862,
+              "inside": 0.0,
+              "p95": 6.035020838346405
+            },
+            "actual_positive": {
+              "games": 5,
+              "observations": 42,
+              "crps": 2.105445368577693,
+              "bias": -0.39529419606287,
+              "inside": 0.7664285714285715,
+              "p95": 14.861412932033623
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.3164749711808774,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2589362089561382,
+            "offense_mean": 86.06030129053543,
+            "offense_sd": 31.396369371877324,
+            "offense_p90": 126.74020517902262,
+            "qb_receiver_correlation": 0.5409996081231273,
+            "rotation_pair_correlation": 0.23804082400063073,
+            "kicker_mean": 8.246216666666667,
+            "kicker_zero": 0.013,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 1.821269835018109,
+            "bias": 0.5295823170572496,
+            "zero_brier": 0.1359500482873608,
+            "predicted_zero": 0.22678552836052837
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 5,
+              "observations": 19,
+              "crps": 0.9429796082253333,
+              "bias": 2.2336365398600155,
+              "inside": 0.9,
+              "p95": 7.715028217251982
+            },
+            "actual_positive": {
+              "games": 5,
+              "observations": 42,
+              "crps": 2.140667142241993,
+              "bias": -0.3896768009689857,
+              "inside": 0.8364285714285714,
+              "p95": 15.77702062329374
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.3164749711808774,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2589362089561382,
+            "offense_mean": 86.0855997592195,
+            "offense_sd": 31.979539395055596,
+            "offense_p90": 127.52780727863546,
+            "qb_receiver_correlation": 0.5263029431364921,
+            "rotation_pair_correlation": 0.14624805781210645,
+            "kicker_mean": 8.238166666666666,
+            "kicker_zero": 0.01315,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 1.7595064551322317,
+            "bias": 0.2204919409077278,
+            "zero_brier": 0.13662779723517224,
+            "predicted_zero": 0.22375839160839162
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 5,
+              "observations": 19,
+              "crps": 0.9796392050841408,
+              "bias": 2.0466284256094895,
+              "inside": 0.86,
+              "p95": 6.4389668917864675
+            },
+            "actual_positive": {
+              "games": 5,
+              "observations": 42,
+              "crps": 2.0393658554596845,
+              "bias": -0.7433541392439628,
+              "inside": 0.865,
+              "p95": 13.312727383198613
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.3164749711808774,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.000609081225829294,
+            "offense_mean": 82.49643656770122,
+            "offense_sd": 22.079120148354477,
+            "offense_p90": 111.65619585954693,
+            "qb_receiver_correlation": 0.7990783971356235,
+            "rotation_pair_correlation": 0.015299296971329448,
+            "kicker_mean": 8.223616666666667,
+            "kicker_zero": 0.012116666666666666,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 1.7947990455129688,
+            "bias": 0.22160901751626388,
+            "zero_brier": 0.14670667762885264,
+            "predicted_zero": 0.27469747474747475
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 5,
+              "observations": 19,
+              "crps": 0.9323113817752278,
+              "bias": 2.052028025775968,
+              "inside": 0.9266666666666666,
+              "p95": 6.691046956447048
+            },
+            "actual_positive": {
+              "games": 5,
+              "observations": 42,
+              "crps": 2.1021274014873983,
+              "bias": -0.7456324663107223,
+              "inside": 0.7914285714285714,
+              "p95": 13.722187743903758
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.3164749711808774,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.0009838604577263133,
+            "offense_mean": 82.52442845837207,
+            "offense_sd": 19.951837586494754,
+            "offense_p90": 108.94799892114474,
+            "qb_receiver_correlation": 0.8273052390684965,
+            "rotation_pair_correlation": 0.004786196467815925,
+            "kicker_mean": 8.235833333333334,
+            "kicker_zero": 0.011933333333333332,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 1.7947990455129688,
+            "bias": 0.22160901751626388,
+            "zero_brier": 0.14670667762885264,
+            "predicted_zero": 0.27469747474747475
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 5,
+              "observations": 19,
+              "crps": 0.9323113817752278,
+              "bias": 2.052028025775968,
+              "inside": 0.9266666666666666,
+              "p95": 6.691046956447048
+            },
+            "actual_positive": {
+              "games": 5,
+              "observations": 42,
+              "crps": 2.1021274014873983,
+              "bias": -0.7456324663107223,
+              "inside": 0.7914285714285714,
+              "p95": 13.722187743903758
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.5904699538818123,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.11620212480144355,
+            "offense_mean": 82.52442845837207,
+            "offense_sd": 19.951837586494754,
+            "offense_p90": 108.94799892114474,
+            "qb_receiver_correlation": 0.8273052390684965,
+            "rotation_pair_correlation": 0.004786196467815925,
+            "kicker_mean": 8.235833333333334,
+            "kicker_zero": 0.011933333333333332,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    }
+  },
+  "games": [
+    {
+      "date": "2026-10-18",
+      "game": "DAL@GB",
+      "admission": "original",
+      "rotation_observations": 13,
+      "outcome_counts": {
+        "actual_zero": 5,
+        "actual_positive": 7,
+        "actual_negative": 1
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 3.1763087877747567,
+            "bias": -1.857532804172212,
+            "zero_brier": 0.38461538461538464,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 0.9559977737538677,
+              "bias": 1.7003896609648403,
+              "inside": 0.0,
+              "p95": 4.6627311784271415
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 4.885902020068672,
+              "bias": -5.17879380305107,
+              "inside": 0.42857142857142855,
+              "p95": 17.443022414259023
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.3107112318217937,
+              "bias": 3.6016818622945306,
+              "inside": 0.0,
+              "p95": 8.552149133592986
+            }
+          },
+          "dst_crps": 2.092990453449357,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2555258813764928,
+            "offense_mean": 91.26063782961185,
+            "offense_sd": 33.585176284411844,
+            "offense_p90": 134.16512510000416,
+            "qb_receiver_correlation": 0.5282402019009291,
+            "rotation_pair_correlation": 0.23901904620089331,
+            "kicker_mean": 8.126,
+            "kicker_zero": 0.012083333333333333,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 3.0513849643631015,
+            "bias": -1.8623435788374807,
+            "zero_brier": 0.15285546794871796,
+            "predicted_zero": 0.24201282051282053
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 0.7049504349720251,
+              "bias": 1.6994186349561915,
+              "inside": 1.0,
+              "p95": 5.613844387904887
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 4.8391387674349495,
+              "bias": -5.1869465738099985,
+              "inside": 0.5714285714285714,
+              "p95": 18.261211321678953
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.269280989815547,
+              "bias": 3.601066317001782,
+              "inside": 0.0,
+              "p95": 8.616767271105738
+            }
+          },
+          "dst_crps": 2.092990453449357,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2555258813764928,
+            "offense_mean": 91.22936779428761,
+            "offense_sd": 33.907923033291326,
+            "offense_p90": 135.04053197634732,
+            "qb_receiver_correlation": 0.5177883950071167,
+            "rotation_pair_correlation": 0.14453733058270485,
+            "kicker_mean": 8.129083333333334,
+            "kicker_zero": 0.01175,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 3.034485393554465,
+            "bias": -2.1800848769038885,
+            "zero_brier": 0.15485746367521366,
+            "predicted_zero": 0.2346025641025641
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 0.7262166912711215,
+              "bias": 1.5267578315022348,
+              "inside": 1.0,
+              "p95": 4.650651988028961
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 4.822290309827873,
+              "bias": -5.644334786391054,
+              "inside": 0.42857142857142855,
+              "p95": 14.84450606008247
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.0611944910573263,
+              "bias": 3.5354509474756566,
+              "inside": 0.0,
+              "p95": 9.726371263781255
+            }
+          },
+          "dst_crps": 2.092990453449357,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.014444214314979133,
+            "offense_mean": 86.74440255815199,
+            "offense_sd": 23.555877887166222,
+            "offense_p90": 117.51056376998136,
+            "qb_receiver_correlation": 0.7993864220750517,
+            "rotation_pair_correlation": 0.012784713367359729,
+            "kicker_mean": 8.093416666666666,
+            "kicker_zero": 0.011166666666666667,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 2.886500149770467,
+            "bias": -2.186122323649468,
+            "zero_brier": 0.12034385683760686,
+            "predicted_zero": 0.37014102564102563
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 0.4738359050817999,
+              "bias": 1.5072298923299756,
+              "inside": 1.0,
+              "p95": 5.866415023587518
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 4.729423674248044,
+              "bias": -5.632606562111117,
+              "inside": 0.2857142857142857,
+              "p95": 15.476706238397687
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.049356701870762,
+              "bias": 3.472506265684858,
+              "inside": 0.0,
+              "p95": 9.429129885397359
+            }
+          },
+          "dst_crps": 2.092990453449357,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.010461077108194057,
+            "offense_mean": 86.69268266650843,
+            "offense_sd": 23.054119455744008,
+            "offense_p90": 116.7959801683679,
+            "qb_receiver_correlation": 0.8728894934203553,
+            "rotation_pair_correlation": 0.006505827465331839,
+            "kicker_mean": 8.115583333333333,
+            "kicker_zero": 0.01075,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 2.886500149770467,
+            "bias": -2.186122323649468,
+            "zero_brier": 0.12034385683760686,
+            "predicted_zero": 0.37014102564102563
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 0.4738359050817999,
+              "bias": 1.5072298923299756,
+              "inside": 1.0,
+              "p95": 5.866415023587518
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 4.729423674248044,
+              "bias": -5.632606562111117,
+              "inside": 0.2857142857142857,
+              "p95": 15.476706238397687
+            },
+            "actual_negative": {
+              "games": 1,
+              "observations": 1,
+              "crps": 2.049356701870762,
+              "bias": 3.472506265684858,
+              "inside": 0.0,
+              "p95": 9.429129885397359
+            }
+          },
+          "dst_crps": 2.3322627238673044,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.0919818620748647,
+            "offense_mean": 86.69268266650843,
+            "offense_sd": 23.054119455744008,
+            "offense_p90": 116.7959801683679,
+            "qb_receiver_correlation": 0.8728894934203553,
+            "rotation_pair_correlation": 0.006505827465331839,
+            "kicker_mean": 8.115583333333333,
+            "kicker_zero": 0.01075,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    },
+    {
+      "date": "2026-10-19",
+      "game": "WAS@SF",
+      "admission": "newly_admitted",
+      "rotation_observations": 12,
+      "outcome_counts": {
+        "actual_zero": 3,
+        "actual_positive": 9,
+        "actual_negative": 0
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 1.5326513350213327,
+            "bias": 0.16695687514058877,
+            "zero_brier": 0.25,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 1.2482341221786593,
+              "bias": 2.172234814064821,
+              "inside": 0.0,
+              "p95": 5.954541513874017
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 9,
+              "crps": 1.627457072635557,
+              "bias": -0.5014691045008218,
+              "inside": 1.0,
+              "p95": 13.663328885787875
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 1.3835870400467107,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2526939861206214,
+            "offense_mean": 84.44836268404885,
+            "offense_sd": 31.023691226026322,
+            "offense_p90": 125.29209711681057,
+            "qb_receiver_correlation": 0.5366061274266289,
+            "rotation_pair_correlation": 0.24441428133333082,
+            "kicker_mean": 8.945250000000001,
+            "kicker_zero": 0.009333333333333332,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 1.515961577481684,
+            "bias": 0.17607422369943374,
+            "zero_brier": 0.1333427361111111,
+            "predicted_zero": 0.21225
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 0.9894852462631182,
+              "bias": 2.184672590392681,
+              "inside": 0.6666666666666666,
+              "p95": 6.999448257203483
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 9,
+              "crps": 1.6914536878878725,
+              "bias": -0.4934585651983154,
+              "inside": 1.0,
+              "p95": 14.819299241759092
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 1.3835870400467107,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2526939861206214,
+            "offense_mean": 84.50306677540192,
+            "offense_sd": 31.781261236015013,
+            "offense_p90": 125.53074719996384,
+            "qb_receiver_correlation": 0.5201995400568513,
+            "rotation_pair_correlation": 0.15488375231044105,
+            "kicker_mean": 8.939833333333333,
+            "kicker_zero": 0.009333333333333332,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 1.4525287809686926,
+            "bias": -0.13533226089408776,
+            "zero_brier": 0.1302958148148148,
+            "predicted_zero": 0.22244444444444444
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 1.0372564616814355,
+              "bias": 1.9524426454253863,
+              "inside": 0.6666666666666666,
+              "p95": 5.581180395432593
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 9,
+              "crps": 1.5909528873977785,
+              "bias": -0.8312572296672458,
+              "inside": 1.0,
+              "p95": 12.340469843224833
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 1.3835870400467107,
+          "interactions": {
+            "qb_opposing_dst_correlation": 0.005659348277856974,
+            "offense_mean": 80.93481495229938,
+            "offense_sd": 22.21334700974344,
+            "offense_p90": 109.99932406797329,
+            "qb_receiver_correlation": 0.7918451923007329,
+            "rotation_pair_correlation": 0.01255303767068995,
+            "kicker_mean": 8.880833333333333,
+            "kicker_zero": 0.008083333333333333,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 1.4342857633465778,
+            "bias": -0.11538437702669123,
+            "zero_brier": 0.1376777916666667,
+            "predicted_zero": 0.29483333333333334
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 0.7188981035594421,
+              "bias": 1.981837106388653,
+              "inside": 1.0,
+              "p95": 7.083260265662393
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 9,
+              "crps": 1.6727483166089563,
+              "bias": -0.814458204831806,
+              "inside": 1.0,
+              "p95": 13.260714033951126
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 1.3835870400467107,
+          "interactions": {
+            "qb_opposing_dst_correlation": 0.007931764615961347,
+            "offense_mean": 81.0687811981692,
+            "offense_sd": 22.13244670421234,
+            "offense_p90": 110.45573707040855,
+            "qb_receiver_correlation": 0.8424339468352672,
+            "rotation_pair_correlation": 0.01197406473468687,
+            "kicker_mean": 8.893166666666666,
+            "kicker_zero": 0.007916666666666666,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 1.4342857633465778,
+            "bias": -0.11538437702669123,
+            "zero_brier": 0.1376777916666667,
+            "predicted_zero": 0.29483333333333334
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 0.7188981035594421,
+              "bias": 1.981837106388653,
+              "inside": 1.0,
+              "p95": 7.083260265662393
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 9,
+              "crps": 1.6727483166089563,
+              "bias": -0.814458204831806,
+              "inside": 1.0,
+              "p95": 13.260714033951126
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 1.0783805016624235,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.1238589386511807,
+            "offense_mean": 81.0687811981692,
+            "offense_sd": 22.13244670421234,
+            "offense_p90": 110.45573707040855,
+            "qb_receiver_correlation": 0.8424339468352672,
+            "rotation_pair_correlation": 0.01197406473468687,
+            "kicker_mean": 8.893166666666666,
+            "kicker_zero": 0.007916666666666666,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    },
+    {
+      "date": "2026-10-22",
+      "game": "NE@CHI",
+      "admission": "newly_admitted",
+      "rotation_observations": 13,
+      "outcome_counts": {
+        "actual_zero": 5,
+        "actual_positive": 8,
+        "actual_negative": 0
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 2.2583120214409176,
+            "bias": 1.072075413545998,
+            "zero_brier": 0.38461538461538464,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 1.7217139153805303,
+              "bias": 3.0297063069857657,
+              "inside": 0.0,
+              "p95": 8.342351851964938
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.593685837728659,
+              "bias": -0.15144389485385676,
+              "inside": 0.625,
+              "p95": 14.175051106334493
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.5015553315757035,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.25920240303291453,
+            "offense_mean": 82.97966377931887,
+            "offense_sd": 29.53770934139586,
+            "offense_p90": 122.13050292172693,
+            "qb_receiver_correlation": 0.5465064117978659,
+            "rotation_pair_correlation": 0.23422806457171041,
+            "kicker_mean": 8.158583333333333,
+            "kicker_zero": 0.012166666666666666,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 2.0976511166757965,
+            "bias": 1.0825112241259802,
+            "zero_brier": 0.15054467948717948,
+            "predicted_zero": 0.2448974358974359
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 1.355992501974388,
+              "bias": 3.0410030256815728,
+              "inside": 1.0,
+              "p95": 9.944592482089629
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.5611877508641774,
+              "bias": -0.1415461518462653,
+              "inside": 0.75,
+              "p95": 14.891818958010962
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.5015553315757035,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.25920240303291453,
+            "offense_mean": 83.04749654808876,
+            "offense_sd": 30.221749125836787,
+            "offense_p90": 123.09782807976477,
+            "qb_receiver_correlation": 0.5275664481439656,
+            "rotation_pair_correlation": 0.13615747823726337,
+            "kicker_mean": 8.163,
+            "kicker_zero": 0.0125,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 2.1335384879002257,
+            "bias": 0.7932939565386218,
+            "zero_brier": 0.1516649358974359,
+            "predicted_zero": 0.24397435897435896
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 1.418073853203746,
+              "bias": 2.7861732771962666,
+              "inside": 0.8,
+              "p95": 8.03041133098206
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.580703884585526,
+              "bias": -0.4522556188724063,
+              "inside": 0.75,
+              "p95": 12.61996122712167
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.5015553315757035,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.005235673552722029,
+            "offense_mean": 79.84130886653836,
+            "offense_sd": 21.029781123272382,
+            "offense_p90": 107.85115427021671,
+            "qb_receiver_correlation": 0.806762676001523,
+            "rotation_pair_correlation": 0.013744956529842828,
+            "kicker_mean": 8.138583333333333,
+            "kicker_zero": 0.0115,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 2.1364971755630844,
+            "bias": 0.7862654709597656,
+            "zero_brier": 0.13671713247863246,
+            "predicted_zero": 0.26879487179487177
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 1.3975081212008547,
+              "bias": 2.818961387910728,
+              "inside": 0.8,
+              "p95": 8.573667841113615
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.5983653345394777,
+              "bias": -0.4841694771345858,
+              "inside": 0.625,
+              "p95": 13.099506307377135
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.5015553315757035,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.009314173826216608,
+            "offense_mean": 79.69414007315291,
+            "offense_sd": 21.03761497752283,
+            "offense_p90": 107.40156079988404,
+            "qb_receiver_correlation": 0.8279404598709936,
+            "rotation_pair_correlation": 0.012254391024739865,
+            "kicker_mean": 8.134583333333333,
+            "kicker_zero": 0.011,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 2.1364971755630844,
+            "bias": 0.7862654709597656,
+            "zero_brier": 0.13671713247863246,
+            "predicted_zero": 0.26879487179487177
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 1.3975081212008547,
+              "bias": 2.818961387910728,
+              "inside": 0.8,
+              "p95": 8.573667841113615
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.5983653345394777,
+              "bias": -0.4841694771345858,
+              "inside": 0.625,
+              "p95": 13.099506307377135
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.2464993197673344,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.14264576029613854,
+            "offense_mean": 79.69414007315291,
+            "offense_sd": 21.03761497752283,
+            "offense_p90": 107.40156079988404,
+            "qb_receiver_correlation": 0.8279404598709936,
+            "rotation_pair_correlation": 0.012254391024739865,
+            "kicker_mean": 8.134583333333333,
+            "kicker_zero": 0.011,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    },
+    {
+      "date": "2026-10-26",
+      "game": "DAL@PHI",
+      "admission": "newly_admitted",
+      "rotation_observations": 11,
+      "outcome_counts": {
+        "actual_zero": 3,
+        "actual_positive": 8,
+        "actual_negative": 0
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 2.09891164745497,
+            "bias": -1.309542876540198,
+            "zero_brier": 0.2727272727272727,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 0.8571153643672227,
+              "bias": 1.5322039871634605,
+              "inside": 0.0,
+              "p95": 4.250817892869781
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.5645852536128753,
+              "bias": -2.37519795042907,
+              "inside": 0.75,
+              "p95": 15.350602241688565
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.2491869713735655,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.262896570736129,
+            "offense_mean": 81.08171072140905,
+            "offense_sd": 29.612153907191548,
+            "offense_p90": 119.21104051493546,
+            "qb_receiver_correlation": 0.5522670075804057,
+            "rotation_pair_correlation": 0.23457313542574862,
+            "kicker_mean": 7.59075,
+            "kicker_zero": 0.016083333333333335,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 2.006143504925533,
+            "bias": -1.308017928804722,
+            "zero_brier": 0.0881881792929293,
+            "predicted_zero": 0.2207727272727273
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 0.42177141417702907,
+              "bias": 1.5300358736813007,
+              "inside": 1.0,
+              "p95": 6.69009426395866
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.600283038956222,
+              "bias": -2.3722881047369806,
+              "inside": 0.875,
+              "p95": 16.18908362219406
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.2491869713735655,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.262896570736129,
+            "offense_mean": 81.09009793395417,
+            "offense_sd": 29.9879887851664,
+            "offense_p90": 120.15052939024721,
+            "qb_receiver_correlation": 0.5403543786007654,
+            "rotation_pair_correlation": 0.14362128671031799,
+            "kicker_mean": 7.56875,
+            "kicker_zero": 0.016416666666666666,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 1.9572145898990412,
+            "bias": -1.5828719054176061,
+            "zero_brier": 0.09024703282828284,
+            "predicted_zero": 0.2141060606060606
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 0.46378012645173855,
+              "bias": 1.4261218193881593,
+              "inside": 1.0,
+              "p95": 5.554783167634603
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.51725251369178,
+              "bias": -2.7112445522197683,
+              "inside": 0.875,
+              "p95": 14.034633719158533
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.2491869713735655,
+          "interactions": {
+            "qb_opposing_dst_correlation": 0.0056288711819876755,
+            "offense_mean": 77.9833681433309,
+            "offense_sd": 21.300364648727687,
+            "offense_p90": 106.58963420843811,
+            "qb_receiver_correlation": 0.7936986854492927,
+            "rotation_pair_correlation": 0.025241089820008902,
+            "kicker_mean": 7.606083333333333,
+            "kicker_zero": 0.014833333333333334,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 1.9433207424272287,
+            "bias": -1.586094868343786,
+            "zero_brier": 0.09883838636363637,
+            "predicted_zero": 0.30534848484848487
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 0.45073479057607047,
+              "bias": 1.4240880316052043,
+              "inside": 1.0,
+              "p95": 5.168743532984189
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.503040474371413,
+              "bias": -2.7149134558246577,
+              "inside": 0.875,
+              "p95": 14.391802886562072
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.2491869713735655,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.005448940920919145,
+            "offense_mean": 78.00496370101455,
+            "offense_sd": 16.54122587495705,
+            "offense_p90": 99.9322634147681,
+            "qb_receiver_correlation": 0.7852217324768958,
+            "rotation_pair_correlation": -0.0030768964623113394,
+            "kicker_mean": 7.612666666666667,
+            "kicker_zero": 0.01525,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 1.9433207424272287,
+            "bias": -1.586094868343786,
+            "zero_brier": 0.09883838636363637,
+            "predicted_zero": 0.30534848484848487
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 3,
+              "crps": 0.45073479057607047,
+              "bias": 1.4240880316052043,
+              "inside": 1.0,
+              "p95": 5.168743532984189
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 2.503040474371413,
+              "bias": -2.7149134558246577,
+              "inside": 0.875,
+              "p95": 14.391802886562072
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.6036814322833166,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.05194746947228439,
+            "offense_mean": 78.00496370101455,
+            "offense_sd": 16.54122587495705,
+            "offense_p90": 99.9322634147681,
+            "qb_receiver_correlation": 0.7852217324768958,
+            "rotation_pair_correlation": -0.0030768964623113394,
+            "kicker_mean": 7.612666666666667,
+            "kicker_zero": 0.01525,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    },
+    {
+      "date": "2026-10-29",
+      "game": "CAR@GB",
+      "admission": "newly_admitted",
+      "rotation_observations": 12,
+      "outcome_counts": {
+        "actual_zero": 2,
+        "actual_positive": 10,
+        "actual_negative": 0
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 1.8269740015100207,
+            "bias": 1.5155628384881668,
+            "zero_brier": 0.16666666666666666,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 2,
+              "crps": 0.672839970484932,
+              "bias": 1.2636707807387877,
+              "inside": 0.0,
+              "p95": 3.691574296857226
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 10,
+              "crps": 2.0578008077150383,
+              "bias": 1.5659412500380425,
+              "inside": 0.6,
+              "p95": 17.27957782810189
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 1.9368529686872191,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.26111706931721,
+            "offense_mean": 94.85636699929933,
+            "offense_sd": 35.63122899932317,
+            "offense_p90": 139.68079589775988,
+            "qb_receiver_correlation": 0.5370464518033747,
+            "rotation_pair_correlation": 0.24892252251316255,
+            "kicker_mean": 7.94325,
+            "kicker_zero": 0.0165,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 1.8499096764619225,
+            "bias": 1.5269776080713744,
+            "zero_brier": 0.09144734953703704,
+            "predicted_zero": 0.22576388888888888
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 2,
+              "crps": 0.39622776748078037,
+              "bias": 1.2708289372825368,
+              "inside": 1.0,
+              "p95": 5.0922637322203395
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 10,
+              "crps": 2.140646058258151,
+              "bias": 1.5782073422291418,
+              "inside": 0.7,
+              "p95": 18.4986668406219
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 1.9368529686872191,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.26111706931721,
+            "offense_mean": 94.92485561679857,
+            "offense_sd": 36.29253855125622,
+            "offense_p90": 140.6488155207728,
+            "qb_receiver_correlation": 0.5262979013527846,
+            "rotation_pair_correlation": 0.1568682281217314,
+            "kicker_mean": 7.93425,
+            "kicker_zero": 0.016666666666666666,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 1.7090329606951087,
+            "bias": 1.1406685772567535,
+            "zero_brier": 0.08946052314814815,
+            "predicted_zero": 0.21747222222222223
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 2,
+              "crps": 0.43179340118521614,
+              "bias": 1.140782568985191,
+              "inside": 1.0,
+              "p95": 4.121859059396685
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 10,
+              "crps": 1.9644808725970873,
+              "bias": 1.140645778911066,
+              "inside": 0.7,
+              "p95": 15.31324739544553
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 1.9368529686872191,
+          "interactions": {
+            "qb_opposing_dst_correlation": 0.0030241880589702364,
+            "offense_mean": 90.58081176548694,
+            "offense_sd": 23.770794237056336,
+            "offense_p90": 121.80603168606385,
+            "qb_receiver_correlation": 0.8143664628283414,
+            "rotation_pair_correlation": 0.012242834932748907,
+            "kicker_mean": 7.922666666666666,
+            "kicker_zero": 0.015916666666666666,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 1.7513241984091927,
+            "bias": 1.1443540131779975,
+            "zero_brier": 0.08228975925925926,
+            "predicted_zero": 0.23547222222222222
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 2,
+              "crps": 0.39116885790816036,
+              "bias": 1.1240948948339098,
+              "inside": 1.0,
+              "p95": 4.8108355897002095
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 10,
+              "crps": 2.0233552665093995,
+              "bias": 1.1484058368468149,
+              "inside": 0.6,
+              "p95": 14.77307003510779
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 1.9368529686872191,
+          "interactions": {
+            "qb_opposing_dst_correlation": 0.009895360937534951,
+            "offense_mean": 90.76562280476783,
+            "offense_sd": 22.118367578889902,
+            "offense_p90": 119.90854484077217,
+            "qb_receiver_correlation": 0.8714937966380261,
+            "rotation_pair_correlation": 0.01002395026039915,
+            "kicker_mean": 7.945833333333333,
+            "kicker_zero": 0.015416666666666665,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 1.7513241984091927,
+            "bias": 1.1443540131779975,
+            "zero_brier": 0.08228975925925926,
+            "predicted_zero": 0.23547222222222222
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 2,
+              "crps": 0.39116885790816036,
+              "bias": 1.1240948948339098,
+              "inside": 1.0,
+              "p95": 4.8108355897002095
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 10,
+              "crps": 2.0233552665093995,
+              "bias": 1.1484058368468149,
+              "inside": 0.6,
+              "p95": 14.77307003510779
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.1214346873173477,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.12883747140736554,
+            "offense_mean": 90.76562280476783,
+            "offense_sd": 22.118367578889902,
+            "offense_p90": 119.90854484077217,
+            "qb_receiver_correlation": 0.8714937966380261,
+            "rotation_pair_correlation": 0.01002395026039915,
+            "kicker_mean": 7.945833333333333,
+            "kicker_zero": 0.015416666666666665,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    },
+    {
+      "date": "2026-11-01",
+      "game": "PHI@WAS",
+      "admission": "original",
+      "rotation_observations": 13,
+      "outcome_counts": {
+        "actual_zero": 5,
+        "actual_positive": 8,
+        "actual_negative": 0
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 1.580082033378623,
+            "bias": 0.04040811772740605,
+            "zero_brier": 0.38461538461538464,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 1.0588751271744528,
+              "bias": 1.940918321106179,
+              "inside": 0.0,
+              "p95": 5.497538174982321
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 1.9058363497562292,
+              "bias": -1.147410759384327,
+              "inside": 0.75,
+              "p95": 13.866443733337857
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.8390397778509353,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.25620275340276666,
+            "offense_mean": 79.00043629186911,
+            "offense_sd": 29.34286104776644,
+            "offense_p90": 117.25471355499064,
+            "qb_receiver_correlation": 0.5489768246287978,
+            "rotation_pair_correlation": 0.2203133158360794,
+            "kicker_mean": 7.593083333333334,
+            "kicker_zero": 0.021916666666666668,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 1.4249532613407183,
+            "bias": 0.041143319160036745,
+            "zero_brier": 0.12696453205128205,
+            "predicted_zero": 0.24667948717948718
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 0.6220258444302225,
+              "bias": 1.9540561532094853,
+              "inside": 1.0,
+              "p95": 7.731658562085924
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 1.9267828969097782,
+              "bias": -1.1544272021208686,
+              "inside": 0.875,
+              "p95": 14.626866551383953
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.8390397778509353,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.25620275340276666,
+            "offense_mean": 79.00521510118121,
+            "offense_sd": 30.05805571928923,
+            "offense_p90": 117.96699645030706,
+            "qb_receiver_correlation": 0.5290847243628304,
+            "rotation_pair_correlation": 0.1303914489451848,
+            "kicker_mean": 7.593,
+            "kicker_zero": 0.021833333333333337,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 1.3921192296849594,
+            "bias": -0.20768253425942546,
+            "zero_brier": 0.12756347222222222,
+            "predicted_zero": 0.23532051282051283
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 0.6809576385408775,
+              "bias": 1.7774470911111278,
+              "inside": 1.0,
+              "p95": 6.329397139353219
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 1.8365952241500108,
+              "bias": -1.4483885501160212,
+              "inside": 0.75,
+              "p95": 12.701524030834278
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.8390397778509353,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.006135965917244324,
+            "offense_mean": 75.85175984715723,
+            "offense_sd": 20.59197418488806,
+            "offense_p90": 103.26471469863611,
+            "qb_receiver_correlation": 0.7824557160897675,
+            "rotation_pair_correlation": 0.014768999791482332,
+            "kicker_mean": 7.592083333333333,
+            "kicker_zero": 0.020999999999999998,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 1.3413120682487143,
+            "bias": -0.19862473380241258,
+            "zero_brier": 0.09973044871794871,
+            "predicted_zero": 0.35817948717948717
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 0.5340186982995443,
+              "bias": 1.7792036290067876,
+              "inside": 1.0,
+              "p95": 7.66333152768324
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 1.8458704244669457,
+              "bias": -1.4347674605581626,
+              "inside": 0.75,
+              "p95": 12.953045713263679
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 3.8390397778509353,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.0010974340334446806,
+            "offense_mean": 76.21838740629772,
+            "offense_sd": 20.896140539129746,
+            "offense_p90": 103.71446694947252,
+            "qb_receiver_correlation": 0.8305370705674735,
+            "rotation_pair_correlation": 0.006423358329360768,
+            "kicker_mean": 7.612083333333333,
+            "kicker_zero": 0.020916666666666667,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 1.3413120682487143,
+            "bias": -0.19862473380241258,
+            "zero_brier": 0.09973044871794871,
+            "predicted_zero": 0.35817948717948717
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 5,
+              "crps": 0.5340186982995443,
+              "bias": 1.7792036290067876,
+              "inside": 1.0,
+              "p95": 7.66333152768324
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 8,
+              "crps": 1.8458704244669457,
+              "bias": -1.4347674605581626,
+              "inside": 0.75,
+              "p95": 12.953045713263679
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 4.326993338509484,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.04317558572844161,
+            "offense_mean": 76.21838740629772,
+            "offense_sd": 20.896140539129746,
+            "offense_p90": 103.71446694947252,
+            "qb_receiver_correlation": 0.8305370705674735,
+            "rotation_pair_correlation": 0.006423358329360768,
+            "kicker_mean": 7.612083333333333,
+            "kicker_zero": 0.020916666666666667,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    },
+    {
+      "date": "2026-11-02",
+      "game": "CHI@SEA",
+      "admission": "newly_admitted",
+      "rotation_observations": 13,
+      "outcome_counts": {
+        "actual_zero": 6,
+        "actual_positive": 7,
+        "actual_negative": 0
+      },
+      "profiles": {
+        "baseline": {
+          "rotation": {
+            "crps": 1.8009014883715,
+            "bias": 1.1815849730783348,
+            "zero_brier": 0.46153846153846156,
+            "predicted_zero": 0.0
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 6,
+              "crps": 1.9376390417425262,
+              "bias": 3.1601189356664765,
+              "inside": 0.0,
+              "p95": 7.935818636166061
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 1.6836978711963346,
+              "bias": -0.5143012805686438,
+              "inside": 0.8571428571428571,
+              "p95": 13.838504598255291
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.511192544221189,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2587710155738162,
+            "offense_mean": 86.93540226860108,
+            "offense_sd": 31.177063385449713,
+            "offense_p90": 127.3865894438803,
+            "qb_receiver_correlation": 0.5325720420073613,
+            "rotation_pair_correlation": 0.2280661161592012,
+            "kicker_mean": 8.593250000000001,
+            "kicker_zero": 0.010916666666666667,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "sampled_hurdle": {
+          "rotation": {
+            "crps": 1.6366832995456082,
+            "bias": 1.1703664581941813,
+            "zero_brier": 0.216227297008547,
+            "predicted_zero": 0.23024358974358974
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 6,
+              "crps": 1.5514211112313512,
+              "bias": 3.1416422722619863,
+              "inside": 0.8333333333333334,
+              "p95": 9.848742350787798
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 1.7097651752435425,
+              "bias": -0.5192985252925091,
+              "inside": 0.8571428571428571,
+              "p95": 14.48623445388269
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.511192544221189,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.2587710155738162,
+            "offense_mean": 86.86248192185408,
+            "offense_sd": 31.61415927700355,
+            "offense_p90": 128.21111620242868,
+            "qb_receiver_correlation": 0.5170964475280933,
+            "rotation_pair_correlation": 0.13970954368077848,
+            "kicker_mean": 8.585,
+            "kicker_zero": 0.010833333333333334,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "linked_completion": {
+          "rotation": {
+            "crps": 1.5452174561980903,
+            "bias": 0.8867013370549577,
+            "zero_brier": 0.22147067948717947,
+            "predicted_zero": 0.2207948717948718
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 6,
+              "crps": 1.547292182898568,
+              "bias": 2.927621817052444,
+              "inside": 0.8333333333333334,
+              "p95": 8.906600505486397
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 1.5434391190262522,
+              "bias": -0.8626590743714594,
+              "inside": 1.0,
+              "p95": 12.2553247310425
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.511192544221189,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.012122140095239327,
+            "offense_mean": 83.14187911085052,
+            "offense_sd": 22.081313722972546,
+            "offense_p90": 112.03483506504267,
+            "qb_receiver_correlation": 0.7887189690982274,
+            "rotation_pair_correlation": 0.01271456590335665,
+            "kicker_mean": 8.569916666666666,
+            "kicker_zero": 0.01025,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_events": {
+          "rotation": {
+            "crps": 1.70856734781876,
+            "bias": 0.8789048488140336,
+            "zero_brier": 0.2780103183760684,
+            "predicted_zero": 0.26903846153846156
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 6,
+              "crps": 1.7032470356316112,
+              "bias": 2.911158708141346,
+              "inside": 0.8333333333333334,
+              "p95": 7.818727552774831
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 1.7131276154077448,
+              "bias": -0.8630270306093769,
+              "inside": 0.8571428571428571,
+              "p95": 13.08584545652067
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.511192544221189,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.007983313094992112,
+            "offense_mean": 83.0886345147559,
+            "offense_sd": 17.929532796891653,
+            "offense_p90": 107.04188847989084,
+            "qb_receiver_correlation": 0.8094362595212998,
+            "rotation_pair_correlation": -0.007244527218434921,
+            "kicker_mean": 8.592916666666667,
+            "kicker_zero": 0.010083333333333333,
+            "rotations_all_zero": 0.0
+          }
+        },
+        "reconciled_dst": {
+          "rotation": {
+            "crps": 1.70856734781876,
+            "bias": 0.8789048488140336,
+            "zero_brier": 0.2780103183760684,
+            "predicted_zero": 0.26903846153846156
+          },
+          "strict_subgroups": {
+            "actual_zero": {
+              "games": 1,
+              "observations": 6,
+              "crps": 1.7032470356316112,
+              "bias": 2.911158708141346,
+              "inside": 0.8333333333333334,
+              "p95": 7.818727552774831
+            },
+            "actual_positive": {
+              "games": 1,
+              "observations": 7,
+              "crps": 1.7131276154077448,
+              "bias": -0.8630270306093769,
+              "inside": 0.8571428571428571,
+              "p95": 13.08584545652067
+            },
+            "actual_negative": {
+              "games": 0,
+              "observations": 0,
+              "crps": null,
+              "bias": null,
+              "inside": null,
+              "p95": null
+            }
+          },
+          "dst_crps": 2.9023538283786383,
+          "interactions": {
+            "qb_opposing_dst_correlation": -0.13372098418024858,
+            "offense_mean": 83.0886345147559,
+            "offense_sd": 17.929532796891653,
+            "offense_p90": 107.04188847989084,
+            "qb_receiver_correlation": 0.8094362595212998,
+            "rotation_pair_correlation": -0.007244527218434921,
+            "kicker_mean": 8.592916666666667,
+            "kicker_zero": 0.010083333333333333,
+            "rotations_all_zero": 0.0
+          }
+        }
+      }
+    }
+  ],
+  "excluded": [],
+  "limitations": [
+    "Current-model retrospective reruns on strictly qualified frozen pregame inputs, separate from distributions recorded by the old executable.",
+    "Exact selected-source base-player scores only; other exports detect conflicts and never fill missing outcomes. Captain is not a second observation.",
+    "One representative contest per game, selected by known construction coverage before reading outcomes. Games, not players or contests, are evaluation units.",
+    "No weighting fit, future scores, missing-score zeros, current-depth substitutions or production changes. Small game samples remain exploratory.",
+    "Expanded coverage of the same declared retrospective window; not a new blind/prospective holdout.",
+    "Game groups, not players/draws, are evaluation units; original two-game results retained separately.",
+    "Model correlations are diagnostics, not empirical within-game correlation validation.",
+    "Forecast-mean consistency does not establish forecast calibration or full DK event scoring. No production defaults changed."
+  ],
+  "sensitivities": {
+    "all_admitted": {
+      "rotation_crps": {
+        "games": 7,
+        "mean_gap": -0.1531905527668708,
+        "lower_games": 7,
+        "higher_games": 0,
+        "equal_games": 0,
+        "omit_one_gap_range": [
+          -0.1661140110445446,
+          -0.13042087189396764
+        ]
+      },
+      "positive_crps": {
+        "games": 7,
+        "mean_gap": -0.03329058665162633,
+        "lower_games": 4,
+        "higher_games": 3,
+        "equal_games": 0,
+        "omit_one_gap_range": [
+          -0.04638755842246393,
+          -0.01275929345679272
+        ]
+      },
+      "positive_bias": {
+        "games": 7,
+        "mean_gap": -0.356122973067592,
+        "lower_games": 7,
+        "higher_games": 0,
+        "equal_games": 0,
+        "omit_one_gap_range": [
+          -0.3675840183832181,
+          -0.33984134206884953
+        ]
+      },
+      "dst_crps": {
+        "games": 7,
+        "mean_gap": 0.29960010636873846,
+        "lower_games": 1,
+        "higher_games": 6,
+        "equal_games": 0,
+        "omit_one_gap_range": [
+          0.22537612606492305,
+          0.40040121382757604
+        ]
+      }
+    },
+    "newly_admitted": {
+      "rotation_crps": {
+        "games": 5,
+        "mean_gap": -0.10875105324677943,
+        "lower_games": 5,
+        "higher_games": 0,
+        "equal_games": 0,
+        "omit_one_gap_range": [
+          -0.1170263657832673,
+          -0.09704109030153901
+        ]
+      },
+      "positive_crps": {
+        "games": 5,
+        "mean_gap": -0.003317967090294571,
+        "lower_games": 2,
+        "higher_games": 3,
+        "equal_games": 0,
+        "omit_one_gap_range": [
+          -0.015470269856218022,
+          0.011238735947497303
+        ]
+      },
+      "positive_bias": {
+        "games": 5,
+        "mean_gap": -0.3503382702478523,
+        "lower_games": 5,
+        "higher_games": 0,
+        "equal_games": 0,
+        "omit_one_gap_range": [
+          -0.35967556272706935,
+          -0.3335389845120085
+        ]
+      },
+      "dst_crps": {
+        "games": 5,
+        "mean_gap": 0.2739949827009346,
+        "lower_games": 1,
+        "higher_games": 4,
+        "equal_games": 0,
+        "omit_one_gap_range": [
+          0.15625773132826049,
+          0.41879536297224
+        ]
+      }
+    }
+  },
+  "validation": {
+    "new_reader_regressions": 13,
+    "focused_tests": 53,
+    "focused_seconds": 38.375,
+    "receipt_checks": 6,
+    "receipt_check_seconds": 0.002,
+    "full_tests": 2531,
+    "full_passed": 2530,
+    "full_skipped": 1,
+    "full_seconds": 912.848,
+    "skip_reason": "Symlink creation unavailable",
+    "unexpected_network_attempts": 0,
+    "windows_ci_package": "Not run for this stacked head; inherited results do not validate this change",
+    "private_aggregator_sha256": "5fc323b2e5fb3e5c8a4d490a94ca9a1bd6bebe1d15d707357281178920d0ff0a",
+    "private_receipt_checks_sha256": "96049c5b8a1b8860d2d805b927eac150e9a39d798e66953395c0a105d6bd18e1"
+  }
+}
