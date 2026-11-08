@@ -82,6 +82,7 @@ def save_build_archive(payload, context, diagnostic):
     input_id = str(context.get('input_id') or '')
     files = {}
     snapshot_status = 'unavailable'
+    snapshot = None
     if re.fullmatch(r'[0-9a-f]{64}', input_id):
         try:
             snapshot = load_snapshot(str(folder.parent / 'snapshots' / (input_id + '.json')))
@@ -90,6 +91,7 @@ def save_build_archive(payload, context, diagnostic):
             files['input-snapshot.json'] = json.dumps(snapshot, ensure_ascii=False, allow_nan=False).encode('utf-8')
             snapshot_status = 'included'
         except (OSError, ValueError, TypeError, KeyError):
+            snapshot = None
             snapshot_status = 'unavailable or invalid'
     now = datetime.datetime.now(datetime.timezone.utc)
     audit_id = uuid.uuid4().hex
@@ -102,6 +104,13 @@ def save_build_archive(payload, context, diagnostic):
         app_code_id=implementation_id(), output_count=len(output),
         ordering='canonical SIM order' if has_sim else 'build output order',
         settings=context.get('settings') or {}, portfolio_rules=context.get('portfolio_rules') or {})
+    from build_screening_evidence import capture as capture_screening
+    screening, screening_bytes = capture_screening(folder.parent / 'screening-audits',
+        diagnostic.get('screening_audit'), snapshot, rows, kind=kind,
+        cancelled=bool(payload.get('cancelled')))
+    metadata['screening_evidence'] = screening
+    if screening_bytes is not None:
+        files['screening-audit.json.gz'] = screening_bytes
     files['lineups.json'] = json.dumps(dict(metadata=metadata, lineups=output),
         ensure_ascii=False, allow_nan=False).encode('utf-8')
     stream = io.StringIO(newline='')

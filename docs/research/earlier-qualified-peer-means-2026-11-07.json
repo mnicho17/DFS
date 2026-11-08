@@ -1,0 +1,1505 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-07",
+  "runtime_commit": "9212ba76b532eea8912447c6ab639173acec99d1",
+  "authority": "observational cohort comparison only; no generation/model/default/payout changes",
+  "private_report_sha256": "32b5785e1af69e603b47015cfeb9e82c9c5e04ee3dbc2936e1f328b710750fe9",
+  "harness_sha256": "9a1951d584552703a30e359ce9ce699a3e4c8ac835293a0e01a2d12f0fec5ac2",
+  "legacy_series_canonical_sha256": "429991dd2ae48e8de993cf87e0043fc82d390c9a5f42a9fab1b7eb63b7fe2bfc",
+  "legacy_series_exactly_reproduced": true,
+  "coverage": {
+    "contests": 6,
+    "games": 6,
+    "profiles": 5195,
+    "portfolio_entries": 690269,
+    "excluded_contests": 0,
+    "unresolved_portfolio_entries": 2150,
+    "complete_fields": 0
+  },
+  "recorded_peer_metric_calls": 68458,
+  "evaluation_windows": [
+    [
+      "2026-10-19",
+      "2026-10-19"
+    ],
+    [
+      "2026-10-22",
+      "2026-10-22"
+    ],
+    [
+      "2026-10-26",
+      "2026-10-26"
+    ],
+    [
+      "2026-10-29",
+      "2026-10-29"
+    ],
+    [
+      "2026-11-01",
+      "2026-11-01"
+    ],
+    [
+      "2026-11-02",
+      "2026-11-02"
+    ]
+  ],
+  "support_checks": {
+    "5": {
+      "usage": {
+        "split_5_1_pct": {
+          "profiles": 1127,
+          "games": 6,
+          "cohort_mean": 18.752139251244614,
+          "peer_mean": 18.121031444471036,
+          "difference_pp": 0.6311078067735781,
+          "higher": 4,
+          "lower": 2,
+          "equal": 0,
+          "omit_one_range": [
+            -0.45197616501694887,
+            1.6659871268138589
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 20.867564819522116,
+              "peer_mean": 24.037509839434694,
+              "difference_pp": -3.1699450199125785
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 15.430871212121213,
+              "peer_mean": 19.974160005549038,
+              "difference_pp": -4.543288793427825
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 14.324263038548754,
+              "peer_mean": 12.788118369657171,
+              "difference_pp": 1.5361446688915823
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 17.76710816777042,
+              "peer_mean": 15.275228794698938,
+              "difference_pp": 2.491879373071482
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 20.1592039800995,
+              "peer_mean": 18.733875033806907,
+              "difference_pp": 1.4253289462925949
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 23.963824289405686,
+              "peer_mean": 17.917296623679473,
+              "difference_pp": 6.046527665726213
+            }
+          ]
+        },
+        "split_4_2_pct": {
+          "profiles": 1127,
+          "games": 6,
+          "cohort_mean": 47.103459467054925,
+          "peer_mean": 46.43899591796093,
+          "difference_pp": 0.6644635490939912,
+          "higher": 3,
+          "lower": 3,
+          "equal": 0,
+          "omit_one_range": [
+            -0.30432973226024557,
+            1.5650396996984626
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 45.760294865277075,
+              "peer_mean": 43.385496354980944,
+              "difference_pp": 2.374798510296131
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 48.12736742424242,
+              "peer_mean": 42.61893746837725,
+              "difference_pp": 5.508429955865175
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 51.006802721088434,
+              "peer_mean": 47.65857087671129,
+              "difference_pp": 3.348231844377146
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 46.47240618101545,
+              "peer_mean": 47.21503800346323,
+              "difference_pp": -0.7426318224477768
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 44.71641791044776,
+              "peer_mean": 48.554835114376125,
+              "difference_pp": -3.8384172039283655
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 46.5374677002584,
+              "peer_mean": 49.20109768985676,
+              "difference_pp": -2.6636299895983626
+            }
+          ]
+        },
+        "split_3_3_pct": {
+          "profiles": 1127,
+          "games": 6,
+          "cohort_mean": 34.14440128170046,
+          "peer_mean": 35.43997263756803,
+          "difference_pp": -1.29557135586757,
+          "higher": 2,
+          "lower": 4,
+          "equal": 0,
+          "omit_one_range": [
+            -2.037303278568237,
+            -0.5778103243873375
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 33.37214031520082,
+              "peer_mean": 32.57699380558436,
+              "difference_pp": 0.7951465096164583
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 36.44176136363637,
+              "peer_mean": 37.406902526073715,
+              "difference_pp": -0.965141162437348
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 34.66893424036281,
+              "peer_mean": 39.55331075363154,
+              "difference_pp": -4.884376513268734
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 35.760485651214125,
+              "peer_mean": 37.50973320183784,
+              "difference_pp": -1.7492475506237142
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 35.124378109452735,
+              "peer_mean": 32.71128985181697,
+              "difference_pp": 2.4130882576357635
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 29.498708010335918,
+              "peer_mean": 32.881605686463764,
+              "difference_pp": -3.382897676127847
+            }
+          ]
+        },
+        "qb_opposing_dst_pct": {
+          "profiles": 1127,
+          "games": 6,
+          "cohort_mean": 12.055732736468928,
+          "peer_mean": 12.573160756506693,
+          "difference_pp": -0.5174280200377647,
+          "higher": 1,
+          "lower": 5,
+          "equal": 0,
+          "omit_one_range": [
+            -0.8133355389369765,
+            -0.249077806437041
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 10.336892052194543,
+              "peer_mean": 10.779318571519648,
+              "difference_pp": -0.4424265193251049
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 10.20501893939394,
+              "peer_mean": 12.064198027435323,
+              "difference_pp": -1.8591790880413832
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 8.229024943310657,
+              "peer_mean": 8.522171574777222,
+              "difference_pp": -0.2931466314665645
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 12.434878587196469,
+              "peer_mean": 13.63965276819176,
+              "difference_pp": -1.204774180995292
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 15.149253731343284,
+              "peer_mean": 15.416405006199822,
+              "difference_pp": -0.26715127485653767
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 15.979328165374676,
+              "peer_mean": 15.017218590916382,
+              "difference_pp": 0.9621095744582941
+            }
+          ]
+        },
+        "all_four_pct": {
+          "profiles": 1127,
+          "games": 6,
+          "cohort_mean": 51.78039135081764,
+          "peer_mean": 53.40825282997549,
+          "difference_pp": -1.6278614791578516,
+          "higher": 1,
+          "lower": 5,
+          "equal": 0,
+          "omit_one_range": [
+            -2.0286137170181333,
+            -0.9316891141334736
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 47.111760718522284,
+              "peer_mean": 46.73586100837873,
+              "difference_pp": 0.37589971014355683
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 40.50568181818182,
+              "peer_mean": 45.61440512246156,
+              "difference_pp": -5.108723304279742
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 63.276643990929706,
+              "peer_mean": 65.33704905390307,
+              "difference_pp": -2.0604050629733663
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 54.17439293598234,
+              "peer_mean": 54.84292574159067,
+              "difference_pp": -0.6685328056083293
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 50.22885572139303,
+              "peer_mean": 52.20835858620429,
+              "difference_pp": -1.9795028648112591
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 55.38501291989664,
+              "peer_mean": 55.71091746731461,
+              "difference_pp": -0.32590454741797004
+            }
+          ]
+        },
+        "receiver_own_qb_pct": {
+          "profiles": 897,
+          "games": 6,
+          "cohort_mean": 83.1097207571315,
+          "peer_mean": 77.8478277116283,
+          "difference_pp": 5.2618930455032,
+          "higher": 4,
+          "lower": 2,
+          "equal": 0,
+          "omit_one_range": [
+            4.402461314666331,
+            6.483653355608675
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 86.61770999369807,
+              "peer_mean": 86.91187820014568,
+              "difference_pp": -0.2941682064476083
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 91.31152179114389,
+              "peer_mean": 86.33402347075024,
+              "difference_pp": 4.97749832039365
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 78.83751202057874,
+              "peer_mean": 69.2784603208912,
+              "difference_pp": 9.559051699687544
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 85.66541708106352,
+              "peer_mean": 76.26059498437002,
+              "difference_pp": 9.404822096693508
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 81.03069678310949,
+              "peer_mean": 81.87760528813367,
+              "difference_pp": -0.8469085050241745
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 75.19546687319529,
+              "peer_mean": 66.424404005479,
+              "difference_pp": 8.771062867716282
+            }
+          ]
+        },
+        "kd_zero_pct": {
+          "profiles": 1127,
+          "games": 6,
+          "cohort_mean": 42.827311797125724,
+          "peer_mean": 44.74658149319583,
+          "difference_pp": -1.9192696960701092,
+          "higher": 2,
+          "lower": 4,
+          "equal": 0,
+          "omit_one_range": [
+            -3.631812156977282,
+            -1.1280482968808236
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 46.020504999152685,
+              "peer_mean": 45.15510830121192,
+              "difference_pp": 0.865396697940767
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 52.51278409090909,
+              "peer_mean": 45.86934148244334,
+              "difference_pp": 6.6434426084657545
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 50.50566893424036,
+              "peer_mean": 53.643263158879726,
+              "difference_pp": -3.137594224639365
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 42.10706401766004,
+              "peer_mean": 46.76802201155664,
+              "difference_pp": -4.660957993896595
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 34.43283582089552,
+              "peer_mean": 40.30821251291206,
+              "difference_pp": -5.875376692016538
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 31.385012919896642,
+              "peer_mean": 36.73554149217132,
+              "difference_pp": -5.35052857227468
+            }
+          ]
+        },
+        "kd_one_pct": {
+          "profiles": 1127,
+          "games": 6,
+          "cohort_mean": 43.532968389172396,
+          "peer_mean": 42.420382532987745,
+          "difference_pp": 1.112585856184656,
+          "higher": 4,
+          "lower": 2,
+          "equal": 0,
+          "omit_one_range": [
+            0.5319567644925698,
+            2.7974420807704035
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 42.06668361294696,
+              "peer_mean": 42.11535257103985,
+              "difference_pp": -0.048668958092889625
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 39.39251893939394,
+              "peer_mean": 46.70421420613802,
+              "difference_pp": -7.311695266744081
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 40.27210884353742,
+              "peer_mean": 37.175164585920186,
+              "difference_pp": 3.0969442576172312
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 44.29028697571744,
+              "peer_mean": 41.14384473436913,
+              "difference_pp": 3.1464422413483106
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 50.25373134328358,
+              "peer_mean": 46.238000028638496,
+              "difference_pp": 4.0157313146450875
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 44.92248062015504,
+              "peer_mean": 41.145719071820764,
+              "difference_pp": 3.776761548334278
+            }
+          ]
+        },
+        "kd_two_pct": {
+          "profiles": 1127,
+          "games": 6,
+          "cohort_mean": 12.657224214632482,
+          "peer_mean": 11.636927654804557,
+          "difference_pp": 1.0202965598279243,
+          "higher": 5,
+          "lower": 1,
+          "equal": 0,
+          "omit_one_range": [
+            0.7745475889554477,
+            1.3460410640229792
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 11.19276393831554,
+              "peer_mean": 8.943722524125233,
+              "difference_pp": 2.249041414190307
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 7.958333333333333,
+              "peer_mean": 7.167139641371084,
+              "difference_pp": 0.7911936919622491
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 8.691609977324264,
+              "peer_mean": 8.430516174066163,
+              "difference_pp": 0.2610938032581007
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 13.439293598233995,
+              "peer_mean": 12.061809608615516,
+              "difference_pp": 1.3774839896184794
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 15.203980099502488,
+              "peer_mean": 13.152587678416728,
+              "difference_pp": 2.05139242108576
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 19.45736434108527,
+              "peer_mean": 20.06579030223262,
+              "difference_pp": -0.6084259611473506
+            }
+          ]
+        },
+        "kd_three_plus_pct": {
+          "profiles": 1127,
+          "games": 6,
+          "cohort_mean": 0.9824955990693982,
+          "peer_mean": 1.1961083190118695,
+          "difference_pp": -0.21361271994247127,
+          "higher": 2,
+          "lower": 4,
+          "equal": 0,
+          "omit_one_range": [
+            -0.692773860948516,
+            0.3568185668766716
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 0.7200474495848161,
+              "peer_mean": 3.7858166036230014,
+              "difference_pp": -3.0657691540381853
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 0.13636363636363635,
+              "peer_mean": 0.2593046700475592,
+              "difference_pp": -0.12294103368392284
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 0.5306122448979592,
+              "peer_mean": 0.7510560811339262,
+              "difference_pp": -0.22044383623596697
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 0.16335540838852097,
+              "peer_mean": 0.026323645458712543,
+              "difference_pp": 0.13703176292980843
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 0.10945273631840795,
+              "peer_mean": 0.30119978003272124,
+              "difference_pp": -0.19174704371431328
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 4.235142118863049,
+              "peer_mean": 2.0529491337752965,
+              "difference_pp": 2.1821929850877524
+            }
+          ]
+        }
+      },
+      "legacy_peer_support": 1127,
+      "legacy_outcomes": {
+        "showdown / 150-Max": {
+          "cohort_rate": 0.5837268735744803,
+          "peer_rate": 0.3767598967430438,
+          "slates": 6,
+          "matched_profiles": 1127
+        }
+      }
+    },
+    "10": {
+      "usage": {
+        "split_5_1_pct": {
+          "profiles": 662,
+          "games": 6,
+          "cohort_mean": 18.78099250447562,
+          "peer_mean": 17.481557797518633,
+          "difference_pp": 1.2994347069569887,
+          "higher": 4,
+          "lower": 2,
+          "equal": 0,
+          "omit_one_range": [
+            0.34088179482268616,
+            2.27548275872205
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 20.518587360594797,
+              "peer_mean": 24.099392912463113,
+              "difference_pp": -3.580805551868316
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 15.023148148148149,
+              "peer_mean": 15.106478426262722,
+              "difference_pp": -0.08333027811457328
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 14.076190476190476,
+              "peer_mean": 12.599379642039699,
+              "difference_pp": 1.4768108341507773
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 17.18421052631579,
+              "peer_mean": 14.101347436084167,
+              "difference_pp": 3.0828630902316245
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 20.260162601626018,
+              "peer_mean": 19.4512917219121,
+              "difference_pp": 0.8088708797139184
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 25.623655913978496,
+              "peer_mean": 19.531456646349994,
+              "difference_pp": 6.0921992676285015
+            }
+          ]
+        },
+        "split_4_2_pct": {
+          "profiles": 662,
+          "games": 6,
+          "cohort_mean": 46.73836525795281,
+          "peer_mean": 46.773497484628436,
+          "difference_pp": -0.03513222667562488,
+          "higher": 4,
+          "lower": 2,
+          "equal": 0,
+          "omit_one_range": [
+            -0.6310010806627588,
+            0.7984747599127473
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 46.06505576208178,
+              "peer_mean": 43.46974048340282,
+              "difference_pp": 2.59531527867896
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 49.03472222222222,
+              "peer_mean": 48.50567761229429,
+              "difference_pp": 0.5290446099279293
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 50.67619047619048,
+              "peer_mean": 47.73197843293043,
+              "difference_pp": 2.9442120432600447
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 46.99122807017544,
+              "peer_mean": 45.77050052776643,
+              "difference_pp": 1.2207275424090085
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 42.8780487804878,
+              "peer_mean": 46.17497445520001,
+              "difference_pp": -3.296925674712206
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 44.784946236559136,
+              "peer_mean": 48.98811339617662,
+              "difference_pp": -4.203167159617486
+            }
+          ]
+        },
+        "split_3_3_pct": {
+          "profiles": 662,
+          "games": 6,
+          "cohort_mean": 34.48064223757157,
+          "peer_mean": 35.74494471785293,
+          "difference_pp": -1.2643024802813614,
+          "higher": 2,
+          "lower": 4,
+          "equal": 0,
+          "omit_one_range": [
+            -2.0147739353372907,
+            -0.6329584008554697
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 33.41635687732342,
+              "peer_mean": 32.43086660413406,
+              "difference_pp": 0.9854902731893631
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 35.94212962962963,
+              "peer_mean": 36.38784396144298,
+              "difference_pp": -0.44571433181334896
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 35.24761904761905,
+              "peer_mean": 39.66864192502987,
+              "difference_pp": -4.42102287741082
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 35.824561403508774,
+              "peer_mean": 40.1281520361494,
+              "difference_pp": -4.303590632640628
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 36.86178861788618,
+              "peer_mean": 34.37373382288789,
+              "difference_pp": 2.488054794998284
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 29.591397849462364,
+              "peer_mean": 31.480429957473383,
+              "difference_pp": -1.889032108011019
+            }
+          ]
+        },
+        "qb_opposing_dst_pct": {
+          "profiles": 662,
+          "games": 6,
+          "cohort_mean": 11.536144759371222,
+          "peer_mean": 11.792816591376251,
+          "difference_pp": -0.2566718320050286,
+          "higher": 2,
+          "lower": 4,
+          "equal": 0,
+          "omit_one_range": [
+            -1.082727883588961,
+            0.43784324264463875
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 10.38909541511772,
+              "peer_mean": 11.021731083472726,
+              "difference_pp": -0.6326356683550056
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 9.289351851851851,
+              "peer_mean": 11.420911095282818,
+              "difference_pp": -2.131559243430967
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 7.414285714285715,
+              "peer_mean": 8.790097721998153,
+              "difference_pp": -1.3758120077124385
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 12.986842105263158,
+              "peer_mean": 10.531227398456187,
+              "difference_pp": 2.455614706806971
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 10.691056910569106,
+              "peer_mean": 14.420304115822471,
+              "difference_pp": -3.7292472052533654
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 18.446236559139784,
+              "peer_mean": 14.57262813322515,
+              "difference_pp": 3.873608425914634
+            }
+          ]
+        },
+        "all_four_pct": {
+          "profiles": 662,
+          "games": 6,
+          "cohort_mean": 51.69266399133176,
+          "peer_mean": 54.56533374844014,
+          "difference_pp": -2.8726697571083775,
+          "higher": 1,
+          "lower": 5,
+          "equal": 0,
+          "omit_one_range": [
+            -3.6310259492649477,
+            -2.330891988406745
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 47.37856257744733,
+              "peer_mean": 46.45945137377286,
+              "difference_pp": 0.9191112036744755
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 39.81481481481482,
+              "peer_mean": 43.79263095190781,
+              "difference_pp": -3.9778161370929936
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 62.84761904761905,
+              "peer_mean": 65.44272364811707,
+              "difference_pp": -2.5951046004980185
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 53.3421052631579,
+              "peer_mean": 58.923663863774436,
+              "difference_pp": -5.581558600616539
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 53.50406504065041,
+              "peer_mean": 56.299838014854174,
+              "difference_pp": -2.7957729742037642
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 53.26881720430107,
+              "peer_mean": 56.473694638214496,
+              "difference_pp": -3.204877433913424
+            }
+          ]
+        },
+        "receiver_own_qb_pct": {
+          "profiles": 631,
+          "games": 6,
+          "cohort_mean": 81.46964121032057,
+          "peer_mean": 74.53790362462766,
+          "difference_pp": 6.931737585692912,
+          "higher": 4,
+          "lower": 2,
+          "equal": 0,
+          "omit_one_range": [
+            4.711745933522806,
+            8.917094030486544
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 86.63177172073264,
+              "peer_mean": 86.8868996208295,
+              "difference_pp": -0.25512790009685204
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 91.32849466642584,
+              "peer_mean": 85.93732541317553,
+              "difference_pp": 5.391169253250311
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 78.93778627814558,
+              "peer_mean": 62.96181940330763,
+              "difference_pp": 15.975966874837951
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 87.78294503991197,
+              "peer_mean": 69.75124919336852,
+              "difference_pp": 18.031695846543442
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 75.5550833559165,
+              "peer_mean": 78.55012799419174,
+              "difference_pp": -2.995044638275246
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 68.58176620079092,
+              "peer_mean": 63.140000122893056,
+              "difference_pp": 5.441766077897867
+            }
+          ]
+        },
+        "kd_zero_pct": {
+          "profiles": 662,
+          "games": 6,
+          "cohort_mean": 43.029981466339535,
+          "peer_mean": 45.570616505663395,
+          "difference_pp": -2.5406350393238615,
+          "higher": 3,
+          "lower": 3,
+          "equal": 0,
+          "omit_one_range": [
+            -3.4794373841669533,
+            -1.423753968828637
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 46.02354399008674,
+              "peer_mean": 44.85982812629696,
+              "difference_pp": 1.1637158637897826
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 54.699074074074076,
+              "peer_mean": 52.54569738918248,
+              "difference_pp": 2.1533766848915974
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 50.45238095238095,
+              "peer_mean": 50.37137417559754,
+              "difference_pp": 0.08100677678341128
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 40.43421052631579,
+              "peer_mean": 48.55925091811577,
+              "difference_pp": -8.125040391799985
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 40.09756097560976,
+              "peer_mean": 42.544314756872545,
+              "difference_pp": -2.4467537812627853
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 26.473118279569892,
+              "peer_mean": 34.54323366791508,
+              "difference_pp": -8.07011538834519
+            }
+          ]
+        },
+        "kd_one_pct": {
+          "profiles": 662,
+          "games": 6,
+          "cohort_mean": 43.48994139099655,
+          "peer_mean": 40.63724266250692,
+          "difference_pp": 2.852698728489622,
+          "higher": 4,
+          "lower": 2,
+          "equal": 0,
+          "omit_one_range": [
+            1.7087708450335597,
+            3.9356054657068738
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 42.01548946716233,
+              "peer_mean": 42.43504523308659,
+              "difference_pp": -0.41955576592425814
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 38.59953703703704,
+              "peer_mean": 41.161371994633676,
+              "difference_pp": -2.5618349575966377
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 39.957142857142856,
+              "peer_mean": 37.62011320412853,
+              "difference_pp": 2.3370296530143264
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 46.25877192982456,
+              "peer_mean": 37.68643378405463,
+              "difference_pp": 8.572338145769933
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 47.8130081300813,
+              "peer_mean": 44.93364232322226,
+              "difference_pp": 2.8793658068590418
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 46.295698924731184,
+              "peer_mean": 39.98684943591586,
+              "difference_pp": 6.308849488815326
+            }
+          ]
+        },
+        "kd_two_pct": {
+          "profiles": 662,
+          "games": 6,
+          "cohort_mean": 12.245815716883385,
+          "peer_mean": 12.39936669377757,
+          "difference_pp": -0.15355097689418531,
+          "higher": 2,
+          "lower": 4,
+          "equal": 0,
+          "omit_one_range": [
+            -0.6778828180558862,
+            0.1858073215150382
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 11.26456009913259,
+              "peer_mean": 8.79645187021827,
+              "difference_pp": 2.4681082289143195
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 6.636574074074074,
+              "peer_mean": 6.123320512240428,
+              "difference_pp": 0.513253561833646
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 8.933333333333334,
+              "peer_mean": 10.783675802273637,
+              "difference_pp": -1.850342468940303
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 13.175438596491228,
+              "peer_mean": 13.715903259557102,
+              "difference_pp": -0.5404646630658743
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 11.991869918699187,
+              "peer_mean": 12.322521328144408,
+              "difference_pp": -0.3306514094452204
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 21.473118279569892,
+              "peer_mean": 22.654327390231572,
+              "difference_pp": -1.1812091106616798
+            }
+          ]
+        },
+        "kd_three_plus_pct": {
+          "profiles": 662,
+          "games": 6,
+          "cohort_mean": 1.2342614257805367,
+          "peer_mean": 1.3927741380521117,
+          "difference_pp": -0.15851271227157493,
+          "higher": 2,
+          "lower": 4,
+          "equal": 0,
+          "omit_one_range": [
+            -0.7787102567641982,
+            0.4522384106300786
+          ],
+          "game_differences": [
+            {
+              "game": [
+                "2026-10-19",
+                "WAS@SF"
+              ],
+              "cohort_mean": 0.6964064436183395,
+              "peer_mean": 3.908674770398182,
+              "difference_pp": -3.2122683267798426
+            },
+            {
+              "game": [
+                "2026-10-22",
+                "NE@CHI"
+              ],
+              "cohort_mean": 0.06481481481481481,
+              "peer_mean": 0.1696101039434163,
+              "difference_pp": -0.10479528912860149
+            },
+            {
+              "game": [
+                "2026-10-26",
+                "DAL@PHI"
+              ],
+              "cohort_mean": 0.6571428571428571,
+              "peer_mean": 1.2248368180002926,
+              "difference_pp": -0.5676939608574355
+            },
+            {
+              "game": [
+                "2026-10-29",
+                "CAR@GB"
+              ],
+              "cohort_mean": 0.13157894736842105,
+              "peer_mean": 0.03841203827250051,
+              "difference_pp": 0.09316690909592054
+            },
+            {
+              "game": [
+                "2026-11-01",
+                "PHI@WAS"
+              ],
+              "cohort_mean": 0.09756097560975609,
+              "peer_mean": 0.19952159176078843,
+              "difference_pp": -0.10196061615103234
+            },
+            {
+              "game": [
+                "2026-11-02",
+                "CHI@SEA"
+              ],
+              "cohort_mean": 5.758064516129032,
+              "peer_mean": 2.8155895059374902,
+              "difference_pp": 2.942475010191542
+            }
+          ]
+        }
+      },
+      "legacy_peer_support": 662,
+      "legacy_outcomes": {
+        "showdown / 150-Max": {
+          "cohort_rate": 0.5220949539904893,
+          "peer_rate": 0.3855382127671636,
+          "slates": 6,
+          "matched_profiles": 662
+        }
+      }
+    }
+  },
+  "method": {
+    "cohort": "same format/preset/entry count; >=3 earlier ranked slates and >=2 earlier top-cutoff slates; no same-date evidence",
+    "peers": "noncohort same observed entry count and exact earlier ranked-slate count; current winners permitted; complete identity/rank/roster metadata",
+    "statistic": "equal-user per-metric arithmetic means; compare cohort mean to peer mean; contests within games, games equally",
+    "qualification": "unchanged existing reviewer, original sources, associations, index and final series verification",
+    "series_bounds": "six explicit nonoverlapping one-date windows; original 300000 selected-entry daily cap plus existing 1200000-entry/10000-profile/8-window series caps",
+    "fresh_metrics": [
+      "split_5_1_pct",
+      "split_4_2_pct",
+      "split_3_3_pct",
+      "qb_opposing_dst_pct",
+      "all_four_pct",
+      "receiver_own_qb_pct",
+      "kd_zero_pct",
+      "kd_one_pct",
+      "kd_two_pct",
+      "kd_three_plus_pct"
+    ],
+    "excluded_cached_metrics": "player/captain pool, overlap/repeats/salary and double-QB/K/DST summaries not used for fresh conclusions",
+    "limitations": "observed participants only; partial field unverified; peer reuse; no exact prior-contest/fee/field-strength matching; six games only"
+  },
+  "validation": {
+    "existing_history_regressions": 85,
+    "regression_seconds": 51.572,
+    "private_recorder_checks": 10,
+    "recorder_seconds": 3.07,
+    "unexpected_network_attempts": 0,
+    "test_harness_sha256": "0b14887e77887fffbd4f5cce3b9955cf7815284f2b49b2aa7455bdf7d14c8bcb",
+    "legacy_output": "exact canonical JSON reproduction of the original six bounded reports; same cohort, medians, support and outcomes",
+    "independent_checks": "captured-call/profile binding, same metric-specific eligibility/cohort averages, game/support/omit-one arithmetic, exhaustive category totals, hashes and privacy passed"
+  }
+}

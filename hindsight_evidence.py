@@ -333,6 +333,8 @@ def capture(db_path,selection,*,history_root=None,cancelled=lambda:False,progres
                 from build_explanations import archive_receipt
                 try:
                     explanation['archive']=archive_receipt(matches,chosen,pool,kind,cancelled)
+                    from screening_explanation_evidence import capture as capture_screening
+                    explanation['screening']=capture_screening(matches,chosen,pool,kind,reader,cancelled)
                 except (ValueError,TypeError,KeyError):
                     explanation['archive']=dict(status='unavailable_evidence',reason='invalid_exact_archive_occurrences')
         blockers=sorted(set(blockers))

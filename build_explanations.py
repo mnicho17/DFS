@@ -4,8 +4,9 @@ from collections import Counter
 from hindsight_contract import check, signature, validate_roster
 
 UNRECORDED = ('generation', 'screening', 'independent_validation', 'portfolio_selection')
-LIMITATION = ('Final output absence does not identify a rejection stage. Candidate generation, screening, '
-              'independent validation and portfolio-selection decisions are not recorded per witness. '
+LIMITATION = ('Final output absence does not identify a rejection stage. Stage membership is shown only from '
+              'the original bound audit; absence from its captured bank is not a rejection reason. '
+              'Independent validation and portfolio-selection rejection decisions are not recorded per witness. '
               'Snapshot checks cover supported local rules only; portfolio feasibility, submission and predictability are not established.')
 
 
@@ -58,6 +59,16 @@ def local_check(roster, pool, kind, rules):
 def explain(capture, scopes, cancelled=lambda:False):
     evidence=capture.get('build_explanation_evidence') or {}
     archive=evidence.get('archive') or dict(status='not_requested')
+    screening=evidence.get('screening') or dict(status='not_recorded')
+    stage_counts={}
+    if screening['status']=='ready':
+        signatures=screening['candidate_signatures']
+        for stage,order in screening['stage_orders'].items():
+            counts_for_stage=Counter()
+            for index in order:
+                check(cancelled)
+                counts_for_stage[tuple(signatures[index])]+=1
+            stage_counts[stage]=counts_for_stage
     local=capture['gates']['snapshot']
     counts={tuple(v['signature']):v['occurrences'] for v in archive.get('signatures',[])}
     targets=[]
@@ -83,10 +94,15 @@ def explain(capture, scopes, cancelled=lambda:False):
         if archive['status']=='ready':
             n=counts.get(tuple(signature(roster,capture['format'])),0)
             membership=dict(status='present' if n else 'absent',occurrences=n)
+        stages={stage:dict(status='observed' if counter[tuple(row['signature'])] else 'not_observed',
+                           occurrences=counter[tuple(row['signature'])]) for stage,counter in stage_counts.items()}
+        pipeline={k:'not_recorded' for k in UNRECORDED}
+        if stage_counts:
+            pipeline['generation']='recorded_membership_only'
+            pipeline['screening']=('not_run' if screening['screening_status']=='not run' else 'recorded_membership_only')
         output.append(dict(source=source,number=number,status='checked',signature=row['signature'],
-            snapshot=snapshot,generated_output=membership,
-            pipeline={k:'not_recorded' for k in UNRECORDED}))
-    return dict(version=1,targets=output,archive={k:v for k,v in archive.items() if k!='signatures'},
+            snapshot=snapshot,generated_output=membership,recorded_stages=stages,pipeline=pipeline))
+    return dict(version=2,targets=output,screening_evidence={k:v for k,v in screening.items() if k not in ('candidate_signatures','stage_orders')},archive={k:v for k,v in archive.items() if k!='signatures'},
                 limitation=LIMITATION,scope='returned_witnesses_only; ties may be partial or display limited')
 
 
@@ -99,6 +115,14 @@ def lines(review, pool=(), private=False):
         f"Snapshot checks: {local['passes_supported_checks']} pass supported checks; {local['conflicts']} conflict; {len(rows)-local['passes_supported_checks']-local['conflicts']} unavailable/not requested.",
         'Generated archive: '+review['archive']['status'].replace('_',' ')+'.',review['limitation'],
         'These are returned witness examples, not an exhaustive census of tied optima or observed entries.']
+    screening=review.get('screening_evidence') or dict(status='not_recorded')
+    result.append('Original screening evidence: '+screening['status'].replace('_',' ')+'.')
+    if screening['status']=='ready':
+        result.append('Captured coarse scoring: '+screening['screening_status']+'. Membership does not identify rejection causes.')
+        from screening_explanation_evidence import STAGES
+        for stage in STAGES:
+            observed=sum(r.get('recorded_stages',{}).get(stage,{}).get('status')=='observed' for r in rows)
+            result.append('Recorded '+stage.replace('_',' ')+': '+str(observed)+' witness example(s) observed.')
     def state(value):
         return {'not_requested':'not requested','unavailable_evidence':'unavailable evidence','unsupported_rules':'unsupported recorded rules','passes_supported_checks':'no conflicts with supported snapshot rules'}.get(value,value.replace('_',' '))
     if review['archive'].get('reason'):result.append('Archive membership could not be validated against the exact qualified snapshot and historical salary identities.')
@@ -112,6 +136,10 @@ def lines(review, pool=(), private=False):
             result += ['Snapshot local checks: '+state(row['snapshot']['status'])+'.',
                        'Selected generated output: '+state(row['generated_output']['status'])+
                        ('; occurrences '+str(row['generated_output']['occurrences']) if row['generated_output']['occurrences'] is not None else '')+'.']
+            for stage,value in row.get('recorded_stages',{}).items():
+                result.append(stage.replace('_',' ').capitalize()+': '+
+                    ('recorded '+str(value['occurrences'])+' occurrence(s)' if value['status']=='observed'
+                     else 'not observed in captured bank; not rejection evidence')+'.')
             for issue in row['snapshot']['issues']:
                 label={'recorded_salary_cap':'Exceeds recorded salary cap','recorded_requirement_missing':'Missing recorded required player','recorded_exclusion_present':'Contains recorded excluded player','recorded_group_at_least_one':'Missing every player from a recorded required group','recorded_group_never_together':'Contains players from a recorded never-together group'}[issue['code']]
                 result.append(label+(' ('+issue['role']+')' if issue.get('role') else '')+': '+
