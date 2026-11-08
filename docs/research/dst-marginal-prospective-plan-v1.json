@@ -1,0 +1,67 @@
+{
+  "version": "dst-marginal-prospective-plan-v1",
+  "declared_at_utc": "2026-11-08T03:24:35Z",
+  "state": "declared_not_executed",
+  "window": {
+    "timezone": "America/New_York",
+    "first_game_date": "2026-11-08",
+    "last_game_date": "2026-12-07",
+    "inclusive": true,
+    "early_stopping": false
+  },
+  "reference": "reconciled_events inherited DST draws",
+  "secondary_reference": "reconciled_dst residual draws",
+  "candidates": {
+    "family": "max(-4, location + spread * standard_normal)",
+    "spread_factors": [
+      0.75,
+      1.0,
+      1.25
+    ],
+    "primary_factor": 1.0,
+    "forecast_mean_tolerance": 1e-09
+  },
+  "sampling": {
+    "seeds": [
+      90210,
+      481516,
+      730001
+    ],
+    "draws_per_seed": 2000,
+    "max_draws": 6000,
+    "rng": "isolated random.Random SHA-256 seed; gauss(0,1)",
+    "seed_encoding": "UTF-8 JSON compact array [version, ISO game date, canonical game key, canonical DST key, integer seed]",
+    "digest_to_integer": "all SHA-256 digest bytes big-endian unsigned",
+    "shared_normals_across_factors": true,
+    "shared_normals_across_defenses": false,
+    "sample_recentering": false
+  },
+  "primary_metric": "equal-game mean empirical CRPS difference, factor 1.0 minus inherited reference",
+  "secondary_metrics": [
+    "all-factor CRPS",
+    "mean bias",
+    "analytic and sample SD",
+    "p10/p90/p95",
+    "80-percent interval score and coverage",
+    "floor probability",
+    "P(DST>=8) and Brier"
+  ],
+  "unit": "game; equal weight of both qualified DSTs within each game",
+  "minimum_support": {
+    "games": 10,
+    "dst_actuals": 20,
+    "both_dst_required": true,
+    "meaning": "minimum descriptive support, not statistical power or production approval"
+  },
+  "outcome_selection": "exact selected-source base scores; other exports conflict-check only, never fill missing actuals",
+  "history_access": "none during declaration; future read-only bounded qualified evaluation only",
+  "source_sha256": {
+    "scripts/dst_marginal_specification.py": "b90fb27918b061b8764da955bd9fb202746d14bee8b122451e8eecdd8fa459e9",
+    "scripts/dst_alignment_diagnostic.py": "f350cb7df358ed5c606b533e9dc33b21b4bfae35e3192e7cacc9b3e78a304418",
+    "scripts/research_outcome_reader.py": "21883d26dfbe0a6d8c9aa0925feea8b8af38d519726ed5c46c04b6ca4d943a09",
+    "scripts/audit_rotation_zero_prototype.py": "6fa76ad45902b1a582f68cc33ba4042126ad521e32e262e978cf593a878e4398",
+    "reconciled_event_prototype.py": "3e8405540e598ca65db99a9b6ea553a7b169935a8bea5c2af3d910fb166df167",
+    "nfl_simulation.py": "9a66abca13aac0f85016863322f4eef061993856b27242ce70ee0fe27f43e790"
+  },
+  "production_activation": false
+}
