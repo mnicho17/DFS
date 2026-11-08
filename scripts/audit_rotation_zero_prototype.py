@@ -14,7 +14,9 @@ parser.add_argument('--event-study',action='store_true',help='Predeclared direct
 parser.add_argument('--reconciled-study',action='store_true',help='Fixed-bound event moment reconciliation and opposing-DST residual comparisons')
 parser.add_argument('--evaluation-after',help='Exclusive game-date boundary fixed before reading holdout scores')
 parser.add_argument('--bounded-research-outcomes',action='store_true',help='Research-only full-file score scan: 1M rows, 128 MiB per file, 60 seconds per read/verification operation; legacy limits unchanged')
+parser.add_argument('--dst-alignment-study',action='store_true',help='Research-only fixed within-seed DST alignment control; requires reconciled study')
 args=parser.parse_args()
+if args.dst_alignment_study and not args.reconciled_study:parser.error('DST alignment requires --reconciled-study')
 if args.evaluation_after:
  dt.date.fromisoformat(args.evaluation_after)
  if args.evaluation_after>=args.completed_before:parser.error('Holdout boundary must precede completion cutoff')
@@ -202,9 +204,22 @@ with _connect(db,True) as conn:
       kicker_zero=sum(x==0 for x in v[player_key(kicker)])/6000 if kicker else None,
       rotations_all_zero=sum(all(v[player_key(p)][i]==0 for p in rotations) for i in range(6000))/6000 if rotations else None)
     teams.append(dict(team=team,profiles=profiles))
+   alignment=None
+   if args.dst_alignment_study:
+    from scripts.dst_alignment_diagnostic import compare_alignment, VERSION as ALIGNMENT_VERSION, THRESHOLDS
+    report['dst_alignment_study']=dict(version=ALIGNMENT_VERSION,thresholds=dict(THRESHOLDS),control='Fixed shared nonzero cyclic shift within each seed; no fitting or independence guarantee',scoring='Three declared joint-event Briers, not a complete joint-distribution score')
+    alignment=[];by_key={player_key(p):p for p in pool}
+    for dst_key,link in sorted(models['reconciled_dst'].dst_links.items()):
+     dst=by_key[dst_key];qb=by_key[link['qb']]
+     actuals=[base.get((ai._name(p['Name']),p['Team'],p['Position'],manifest['games'][0])) for p in (qb,dst)]
+     if any(v is None for v in actuals):
+      alignment.append(dict(qb=link['qb'],dst=dst_key,status='unavailable',reason='Both exact selected-source actual scores required'));continue
+     profiles={name:compare_alignment(values[name][link['qb']],values[name][dst_key],float(actuals[0]),float(actuals[1]),seeds=report['seeds'],block_size=report['scenarios_per_seed']) for name in ('reconciled_events','reconciled_dst')}
+     alignment.append(dict(qb=link['qb'],dst=dst_key,status='complete',profiles=profiles))
    report['games'].append(dict(date=row['date'],game=row['game'],source_hash=row['result_hash'],salary_hash=row['salary_hash'],
     snapshot=receipt,rows=rows,modeled_offense=modeled_offense,modeled_defense=modeled_defense,model_receipts=model_receipts,forecast_checks=forecast_checks,teams=teams,eligible=len(target),observed=len(rows),scenarios=6000,
     model_counts={name:dict(model.counts) for name,model in models.items() if model}))
+   if alignment is not None:report['games'][-1]['dst_alignment']=alignment
    print('MATCHED',len(rows),'rotation outcomes',flush=True)
   except Exception as exc:
    report['excluded'].append(dict(date=row['date'],game=row['game'],reason=str(exc)));print('EXCLUDED',str(exc),flush=True)

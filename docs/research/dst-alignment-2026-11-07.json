@@ -1,0 +1,3582 @@
+{
+  "schema_version": 1,
+  "authority": "Mechanistic replay of previously studied games; no new holdout/model/default qualification",
+  "plan": {
+    "created_at": "2026-11-08T00:48:05.270033+00:00",
+    "evaluation_after": "2026-10-16",
+    "completed_before": "2026-11-07",
+    "authority": "Mechanistic replay of seven previously studied games; not a new blind/unseen holdout or coupling model",
+    "seeds": [
+      90210,
+      481516,
+      730001
+    ],
+    "scenarios_per_seed": 2000,
+    "thresholds": {
+      "low_qb": 10.0,
+      "high_qb": 20.0,
+      "low_dst": 4.0,
+      "high_dst": 8.0
+    },
+    "shift": "Nonzero cyclic within-seed shift from SHA256(dst-alignment-diagnostic-v1:<seed>); same shift for both DSTs",
+    "profiles": [
+      "reconciled_events",
+      "reconciled_dst"
+    ],
+    "process_deadline_seconds": 1800,
+    "prior_report_sha256": "5d23dec229f6f51e956f3fa381d7429c1524938f4d6ef9135ae4ae25d6d041ed",
+    "prior_inventory_sha256": "b30a351c586653c5033ad77a8c7171b91df3a409e38fd1e7187ed501087b1166",
+    "declared_document_sha256": "13f9bd2356339678deb5a4cddee695a8cc4900777bd03e8ffaf5966d5880f6e9"
+  },
+  "verification": {
+    "status": "complete",
+    "seconds": 665.3589999997057,
+    "report_sha256": "80b7fccb9e41083d97ae89cb71213a6136711929598ce002fa8a0198976ef8c9",
+    "auditor_sha256": "6fa76ad45902b1a582f68cc33ba4042126ad521e32e262e978cf593a878e4398",
+    "alignment_helper_sha256": "f350cb7df358ed5c606b533e9dc33b21b4bfae35e3192e7cacc9b3e78a304418",
+    "reader_sha256": "21883d26dfbe0a6d8c9aa0925feea8b8af38d519726ed5c46c04b6ca4d943a09",
+    "inventory_sha256": "b30a351c586653c5033ad77a8c7171b91df3a409e38fd1e7187ed501087b1166",
+    "db_attributes_unchanged": true,
+    "source_qualified_games": 7,
+    "admitted_games": 7,
+    "excluded_games": 0
+  },
+  "study": {
+    "version": "dst-alignment-diagnostic-v1",
+    "thresholds": {
+      "low_qb": 10.0,
+      "high_qb": 20.0,
+      "low_dst": 4.0,
+      "high_dst": 8.0
+    },
+    "control": "Fixed shared nonzero cyclic shift within each seed; no fitting or independence guarantee",
+    "scoring": "Three declared joint-event Briers, not a complete joint-distribution score"
+  },
+  "coverage": {
+    "games": 7,
+    "complete_pairs": 14,
+    "unavailable_pairs": 0,
+    "excluded_games": 0,
+    "pair_profile_marginal_checks": 28,
+    "seed_marginal_checks": 84
+  },
+  "invariants": {
+    "exact_previous_seven_games": true,
+    "exact_previous_summary": true,
+    "scoring_model_unchanged": true,
+    "exact_marginals": true,
+    "same_shift_shared_by_all_dsts": true,
+    "forecast_checks": 300,
+    "failed_forecast_5se": 0,
+    "max_analytic_residual": 3.2656887682946945e-07
+  },
+  "summary": {
+    "reconciled_events": {
+      "dst_marginal": {
+        "mean": 5.144369215183627,
+        "sd": 4.457090876225702,
+        "bias": -0.06991649910208794,
+        "crps": 2.5020578696006686,
+        "p10": -0.7225222413944825,
+        "p90": 10.933012327727356
+      },
+      "original": {
+        "correlation": -0.002353973347181472,
+        "correlation_pairs": 14,
+        "covariance": -0.05298479227075802,
+        "mean_event_brier": 0.08931959391534391,
+        "events": {
+          "low_qb_high_dst": {
+            "probability": 0.023476190476190477,
+            "observed_frequency": 0.07142857142857142,
+            "brier": 0.06648928571428572,
+            "true_pairs": 1,
+            "games_with_event": 1
+          },
+          "high_qb_high_dst": {
+            "probability": 0.09470238095238095,
+            "observed_frequency": 0.0,
+            "brier": 0.014699823412698413,
+            "true_pairs": 0,
+            "games_with_event": 0
+          },
+          "high_qb_low_dst": {
+            "probability": 0.15841666666666668,
+            "observed_frequency": 0.21428571428571427,
+            "brier": 0.18676967261904762,
+            "true_pairs": 3,
+            "games_with_event": 2
+          }
+        }
+      },
+      "shifted": {
+        "correlation": 0.0016906417787740603,
+        "correlation_pairs": 14,
+        "covariance": 0.017475356681007255,
+        "mean_event_brier": 0.08970528174603175,
+        "events": {
+          "low_qb_high_dst": {
+            "probability": 0.02229761904761905,
+            "observed_frequency": 0.07142857142857142,
+            "brier": 0.06661588293650793,
+            "true_pairs": 1,
+            "games_with_event": 1
+          },
+          "high_qb_high_dst": {
+            "probability": 0.09566666666666666,
+            "observed_frequency": 0.0,
+            "brier": 0.014816130952380952,
+            "true_pairs": 0,
+            "games_with_event": 0
+          },
+          "high_qb_low_dst": {
+            "probability": 0.15870238095238096,
+            "observed_frequency": 0.21428571428571427,
+            "brier": 0.18768383134920635,
+            "true_pairs": 3,
+            "games_with_event": 2
+          }
+        }
+      },
+      "sensitivities": {
+        "mean_event_brier": {
+          "shifted_minus_original": 0.0003856878306878272,
+          "original_lower_games": 6,
+          "original_higher_games": 1,
+          "equal_games": 0,
+          "omit_one_gap_range": [
+            0.00030859413580246593,
+            0.0004666157407407368
+          ]
+        },
+        "low_qb_high_dst": {
+          "shifted_minus_original": 0.00012659722222221274,
+          "original_lower_games": 3,
+          "original_higher_games": 4,
+          "equal_games": 0,
+          "omit_one_gap_range": [
+            -9.23819444444444e-05,
+            0.0002018703703703593
+          ]
+        },
+        "high_qb_high_dst": {
+          "shifted_minus_original": 0.00011630753968253841,
+          "original_lower_games": 6,
+          "original_higher_games": 1,
+          "equal_games": 0,
+          "omit_one_gap_range": [
+            -1.1900462962963374e-05,
+            0.00039118518518518327
+          ]
+        },
+        "high_qb_low_dst": {
+          "shifted_minus_original": 0.0009141587301587326,
+          "original_lower_games": 5,
+          "original_higher_games": 2,
+          "equal_games": 0,
+          "omit_one_gap_range": [
+            0.0006849398148148214,
+            0.001145212962962966
+          ]
+        }
+      }
+    },
+    "reconciled_dst": {
+      "dst_marginal": {
+        "mean": 5.158659809303564,
+        "sd": 1.729803885329838,
+        "bias": -0.05562590498215059,
+        "crps": 2.801657975969407,
+        "p10": 2.773262151323669,
+        "p90": 7.5421469336952
+      },
+      "original": {
+        "correlation": -0.10230972454436058,
+        "correlation_pairs": 14,
+        "covariance": -1.1158191130999975,
+        "mean_event_brier": 0.09994579100529101,
+        "events": {
+          "low_qb_high_dst": {
+            "probability": 0.016392857142857143,
+            "observed_frequency": 0.07142857142857142,
+            "brier": 0.07196120833333333,
+            "true_pairs": 1,
+            "games_with_event": 1
+          },
+          "high_qb_high_dst": {
+            "probability": 0.057583333333333334,
+            "observed_frequency": 0.0,
+            "brier": 0.008468005952380953,
+            "true_pairs": 0,
+            "games_with_event": 0
+          },
+          "high_qb_low_dst": {
+            "probability": 0.12192857142857143,
+            "observed_frequency": 0.21428571428571427,
+            "brier": 0.21940815873015873,
+            "true_pairs": 3,
+            "games_with_event": 2
+          }
+        }
+      },
+      "shifted": {
+        "correlation": 0.0011188131338054088,
+        "correlation_pairs": 14,
+        "covariance": 0.01316142832671432,
+        "mean_event_brier": 0.10041447949735449,
+        "events": {
+          "low_qb_high_dst": {
+            "probability": 0.013142857142857144,
+            "observed_frequency": 0.07142857142857142,
+            "brier": 0.0717786507936508,
+            "true_pairs": 1,
+            "games_with_event": 1
+          },
+          "high_qb_high_dst": {
+            "probability": 0.06510714285714286,
+            "observed_frequency": 0.0,
+            "brier": 0.010203505952380952,
+            "true_pairs": 0,
+            "games_with_event": 0
+          },
+          "high_qb_low_dst": {
+            "probability": 0.11688095238095238,
+            "observed_frequency": 0.21428571428571427,
+            "brier": 0.21926128174603174,
+            "true_pairs": 3,
+            "games_with_event": 2
+          }
+        }
+      },
+      "sensitivities": {
+        "mean_event_brier": {
+          "shifted_minus_original": 0.0004686884920634878,
+          "original_lower_games": 4,
+          "original_higher_games": 3,
+          "equal_games": 0,
+          "omit_one_gap_range": [
+            0.0001302662037037011,
+            0.0006502206790123409
+          ]
+        },
+        "low_qb_high_dst": {
+          "shifted_minus_original": -0.00018255753968253965,
+          "original_lower_games": 0,
+          "original_higher_games": 5,
+          "equal_games": 2,
+          "omit_one_gap_range": [
+            -0.00021298379629629627,
+            -0.0001153449074074074
+          ]
+        },
+        "high_qb_high_dst": {
+          "shifted_minus_original": 0.0017355000000000003,
+          "original_lower_games": 5,
+          "original_higher_games": 0,
+          "equal_games": 2,
+          "omit_one_gap_range": [
+            0.0014160092592592597,
+            0.0020247500000000005
+          ]
+        },
+        "high_qb_low_dst": {
+          "shifted_minus_original": -0.00014687698412698896,
+          "original_lower_games": 2,
+          "original_higher_games": 5,
+          "equal_games": 0,
+          "omit_one_gap_range": [
+            -0.0009469074074074108,
+            0.00024826157407406904
+          ]
+        }
+      }
+    }
+  },
+  "games": [
+    {
+      "date": "2026-10-18",
+      "game": "DAL@GB",
+      "complete_pairs": 2,
+      "unavailable_pairs": 0,
+      "profiles": {
+        "reconciled_events": {
+          "dst_marginal": {
+            "mean": 3.642023363749047,
+            "sd": 3.8894241527896716,
+            "bias": -3.357976636250953,
+            "crps": 2.092990453449357,
+            "p10": -1.5691227432579784,
+            "p90": 8.70726196374206
+          },
+          "original": {
+            "correlation": -0.010461077108194057,
+            "correlation_pairs": 2,
+            "covariance": -0.2756513621289696,
+            "mean_event_brier": 0.02155917592592593,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.021083333333333332,
+                "observed_frequency": 0.0,
+                "brier": 0.0008280138888888888,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.0545,
+                "observed_frequency": 0.0,
+                "brier": 0.0054205,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.21941666666666668,
+                "observed_frequency": 0.0,
+                "brier": 0.058429013888888895,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": 0.010888719919509751,
+            "correlation_pairs": 2,
+            "covariance": 0.3119964379323963,
+            "mean_event_brier": 0.021998657407407404,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.020833333333333332,
+                "observed_frequency": 0.0,
+                "brier": 0.0008273888888888887,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.05766666666666667,
+                "observed_frequency": 0.0,
+                "brier": 0.005994888888888889,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.21966666666666668,
+                "observed_frequency": 0.0,
+                "brier": 0.05917369444444444,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.02230184804386763,
+                "correlation_pairs": 2,
+                "covariance": -0.47297395923639596,
+                "mean_event_brier": 0.022140958333333335,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0195,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0006864999999999999,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.061500000000000006,
+                    "observed_frequency": 0.0,
+                    "brier": 0.006807250000000001,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.21875,
+                    "observed_frequency": 0.0,
+                    "brier": 0.058929125,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.010941665900827284,
+                "correlation_pairs": 2,
+                "covariance": 0.37826767954838475,
+                "mean_event_brier": 0.022888083333333333,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.021,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0008020000000000001,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.061750000000000006,
+                    "observed_frequency": 0.0,
+                    "brier": 0.006865625000000001,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.22125,
+                    "observed_frequency": 0.0,
+                    "brier": 0.060996625000000006,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.013156242387056687,
+                "correlation_pairs": 2,
+                "covariance": -0.5264014938076225,
+                "mean_event_brier": 0.02137329166666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.02275,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001035125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.04875,
+                    "observed_frequency": 0.0,
+                    "brier": 0.004424125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.22025,
+                    "observed_frequency": 0.0,
+                    "brier": 0.058660625,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.0023728406315580404,
+                "correlation_pairs": 2,
+                "covariance": -0.16495667576130102,
+                "mean_event_brier": 0.022726083333333334,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0245,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0012005000000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.05325,
+                    "observed_frequency": 0.0,
+                    "brier": 0.005310624999999999,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.22325,
+                    "observed_frequency": 0.0,
+                    "brier": 0.06166712500000001,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": 0.004666207233092836,
+                "correlation_pairs": 2,
+                "covariance": 0.17080667013335193,
+                "mean_event_brier": 0.0212235,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.021,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00078325,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.053250000000000006,
+                    "observed_frequency": 0.0,
+                    "brier": 0.005163625000000001,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.21925,
+                    "observed_frequency": 0.0,
+                    "brier": 0.057723625,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.024511343004468573,
+                "correlation_pairs": 2,
+                "covariance": 0.7210636134863475,
+                "mean_event_brier": 0.02048141666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.017,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000545,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.057999999999999996,
+                    "observed_frequency": 0.0,
+                    "brier": 0.005863999999999999,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.2145,
+                    "observed_frequency": 0.0,
+                    "brier": 0.055035249999999994,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "reconciled_dst": {
+          "dst_marginal": {
+            "mean": 3.716566552581029,
+            "sd": 1.6512584042187168,
+            "bias": -3.283433447418971,
+            "crps": 2.3322627238673044,
+            "p10": 1.4403058508608813,
+            "p90": 5.990579818492536
+          },
+          "original": {
+            "correlation": -0.0919818620748647,
+            "correlation_pairs": 2,
+            "covariance": -1.0338644658837268,
+            "mean_event_brier": 0.027260078703703703,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.015,
+                "observed_frequency": 0.0,
+                "brier": 0.00045,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.019,
+                "observed_frequency": 0.0,
+                "brier": 0.000722,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.23075,
+                "observed_frequency": 0.0,
+                "brier": 0.0806082361111111,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": -0.004774894381519789,
+            "correlation_pairs": 2,
+            "covariance": -0.05251101093181844,
+            "mean_event_brier": 0.026639574074074072,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.010416666666666666,
+                "observed_frequency": 0.0,
+                "brier": 0.00021701388888888888,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.027583333333333335,
+                "observed_frequency": 0.0,
+                "brier": 0.0015216805555555556,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.22249999999999998,
+                "observed_frequency": 0.0,
+                "brier": 0.07818002777777777,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.07561789369281709,
+                "correlation_pairs": 2,
+                "covariance": -0.8541236310565596,
+                "mean_event_brier": 0.028357583333333335,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.015,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00045,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0245,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0012005000000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.2335,
+                    "observed_frequency": 0.0,
+                    "brier": 0.08342225,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.008581412762558773,
+                "correlation_pairs": 2,
+                "covariance": 0.09702449011217097,
+                "mean_event_brier": 0.027436500000000003,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.00975,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000190125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.03075,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001891125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.2235,
+                    "observed_frequency": 0.0,
+                    "brier": 0.08022825,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.11640674012609134,
+                "correlation_pairs": 2,
+                "covariance": -1.2994186162422747,
+                "mean_event_brier": 0.027081791666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.016,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000512,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.01375,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000378125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.2305,
+                    "observed_frequency": 0.0,
+                    "brier": 0.08035525,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.009660186502076052,
+                "correlation_pairs": 2,
+                "covariance": 0.10211158455263224,
+                "mean_event_brier": 0.026252625000000005,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.00925,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00017112499999999997,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0255,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0013004999999999998,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.2215,
+                    "observed_frequency": 0.0,
+                    "brier": 0.07728625000000001,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.08401130337029891,
+                "correlation_pairs": 2,
+                "covariance": -0.9470988951447178,
+                "mean_event_brier": 0.026398250000000005,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.014,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00039200000000000004,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.01875,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000703125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.22825,
+                    "observed_frequency": 0.0,
+                    "brier": 0.078099625,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.0326472447885984,
+                "correlation_pairs": 2,
+                "covariance": -0.3557168522526303,
+                "mean_event_brier": 0.026255625000000005,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.01225,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00030012500000000004,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0265,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0014045,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.2225,
+                    "observed_frequency": 0.0,
+                    "brier": 0.07706225000000001,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "date": "2026-10-19",
+      "game": "WAS@SF",
+      "complete_pairs": 2,
+      "unavailable_pairs": 0,
+      "profiles": {
+        "reconciled_events": {
+          "dst_marginal": {
+            "mean": 6.157521805946885,
+            "sd": 4.78642985474889,
+            "bias": 1.6575218059468848,
+            "crps": 1.3835870400467107,
+            "p10": -0.11127567360967472,
+            "p90": 12.341158176170707
+          },
+          "original": {
+            "correlation": 0.007931764615961347,
+            "correlation_pairs": 2,
+            "covariance": 0.3862729807753175,
+            "mean_event_brier": 0.021095662037037038,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.012083333333333333,
+                "observed_frequency": 0.0,
+                "brier": 0.00019618055555555553,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.16166666666666668,
+                "observed_frequency": 0.0,
+                "brier": 0.03168636111111111,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.172,
+                "observed_frequency": 0.0,
+                "brier": 0.03140444444444444,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": -0.008158906575143688,
+            "correlation_pairs": 2,
+            "covariance": -0.2875141168923572,
+            "mean_event_brier": 0.020995782407407407,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.011166666666666667,
+                "observed_frequency": 0.0,
+                "brier": 0.00016069444444444443,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.15775,
+                "observed_frequency": 0.0,
+                "brier": 0.03015340277777778,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.1765,
+                "observed_frequency": 0.0,
+                "brier": 0.03267325,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.017168256205995477,
+                "correlation_pairs": 2,
+                "covariance": -0.5197093724333901,
+                "mean_event_brier": 0.020923624999999998,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.01425,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000288625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.16375,
+                    "observed_frequency": 0.0,
+                    "brier": 0.032034125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.17025,
+                    "observed_frequency": 0.0,
+                    "brier": 0.030448125,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.005282243474301987,
+                "correlation_pairs": 2,
+                "covariance": -0.23183229435169028,
+                "mean_event_brier": 0.02045795833333333,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.01075,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00016812499999999998,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.16275,
+                    "observed_frequency": 0.0,
+                    "brier": 0.031564125000000005,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.16775,
+                    "observed_frequency": 0.0,
+                    "brier": 0.029641624999999998,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": 0.03033677712752489,
+                "correlation_pairs": 2,
+                "covariance": 1.2091300704775136,
+                "mean_event_brier": 0.01953520833333333,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0115,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00016825000000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.15675,
+                    "observed_frequency": 0.0,
+                    "brier": 0.029366125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.16549999999999998,
+                    "observed_frequency": 0.0,
+                    "brier": 0.029071249999999996,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.007079226960468693,
+                "correlation_pairs": 2,
+                "covariance": -0.2209799991542558,
+                "mean_event_brier": 0.020159625,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.012750000000000001,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000180625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.14925,
+                    "observed_frequency": 0.0,
+                    "brier": 0.027352125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.17825,
+                    "observed_frequency": 0.0,
+                    "brier": 0.03294612499999999,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": 0.011876418072133944,
+                "correlation_pairs": 2,
+                "covariance": 0.487102550774531,
+                "mean_event_brier": 0.022932374999999998,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0105,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00014625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.1645,
+                    "observed_frequency": 0.0,
+                    "brier": 0.03378425,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.18025000000000002,
+                    "observed_frequency": 0.0,
+                    "brier": 0.034866625,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.011488824611531695,
+                "correlation_pairs": 2,
+                "covariance": -0.39202575067842327,
+                "mean_event_brier": 0.022471541666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.01,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00014225000000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.16125,
+                    "observed_frequency": 0.0,
+                    "brier": 0.031664124999999994,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1835,
+                    "observed_frequency": 0.0,
+                    "brier": 0.03560825000000001,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "reconciled_dst": {
+          "dst_marginal": {
+            "mean": 6.090531081050017,
+            "sd": 1.7565437236802643,
+            "bias": 1.5905310810500168,
+            "crps": 1.0783805016624235,
+            "p10": 3.6902941884268303,
+            "p90": 8.522606870617995
+          },
+          "original": {
+            "correlation": -0.1238589386511807,
+            "correlation_pairs": 2,
+            "covariance": -1.4475683184838943,
+            "mean_event_brier": 0.013034425925925925,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.0095,
+                "observed_frequency": 0.0,
+                "brier": 0.0001805,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.09316666666666666,
+                "observed_frequency": 0.0,
+                "brier": 0.017360055555555552,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.10383333333333333,
+                "observed_frequency": 0.0,
+                "brier": 0.021562722222222223,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": 0.014704542032402512,
+            "correlation_pairs": 2,
+            "covariance": 0.17180145889279197,
+            "mean_event_brier": 0.01339696759259259,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.008166666666666666,
+                "observed_frequency": 0.0,
+                "brier": 0.00013338888888888886,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.1025,
+                "observed_frequency": 0.0,
+                "brier": 0.021012499999999996,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.09758333333333333,
+                "observed_frequency": 0.0,
+                "brier": 0.019045013888888886,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.14186377779553427,
+                "correlation_pairs": 2,
+                "covariance": -1.6509933363637346,
+                "mean_event_brier": 0.012246874999999997,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.01025,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00021012500000000003,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0875,
+                    "observed_frequency": 0.0,
+                    "brier": 0.015312499999999998,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.103,
+                    "observed_frequency": 0.0,
+                    "brier": 0.021217999999999997,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.0036168017348592596,
+                "correlation_pairs": 2,
+                "covariance": 0.04196375238139866,
+                "mean_event_brier": 0.012764750000000002,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.00925,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00017112499999999997,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.098,
+                    "observed_frequency": 0.0,
+                    "brier": 0.019208000000000003,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.09725,
+                    "observed_frequency": 0.0,
+                    "brier": 0.018915125,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.1393810587865616,
+                "correlation_pairs": 2,
+                "covariance": -1.6261307517639945,
+                "mean_event_brier": 0.013603583333333332,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.00925,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00017112499999999997,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.09475,
+                    "observed_frequency": 0.0,
+                    "brier": 0.017955125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1065,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0226845,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.009015280646459727,
+                "correlation_pairs": 2,
+                "covariance": -0.10825521878310998,
+                "mean_event_brier": 0.013411875000000002,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.008,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000128,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.09875,
+                    "observed_frequency": 0.0,
+                    "brier": 0.019503125000000003,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1015,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0206045,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.09197179185066769,
+                "correlation_pairs": 2,
+                "covariance": -1.0756418515585313,
+                "mean_event_brier": 0.013295041666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.009,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00016199999999999998,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.09725,
+                    "observed_frequency": 0.0,
+                    "brier": 0.018915125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.102,
+                    "observed_frequency": 0.0,
+                    "brier": 0.020807999999999997,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.04887604601429374,
+                "correlation_pairs": 2,
+                "covariance": 0.5716348588455095,
+                "mean_event_brier": 0.01410275,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.00725,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00010512500000000001,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.11075,
+                    "observed_frequency": 0.0,
+                    "brier": 0.024531125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.094,
+                    "observed_frequency": 0.0,
+                    "brier": 0.017672,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "date": "2026-10-22",
+      "game": "NE@CHI",
+      "complete_pairs": 2,
+      "unavailable_pairs": 0,
+      "profiles": {
+        "reconciled_events": {
+          "dst_marginal": {
+            "mean": 7.204469442711878,
+            "sd": 5.750988552415151,
+            "bias": 4.204469442711878,
+            "crps": 2.5015553315757035,
+            "p10": -0.28956505959061873,
+            "p90": 14.750308601468493
+          },
+          "original": {
+            "correlation": -0.009314173826216608,
+            "correlation_pairs": 2,
+            "covariance": -0.34468887494792366,
+            "mean_event_brier": 0.2681001157407408,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.025833333333333333,
+                "observed_frequency": 0.0,
+                "brier": 0.0006994722222222222,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.17258333333333334,
+                "observed_frequency": 0.0,
+                "brier": 0.030280069444444446,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.12083333333333335,
+                "observed_frequency": 1.0,
+                "brier": 0.7733208055555556,
+                "true_pairs": 2
+              }
+            }
+          },
+          "shifted": {
+            "correlation": -0.004129476831002959,
+            "correlation_pairs": 2,
+            "covariance": -0.1462176935892102,
+            "mean_event_brier": 0.26894836574074077,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.026166666666666668,
+                "observed_frequency": 0.0,
+                "brier": 0.0007384722222222224,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.17291666666666666,
+                "observed_frequency": 0.0,
+                "brier": 0.03049634722222222,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.1195,
+                "observed_frequency": 1.0,
+                "brier": 0.7756102777777778,
+                "true_pairs": 2
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": 0.013202037018948927,
+                "correlation_pairs": 2,
+                "covariance": 0.4646545576325374,
+                "mean_event_brier": 0.27304341666666665,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.02425,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000633625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.17075,
+                    "observed_frequency": 0.0,
+                    "brier": 0.029628625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.112,
+                    "observed_frequency": 1.0,
+                    "brier": 0.788868,
+                    "true_pairs": 2
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.005608792423449341,
+                "correlation_pairs": 2,
+                "covariance": 0.20269807735858578,
+                "mean_event_brier": 0.27033241666666663,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.022,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000509,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.17125,
+                    "observed_frequency": 0.0,
+                    "brier": 0.030182125000000004,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.11674999999999999,
+                    "observed_frequency": 1.0,
+                    "brier": 0.780306125,
+                    "true_pairs": 2
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.047130534406174165,
+                "correlation_pairs": 2,
+                "covariance": -1.7238212259772552,
+                "mean_event_brier": 0.26293625,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.02475,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0006456249999999999,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.16899999999999998,
+                    "observed_frequency": 0.0,
+                    "brier": 0.029345,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.12925,
+                    "observed_frequency": 1.0,
+                    "brier": 0.7588181249999999,
+                    "true_pairs": 2
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.004119076389235917,
+                "correlation_pairs": 2,
+                "covariance": -0.14556751964747655,
+                "mean_event_brier": 0.26567741666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.026000000000000002,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00074,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.16975,
+                    "observed_frequency": 0.0,
+                    "brier": 0.029641625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.12475,
+                    "observed_frequency": 1.0,
+                    "brier": 0.766650625,
+                    "true_pairs": 2
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": 0.006491844353108469,
+                "correlation_pairs": 2,
+                "covariance": 0.22906653363472546,
+                "mean_event_brier": 0.26842370833333334,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0285,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0008325000000000001,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.178,
+                    "observed_frequency": 0.0,
+                    "brier": 0.031973,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.12125,
+                    "observed_frequency": 1.0,
+                    "brier": 0.772465625,
+                    "true_pairs": 2
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.013101262842768678,
+                "correlation_pairs": 2,
+                "covariance": -0.49181714834496126,
+                "mean_event_brier": 0.27093895833333337,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0305,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00101125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.17775000000000002,
+                    "observed_frequency": 0.0,
+                    "brier": 0.031827625000000005,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.117,
+                    "observed_frequency": 1.0,
+                    "brier": 0.7799780000000001,
+                    "true_pairs": 2
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "reconciled_dst": {
+          "dst_marginal": {
+            "mean": 7.2563918663134235,
+            "sd": 1.7502910578523938,
+            "bias": 4.2563918663134235,
+            "crps": 3.2464993197673344,
+            "p10": 4.856983486022022,
+            "p90": 9.650704239263955
+          },
+          "original": {
+            "correlation": -0.14264576029613854,
+            "correlation_pairs": 2,
+            "covariance": -1.5870985206236026,
+            "mean_event_brier": 0.3375865787037037,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.028,
+                "observed_frequency": 0.0,
+                "brier": 0.0008534444444444445,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.13858333333333334,
+                "observed_frequency": 0.0,
+                "brier": 0.019556902777777774,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.0038333333333333336,
+                "observed_frequency": 1.0,
+                "brier": 0.9923493888888888,
+                "true_pairs": 2
+              }
+            }
+          },
+          "shifted": {
+            "correlation": -0.0008834269448361445,
+            "correlation_pairs": 2,
+            "covariance": -0.009108774914372751,
+            "mean_event_brier": 0.3400858009259259,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.02366666666666667,
+                "observed_frequency": 0.0,
+                "brier": 0.0006023611111111111,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.14941666666666667,
+                "observed_frequency": 0.0,
+                "brier": 0.022652347222222223,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.0015,
+                "observed_frequency": 1.0,
+                "brier": 0.9970026944444443,
+                "true_pairs": 2
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.12480967942466568,
+                "correlation_pairs": 2,
+                "covariance": -1.3500099721225325,
+                "mean_event_brier": 0.33780237500000004,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.024999999999999998,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0007352499999999999,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.13574999999999998,
+                    "observed_frequency": 0.0,
+                    "brier": 0.018660625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.003,
+                    "observed_frequency": 1.0,
+                    "brier": 0.9940112500000001,
+                    "true_pairs": 2
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.008341579886438924,
+                "correlation_pairs": 2,
+                "covariance": -0.09252098906269828,
+                "mean_event_brier": 0.33965195833333334,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.02075,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000498625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.14850000000000002,
+                    "observed_frequency": 0.0,
+                    "brier": 0.02245225,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.002,
+                    "observed_frequency": 1.0,
+                    "brier": 0.996005,
+                    "true_pairs": 2
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.1537043210049086,
+                "correlation_pairs": 2,
+                "covariance": -1.6955444170484741,
+                "mean_event_brier": 0.3374286666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.028249999999999997,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0008506249999999999,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.14300000000000002,
+                    "observed_frequency": 0.0,
+                    "brier": 0.02091125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.00475,
+                    "observed_frequency": 1.0,
+                    "brier": 0.9905241250000001,
+                    "true_pairs": 2
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.00040574740357797977,
+                "correlation_pairs": 2,
+                "covariance": -0.0031958387069097732,
+                "mean_event_brier": 0.3404636666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.02175,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000495625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.1515,
+                    "observed_frequency": 0.0,
+                    "brier": 0.023393249999999997,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.00125,
+                    "observed_frequency": 1.0,
+                    "brier": 0.997502125,
+                    "true_pairs": 2
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.1490183846414046,
+                "correlation_pairs": 2,
+                "covariance": -1.7136632668040486,
+                "mean_event_brier": 0.337554,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.03075,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0009981249999999999,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.137,
+                    "observed_frequency": 0.0,
+                    "brier": 0.01914925,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.00375,
+                    "observed_frequency": 1.0,
+                    "brier": 0.9925146250000001,
+                    "true_pairs": 2
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.005922092687812585,
+                "correlation_pairs": 2,
+                "covariance": 0.07046840892224217,
+                "mean_event_brier": 0.3401699166666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0285,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0008545,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.14825,
+                    "observed_frequency": 0.0,
+                    "brier": 0.022153625000000003,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.00125,
+                    "observed_frequency": 1.0,
+                    "brier": 0.9975016250000001,
+                    "true_pairs": 2
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "date": "2026-10-26",
+      "game": "DAL@PHI",
+      "complete_pairs": 2,
+      "unavailable_pairs": 0,
+      "profiles": {
+        "reconciled_events": {
+          "dst_marginal": {
+            "mean": 2.510576914991079,
+            "sd": 2.9797294530736744,
+            "bias": 2.510576914991079,
+            "crps": 3.2491869713735655,
+            "p10": -1.401588789743006,
+            "p90": 6.382437118479387
+          },
+          "original": {
+            "correlation": -0.005448940920919145,
+            "correlation_pairs": 2,
+            "covariance": -0.08353847072717903,
+            "mean_event_brier": 0.11169898148148147,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.0033333333333333335,
+                "observed_frequency": 0.0,
+                "brier": 1.388888888888889e-05,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.0085,
+                "observed_frequency": 0.0,
+                "brier": 0.0001043611111111111,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.15050000000000002,
+                "observed_frequency": 0.5,
+                "brier": 0.3349786944444444,
+                "true_pairs": 1
+              }
+            }
+          },
+          "shifted": {
+            "correlation": 0.009463548018487151,
+            "correlation_pairs": 2,
+            "covariance": 0.14525342294119092,
+            "mean_event_brier": 0.1123583287037037,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.003916666666666667,
+                "observed_frequency": 0.0,
+                "brier": 1.8402777777777778e-05,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.009916666666666667,
+                "observed_frequency": 0.0,
+                "brier": 0.00013334722222222225,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.15091666666666667,
+                "observed_frequency": 0.5,
+                "brier": 0.3369232361111111,
+                "true_pairs": 1
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.00520614294036376,
+                "correlation_pairs": 2,
+                "covariance": -0.07812830374540382,
+                "mean_event_brier": 0.11073791666666664,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.003,
+                    "observed_frequency": 0.0,
+                    "brier": 9.999999999999999e-06,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.007500000000000001,
+                    "observed_frequency": 0.0,
+                    "brier": 8.125000000000001e-05,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1535,
+                    "observed_frequency": 0.5,
+                    "brier": 0.33212249999999993,
+                    "true_pairs": 1
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.04801588530929167,
+                "correlation_pairs": 2,
+                "covariance": 0.7602574357931973,
+                "mean_event_brier": 0.11462225000000002,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0022500000000000003,
+                    "observed_frequency": 0.0,
+                    "brier": 6.625000000000001e-06,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.011000000000000001,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00015700000000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.15125,
+                    "observed_frequency": 0.5,
+                    "brier": 0.34370312500000005,
+                    "true_pairs": 1
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.006988696882397708,
+                "correlation_pairs": 2,
+                "covariance": -0.10465457989684156,
+                "mean_event_brier": 0.111594875,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.00375,
+                    "observed_frequency": 0.0,
+                    "brier": 1.9125e-05,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.008,
+                    "observed_frequency": 0.0,
+                    "brier": 9.424999999999999e-05,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1505,
+                    "observed_frequency": 0.5,
+                    "brier": 0.33467125000000003,
+                    "true_pairs": 1
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.015898679636034616,
+                "correlation_pairs": 2,
+                "covariance": -0.2575022257904085,
+                "mean_event_brier": 0.11034212499999999,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.00475,
+                    "observed_frequency": 0.0,
+                    "brier": 2.5625e-05,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.00775,
+                    "observed_frequency": 0.0,
+                    "brier": 8.762499999999999e-05,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.15425,
+                    "observed_frequency": 0.5,
+                    "brier": 0.330913125,
+                    "true_pairs": 1
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.0037200476648028046,
+                "correlation_pairs": 2,
+                "covariance": -0.0594236934799164,
+                "mean_event_brier": 0.11277279166666665,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0032500000000000003,
+                    "observed_frequency": 0.0,
+                    "brier": 1.3625e-05,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.01,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00014225000000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1475,
+                    "observed_frequency": 0.5,
+                    "brier": 0.3381625,
+                    "true_pairs": 1
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.0034392927077566927,
+                "correlation_pairs": 2,
+                "covariance": -0.05858610611984062,
+                "mean_event_brier": 0.11215116666666666,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.00475,
+                    "observed_frequency": 0.0,
+                    "brier": 2.7625000000000004e-05,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.011000000000000001,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00016325,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.14725,
+                    "observed_frequency": 0.5,
+                    "brier": 0.336262625,
+                    "true_pairs": 1
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "reconciled_dst": {
+          "dst_marginal": {
+            "mean": 2.511618416311422,
+            "sd": 1.7282269910804144,
+            "bias": 2.511618416311422,
+            "crps": 3.6036814322833166,
+            "p10": 0.1064572684002334,
+            "p90": 4.8815684827646395
+          },
+          "original": {
+            "correlation": -0.05194746947228439,
+            "correlation_pairs": 2,
+            "covariance": -0.4789094630859403,
+            "mean_event_brier": 0.10889191203703706,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.0,
+                "observed_frequency": 0.0,
+                "brier": 0.0,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.0,
+                "observed_frequency": 0.0,
+                "brier": 0.0,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.16591666666666666,
+                "observed_frequency": 0.5,
+                "brier": 0.32667573611111117,
+                "true_pairs": 1
+              }
+            }
+          },
+          "shifted": {
+            "correlation": 0.004936174075288666,
+            "correlation_pairs": 2,
+            "covariance": 0.05672147999964647,
+            "mean_event_brier": 0.10938856481481483,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.0,
+                "observed_frequency": 0.0,
+                "brier": 0.0,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.0,
+                "observed_frequency": 0.0,
+                "brier": 0.0,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.16449999999999998,
+                "observed_frequency": 0.5,
+                "brier": 0.3281656944444445,
+                "true_pairs": 1
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.04362088671985718,
+                "correlation_pairs": 2,
+                "covariance": -0.41996016538590364,
+                "mean_event_brier": 0.11180816666666664,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1665,
+                    "observed_frequency": 0.5,
+                    "brier": 0.3354244999999999,
+                    "true_pairs": 1
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.0191919809795707,
+                "correlation_pairs": 2,
+                "covariance": 0.1896233460771778,
+                "mean_event_brier": 0.11061708333333332,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1655,
+                    "observed_frequency": 0.5,
+                    "brier": 0.33185125,
+                    "true_pairs": 1
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.06950582999177418,
+                "correlation_pairs": 2,
+                "covariance": -0.6348449847857185,
+                "mean_event_brier": 0.10780920833333334,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.16525,
+                    "observed_frequency": 0.5,
+                    "brier": 0.323427625,
+                    "true_pairs": 1
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.008381953075662817,
+                "correlation_pairs": 2,
+                "covariance": -0.051612026213150475,
+                "mean_event_brier": 0.10763533333333336,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.16499999999999998,
+                    "observed_frequency": 0.5,
+                    "brier": 0.322906,
+                    "true_pairs": 1
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.041165912074638836,
+                "correlation_pairs": 2,
+                "covariance": -0.369931145697324,
+                "mean_event_brier": 0.10710666666666668,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.16599999999999998,
+                    "observed_frequency": 0.5,
+                    "brier": 0.32132,
+                    "true_pairs": 1
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.004991627574166942,
+                "correlation_pairs": 2,
+                "covariance": 0.044145213523786864,
+                "mean_event_brier": 0.10993133333333335,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.163,
+                    "observed_frequency": 0.5,
+                    "brier": 0.32979400000000003,
+                    "true_pairs": 1
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "date": "2026-10-29",
+      "game": "CAR@GB",
+      "complete_pairs": 2,
+      "unavailable_pairs": 0,
+      "profiles": {
+        "reconciled_events": {
+          "dst_marginal": {
+            "mean": 5.75311381659309,
+            "sd": 4.657559796124582,
+            "bias": -2.74688618340691,
+            "crps": 1.9368529686872191,
+            "p10": -0.38007313977882795,
+            "p90": 11.82043167315091
+          },
+          "original": {
+            "correlation": 0.009895360937534951,
+            "correlation_pairs": 2,
+            "covariance": 0.2694909151655862,
+            "mean_event_brier": 0.009298162037037037,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.04008333333333333,
+                "observed_frequency": 0.0,
+                "brier": 0.0016308472222222221,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.106,
+                "observed_frequency": 0.0,
+                "brier": 0.01161625,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.12083333333333335,
+                "observed_frequency": 0.0,
+                "brier": 0.01464738888888889,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": -0.004622166509656344,
+            "correlation_pairs": 2,
+            "covariance": -0.15427984387007126,
+            "mean_event_brier": 0.009316013888888888,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.035833333333333335,
+                "observed_frequency": 0.0,
+                "brier": 0.0013058055555555555,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.10841666666666666,
+                "observed_frequency": 0.0,
+                "brier": 0.012150847222222221,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.12016666666666667,
+                "observed_frequency": 0.0,
+                "brier": 0.014491388888888887,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": 0.023813383443059728,
+                "correlation_pairs": 2,
+                "covariance": 0.7172453433097106,
+                "mean_event_brier": 0.00886175,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.03925,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0015586250000000001,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.10225000000000001,
+                    "observed_frequency": 0.0,
+                    "brier": 0.010928125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1185,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0140985,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.0069626100218214615,
+                "correlation_pairs": 2,
+                "covariance": 0.1793789586267217,
+                "mean_event_brier": 0.008580708333333333,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.034,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001181,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.10175,
+                    "observed_frequency": 0.0,
+                    "brier": 0.010601125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.118,
+                    "observed_frequency": 0.0,
+                    "brier": 0.01396,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": 0.00968343274038402,
+                "correlation_pairs": 2,
+                "covariance": 0.2145499740505885,
+                "mean_event_brier": 0.009575208333333335,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.04125,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001740625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.1135,
+                    "observed_frequency": 0.0,
+                    "brier": 0.013302500000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.11649999999999999,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0136825,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.016230105270161277,
+                "correlation_pairs": 2,
+                "covariance": -0.5030854651084207,
+                "mean_event_brier": 0.009696916666666668,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.03825,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001539625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.11325,
+                    "observed_frequency": 0.0,
+                    "brier": 0.013298625000000001,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1185,
+                    "observed_frequency": 0.0,
+                    "brier": 0.014252500000000001,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.0036945523018477593,
+                "correlation_pairs": 2,
+                "covariance": -0.11884038913939927,
+                "mean_event_brier": 0.009526583333333333,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.039749999999999994,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0015981249999999997,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.10225,
+                    "observed_frequency": 0.0,
+                    "brier": 0.010719125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.1275,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0162625,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.0046482110084306505,
+                "correlation_pairs": 2,
+                "covariance": -0.13465084240437358,
+                "mean_event_brier": 0.009756583333333334,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.035250000000000004,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001242625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.11025,
+                    "observed_frequency": 0.0,
+                    "brier": 0.012650125000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.124,
+                    "observed_frequency": 0.0,
+                    "brier": 0.015377,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "reconciled_dst": {
+          "dst_marginal": {
+            "mean": 5.789828562541421,
+            "sd": 1.7329277607355817,
+            "bias": -2.710171437458578,
+            "crps": 2.1214346873173477,
+            "p10": 3.4106123433858087,
+            "p90": 8.180237728410141
+          },
+          "original": {
+            "correlation": -0.12883747140736554,
+            "correlation_pairs": 2,
+            "covariance": -1.435914522003662,
+            "mean_event_brier": 0.003043513888888889,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.020999999999999998,
+                "observed_frequency": 0.0,
+                "brier": 0.0005344444444444444,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.03125,
+                "observed_frequency": 0.0,
+                "brier": 0.0018517361111111113,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.07683333333333334,
+                "observed_frequency": 0.0,
+                "brier": 0.0067443611111111116,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": 0.005267417940212037,
+            "correlation_pairs": 2,
+            "covariance": 0.05730180085969998,
+            "mean_event_brier": 0.002990912037037037,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.016333333333333335,
+                "observed_frequency": 0.0,
+                "brier": 0.00037355555555555563,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.0445,
+                "observed_frequency": 0.0,
+                "brier": 0.0030149444444444442,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.06641666666666667,
+                "observed_frequency": 0.0,
+                "brier": 0.005584236111111111,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.12215558859975824,
+                "correlation_pairs": 2,
+                "covariance": -1.360836369601306,
+                "mean_event_brier": 0.002710166666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.022,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000548,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.029,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0015700000000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.07250000000000001,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0060125000000000005,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.011619929986055006,
+                "correlation_pairs": 2,
+                "covariance": -0.1283314970216422,
+                "mean_event_brier": 0.0025752500000000003,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0185,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0004745,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.041,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0023832500000000004,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.062,
+                    "observed_frequency": 0.0,
+                    "brier": 0.004868,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.13039452114721828,
+                "correlation_pairs": 2,
+                "covariance": -1.465971411226717,
+                "mean_event_brier": 0.0030799166666666666,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.02,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0005,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.029750000000000002,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0017116250000000003,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.07875,
+                    "observed_frequency": 0.0,
+                    "brier": 0.007028125,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.010936715807290949,
+                "correlation_pairs": 2,
+                "covariance": 0.1226771411087541,
+                "mean_event_brier": 0.0030091249999999996,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.01575,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00038612499999999997,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.042749999999999996,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0027731249999999995,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.06775,
+                    "observed_frequency": 0.0,
+                    "brier": 0.005868125,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.13500137007983276,
+                "correlation_pairs": 2,
+                "covariance": -1.491027776005616,
+                "mean_event_brier": 0.0033673749999999997,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.021,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000562,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.035,
+                    "observed_frequency": 0.0,
+                    "brier": 0.002314,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.07925,
+                    "observed_frequency": 0.0,
+                    "brier": 0.007226125,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.015480347333604753,
+                "correlation_pairs": 2,
+                "covariance": 0.1674677676693344,
+                "mean_event_brier": 0.0034495,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.01475,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000277625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.049749999999999996,
+                    "observed_frequency": 0.0,
+                    "brier": 0.004015624999999999,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.0695,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00605525,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "date": "2026-11-01",
+      "game": "PHI@WAS",
+      "complete_pairs": 2,
+      "unavailable_pairs": 0,
+      "profiles": {
+        "reconciled_events": {
+          "dst_marginal": {
+            "mean": 3.260863918161358,
+            "sd": 3.2646526207459994,
+            "bias": -5.239136081838642,
+            "crps": 3.8390397778509353,
+            "p10": -1.0196158623599514,
+            "p90": 7.45639794181634
+          },
+          "original": {
+            "correlation": -0.0010974340334446806,
+            "correlation_pairs": 2,
+            "covariance": -0.03315195863873635,
+            "mean_event_brier": 0.18247203240740742,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.0205,
+                "observed_frequency": 0.5,
+                "brier": 0.46032025000000004,
+                "true_pairs": 1
+              },
+              "high_qb_high_dst": {
+                "probability": 0.019166666666666665,
+                "observed_frequency": 0.0,
+                "brier": 0.0003907222222222222,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.24025,
+                "observed_frequency": 0.0,
+                "brier": 0.08670512499999998,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": 0.0030399562635120853,
+            "correlation_pairs": 2,
+            "covariance": 0.066361613439548,
+            "mean_event_brier": 0.18324788425925925,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.019833333333333335,
+                "observed_frequency": 0.5,
+                "brier": 0.4617607222222222,
+                "true_pairs": 1
+              },
+              "high_qb_high_dst": {
+                "probability": 0.020833333333333332,
+                "observed_frequency": 0.0,
+                "brier": 0.0004980277777777778,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.24175000000000002,
+                "observed_frequency": 0.0,
+                "brier": 0.08748490277777779,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.009870292285158953,
+                "correlation_pairs": 2,
+                "covariance": -0.23417518348463676,
+                "mean_event_brier": 0.18298158333333336,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.02125,
+                    "observed_frequency": 0.5,
+                    "brier": 0.45936162500000005,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0165,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0002925,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.24275,
+                    "observed_frequency": 0.0,
+                    "brier": 0.089290625,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.018546163887887625,
+                "correlation_pairs": 2,
+                "covariance": 0.3815811693021667,
+                "mean_event_brier": 0.18464029166666665,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.01875,
+                    "observed_frequency": 0.5,
+                    "brier": 0.46368462499999996,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.01825,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000418625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.24525,
+                    "observed_frequency": 0.0,
+                    "brier": 0.089817625,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": 0.014644373091139987,
+                "correlation_pairs": 2,
+                "covariance": 0.2916011522003951,
+                "mean_event_brier": 0.18281904166666665,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0195,
+                    "observed_frequency": 0.5,
+                    "brier": 0.46176049999999996,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.02275,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000535625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.24,
+                    "observed_frequency": 0.0,
+                    "brier": 0.08616099999999999,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.008893679710193492,
+                "correlation_pairs": 2,
+                "covariance": -0.18101197948572528,
+                "mean_event_brier": 0.18134216666666664,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.02325,
+                    "observed_frequency": 0.5,
+                    "brier": 0.455058125,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.020999999999999998,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00047125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.24325,
+                    "observed_frequency": 0.0,
+                    "brier": 0.08849712499999998,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.00793413149905434,
+                "correlation_pairs": 2,
+                "covariance": -0.16169440817016367,
+                "mean_event_brier": 0.18163566666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.02075,
+                    "observed_frequency": 0.5,
+                    "brier": 0.459840625,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.018250000000000002,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000366125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.23800000000000002,
+                    "observed_frequency": 0.0,
+                    "brier": 0.08470025000000002,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.0005825333108908683,
+                "correlation_pairs": 2,
+                "covariance": -0.0062969130359935704,
+                "mean_event_brier": 0.18379841666666666,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0175,
+                    "observed_frequency": 0.5,
+                    "brier": 0.4665785,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.02325,
+                    "observed_frequency": 0.0,
+                    "brier": 0.000626125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.23675000000000002,
+                    "observed_frequency": 0.0,
+                    "brier": 0.084190625,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "reconciled_dst": {
+          "dst_marginal": {
+            "mean": 3.254928248176069,
+            "sd": 1.7393267799346712,
+            "bias": -5.2450717518239305,
+            "crps": 4.326993338509484,
+            "p10": 0.8200700564888007,
+            "p90": 5.650878558182987
+          },
+          "original": {
+            "correlation": -0.04317558572844161,
+            "correlation_pairs": 2,
+            "covariance": -0.44639450066786196,
+            "mean_event_brier": 0.20260925925925927,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.0,
+                "observed_frequency": 0.5,
+                "brier": 0.5,
+                "true_pairs": 1
+              },
+              "high_qb_high_dst": {
+                "probability": 0.0,
+                "observed_frequency": 0.0,
+                "brier": 0.0,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.26566666666666666,
+                "observed_frequency": 0.0,
+                "brier": 0.10782777777777779,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": -0.011694994902263809,
+            "correlation_pairs": 2,
+            "covariance": -0.12445822812764942,
+            "mean_event_brier": 0.202279875,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.0,
+                "observed_frequency": 0.5,
+                "brier": 0.5,
+                "true_pairs": 1
+              },
+              "high_qb_high_dst": {
+                "probability": 0.0,
+                "observed_frequency": 0.0,
+                "brier": 0.0,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.26325,
+                "observed_frequency": 0.0,
+                "brier": 0.10683962500000001,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.034977970366658506,
+                "correlation_pairs": 2,
+                "covariance": -0.36722087669076764,
+                "mean_event_brier": 0.20435508333333333,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.5,
+                    "brier": 0.5,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.27249999999999996,
+                    "observed_frequency": 0.0,
+                    "brier": 0.11306524999999998,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.004851904162345061,
+                "correlation_pairs": 2,
+                "covariance": 0.0482211966012739,
+                "mean_event_brier": 0.20431770833333332,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.5,
+                    "brier": 0.5,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.27175,
+                    "observed_frequency": 0.0,
+                    "brier": 0.11295312499999999,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.038707299589440136,
+                "correlation_pairs": 2,
+                "covariance": -0.397547977559909,
+                "mean_event_brier": 0.20222304166666666,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.5,
+                    "brier": 0.5,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.26475,
+                    "observed_frequency": 0.0,
+                    "brier": 0.106669125,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.014529125219889763,
+                "correlation_pairs": 2,
+                "covariance": -0.15597616122767763,
+                "mean_event_brier": 0.20250875000000002,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.5,
+                    "brier": 0.5,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.264,
+                    "observed_frequency": 0.0,
+                    "brier": 0.10752625000000002,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.05503612925646383,
+                "correlation_pairs": 2,
+                "covariance": -0.5682930768417912,
+                "mean_event_brier": 0.20128520833333333,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.5,
+                    "brier": 0.5,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.25975000000000004,
+                    "observed_frequency": 0.0,
+                    "brier": 0.103855625,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.02618686513140846,
+                "correlation_pairs": 2,
+                "covariance": -0.25949814884542644,
+                "mean_event_brier": 0.200079,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.5,
+                    "brier": 0.5,
+                    "true_pairs": 1
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.0,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.254,
+                    "observed_frequency": 0.0,
+                    "brier": 0.100237,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "date": "2026-11-02",
+      "game": "CHI@SEA",
+      "complete_pairs": 2,
+      "unavailable_pairs": 0,
+      "profiles": {
+        "reconciled_events": {
+          "dst_marginal": {
+            "mean": 7.4820152441320475,
+            "sd": 5.870851703681941,
+            "bias": 2.4820152441320475,
+            "crps": 2.511192544221189,
+            "p10": -0.28641442142132023,
+            "p90": 15.073090819263602
+          },
+          "original": {
+            "correlation": -0.007983313094992112,
+            "correlation_pairs": 2,
+            "covariance": -0.2896267753934012,
+            "mean_event_brier": 0.011013027777777778,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.04141666666666667,
+                "observed_frequency": 0.0,
+                "brier": 0.0017363472222222222,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.1405,
+                "observed_frequency": 0.0,
+                "brier": 0.023400500000000005,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.08508333333333334,
+                "observed_frequency": 0.0,
+                "brier": 0.007902236111111112,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": 0.005352818165712425,
+            "correlation_pairs": 2,
+            "covariance": 0.18672767680555422,
+            "mean_event_brier": 0.011071939814814814,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.03833333333333333,
+                "observed_frequency": 0.0,
+                "brier": 0.0014996944444444446,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.14216666666666666,
+                "observed_frequency": 0.0,
+                "brier": 0.024286055555555554,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.08241666666666667,
+                "observed_frequency": 0.0,
+                "brier": 0.007430069444444444,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.02119776719523151,
+                "correlation_pairs": 2,
+                "covariance": -0.6536092288855195,
+                "mean_event_brier": 0.009993666666666668,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.04475,
+                    "observed_frequency": 0.0,
+                    "brier": 0.002004125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.1285,
+                    "observed_frequency": 0.0,
+                    "brier": 0.01964825,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.08825,
+                    "observed_frequency": 0.0,
+                    "brier": 0.008328625000000001,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.007555511728472169,
+                "correlation_pairs": 2,
+                "covariance": 0.3511285894504196,
+                "mean_event_brier": 0.010290833333333334,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.03675,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001352125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.1315,
+                    "observed_frequency": 0.0,
+                    "brier": 0.02151725,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.08625,
+                    "observed_frequency": 0.0,
+                    "brier": 0.008003125,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": 0.0031995375774131344,
+                "correlation_pairs": 2,
+                "covariance": 0.06498085927969975,
+                "mean_event_brier": 0.011563708333333332,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.03925,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001593125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.147,
+                    "observed_frequency": 0.0,
+                    "brier": 0.024972999999999995,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.086,
+                    "observed_frequency": 0.0,
+                    "brier": 0.008125,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.008541149471991485,
+                "correlation_pairs": 2,
+                "covariance": -0.2771846519997482,
+                "mean_event_brier": 0.011444916666666666,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.03825,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001523125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.145,
+                    "observed_frequency": 0.0,
+                    "brier": 0.024745999999999997,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.08525,
+                    "observed_frequency": 0.0,
+                    "brier": 0.008065625,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.007326317741330869,
+                "correlation_pairs": 2,
+                "covariance": -0.31614496138531106,
+                "mean_event_brier": 0.011614125,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.04025,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0016801250000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.146,
+                    "observed_frequency": 0.0,
+                    "brier": 0.02587225,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.081,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00729,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.015737823963239875,
+                "correlation_pairs": 2,
+                "covariance": 0.45034608815506394,
+                "mean_event_brier": 0.011597458333333333,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.04,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0017000000000000001,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.15,
+                    "observed_frequency": 0.0,
+                    "brier": 0.026790249999999998,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.07575,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0063021250000000004,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "reconciled_dst": {
+          "dst_marginal": {
+            "mean": 7.490753938151563,
+            "sd": 1.7500524798068238,
+            "bias": 2.490753938151563,
+            "crps": 2.9023538283786383,
+            "p10": 5.088111865681107,
+            "p90": 9.918452838134144
+          },
+          "original": {
+            "correlation": -0.13372098418024858,
+            "correlation_pairs": 2,
+            "covariance": -1.380984000951294,
+            "mean_event_brier": 0.007194768518518519,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.041249999999999995,
+                "observed_frequency": 0.0,
+                "brier": 0.0017100694444444442,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.12108333333333335,
+                "observed_frequency": 0.0,
+                "brier": 0.019785347222222225,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.006666666666666667,
+                "observed_frequency": 0.0,
+                "brier": 8.88888888888889e-05,
+                "true_pairs": 0
+              }
+            }
+          },
+          "shifted": {
+            "correlation": 0.00027687411735438866,
+            "correlation_pairs": 2,
+            "covariance": -0.007616727491297558,
+            "mean_event_brier": 0.008119662037037038,
+            "events": {
+              "low_qb_high_dst": {
+                "probability": 0.033416666666666664,
+                "observed_frequency": 0.0,
+                "brier": 0.001124236111111111,
+                "true_pairs": 0
+              },
+              "high_qb_high_dst": {
+                "probability": 0.13175,
+                "observed_frequency": 0.0,
+                "brier": 0.023223069444444445,
+                "true_pairs": 0
+              },
+              "high_qb_low_dst": {
+                "probability": 0.002416666666666667,
+                "observed_frequency": 0.0,
+                "brier": 1.1680555555555557e-05,
+                "true_pairs": 0
+              }
+            }
+          },
+          "per_seed": [
+            {
+              "seed": 90210,
+              "original": {
+                "correlation": -0.14828600547647477,
+                "correlation_pairs": 2,
+                "covariance": -1.56042326734668,
+                "mean_event_brier": 0.006234541666666667,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.043,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0018980000000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.11074999999999999,
+                    "observed_frequency": 0.0,
+                    "brier": 0.016721125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.0065,
+                    "observed_frequency": 0.0,
+                    "brier": 8.45e-05,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": 0.03239799164795666,
+                "correlation_pairs": 2,
+                "covariance": 0.33253155853433813,
+                "mean_event_brier": 0.007517666666666668,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.031,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0010332499999999999,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.12675,
+                    "observed_frequency": 0.0,
+                    "brier": 0.021504625000000003,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.00275,
+                    "observed_frequency": 0.0,
+                    "brier": 1.5124999999999998e-05,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 481516,
+              "original": {
+                "correlation": -0.13173430409929004,
+                "correlation_pairs": 2,
+                "covariance": -1.3446386724122357,
+                "mean_event_brier": 0.0073255,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.041499999999999995,
+                    "observed_frequency": 0.0,
+                    "brier": 0.00172625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.1235,
+                    "observed_frequency": 0.0,
+                    "brier": 0.02015225,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.007,
+                    "observed_frequency": 0.0,
+                    "brier": 9.800000000000001e-05,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.0018017172030340527,
+                "correlation_pairs": 2,
+                "covariance": -0.04193231285426809,
+                "mean_event_brier": 0.008166083333333332,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.0315,
+                    "observed_frequency": 0.0,
+                    "brier": 0.0009945000000000002,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.13325,
+                    "observed_frequency": 0.0,
+                    "brier": 0.023493624999999997,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.00225,
+                    "observed_frequency": 0.0,
+                    "brier": 1.0124999999999999e-05,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            },
+            {
+              "seed": 730001,
+              "original": {
+                "correlation": -0.12044099839862664,
+                "correlation_pairs": 2,
+                "covariance": -1.2332636290792425,
+                "mean_event_brier": 0.008116708333333333,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.03925,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001540625,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.129,
+                    "observed_frequency": 0.0,
+                    "brier": 0.022725,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.0065,
+                    "observed_frequency": 0.0,
+                    "brier": 8.45e-05,
+                    "true_pairs": 0
+                  }
+                }
+              },
+              "shifted": {
+                "correlation": -0.029663520053226672,
+                "correlation_pairs": 2,
+                "covariance": -0.30882299413823944,
+                "mean_event_brier": 0.008723624999999999,
+                "events": {
+                  "low_qb_high_dst": {
+                    "probability": 0.03775,
+                    "observed_frequency": 0.0,
+                    "brier": 0.001428125,
+                    "true_pairs": 0
+                  },
+                  "high_qb_high_dst": {
+                    "probability": 0.13525,
+                    "observed_frequency": 0.0,
+                    "brier": 0.024732624999999998,
+                    "true_pairs": 0
+                  },
+                  "high_qb_low_dst": {
+                    "probability": 0.00225,
+                    "observed_frequency": 0.0,
+                    "brier": 1.0124999999999999e-05,
+                    "true_pairs": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Seven previously studied retrospective games, not independent unseen validation. Games are aggregation units, not fourteen independent pairs or thousands of observed games.",
+    "Within-seed shifts preserve exact DST samples/marginals and the two-DST block relationship, but do not guarantee independence or zero correlation.",
+    "Three fixed threshold-event Briers do not validate the complete joint distribution; all events and their observed support are disclosed.",
+    "Marginal CRPS is exactly invariant to the control, so its previous change cannot measure correlation quality. No alternative coupling or coefficients are fitted.",
+    "Original sources, pregame evidence, selected-score coverage, cross-export conflicts and final source/model/database checks remain enforced. No production defaults changed."
+  ],
+  "validation": {
+    "new_regressions": 13,
+    "focused_tests": 51,
+    "focused_seconds": 21.863,
+    "receipt_checks": 6,
+    "receipt_check_seconds": 0.008,
+    "full_tests": 2544,
+    "full_passed": 2543,
+    "full_skipped": 1,
+    "full_seconds": 1198.358,
+    "skip_reason": "Symlink creation unavailable",
+    "unexpected_network_attempts": 0,
+    "windows_ci_package": "Not yet validated for the new PR head; consult the PR checks",
+    "private_aggregator_sha256": "db3c623af7a480933fd2b3663eda1ec91ef6ead154f383e9f3ced066ff4a2bcf",
+    "private_receipt_checks_sha256": "cf65529542b80f4f9d0523b7a9602d7714381b93b0aaddf58b94bb2397b6a576"
+  }
+}
