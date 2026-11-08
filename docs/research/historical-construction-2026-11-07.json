@@ -1,0 +1,2998 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-07",
+  "runtime_commit": "9212ba76b532eea8912447c6ab639173acec99d1",
+  "authority": "observational research only; not a qualified model, SIM cache or historical source replacement",
+  "coverage": {
+    "result_sources": 68,
+    "salary_sources": 45,
+    "indexed_contests": 49,
+    "showdown_contests": 42,
+    "showdown_game_groups": 23,
+    "showdown_indexed_entries": 4996498,
+    "indexed_source_paths_missing": 0,
+    "saved_pair_mismatches": 0,
+    "field_completeness_verified": 0,
+    "unpaired_results": 19,
+    "unpaired_showdown": 4,
+    "unpaired_classic": 15
+  },
+  "discovery": {
+    "contests": 36,
+    "profiles": 1136,
+    "distinct_users": 959,
+    "games": 17,
+    "accepted_entries": 3664751,
+    "support_checks": {
+      "5": {
+        "profiles": 1075,
+        "comparisons": {
+          "showdown / 150-Max": {
+            "contests": 12,
+            "winner_profiles": 706,
+            "metrics": {
+              "player_pool": {
+                "winner": 22.637151465189646,
+                "peer": 22.183684693659522,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "captain_pool": {
+                "winner": 10.100529590182326,
+                "peer": 10.166950649737291,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "repeated_pct": {
+                "winner": 0.22641885220049832,
+                "peer": 0.013267528393261046,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "mean_shared_players": {
+                "winner": 2.6959812518674244,
+                "peer": 2.7229179530247425,
+                "slates": 12,
+                "matched_profiles": 700
+              },
+              "mean_salary": {
+                "winner": 48641.04711419239,
+                "peer": 49046.21469738896,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "double_qb_pct": {
+                "winner": 38.00819992308152,
+                "peer": 37.618708636459196,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "double_k_pct": {
+                "winner": 2.5382016151493443,
+                "peer": 2.2412335043266958,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "double_dst_pct": {
+                "winner": 1.7397349970579188,
+                "peer": 0.4775039429833021,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "split_5_1_pct": {
+                "winner": 19.57435357568664,
+                "peer": 17.117554892166904,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "split_4_2_pct": {
+                "winner": 46.825660065331675,
+                "peer": 47.12791347173244,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "split_3_3_pct": {
+                "winner": 33.59998635898169,
+                "peer": 32.5051093136826,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "qb_opposing_dst_pct": {
+                "winner": 11.905406974137644,
+                "peer": 11.186005439096053,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "all_four_pct": {
+                "winner": 54.72899488447701,
+                "peer": 52.42757902170954,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "receiver_own_qb_pct": {
+                "winner": 84.6180046886732,
+                "peer": 87.98302793275425,
+                "slates": 12,
+                "matched_profiles": 688
+              },
+              "kd_zero_pct": {
+                "winner": 43.706750889274716,
+                "peer": 40.659902461079625,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "kd_one_pct": {
+                "winner": 42.826642629463954,
+                "peer": 42.899278197255896,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "kd_two_pct": {
+                "winner": 12.671747836275983,
+                "peer": 12.391346423400902,
+                "slates": 12,
+                "matched_profiles": 706
+              },
+              "kd_three_plus_pct": {
+                "winner": 0.7948586449853441,
+                "peer": 0.18903012098889166,
+                "slates": 12,
+                "matched_profiles": 706
+              }
+            }
+          },
+          "showdown / 20-Max": {
+            "contests": 12,
+            "winner_profiles": 348,
+            "metrics": {
+              "player_pool": {
+                "winner": 16.338484216883568,
+                "peer": 15.847452825085574,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "captain_pool": {
+                "winner": 5.3944066969545235,
+                "peer": 5.393760586956619,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "repeated_pct": {
+                "winner": 0.11971611655263137,
+                "peer": 0.0,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "mean_shared_players": {
+                "winner": 3.0675710545104304,
+                "peer": 2.8960311074665044,
+                "slates": 8,
+                "matched_profiles": 323
+              },
+              "mean_salary": {
+                "winner": 48955.110502576645,
+                "peer": 49373.94944727935,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "double_qb_pct": {
+                "winner": 30.987477558936547,
+                "peer": 25.956923714919544,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "double_k_pct": {
+                "winner": 3.023610190359557,
+                "peer": 0.9886697622435585,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "double_dst_pct": {
+                "winner": 1.8886154336254142,
+                "peer": 0.0034994400895856665,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "split_5_1_pct": {
+                "winner": 19.793922468794236,
+                "peer": 12.738361010398062,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "split_4_2_pct": {
+                "winner": 45.27416306419128,
+                "peer": 44.804189033413785,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "split_3_3_pct": {
+                "winner": 34.93191446701449,
+                "peer": 33.52880898590245,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "qb_opposing_dst_pct": {
+                "winner": 8.396158395196641,
+                "peer": 7.20345642320615,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "all_four_pct": {
+                "winner": 62.37824506122023,
+                "peer": 62.892473894871706,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "receiver_own_qb_pct": {
+                "winner": 76.14751382432958,
+                "peer": 94.61992190373215,
+                "slates": 8,
+                "matched_profiles": 290
+              },
+              "kd_zero_pct": {
+                "winner": 57.86685722947942,
+                "peer": 37.4664147187701,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "kd_one_pct": {
+                "winner": 32.13798853746055,
+                "peer": 41.90390486140922,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "kd_two_pct": {
+                "winner": 8.635151793189436,
+                "peer": 10.553733453759262,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "kd_three_plus_pct": {
+                "winner": 1.3600024398705912,
+                "peer": 0.0,
+                "slates": 8,
+                "matched_profiles": 348
+              }
+            }
+          },
+          "showdown / Single Entry": {
+            "contests": 3,
+            "winner_profiles": 5,
+            "metrics": {
+              "player_pool": {
+                "winner": 6,
+                "peer": 6.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "captain_pool": {
+                "winner": 1,
+                "peer": 1.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "repeated_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "mean_shared_players": {
+                "winner": null,
+                "peer": null,
+                "slates": 0,
+                "matched_profiles": 0
+              },
+              "mean_salary": {
+                "winner": 49500.0,
+                "peer": 49700.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "double_qb_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "double_k_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "double_dst_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "split_5_1_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "split_4_2_pct": {
+                "winner": 100.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "split_3_3_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "qb_opposing_dst_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "all_four_pct": {
+                "winner": 100.0,
+                "peer": 100.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "receiver_own_qb_pct": {
+                "winner": 0.0,
+                "peer": 100.0,
+                "slates": 1,
+                "matched_profiles": 1
+              },
+              "kd_zero_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "kd_one_pct": {
+                "winner": 100.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "kd_two_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "kd_three_plus_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              }
+            }
+          },
+          "showdown / Unclassified": {
+            "contests": 9,
+            "winner_profiles": 16,
+            "metrics": {
+              "player_pool": {
+                "winner": 17.36706349206349,
+                "peer": 18.456349206349206,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "captain_pool": {
+                "winner": 7.109126984126984,
+                "peer": 7.222222222222222,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "repeated_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "mean_shared_players": {
+                "winner": 2.7647889498434486,
+                "peer": 2.8050239052408905,
+                "slates": 6,
+                "matched_profiles": 15
+              },
+              "mean_salary": {
+                "winner": 49175.625,
+                "peer": 49372.65277777778,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "double_qb_pct": {
+                "winner": 19.303571428571427,
+                "peer": 30.07936507936508,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "double_k_pct": {
+                "winner": 6.242063492063492,
+                "peer": 1.8869047619047619,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "double_dst_pct": {
+                "winner": 2.765873015873016,
+                "peer": 0.06349206349206349,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "split_5_1_pct": {
+                "winner": 30.29563492063492,
+                "peer": 18.555555555555557,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "split_4_2_pct": {
+                "winner": 43.06944444444444,
+                "peer": 49.00198412698413,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "split_3_3_pct": {
+                "winner": 26.634920634920636,
+                "peer": 29.376984126984127,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "qb_opposing_dst_pct": {
+                "winner": 12.76984126984127,
+                "peer": 6.9563492063492065,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "all_four_pct": {
+                "winner": 67.4702380952381,
+                "peer": 59.267857142857146,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "receiver_own_qb_pct": {
+                "winner": 75.85432476286135,
+                "peer": 88.9104599104599,
+                "slates": 5,
+                "matched_profiles": 15
+              },
+              "kd_zero_pct": {
+                "winner": 28.283730158730158,
+                "peer": 39.50198412698413,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "kd_one_pct": {
+                "winner": 45.079365079365076,
+                "peer": 39.01587301587302,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "kd_two_pct": {
+                "winner": 24.26388888888889,
+                "peer": 13.851190476190476,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "kd_three_plus_pct": {
+                "winner": 2.373015873015873,
+                "peer": 0.06349206349206349,
+                "slates": 6,
+                "matched_profiles": 16
+              }
+            }
+          }
+        },
+        "outcomes": {}
+      },
+      "10": {
+        "profiles": 1054,
+        "comparisons": {
+          "showdown / 150-Max": {
+            "contests": 12,
+            "winner_profiles": 685,
+            "metrics": {
+              "player_pool": {
+                "winner": 22.68814341606843,
+                "peer": 22.14306048126566,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "captain_pool": {
+                "winner": 10.265261206146938,
+                "peer": 10.054835546020053,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "repeated_pct": {
+                "winner": 0.21792098562609216,
+                "peer": 0.010046212577858147,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "mean_shared_players": {
+                "winner": 2.6916368104517177,
+                "peer": 2.7232579643439987,
+                "slates": 12,
+                "matched_profiles": 679
+              },
+              "mean_salary": {
+                "winner": 48602.416606209976,
+                "peer": 49029.71337212758,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "double_qb_pct": {
+                "winner": 38.11038258678269,
+                "peer": 36.99848307831881,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "double_k_pct": {
+                "winner": 2.474048356385136,
+                "peer": 2.1913265317301716,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "double_dst_pct": {
+                "winner": 1.7491997182049663,
+                "peer": 0.4729303801403018,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "split_5_1_pct": {
+                "winner": 19.200724668392986,
+                "peer": 17.117643200082842,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "split_4_2_pct": {
+                "winner": 47.003906579442315,
+                "peer": 47.26448664618567,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "split_3_3_pct": {
+                "winner": 33.79536875216469,
+                "peer": 32.359474777199075,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "qb_opposing_dst_pct": {
+                "winner": 11.865867402597049,
+                "peer": 11.218983529202537,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "all_four_pct": {
+                "winner": 54.57303756874907,
+                "peer": 52.86987802335753,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "receiver_own_qb_pct": {
+                "winner": 85.20613625123615,
+                "peer": 87.87715540689727,
+                "slates": 12,
+                "matched_profiles": 668
+              },
+              "kd_zero_pct": {
+                "winner": 43.754144947431634,
+                "peer": 40.64428980278523,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "kd_one_pct": {
+                "winner": 42.95340459851857,
+                "peer": 43.0808210505715,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "kd_two_pct": {
+                "winner": 12.500118007649014,
+                "peer": 12.479223710166156,
+                "slates": 12,
+                "matched_profiles": 685
+              },
+              "kd_three_plus_pct": {
+                "winner": 0.792332446400789,
+                "peer": 0.1889350404573589,
+                "slates": 12,
+                "matched_profiles": 685
+              }
+            }
+          },
+          "showdown / 20-Max": {
+            "contests": 12,
+            "winner_profiles": 348,
+            "metrics": {
+              "player_pool": {
+                "winner": 16.338484216883568,
+                "peer": 15.847452825085574,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "captain_pool": {
+                "winner": 5.3944066969545235,
+                "peer": 5.393760586956619,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "repeated_pct": {
+                "winner": 0.11971611655263137,
+                "peer": 0.0,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "mean_shared_players": {
+                "winner": 3.0675710545104304,
+                "peer": 2.8960311074665044,
+                "slates": 8,
+                "matched_profiles": 323
+              },
+              "mean_salary": {
+                "winner": 48955.110502576645,
+                "peer": 49373.94944727935,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "double_qb_pct": {
+                "winner": 30.987477558936547,
+                "peer": 25.956923714919544,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "double_k_pct": {
+                "winner": 3.023610190359557,
+                "peer": 0.9886697622435585,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "double_dst_pct": {
+                "winner": 1.8886154336254142,
+                "peer": 0.0034994400895856665,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "split_5_1_pct": {
+                "winner": 19.793922468794236,
+                "peer": 12.738361010398062,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "split_4_2_pct": {
+                "winner": 45.27416306419128,
+                "peer": 44.804189033413785,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "split_3_3_pct": {
+                "winner": 34.93191446701449,
+                "peer": 33.52880898590245,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "qb_opposing_dst_pct": {
+                "winner": 8.396158395196641,
+                "peer": 7.20345642320615,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "all_four_pct": {
+                "winner": 62.37824506122023,
+                "peer": 62.892473894871706,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "receiver_own_qb_pct": {
+                "winner": 76.14751382432958,
+                "peer": 94.61992190373215,
+                "slates": 8,
+                "matched_profiles": 290
+              },
+              "kd_zero_pct": {
+                "winner": 57.86685722947942,
+                "peer": 37.4664147187701,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "kd_one_pct": {
+                "winner": 32.13798853746055,
+                "peer": 41.90390486140922,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "kd_two_pct": {
+                "winner": 8.635151793189436,
+                "peer": 10.553733453759262,
+                "slates": 8,
+                "matched_profiles": 348
+              },
+              "kd_three_plus_pct": {
+                "winner": 1.3600024398705912,
+                "peer": 0.0,
+                "slates": 8,
+                "matched_profiles": 348
+              }
+            }
+          },
+          "showdown / Single Entry": {
+            "contests": 3,
+            "winner_profiles": 5,
+            "metrics": {
+              "player_pool": {
+                "winner": 6,
+                "peer": 6.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "captain_pool": {
+                "winner": 1,
+                "peer": 1.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "repeated_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "mean_shared_players": {
+                "winner": null,
+                "peer": null,
+                "slates": 0,
+                "matched_profiles": 0
+              },
+              "mean_salary": {
+                "winner": 49500.0,
+                "peer": 49700.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "double_qb_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "double_k_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "double_dst_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "split_5_1_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "split_4_2_pct": {
+                "winner": 100.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "split_3_3_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "qb_opposing_dst_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "all_four_pct": {
+                "winner": 100.0,
+                "peer": 100.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "receiver_own_qb_pct": {
+                "winner": 0.0,
+                "peer": 100.0,
+                "slates": 1,
+                "matched_profiles": 1
+              },
+              "kd_zero_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "kd_one_pct": {
+                "winner": 100.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "kd_two_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              },
+              "kd_three_plus_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 2,
+                "matched_profiles": 5
+              }
+            }
+          },
+          "showdown / Unclassified": {
+            "contests": 9,
+            "winner_profiles": 16,
+            "metrics": {
+              "player_pool": {
+                "winner": 17.36706349206349,
+                "peer": 18.456349206349206,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "captain_pool": {
+                "winner": 7.109126984126984,
+                "peer": 7.222222222222222,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "repeated_pct": {
+                "winner": 0.0,
+                "peer": 0.0,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "mean_shared_players": {
+                "winner": 2.7647889498434486,
+                "peer": 2.8050239052408905,
+                "slates": 6,
+                "matched_profiles": 15
+              },
+              "mean_salary": {
+                "winner": 49175.625,
+                "peer": 49372.65277777778,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "double_qb_pct": {
+                "winner": 19.303571428571427,
+                "peer": 30.07936507936508,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "double_k_pct": {
+                "winner": 6.242063492063492,
+                "peer": 1.8869047619047619,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "double_dst_pct": {
+                "winner": 2.765873015873016,
+                "peer": 0.06349206349206349,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "split_5_1_pct": {
+                "winner": 30.29563492063492,
+                "peer": 18.555555555555557,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "split_4_2_pct": {
+                "winner": 43.06944444444444,
+                "peer": 49.00198412698413,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "split_3_3_pct": {
+                "winner": 26.634920634920636,
+                "peer": 29.376984126984127,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "qb_opposing_dst_pct": {
+                "winner": 12.76984126984127,
+                "peer": 6.9563492063492065,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "all_four_pct": {
+                "winner": 67.4702380952381,
+                "peer": 59.267857142857146,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "receiver_own_qb_pct": {
+                "winner": 75.85432476286135,
+                "peer": 88.9104599104599,
+                "slates": 5,
+                "matched_profiles": 15
+              },
+              "kd_zero_pct": {
+                "winner": 28.283730158730158,
+                "peer": 39.50198412698413,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "kd_one_pct": {
+                "winner": 45.079365079365076,
+                "peer": 39.01587301587302,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "kd_two_pct": {
+                "winner": 24.26388888888889,
+                "peer": 13.851190476190476,
+                "slates": 6,
+                "matched_profiles": 16
+              },
+              "kd_three_plus_pct": {
+                "winner": 2.373015873015873,
+                "peer": 0.06349206349206349,
+                "slates": 6,
+                "matched_profiles": 16
+              }
+            }
+          }
+        },
+        "outcomes": {}
+      }
+    }
+  },
+  "discovery_game_sensitivity": {
+    "5": {
+      "showdown / Unclassified": {
+        "player_pool": {
+          "games": 6,
+          "gap_pp": -1.089285714285715,
+          "higher_games": 0,
+          "lower_games": 4,
+          "equal_games": 2,
+          "omit_one_range": [
+            -1.307142857142858,
+            -0.507142857142858
+          ]
+        },
+        "captain_pool": {
+          "games": 6,
+          "gap_pp": -0.11309523809523814,
+          "higher_games": 4,
+          "lower_games": 2,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.5857142857142857,
+            0.6642857142857143
+          ]
+        },
+        "repeated_pct": {
+          "games": 6,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 6,
+          "omit_one_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "mean_shared_players": {
+          "games": 6,
+          "gap_pp": -0.04023495539744223,
+          "higher_games": 1,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.20863282366991323,
+            0.05040226404938526
+          ]
+        },
+        "mean_salary": {
+          "games": 6,
+          "gap_pp": -197.02777777777737,
+          "higher_games": 1,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -352.4333333333328,
+            -73.43333333333285
+          ]
+        },
+        "double_qb_pct": {
+          "games": 6,
+          "gap_pp": -10.775793650793652,
+          "higher_games": 1,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -13.816666666666666,
+            -6.930952380952382
+          ]
+        },
+        "double_k_pct": {
+          "games": 6,
+          "gap_pp": 4.35515873015873,
+          "higher_games": 3,
+          "lower_games": 2,
+          "equal_games": 1,
+          "omit_one_range": [
+            1.2261904761904763,
+            5.55
+          ]
+        },
+        "double_dst_pct": {
+          "games": 6,
+          "gap_pp": 2.7023809523809526,
+          "higher_games": 4,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": [
+            1.8333333333333333,
+            3.242857142857143
+          ]
+        },
+        "split_5_1_pct": {
+          "games": 6,
+          "gap_pp": 11.740079365079366,
+          "higher_games": 4,
+          "lower_games": 2,
+          "equal_games": 0,
+          "omit_one_range": [
+            5.838095238095238,
+            16.08809523809524
+          ]
+        },
+        "split_4_2_pct": {
+          "games": 6,
+          "gap_pp": -5.932539682539684,
+          "higher_games": 2,
+          "lower_games": 3,
+          "equal_games": 1,
+          "omit_one_range": [
+            -8.11904761904762,
+            -1.6190476190476204
+          ]
+        },
+        "split_3_3_pct": {
+          "games": 6,
+          "gap_pp": -2.742063492063492,
+          "higher_games": 3,
+          "lower_games": 3,
+          "equal_games": 0,
+          "omit_one_range": [
+            -7.033333333333333,
+            2.7095238095238097
+          ]
+        },
+        "qb_opposing_dst_pct": {
+          "games": 6,
+          "gap_pp": 5.813492063492064,
+          "higher_games": 4,
+          "lower_games": 2,
+          "equal_games": 0,
+          "omit_one_range": [
+            3.7761904761904765,
+            7.976190476190476
+          ]
+        },
+        "all_four_pct": {
+          "games": 6,
+          "gap_pp": 8.20238095238095,
+          "higher_games": 5,
+          "lower_games": 1,
+          "equal_games": 0,
+          "omit_one_range": [
+            3.8428571428571416,
+            11.3
+          ]
+        },
+        "receiver_own_qb_pct": {
+          "games": 5,
+          "gap_pp": -13.056135147598559,
+          "higher_games": 1,
+          "lower_games": 4,
+          "equal_games": 0,
+          "omit_one_range": [
+            -18.403502267831534,
+            -8.155185769515032
+          ]
+        },
+        "kd_zero_pct": {
+          "games": 6,
+          "gap_pp": -11.21825396825397,
+          "higher_games": 2,
+          "lower_games": 4,
+          "equal_games": 0,
+          "omit_one_range": [
+            -16.961904761904762,
+            -5.461904761904764
+          ]
+        },
+        "kd_one_pct": {
+          "games": 6,
+          "gap_pp": 6.063492063492062,
+          "higher_games": 4,
+          "lower_games": 1,
+          "equal_games": 1,
+          "omit_one_range": [
+            4.276190476190474,
+            7.942857142857141
+          ]
+        },
+        "kd_two_pct": {
+          "games": 6,
+          "gap_pp": 10.412698412698413,
+          "higher_games": 4,
+          "lower_games": 1,
+          "equal_games": 1,
+          "omit_one_range": [
+            7.495238095238095,
+            13.82857142857143
+          ]
+        },
+        "kd_three_plus_pct": {
+          "games": 6,
+          "gap_pp": 2.3095238095238098,
+          "higher_games": 4,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": [
+            1.7714285714285716,
+            2.7714285714285714
+          ]
+        }
+      },
+      "showdown / 20-Max": {
+        "player_pool": {
+          "games": 8,
+          "gap_pp": 0.49103139179799427,
+          "higher_games": 3,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.438821266516578,
+            0.7040358763405649
+          ]
+        },
+        "captain_pool": {
+          "games": 8,
+          "gap_pp": 0.0006461099979048202,
+          "higher_games": 4,
+          "lower_games": 3,
+          "equal_games": 1,
+          "omit_one_range": [
+            -0.2849758742881088,
+            0.2864526971404627
+          ]
+        },
+        "repeated_pct": {
+          "games": 8,
+          "gap_pp": 0.11971611655263137,
+          "higher_games": 2,
+          "lower_games": 0,
+          "equal_games": 6,
+          "omit_one_range": [
+            0.05345070714611588,
+            0.136818418917293
+          ]
+        },
+        "mean_shared_players": {
+          "games": 8,
+          "gap_pp": 0.17153994704392628,
+          "higher_games": 3,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            0.05318851090734432,
+            0.20972986429080295
+          ]
+        },
+        "mean_salary": {
+          "games": 8,
+          "gap_pp": -418.8389447027039,
+          "higher_games": 2,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            -505.75202819092374,
+            -230.10165108880443
+          ]
+        },
+        "double_qb_pct": {
+          "games": 8,
+          "gap_pp": 5.030553844017003,
+          "higher_games": 3,
+          "lower_games": 2,
+          "equal_games": 3,
+          "omit_one_range": [
+            2.2696125564275955,
+            6.710213171686932
+          ]
+        },
+        "double_k_pct": {
+          "games": 8,
+          "gap_pp": 2.0349404281159984,
+          "higher_games": 4,
+          "lower_games": 0,
+          "equal_games": 4,
+          "omit_one_range": [
+            0.9565985845135224,
+            2.325646203561141
+          ]
+        },
+        "double_dst_pct": {
+          "games": 8,
+          "gap_pp": 1.8851159935358284,
+          "higher_games": 5,
+          "lower_games": 0,
+          "equal_games": 3,
+          "omit_one_range": [
+            1.4837540622963703,
+            2.154418278326661
+          ]
+        },
+        "split_5_1_pct": {
+          "games": 8,
+          "gap_pp": 7.055561458396174,
+          "higher_games": 4,
+          "lower_games": 3,
+          "equal_games": 1,
+          "omit_one_range": [
+            3.542941631700763,
+            9.492070238167056
+          ]
+        },
+        "split_4_2_pct": {
+          "games": 8,
+          "gap_pp": 0.4699740307774922,
+          "higher_games": 3,
+          "lower_games": 4,
+          "equal_games": 1,
+          "omit_one_range": [
+            -2.653363012444771,
+            4.822827463745705
+          ]
+        },
+        "split_3_3_pct": {
+          "games": 8,
+          "gap_pp": 1.4031054811120391,
+          "higher_games": 3,
+          "lower_games": 4,
+          "equal_games": 1,
+          "omit_one_range": [
+            -4.825022307300527,
+            3.8416443593661396
+          ]
+        },
+        "qb_opposing_dst_pct": {
+          "games": 8,
+          "gap_pp": 1.1927019719904908,
+          "higher_games": 3,
+          "lower_games": 3,
+          "equal_games": 2,
+          "omit_one_range": [
+            -0.8001773381333173,
+            2.791659396560561
+          ]
+        },
+        "all_four_pct": {
+          "games": 8,
+          "gap_pp": -0.5142288336514733,
+          "higher_games": 5,
+          "lower_games": 2,
+          "equal_games": 1,
+          "omit_one_range": [
+            -2.0162615241731126,
+            3.8408813329697447
+          ]
+        },
+        "receiver_own_qb_pct": {
+          "games": 8,
+          "gap_pp": -18.47240807940256,
+          "higher_games": 1,
+          "lower_games": 7,
+          "equal_games": 0,
+          "omit_one_range": [
+            -22.6986251066188,
+            -6.825609233602925
+          ]
+        },
+        "kd_zero_pct": {
+          "games": 8,
+          "gap_pp": 20.400442510709315,
+          "higher_games": 5,
+          "lower_games": 3,
+          "equal_games": 0,
+          "omit_one_range": [
+            16.171934297953502,
+            24.45793737542391
+          ]
+        },
+        "kd_one_pct": {
+          "games": 8,
+          "gap_pp": -9.765916323948662,
+          "higher_games": 3,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -13.612247639223323,
+            -4.018190084512757
+          ]
+        },
+        "kd_two_pct": {
+          "games": 8,
+          "gap_pp": -1.918581660569825,
+          "higher_games": 3,
+          "lower_games": 4,
+          "equal_games": 1,
+          "omit_one_range": [
+            -2.7174664374367272,
+            -0.7640933263655142
+          ]
+        },
+        "kd_three_plus_pct": {
+          "games": 8,
+          "gap_pp": 1.3600024398705912,
+          "higher_games": 4,
+          "lower_games": 0,
+          "equal_games": 4,
+          "omit_one_range": [
+            0.7379619720970023,
+            1.5542885027092472
+          ]
+        }
+      },
+      "showdown / 150-Max": {
+        "player_pool": {
+          "games": 12,
+          "gap_pp": 0.45346677153012244,
+          "higher_games": 7,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            0.040145568941951766,
+            0.6537819325783154
+          ]
+        },
+        "captain_pool": {
+          "games": 12,
+          "gap_pp": -0.06642105955496636,
+          "higher_games": 6,
+          "lower_games": 5,
+          "equal_games": 1,
+          "omit_one_range": [
+            -0.39064115587814513,
+            0.2911770259400367
+          ]
+        },
+        "repeated_pct": {
+          "games": 12,
+          "gap_pp": 0.21315132380723725,
+          "higher_games": 9,
+          "lower_games": 0,
+          "equal_games": 3,
+          "omit_one_range": [
+            0.18038842130856686,
+            0.23252871688062246
+          ]
+        },
+        "mean_shared_players": {
+          "games": 12,
+          "gap_pp": -0.026936701157317906,
+          "higher_games": 5,
+          "lower_games": 7,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.04790913517539786,
+            0.0031503929958446005
+          ]
+        },
+        "mean_salary": {
+          "games": 12,
+          "gap_pp": -405.16758319656947,
+          "higher_games": 3,
+          "lower_games": 9,
+          "equal_games": 0,
+          "omit_one_range": [
+            -463.2300830926152,
+            -216.09190894171215
+          ]
+        },
+        "double_qb_pct": {
+          "games": 12,
+          "gap_pp": 0.3894912866223237,
+          "higher_games": 6,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.9148502854197667,
+            2.2430814035879894
+          ]
+        },
+        "double_k_pct": {
+          "games": 12,
+          "gap_pp": 0.2969681108226487,
+          "higher_games": 7,
+          "lower_games": 4,
+          "equal_games": 1,
+          "omit_one_range": [
+            0.12750757402884225,
+            0.5588136966550107
+          ]
+        },
+        "double_dst_pct": {
+          "games": 12,
+          "gap_pp": 1.2622310540746167,
+          "higher_games": 9,
+          "lower_games": 0,
+          "equal_games": 3,
+          "omit_one_range": [
+            0.9306983399822265,
+            1.3769793317177637
+          ]
+        },
+        "split_5_1_pct": {
+          "games": 12,
+          "gap_pp": 2.456798683519737,
+          "higher_games": 7,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            1.521438945735329,
+            3.1460531092942587
+          ]
+        },
+        "split_4_2_pct": {
+          "games": 12,
+          "gap_pp": -0.3022534064007682,
+          "higher_games": 6,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.9098952071839803,
+            0.5793599202900711
+          ]
+        },
+        "split_3_3_pct": {
+          "games": 12,
+          "gap_pp": 1.0948770452990815,
+          "higher_games": 4,
+          "lower_games": 8,
+          "equal_games": 0,
+          "omit_one_range": [
+            -1.0783159505828201,
+            1.7455476857808163
+          ]
+        },
+        "qb_opposing_dst_pct": {
+          "games": 12,
+          "gap_pp": 0.7194015350415918,
+          "higher_games": 6,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            0.07185401618862337,
+            1.2393471291362819
+          ]
+        },
+        "all_four_pct": {
+          "games": 12,
+          "gap_pp": 2.301415862767468,
+          "higher_games": 8,
+          "lower_games": 4,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.21663724061730766,
+            3.5286756818755776
+          ]
+        },
+        "receiver_own_qb_pct": {
+          "games": 12,
+          "gap_pp": -3.365023244081046,
+          "higher_games": 3,
+          "lower_games": 9,
+          "equal_games": 0,
+          "omit_one_range": [
+            -4.259451893080087,
+            -0.7488565260104914
+          ]
+        },
+        "kd_zero_pct": {
+          "games": 12,
+          "gap_pp": 3.0468484281950965,
+          "higher_games": 6,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            1.0511073762128325,
+            3.949551129944156
+          ]
+        },
+        "kd_one_pct": {
+          "games": 12,
+          "gap_pp": -0.07263556779193792,
+          "higher_games": 6,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.9476994479813512,
+            1.1139430169542495
+          ]
+        },
+        "kd_two_pct": {
+          "games": 12,
+          "gap_pp": 0.2804014128750796,
+          "higher_games": 5,
+          "lower_games": 7,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.14338230081362555,
+            0.7604379049546323
+          ]
+        },
+        "kd_three_plus_pct": {
+          "games": 12,
+          "gap_pp": 0.6058285239964525,
+          "higher_games": 8,
+          "lower_games": 1,
+          "equal_games": 3,
+          "omit_one_range": [
+            0.4388652768666534,
+            0.6649016942556206
+          ]
+        }
+      },
+      "showdown / Single Entry": {
+        "player_pool": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "captain_pool": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "repeated_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "mean_salary": {
+          "games": 2,
+          "gap_pp": -200.0,
+          "higher_games": 1,
+          "lower_games": 1,
+          "equal_games": 0,
+          "omit_one_range": null
+        },
+        "double_qb_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "double_k_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "double_dst_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "split_5_1_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "split_4_2_pct": {
+          "games": 2,
+          "gap_pp": 100.0,
+          "higher_games": 2,
+          "lower_games": 0,
+          "equal_games": 0,
+          "omit_one_range": null
+        },
+        "split_3_3_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "qb_opposing_dst_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "all_four_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "receiver_own_qb_pct": {
+          "games": 1,
+          "gap_pp": -100.0,
+          "higher_games": 0,
+          "lower_games": 1,
+          "equal_games": 0,
+          "omit_one_range": null
+        },
+        "kd_zero_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "kd_one_pct": {
+          "games": 2,
+          "gap_pp": 100.0,
+          "higher_games": 2,
+          "lower_games": 0,
+          "equal_games": 0,
+          "omit_one_range": null
+        },
+        "kd_two_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "kd_three_plus_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        }
+      }
+    },
+    "10": {
+      "showdown / Unclassified": {
+        "player_pool": {
+          "games": 6,
+          "gap_pp": -1.089285714285715,
+          "higher_games": 0,
+          "lower_games": 4,
+          "equal_games": 2,
+          "omit_one_range": [
+            -1.307142857142858,
+            -0.507142857142858
+          ]
+        },
+        "captain_pool": {
+          "games": 6,
+          "gap_pp": -0.11309523809523814,
+          "higher_games": 4,
+          "lower_games": 2,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.5857142857142857,
+            0.6642857142857143
+          ]
+        },
+        "repeated_pct": {
+          "games": 6,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 6,
+          "omit_one_range": [
+            0.0,
+            0.0
+          ]
+        },
+        "mean_shared_players": {
+          "games": 6,
+          "gap_pp": -0.04023495539744223,
+          "higher_games": 1,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.20863282366991323,
+            0.05040226404938526
+          ]
+        },
+        "mean_salary": {
+          "games": 6,
+          "gap_pp": -197.02777777777737,
+          "higher_games": 1,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -352.4333333333328,
+            -73.43333333333285
+          ]
+        },
+        "double_qb_pct": {
+          "games": 6,
+          "gap_pp": -10.775793650793652,
+          "higher_games": 1,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -13.816666666666666,
+            -6.930952380952382
+          ]
+        },
+        "double_k_pct": {
+          "games": 6,
+          "gap_pp": 4.35515873015873,
+          "higher_games": 3,
+          "lower_games": 2,
+          "equal_games": 1,
+          "omit_one_range": [
+            1.2261904761904763,
+            5.55
+          ]
+        },
+        "double_dst_pct": {
+          "games": 6,
+          "gap_pp": 2.7023809523809526,
+          "higher_games": 4,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": [
+            1.8333333333333333,
+            3.242857142857143
+          ]
+        },
+        "split_5_1_pct": {
+          "games": 6,
+          "gap_pp": 11.740079365079366,
+          "higher_games": 4,
+          "lower_games": 2,
+          "equal_games": 0,
+          "omit_one_range": [
+            5.838095238095238,
+            16.08809523809524
+          ]
+        },
+        "split_4_2_pct": {
+          "games": 6,
+          "gap_pp": -5.932539682539684,
+          "higher_games": 2,
+          "lower_games": 3,
+          "equal_games": 1,
+          "omit_one_range": [
+            -8.11904761904762,
+            -1.6190476190476204
+          ]
+        },
+        "split_3_3_pct": {
+          "games": 6,
+          "gap_pp": -2.742063492063492,
+          "higher_games": 3,
+          "lower_games": 3,
+          "equal_games": 0,
+          "omit_one_range": [
+            -7.033333333333333,
+            2.7095238095238097
+          ]
+        },
+        "qb_opposing_dst_pct": {
+          "games": 6,
+          "gap_pp": 5.813492063492064,
+          "higher_games": 4,
+          "lower_games": 2,
+          "equal_games": 0,
+          "omit_one_range": [
+            3.7761904761904765,
+            7.976190476190476
+          ]
+        },
+        "all_four_pct": {
+          "games": 6,
+          "gap_pp": 8.20238095238095,
+          "higher_games": 5,
+          "lower_games": 1,
+          "equal_games": 0,
+          "omit_one_range": [
+            3.8428571428571416,
+            11.3
+          ]
+        },
+        "receiver_own_qb_pct": {
+          "games": 5,
+          "gap_pp": -13.056135147598559,
+          "higher_games": 1,
+          "lower_games": 4,
+          "equal_games": 0,
+          "omit_one_range": [
+            -18.403502267831534,
+            -8.155185769515032
+          ]
+        },
+        "kd_zero_pct": {
+          "games": 6,
+          "gap_pp": -11.21825396825397,
+          "higher_games": 2,
+          "lower_games": 4,
+          "equal_games": 0,
+          "omit_one_range": [
+            -16.961904761904762,
+            -5.461904761904764
+          ]
+        },
+        "kd_one_pct": {
+          "games": 6,
+          "gap_pp": 6.063492063492062,
+          "higher_games": 4,
+          "lower_games": 1,
+          "equal_games": 1,
+          "omit_one_range": [
+            4.276190476190474,
+            7.942857142857141
+          ]
+        },
+        "kd_two_pct": {
+          "games": 6,
+          "gap_pp": 10.412698412698413,
+          "higher_games": 4,
+          "lower_games": 1,
+          "equal_games": 1,
+          "omit_one_range": [
+            7.495238095238095,
+            13.82857142857143
+          ]
+        },
+        "kd_three_plus_pct": {
+          "games": 6,
+          "gap_pp": 2.3095238095238098,
+          "higher_games": 4,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": [
+            1.7714285714285716,
+            2.7714285714285714
+          ]
+        }
+      },
+      "showdown / 20-Max": {
+        "player_pool": {
+          "games": 8,
+          "gap_pp": 0.49103139179799427,
+          "higher_games": 3,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.438821266516578,
+            0.7040358763405649
+          ]
+        },
+        "captain_pool": {
+          "games": 8,
+          "gap_pp": 0.0006461099979048202,
+          "higher_games": 4,
+          "lower_games": 3,
+          "equal_games": 1,
+          "omit_one_range": [
+            -0.2849758742881088,
+            0.2864526971404627
+          ]
+        },
+        "repeated_pct": {
+          "games": 8,
+          "gap_pp": 0.11971611655263137,
+          "higher_games": 2,
+          "lower_games": 0,
+          "equal_games": 6,
+          "omit_one_range": [
+            0.05345070714611588,
+            0.136818418917293
+          ]
+        },
+        "mean_shared_players": {
+          "games": 8,
+          "gap_pp": 0.17153994704392628,
+          "higher_games": 3,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            0.05318851090734432,
+            0.20972986429080295
+          ]
+        },
+        "mean_salary": {
+          "games": 8,
+          "gap_pp": -418.8389447027039,
+          "higher_games": 2,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            -505.75202819092374,
+            -230.10165108880443
+          ]
+        },
+        "double_qb_pct": {
+          "games": 8,
+          "gap_pp": 5.030553844017003,
+          "higher_games": 3,
+          "lower_games": 2,
+          "equal_games": 3,
+          "omit_one_range": [
+            2.2696125564275955,
+            6.710213171686932
+          ]
+        },
+        "double_k_pct": {
+          "games": 8,
+          "gap_pp": 2.0349404281159984,
+          "higher_games": 4,
+          "lower_games": 0,
+          "equal_games": 4,
+          "omit_one_range": [
+            0.9565985845135224,
+            2.325646203561141
+          ]
+        },
+        "double_dst_pct": {
+          "games": 8,
+          "gap_pp": 1.8851159935358284,
+          "higher_games": 5,
+          "lower_games": 0,
+          "equal_games": 3,
+          "omit_one_range": [
+            1.4837540622963703,
+            2.154418278326661
+          ]
+        },
+        "split_5_1_pct": {
+          "games": 8,
+          "gap_pp": 7.055561458396174,
+          "higher_games": 4,
+          "lower_games": 3,
+          "equal_games": 1,
+          "omit_one_range": [
+            3.542941631700763,
+            9.492070238167056
+          ]
+        },
+        "split_4_2_pct": {
+          "games": 8,
+          "gap_pp": 0.4699740307774922,
+          "higher_games": 3,
+          "lower_games": 4,
+          "equal_games": 1,
+          "omit_one_range": [
+            -2.653363012444771,
+            4.822827463745705
+          ]
+        },
+        "split_3_3_pct": {
+          "games": 8,
+          "gap_pp": 1.4031054811120391,
+          "higher_games": 3,
+          "lower_games": 4,
+          "equal_games": 1,
+          "omit_one_range": [
+            -4.825022307300527,
+            3.8416443593661396
+          ]
+        },
+        "qb_opposing_dst_pct": {
+          "games": 8,
+          "gap_pp": 1.1927019719904908,
+          "higher_games": 3,
+          "lower_games": 3,
+          "equal_games": 2,
+          "omit_one_range": [
+            -0.8001773381333173,
+            2.791659396560561
+          ]
+        },
+        "all_four_pct": {
+          "games": 8,
+          "gap_pp": -0.5142288336514733,
+          "higher_games": 5,
+          "lower_games": 2,
+          "equal_games": 1,
+          "omit_one_range": [
+            -2.0162615241731126,
+            3.8408813329697447
+          ]
+        },
+        "receiver_own_qb_pct": {
+          "games": 8,
+          "gap_pp": -18.47240807940256,
+          "higher_games": 1,
+          "lower_games": 7,
+          "equal_games": 0,
+          "omit_one_range": [
+            -22.6986251066188,
+            -6.825609233602925
+          ]
+        },
+        "kd_zero_pct": {
+          "games": 8,
+          "gap_pp": 20.400442510709315,
+          "higher_games": 5,
+          "lower_games": 3,
+          "equal_games": 0,
+          "omit_one_range": [
+            16.171934297953502,
+            24.45793737542391
+          ]
+        },
+        "kd_one_pct": {
+          "games": 8,
+          "gap_pp": -9.765916323948662,
+          "higher_games": 3,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -13.612247639223323,
+            -4.018190084512757
+          ]
+        },
+        "kd_two_pct": {
+          "games": 8,
+          "gap_pp": -1.918581660569825,
+          "higher_games": 3,
+          "lower_games": 4,
+          "equal_games": 1,
+          "omit_one_range": [
+            -2.7174664374367272,
+            -0.7640933263655142
+          ]
+        },
+        "kd_three_plus_pct": {
+          "games": 8,
+          "gap_pp": 1.3600024398705912,
+          "higher_games": 4,
+          "lower_games": 0,
+          "equal_games": 4,
+          "omit_one_range": [
+            0.7379619720970023,
+            1.5542885027092472
+          ]
+        }
+      },
+      "showdown / 150-Max": {
+        "player_pool": {
+          "games": 12,
+          "gap_pp": 0.5450829348027687,
+          "higher_games": 7,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            0.1400904743302931,
+            0.7537268379666567
+          ]
+        },
+        "captain_pool": {
+          "games": 12,
+          "gap_pp": 0.21042566012688457,
+          "higher_games": 8,
+          "lower_games": 4,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.0886265525888532,
+            0.5363734474111468
+          ]
+        },
+        "repeated_pct": {
+          "games": 12,
+          "gap_pp": 0.207874773048234,
+          "higher_games": 9,
+          "lower_games": 0,
+          "equal_games": 3,
+          "omit_one_range": [
+            0.17319975841439794,
+            0.22677247968898256
+          ]
+        },
+        "mean_shared_players": {
+          "games": 12,
+          "gap_pp": -0.03162115389228071,
+          "higher_games": 5,
+          "lower_games": 7,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.054376125639971296,
+            -0.001959919078660272
+          ]
+        },
+        "mean_salary": {
+          "games": 12,
+          "gap_pp": -427.29676591760955,
+          "higher_games": 3,
+          "lower_games": 9,
+          "equal_games": 0,
+          "omit_one_range": [
+            -487.2148756813509,
+            -240.23283554648316
+          ]
+        },
+        "double_qb_pct": {
+          "games": 12,
+          "gap_pp": 1.1118995084638794,
+          "higher_games": 7,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.2517999293621177,
+            3.031163100142414
+          ]
+        },
+        "double_k_pct": {
+          "games": 12,
+          "gap_pp": 0.28272182465496465,
+          "higher_games": 7,
+          "lower_games": 4,
+          "equal_games": 1,
+          "omit_one_range": [
+            0.1102974894088806,
+            0.5508480511387494
+          ]
+        },
+        "double_dst_pct": {
+          "games": 12,
+          "gap_pp": 1.2762693380646646,
+          "higher_games": 9,
+          "lower_games": 0,
+          "equal_games": 3,
+          "omit_one_range": [
+            0.9460128316077332,
+            1.3922938233432705
+          ]
+        },
+        "split_5_1_pct": {
+          "games": 12,
+          "gap_pp": 2.083081468310146,
+          "higher_games": 7,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            1.11846030199211,
+            2.738361601792887
+          ]
+        },
+        "split_4_2_pct": {
+          "games": 12,
+          "gap_pp": -0.26058006674334716,
+          "higher_games": 6,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.8765656463327031,
+            0.624821745370894
+          ]
+        },
+        "split_3_3_pct": {
+          "games": 12,
+          "gap_pp": 1.4358939749656212,
+          "higher_games": 5,
+          "lower_games": 7,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.706297481855686,
+            2.1175661545079505
+          ]
+        },
+        "qb_opposing_dst_pct": {
+          "games": 12,
+          "gap_pp": 0.6468838733945106,
+          "higher_games": 6,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.00725616015364696,
+            1.1602369527940115
+          ]
+        },
+        "all_four_pct": {
+          "games": 12,
+          "gap_pp": 1.7031595453915394,
+          "higher_games": 7,
+          "lower_games": 5,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.8692804959365025,
+            2.973704691910345
+          ]
+        },
+        "receiver_own_qb_pct": {
+          "games": 12,
+          "gap_pp": -2.671019155661132,
+          "higher_games": 4,
+          "lower_games": 8,
+          "equal_games": 0,
+          "omit_one_range": [
+            -3.5023565238947256,
+            0.008238843174869327
+          ]
+        },
+        "kd_zero_pct": {
+          "games": 12,
+          "gap_pp": 3.1098551446464024,
+          "higher_games": 6,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            1.1198419759778937,
+            3.9680772935807997
+          ]
+        },
+        "kd_one_pct": {
+          "games": 12,
+          "gap_pp": -0.12741645205293692,
+          "higher_games": 6,
+          "lower_games": 6,
+          "equal_games": 0,
+          "omit_one_range": [
+            -1.0374706406313912,
+            1.2246365977604325
+          ]
+        },
+        "kd_two_pct": {
+          "games": 12,
+          "gap_pp": 0.020894297482856834,
+          "higher_games": 5,
+          "lower_games": 7,
+          "equal_games": 0,
+          "omit_one_range": [
+            -0.42133500880658054,
+            0.477339233617662
+          ]
+        },
+        "kd_three_plus_pct": {
+          "games": 12,
+          "gap_pp": 0.6033974059434302,
+          "higher_games": 8,
+          "lower_games": 1,
+          "equal_games": 3,
+          "omit_one_range": [
+            0.4362131480815381,
+            0.6655397861538609
+          ]
+        }
+      },
+      "showdown / Single Entry": {
+        "player_pool": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "captain_pool": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "repeated_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "mean_salary": {
+          "games": 2,
+          "gap_pp": -200.0,
+          "higher_games": 1,
+          "lower_games": 1,
+          "equal_games": 0,
+          "omit_one_range": null
+        },
+        "double_qb_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "double_k_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "double_dst_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "split_5_1_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "split_4_2_pct": {
+          "games": 2,
+          "gap_pp": 100.0,
+          "higher_games": 2,
+          "lower_games": 0,
+          "equal_games": 0,
+          "omit_one_range": null
+        },
+        "split_3_3_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "qb_opposing_dst_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "all_four_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "receiver_own_qb_pct": {
+          "games": 1,
+          "gap_pp": -100.0,
+          "higher_games": 0,
+          "lower_games": 1,
+          "equal_games": 0,
+          "omit_one_range": null
+        },
+        "kd_zero_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "kd_one_pct": {
+          "games": 2,
+          "gap_pp": 100.0,
+          "higher_games": 2,
+          "lower_games": 0,
+          "equal_games": 0,
+          "omit_one_range": null
+        },
+        "kd_two_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        },
+        "kd_three_plus_pct": {
+          "games": 2,
+          "gap_pp": 0.0,
+          "higher_games": 0,
+          "lower_games": 0,
+          "equal_games": 2,
+          "omit_one_range": null
+        }
+      }
+    }
+  },
+  "heldout": {
+    "plan": {
+      "created_at": "2026-11-07T15:05:45.781808+00:00",
+      "discovery_through": "2026-10-18",
+      "holdout_from": "2026-10-19",
+      "through": "2026-11-02",
+      "unit": "independent date/game group; keep all contests for a game in one window",
+      "discovery_games": 17,
+      "holdout_games": 6,
+      "qualification": "existing original-source verification and saved salary-association gates; no upgrades",
+      "heldout_cohort": "existing prior_qualified walk-forward rule: at least three earlier ranked slates and two earlier top-cutoff slates; no same-date evidence",
+      "limitations": [
+        "observed field only; completeness unverified",
+        "descriptive construction comparisons; no strategy defaults or payout claims"
+      ]
+    },
+    "scope": "aggregates of independently completed bounded daily reports; not a combined app report",
+    "evaluated_dates": [
+      "2026-10-19",
+      "2026-10-22",
+      "2026-10-26",
+      "2026-10-29",
+      "2026-11-01",
+      "2026-11-02"
+    ],
+    "qualified_contests": 6,
+    "excluded": [],
+    "profiles": 5195,
+    "portfolio_entries": 690269,
+    "distinct_users": 1494,
+    "support_checks": {
+      "5": {
+        "profiles": 1127,
+        "constructions": {
+          "showdown / 150-Max": {
+            "player_pool": {
+              "games": 6,
+              "gap_pp": 0.15529792990051483,
+              "higher_games": 3,
+              "lower_games": 3,
+              "equal_games": 0,
+              "omit_one_range": [
+                -0.1948924841193822,
+                0.34158139647763264
+              ],
+              "cohort": 20.599891370095193,
+              "peer": 20.444593440194677
+            },
+            "captain_pool": {
+              "games": 6,
+              "gap_pp": 1.1002930579798493,
+              "higher_games": 5,
+              "lower_games": 1,
+              "equal_games": 0,
+              "omit_one_range": [
+                0.7530221241212736,
+                1.4353176559703769
+              ],
+              "cohort": 9.199137835876787,
+              "peer": 8.098844777896936
+            },
+            "repeated_pct": {
+              "games": 6,
+              "gap_pp": 1.7234703753887182,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                1.2738492049884256,
+                1.9166905275639674
+              ],
+              "cohort": 1.7234703753887182,
+              "peer": 0.0
+            },
+            "mean_shared_players": {
+              "games": 6,
+              "gap_pp": 0.00779438347034489,
+              "higher_games": 4,
+              "lower_games": 2,
+              "equal_games": 0,
+              "omit_one_range": [
+                -0.02203182085677389,
+                0.07496209616679375
+              ],
+              "cohort": 2.818711926683121,
+              "peer": 2.810917543212776
+            },
+            "mean_salary": {
+              "games": 6,
+              "gap_pp": 95.61759896897759,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                74.27306250112306,
+                113.30933581703721
+              ],
+              "cohort": 49112.887445169785,
+              "peer": 49017.26984620081
+            },
+            "double_qb_pct": {
+              "games": 6,
+              "gap_pp": 5.181346737453262,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                4.605675786436451,
+                5.542892023133759
+              ],
+              "cohort": 40.22901254409655,
+              "peer": 35.04766580664329
+            },
+            "double_k_pct": {
+              "games": 6,
+              "gap_pp": 2.7940597931406477,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                2.0407270489264002,
+                3.0792399109727575
+              ],
+              "cohort": 3.7487625584705864,
+              "peer": 0.9547027653299384
+            },
+            "double_dst_pct": {
+              "games": 6,
+              "gap_pp": 0.9642274309764868,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                0.7022925554146782,
+                1.0852452656566325
+              ],
+              "cohort": 1.094470190524121,
+              "peer": 0.13024275954763415
+            },
+            "split_5_1_pct": {
+              "games": 6,
+              "gap_pp": 5.641837707919518,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                4.682349952345799,
+                6.224873949723723
+              ],
+              "cohort": 18.752139251244614,
+              "peer": 13.110301543325097
+            },
+            "split_4_2_pct": {
+              "games": 6,
+              "gap_pp": -0.22164860946579168,
+              "higher_games": 2,
+              "lower_games": 4,
+              "equal_games": 0,
+              "omit_one_range": [
+                -0.7358196012002196,
+                0.026528128589370682
+              ],
+              "cohort": 47.103459467054925,
+              "peer": 47.32510807652071
+            },
+            "split_3_3_pct": {
+              "games": 6,
+              "gap_pp": 0.17444646316803394,
+              "higher_games": 3,
+              "lower_games": 3,
+              "equal_games": 0,
+              "omit_one_range": [
+                -0.9478781745466179,
+                0.8979662467577129
+              ],
+              "cohort": 34.14440128170046,
+              "peer": 33.96995481853243
+            },
+            "qb_opposing_dst_pct": {
+              "games": 6,
+              "gap_pp": 2.107803338121748,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                1.5353341549998287,
+                2.5010193345442837
+              ],
+              "cohort": 12.055732736468928,
+              "peer": 9.94792939834718
+            },
+            "all_four_pct": {
+              "games": 6,
+              "gap_pp": -4.1078480109080955,
+              "higher_games": 0,
+              "lower_games": 6,
+              "equal_games": 0,
+              "omit_one_range": [
+                -4.852044544657043,
+                -3.4687210956767784
+              ],
+              "cohort": 51.78039135081764,
+              "peer": 55.88823936172573
+            },
+            "receiver_own_qb_pct": {
+              "games": 6,
+              "gap_pp": -1.9151642759597205,
+              "higher_games": 3,
+              "lower_games": 3,
+              "equal_games": 0,
+              "omit_one_range": [
+                -2.93815452231932,
+                -0.23355916735195023
+              ],
+              "cohort": 83.1097207571315,
+              "peer": 85.02488503309122
+            },
+            "kd_zero_pct": {
+              "games": 6,
+              "gap_pp": -0.8736976094644083,
+              "higher_games": 2,
+              "lower_games": 4,
+              "equal_games": 0,
+              "omit_one_range": [
+                -3.1622155404481993,
+                0.39832903779694034
+              ],
+              "cohort": 42.827311797125724,
+              "peer": 43.70100940659013
+            },
+            "kd_one_pct": {
+              "games": 6,
+              "gap_pp": 2.6557184707618995,
+              "higher_games": 4,
+              "lower_games": 2,
+              "equal_games": 0,
+              "omit_one_range": [
+                1.1719367917799517,
+                4.287051558853674
+              ],
+              "cohort": 43.532968389172396,
+              "peer": 40.8772499184105
+            },
+            "kd_two_pct": {
+              "games": 6,
+              "gap_pp": 5.383368379341054,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                4.798350512920708,
+                5.801984660065777
+              ],
+              "cohort": 12.657224214632482,
+              "peer": 7.273855835291427
+            },
+            "kd_three_plus_pct": {
+              "games": 6,
+              "gap_pp": 0.9288105360125892,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                0.3140558473494741,
+                1.1105925437126194
+              ],
+              "cohort": 0.9824955990693982,
+              "peer": 0.05368506305680898
+            }
+          }
+        },
+        "outcomes": {
+          "showdown / 150-Max": {
+            "games": 6,
+            "gap_pp": 20.696697683143658,
+            "higher_games": 6,
+            "lower_games": 0,
+            "equal_games": 0,
+            "omit_one_range": [
+              19.219405115843717,
+              21.94838764322006
+            ],
+            "cohort_rate": 0.5837268735744803,
+            "peer_rate": 0.3767598967430438
+          }
+        }
+      },
+      "10": {
+        "profiles": 662,
+        "constructions": {
+          "showdown / 150-Max": {
+            "player_pool": {
+              "games": 6,
+              "gap_pp": -0.026644890175294183,
+              "higher_games": 3,
+              "lower_games": 3,
+              "equal_games": 0,
+              "omit_one_range": [
+                -0.1932641907909982,
+                0.09485540008232966
+              ],
+              "cohort": 19.690046074260717,
+              "peer": 19.71669096443601
+            },
+            "captain_pool": {
+              "games": 6,
+              "gap_pp": 0.9216267182284706,
+              "higher_games": 5,
+              "lower_games": 1,
+              "equal_games": 0,
+              "omit_one_range": [
+                0.6930488360677132,
+                1.150237776159879
+              ],
+              "cohort": 8.722756396496196,
+              "peer": 7.801129678267726
+            },
+            "repeated_pct": {
+              "games": 6,
+              "gap_pp": 2.301001421847768,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                1.4203414911635583,
+                2.58771967399923
+              ],
+              "cohort": 2.301001421847768,
+              "peer": 0.0
+            },
+            "mean_shared_players": {
+              "games": 6,
+              "gap_pp": 0.1349628189436062,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                0.0923918234903665,
+                0.14947338666585006
+              ],
+              "cohort": 2.873491902864721,
+              "peer": 2.7385290839211147
+            },
+            "mean_salary": {
+              "games": 6,
+              "gap_pp": 82.61621554904802,
+              "higher_games": 5,
+              "lower_games": 1,
+              "equal_games": 0,
+              "omit_one_range": [
+                34.25422056362004,
+                125.58945865885762
+              ],
+              "cohort": 49160.70347406423,
+              "peer": 49078.08725851518
+            },
+            "double_qb_pct": {
+              "games": 6,
+              "gap_pp": 8.888771633919488,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                7.983730261778653,
+                9.678545787221353
+              ],
+              "cohort": 39.75894143390995,
+              "peer": 30.870169799990464
+            },
+            "double_k_pct": {
+              "games": 6,
+              "gap_pp": 3.634032791628651,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                2.1479361241479293,
+                3.9803515450763327
+              ],
+              "cohort": 4.297754075835723,
+              "peer": 0.6637212842070714
+            },
+            "double_dst_pct": {
+              "games": 6,
+              "gap_pp": 1.1545227623258172,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                0.7252122610275399,
+                1.3405199073835732
+              ],
+              "cohort": 1.2291359278123108,
+              "peer": 0.07461316548649358
+            },
+            "split_5_1_pct": {
+              "games": 6,
+              "gap_pp": 7.29081303779235,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                5.665104677608884,
+                8.292965732091835
+              ],
+              "cohort": 18.78099250447562,
+              "peer": 11.490179466683271
+            },
+            "split_4_2_pct": {
+              "games": 6,
+              "gap_pp": -0.1532605304281335,
+              "higher_games": 2,
+              "lower_games": 4,
+              "equal_games": 0,
+              "omit_one_range": [
+                -0.4567196540576191,
+                0.09995833122817573
+              ],
+              "cohort": 46.73836525795281,
+              "peer": 46.89162578838094
+            },
+            "split_3_3_pct": {
+              "games": 6,
+              "gap_pp": 0.9208959168547768,
+              "higher_games": 2,
+              "lower_games": 4,
+              "equal_games": 0,
+              "omit_one_range": [
+                -0.6250062005872763,
+                1.5164176928183246
+              ],
+              "cohort": 34.48064223757157,
+              "peer": 33.55974632071679
+            },
+            "qb_opposing_dst_pct": {
+              "games": 6,
+              "gap_pp": 2.495715090528655,
+              "higher_games": 5,
+              "lower_games": 1,
+              "equal_games": 0,
+              "omit_one_range": [
+                1.019589291430085,
+                3.1689321827084598
+              ],
+              "cohort": 11.536144759371222,
+              "peer": 9.040429668842567
+            },
+            "all_four_pct": {
+              "games": 6,
+              "gap_pp": -7.218713429300568,
+              "higher_games": 0,
+              "lower_games": 6,
+              "equal_games": 0,
+              "omit_one_range": [
+                -8.22168783758943,
+                -6.123746437741325
+              ],
+              "cohort": 51.69266399133176,
+              "peer": 58.911377420632334
+            },
+            "receiver_own_qb_pct": {
+              "games": 6,
+              "gap_pp": -1.6391210497403155,
+              "higher_games": 2,
+              "lower_games": 4,
+              "equal_games": 0,
+              "omit_one_range": [
+                -3.254925014833083,
+                0.60568586787046
+              ],
+              "cohort": 81.46964121032057,
+              "peer": 83.10876226006089
+            },
+            "kd_zero_pct": {
+              "games": 6,
+              "gap_pp": -0.7935096019398215,
+              "higher_games": 3,
+              "lower_games": 3,
+              "equal_games": 0,
+              "omit_one_range": [
+                -1.4216559667722302,
+                0.3460340917073033
+              ],
+              "cohort": 43.029981466339535,
+              "peer": 43.82349106827935
+            },
+            "kd_one_pct": {
+              "games": 6,
+              "gap_pp": 5.268634564253383,
+              "higher_games": 4,
+              "lower_games": 2,
+              "equal_games": 0,
+              "omit_one_range": [
+                3.745125704746337,
+                6.818194810437395
+              ],
+              "cohort": 43.48994139099655,
+              "peer": 38.22130682674316
+            },
+            "kd_two_pct": {
+              "games": 6,
+              "gap_pp": 4.469400075791172,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                3.579409123207471,
+                5.015661043330359
+              ],
+              "cohort": 12.245815716883385,
+              "peer": 7.776415641092212
+            },
+            "kd_three_plus_pct": {
+              "games": 6,
+              "gap_pp": 1.2342614257805367,
+              "higher_games": 6,
+              "lower_games": 0,
+              "equal_games": 0,
+              "omit_one_range": [
+                0.32950080771083773,
+                1.468150747973681
+              ],
+              "cohort": 1.2342614257805367,
+              "peer": 0.0
+            }
+          }
+        },
+        "outcomes": {
+          "showdown / 150-Max": {
+            "games": 6,
+            "gap_pp": 13.655674122332577,
+            "higher_games": 6,
+            "lower_games": 0,
+            "equal_games": 0,
+            "omit_one_range": [
+              11.59617968088004,
+              15.083189729788263
+            ],
+            "cohort_rate": 0.5220949539904893,
+            "peer_rate": 0.3855382127671636
+          }
+        }
+      }
+    },
+    "report_sha256": {
+      "heldout-2026-10-19.json": "771a46f108492f79b9a78c42f3dff8b60796d231918cfb618698aba6834b6497",
+      "heldout-2026-10-22.json": "edc3a9961ee8bc047c3f44fd65cad06db6e7f0f307d9689515d8dcc4f66b8aa9",
+      "heldout-2026-10-26.json": "3ccc8881fc209725e2182a37bf62287481ec67c9f4c4e96b468cdadf985c2dc9",
+      "heldout-2026-10-29.json": "9794d12a4b899945c51810bddc2a7b2c87810169c818eb9a6bf9fe57944cf609",
+      "heldout-2026-11-01.json": "8218a9981323371f4f79ca11195bdc80a285210abe5c8ceb59457526b04f21fb",
+      "heldout-2026-11-02.json": "2483c510df2932d223ce9fc9317cb3567f256f82640644ff6f3124b618a13f84"
+    }
+  },
+  "limitations": [
+    "Observed indexed field; field completeness unverified.",
+    "Construction contrasts are cohort means versus matched peer medians, not mean-to-mean population effects.",
+    "Discovery rank-one winners and held-out earlier-qualified users are different cohorts.",
+    "Games are grouping units, not proof of statistical independence; users and peers recur.",
+    "Held-out reports cover 150-Max only; no held-out 20-Max or Single Entry evidence.",
+    "Direct all-position Captain/opposing-DST and fresh whole-field construction comparisons remain outstanding.",
+    "No payout, ROI, causal grouping effect or production-default claim."
+  ],
+  "discovery_report_sha256": "a94c6875efa6328bd0d921d2335c1b9ee0eede3f513e202ede55616abfe7f2e9"
+}
